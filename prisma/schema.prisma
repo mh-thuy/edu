@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  TEACHER
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  fullName     String
+  passwordHash String    @map("password_hash")
+  role         Role
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  teacher      Teacher?
+
+  @@map("users")
+}
+
+model Room {
+  id             String          @id @default(uuid())
+  code           String          @unique
+  name           String
+  capacity       Int
+  location       String?
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  classes        Class[]
+  classSchedules ClassSchedule[]
+
+  @@map("rooms")
+}
+
+model Teacher {
+  id             String    @id @default(uuid())
+  userId         String    @unique @map("user_id")
+  code           String    @unique
+  phone          String?
+  specialty      String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classes        Class[]
+
+  @@map("teachers")
+}
+
+model Student {
+  id            String         @id @default(uuid())
+  code          String         @unique
+  fullName      String         @map("full_name")
+  email         String?        @unique
+  phone         String?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  classStudents ClassStudent[]
+
+  @@map("students")
+}
+
+model Class {
+  id             String          @id @default(uuid())
+  code           String          @unique
+  name           String
+  teacherId      String?         @map("teacher_id")
+  roomId         String?         @map("room_id")
+  startDate      DateTime?       @map("start_date")
+  endDate        DateTime?       @map("end_date")
+  status         String          @default("DRAFT")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  teacher        Teacher?        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  room           Room?           @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  classStudents  ClassStudent[]
+  classSchedules ClassSchedule[]
+
+  @@map("classes")
+}
+
+model ClassStudent {
+  classId    String   @map("class_id")
+  studentId  String   @map("student_id")
+  enrolledAt DateTime @default(now()) @map("enrolled_at")
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([classId, studentId])
+  @@map("class_students")
+}
+
+model ClassSchedule {
+  id        String   @id @default(uuid())
+  classId   String   @map("class_id")
+  roomId    String?  @map("room_id")
+  dayOfWeek Int      @map("day_of_week")
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  room      Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@map("class_schedules")
+}
