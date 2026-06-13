@@ -32,7 +32,10 @@ model Room {
   code           String          @unique
   name           String
   capacity       Int
+  floor          Int             @default(1)
   location       String?
+  status         String          @default("AVAILABLE")
+  note           String?
   isActive       Boolean         @default(true) @map("is_active")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
@@ -43,15 +46,19 @@ model Room {
 }
 
 model Teacher {
-  id             String    @id @default(uuid())
-  userId         String    @unique @map("user_id")
-  code           String    @unique
+  id             String          @id @default(uuid())
+  userId         String          @unique @map("user_id")
+  code           String          @unique
   phone          String?
+  email          String?         @unique
+  bankAccount    String?         @map("bank_account")
   specialty      String?
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         String          @default("ACTIVE")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   classes        Class[]
+  classSchedules ClassSchedule[]
 
   @@map("teachers")
 }
@@ -62,6 +69,10 @@ model Student {
   fullName      String         @map("full_name")
   email         String?        @unique
   phone         String?
+  birthday      DateTime?
+  parentName    String?        @map("parent_name")
+  address       String?
+  status        String         @default("ACTIVE")
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   classStudents ClassStudent[]
@@ -75,6 +86,9 @@ model Class {
   name           String
   teacherId      String?         @map("teacher_id")
   roomId         String?         @map("room_id")
+  tuitionFee     Float           @default(0) @map("tuition_fee")
+  totalSessions  Int             @default(0) @map("total_sessions")
+  maxStudents    Int             @default(30) @map("max_students")
   startDate      DateTime?       @map("start_date")
   endDate        DateTime?       @map("end_date")
   status         String          @default("DRAFT")
@@ -103,6 +117,7 @@ model ClassSchedule {
   id        String   @id @default(uuid())
   classId   String   @map("class_id")
   roomId    String?  @map("room_id")
+  teacherId String?  @map("teacher_id")
   dayOfWeek Int      @map("day_of_week")
   startTime String   @map("start_time")
   endTime   String   @map("end_time")
@@ -110,6 +125,7 @@ model ClassSchedule {
   updatedAt DateTime @updatedAt @map("updated_at")
   class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   room      Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
   @@map("class_schedules")
 }

@@ -1,19 +1,16 @@
-"use client";
-
-import { Paper, Stack, Typography } from "@mui/material";
 import type { ReactElement } from "react";
 
+export const dynamic = 'force-dynamic';
+
 export default function AdminPage(): ReactElement {
+  // Temporarily simplified page to test build
   return (
-    <Paper sx={{ p: 3 }}>
-      <Stack spacing={1}>
-        <Typography variant="h5" fontWeight={700}>
-          Admin Workspace
-        </Typography>
-        <Typography color="text.secondary">
-          Route-level authorization for ADMIN role is active.
-        </Typography>
-      </Stack>
-    </Paper>
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>Statistics will be added here</p>
+    </div>
   );
 }
+
+
+

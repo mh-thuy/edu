@@ -1,9 +1,11 @@
 "use client";
 
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
-import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
+import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
+import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
+import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { Box, Divider, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
 import type { Role } from "@prisma/client";
 import Link from "next/link";
@@ -25,22 +27,34 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF", "TEACHER"],
   },
   {
-    label: "Admin",
-    href: "/admin",
-    icon: <ManageAccountsOutlinedIcon fontSize="small" />,
+    label: "Rooms",
+    href: "/admin/rooms",
+    icon: <MeetingRoomOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Staff",
-    href: "/staff",
-    icon: <MeetingRoomOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    label: "Teachers",
+    href: "/admin/teachers",
+    icon: <SchoolOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
   },
   {
-    label: "Teacher",
-    href: "/teacher",
-    icon: <SchoolOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF", "TEACHER"],
+    label: "Students",
+    href: "/admin/students",
+    icon: <GroupOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Classes",
+    href: "/admin/classes",
+    icon: <ClassOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Schedules",
+    href: "/admin/schedules",
+    icon: <ScheduleOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
   },
 ];
 
