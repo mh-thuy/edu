@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
-import { studentFeeFilterSchema } from "@/modules/finance/student-fees/schemas/student-fee.schema";
+import {
+  studentFeeFilterSchema,
+  studentFeeCreateSchema,
+} from "@/modules/finance/student-fees/schemas/student-fee.schema";
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,10 +11,10 @@ export async function GET(request: NextRequest) {
     const filter = {
       page: searchParams.get("page") || "1",
       limit: searchParams.get("limit") || "10",
-      status: searchParams.get("status"),
-      classId: searchParams.get("classId"),
-      studentId: searchParams.get("studentId"),
-      month: searchParams.get("month"),
+      status: searchParams.get("status") || undefined,
+      classId: searchParams.get("classId") || undefined,
+      studentId: searchParams.get("studentId") || undefined,
+      month: searchParams.get("month") || undefined,
     };
 
     const validated = studentFeeFilterSchema.parse(filter);
@@ -20,6 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch student fees";
+    console.error("Student fees API error:", error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -28,24 +32,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Support bulk creation or single creation
-    if (body.classId && body.month && body.amount) {
-      // Bulk creation for entire class
-      const result = await StudentFeeService.createBulkFeesForClass(
-        body.classId,
-        body.month,
-        body.amount,
-        new Date(body.dueDate)
-      );
-      return NextResponse.json(result);
-    }
+    // Validate the request body with create schema
+    const validated = studentFeeCreateSchema.parse(body);
 
-    return NextResponse.json(
-      { error: "Missing required fields for bulk creation" },
-      { status: 400 }
-    );
+    // Create a single student fee
+    const result = await StudentFeeService.createStudentFee({
+      studentId: validated.studentId,
+      classId: validated.classId,
+      month: validated.month,
+      amount: validated.amount,
+      dueDate: new Date(validated.dueDate),
+      status: "unpaid", // Default status for new fees
+    });
+
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create student fees";
+    const message = error instanceof Error ? error.message : "Failed to create student fee";
+    console.error("Student fee creation error:", error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
+

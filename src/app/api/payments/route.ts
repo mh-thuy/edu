@@ -11,10 +11,10 @@ export async function GET(request: NextRequest) {
     const filter = {
       page: searchParams.get("page") || "1",
       limit: searchParams.get("limit") || "10",
-      studentFeeId: searchParams.get("studentFeeId"),
-      method: searchParams.get("method"),
-      startDate: searchParams.get("startDate"),
-      endDate: searchParams.get("endDate"),
+      studentFeeId: searchParams.get("studentFeeId") || undefined,
+      method: searchParams.get("method") || undefined,
+      startDate: searchParams.get("startDate") || undefined,
+      endDate: searchParams.get("endDate") || undefined,
     };
 
     const validated = paymentFilterSchema.parse(filter);
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch payments";
+    console.error("Payments API error:", error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

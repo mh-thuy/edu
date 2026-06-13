@@ -1,5 +1,6 @@
-import { prisma } from "@/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.StudentFeeWhereInput = {};
     if (status) where.status = status;
     if (studentId) where.studentId = studentId;
     if (classId) where.classId = classId;
@@ -29,23 +30,29 @@ export async function GET(request: NextRequest) {
       include: {
         student: true,
         class: true,
+        payments: true,
       },
       orderBy: { createdAt: "desc" },
     });
 
     // Transform to debt tracking format
-    const debts = fees.map((fee) => ({
-      id: fee.id,
-      studentId: fee.student.id,
-      studentName: fee.student.fullName,
-      className: fee.class.name,
-      totalAmount: fee.amount,
-      totalPaid: fee.amount - fee.outstandingAmount,
-      outstanding: fee.outstandingAmount,
-      status: fee.status,
-      month: fee.month,
-      dueDate: fee.dueDate.toISOString(),
-    }));
+    const debts = fees.map((fee) => {
+      const totalPaid = fee.payments.reduce((sum, payment) => sum + payment.amount, 0);
+      const outstanding = fee.amount - totalPaid;
+      
+      return {
+        id: fee.id,
+        studentId: fee.student.id,
+        studentName: fee.student.fullName,
+        className: fee.class.name,
+        totalAmount: fee.amount,
+        totalPaid,
+        outstanding,
+        status: fee.status,
+        month: fee.month,
+        dueDate: fee.dueDate.toISOString(),
+      };
+    });
 
     return NextResponse.json({
       data: debts,

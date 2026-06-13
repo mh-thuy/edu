@@ -8,6 +8,47 @@ import type {
 
 export class StudentFeeService {
   /**
+   * Create a single student fee
+   */
+  static async createStudentFee(data: {
+    studentId: string;
+    classId: string;
+    month: string;
+    amount: number;
+    dueDate: Date;
+    status?: string;
+  }) {
+    // Check if fee already exists
+    const existing = await prisma.studentFee.findUnique({
+      where: {
+        studentId_classId_month: {
+          studentId: data.studentId,
+          classId: data.classId,
+          month: data.month,
+        },
+      },
+    });
+
+    if (existing) {
+      throw new Error("Student fee already exists for this month");
+    }
+
+    return prisma.studentFee.create({
+      data: {
+        studentId: data.studentId,
+        classId: data.classId,
+        month: data.month,
+        amount: data.amount,
+        dueDate: data.dueDate,
+        status: data.status || "unpaid",
+      },
+      include: {
+        payments: true,
+      },
+    });
+  }
+
+  /**
    * Create student fees for all students in a class for a specific month
    */
   static async createBulkFeesForClass(

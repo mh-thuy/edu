@@ -83,12 +83,13 @@ export function DebtTrackingList() {
         if (!response.ok) throw new Error("Failed to load summary");
         const result = await response.json();
         setSummary(result);
-      } catch {
-        snackbar.showError("Failed to load debt summary");
+      } catch (err) {
+        console.error("Failed to load debt summary:", err);
       }
     };
     loadSummary();
-  }, [snackbar, refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const columns: GridColDef[] = useMemo(
     () => [

@@ -1,4 +1,4 @@
-import { prisma } from "@/prisma/client";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -12,16 +12,23 @@ export async function GET() {
       where: { status: "partial" },
     });
 
-    // Get total outstanding amount
+    // Get total outstanding amount - need to calculate from fees and payments
     const fees = await prisma.studentFee.findMany({
       where: {
         status: {
           in: ["unpaid", "partial"],
         },
       },
+      include: {
+        payments: true,
+      },
     });
 
-    const totalDebt = fees.reduce((sum, fee) => sum + fee.outstandingAmount, 0);
+    const totalDebt = fees.reduce((sum, fee) => {
+      const totalPaid = fee.payments.reduce((paidSum, payment) => paidSum + payment.amount, 0);
+      const outstanding = fee.amount - totalPaid;
+      return sum + outstanding;
+    }, 0);
 
     // Get overdue count (past due date and not fully paid)
     const overdueCount = await prisma.studentFee.count({

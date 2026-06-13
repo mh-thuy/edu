@@ -14,11 +14,15 @@ import {
   CircularProgress,
 } from "@mui/material";
 
-import { studentFeeUpdateSchema } from "@/modules/finance/student-fees/schemas/student-fee.schema";
+import {
+  studentFeeCreateSchema,
+  studentFeeUpdateSchema,
+} from "@/modules/finance/student-fees/schemas/student-fee.schema";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import type { z } from "zod";
 
+type StudentFeeCreateInput = z.infer<typeof studentFeeCreateSchema>;
 type StudentFeeUpdateInput = z.infer<typeof studentFeeUpdateSchema>;
 
 interface StudentFeeFormProps {
@@ -42,38 +46,57 @@ export function StudentFeeForm({
 }: StudentFeeFormProps) {
   const snackbar = useSnackbar();
   const [submitting, setSubmitting] = React.useState(false);
+  const isCreating = !initialData;
+
+  const schema = isCreating ? studentFeeCreateSchema : studentFeeUpdateSchema;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<StudentFeeUpdateInput>({
-    resolver: zodResolver(studentFeeUpdateSchema),
-    defaultValues: initialData
+  } = useForm<StudentFeeCreateInput | StudentFeeUpdateInput>({
+    resolver: zodResolver(schema),
+    defaultValues: isCreating
       ? {
-          amount: initialData.amount,
-          dueDate: initialData.dueDate,
-          status: initialData.status,
+          studentId: "",
+          classId: "",
+          month: new Date().toISOString().slice(0, 7),
+          amount: 0,
+          dueDate: new Date().toISOString().split("T")[0],
         }
-      : undefined,
+      : {
+          amount: initialData?.amount,
+          dueDate: initialData?.dueDate,
+          status: initialData?.status,
+        },
   });
 
-  const onSubmit = async (data: StudentFeeUpdateInput) => {
-    if (!initialData?.id) return;
-
+  const onSubmit = async (data: any) => {
     try {
       setSubmitting(true);
-      const response = await fetch(`/api/student-fees/${initialData.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      let response;
 
-      if (!response.ok) throw new Error("Failed to update");
-      snackbar.showSuccess("Cập nhật thành công");
+      if (isCreating) {
+        // CREATE mode - POST to /api/student-fees
+        response = await fetch("/api/student-fees", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+      } else {
+        // UPDATE mode - PUT to /api/student-fees/{id}
+        response = await fetch(`/api/student-fees/${initialData?.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+      }
+
+      if (!response.ok) throw new Error("Failed to save");
+      snackbar.showSuccess(isCreating ? "Tạo thành công" : "Cập nhật thành công");
       onSuccess();
     } catch {
-      snackbar.showError("Cập nhật thất bại");
+      snackbar.showError(isCreating ? "Tạo thất bại" : "Cập nhật thất bại");
     } finally {
       setSubmitting(false);
     }
@@ -91,27 +114,55 @@ export function StudentFeeForm({
       }}
     >
       <DialogTitle>
-        {initialData ? "Sửa hóa đơn" : "Tạo hóa đơn"}
+        {isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}
       </DialogTitle>
       <DialogContent sx={{ mt: 2 }}>
         <Stack spacing={2}>
-          {initialData && (
+          {isCreating ? (
+            <>
+              <TextField
+                label="Mã học sinh"
+                {...register("studentId")}
+                error={!!errors.studentId}
+                helperText={errors.studentId?.message}
+                fullWidth
+              />
+
+              <TextField
+                label="Mã lớp"
+                {...register("classId")}
+                error={!!errors.classId}
+                helperText={errors.classId?.message}
+                fullWidth
+              />
+
+              <TextField
+                label="Tháng (YYYY-MM)"
+                type="month"
+                {...register("month")}
+                error={!!errors.month}
+                helperText={errors.month?.message}
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+            </>
+          ) : (
             <>
               <TextField
                 label="Học sinh"
-                value={initialData.studentId}
+                value={initialData?.studentId}
                 disabled
                 fullWidth
               />
               <TextField
                 label="Lớp"
-                value={initialData.classId}
+                value={initialData?.classId}
                 disabled
                 fullWidth
               />
               <TextField
                 label="Tháng"
-                value={initialData.month}
+                value={initialData?.month}
                 disabled
                 fullWidth
               />
@@ -138,23 +189,25 @@ export function StudentFeeForm({
             InputLabelProps={{ shrink: true }}
           />
 
-          <TextField
-            select
-            label="Trạng thái"
-            {...register("status")}
-            error={!!errors.status}
-            helperText={errors.status?.message}
-            fullWidth
-            slotProps={{
-              select: {
-                native: true,
-              },
-            }}
-          >
-            <option value="unpaid">Chưa thanh toán</option>
-            <option value="partial">Thanh toán một phần</option>
-            <option value="paid">Đã thanh toán</option>
-          </TextField>
+          {!isCreating && (
+            <TextField
+              select
+              label="Trạng thái"
+              {...register("status")}
+              error={!!errors.status}
+              helperText={errors.status?.message}
+              fullWidth
+              slotProps={{
+                select: {
+                  native: true,
+                },
+              }}
+            >
+              <option value="unpaid">Chưa thanh toán</option>
+              <option value="partial">Thanh toán một phần</option>
+              <option value="paid">Đã thanh toán</option>
+            </TextField>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

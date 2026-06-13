@@ -8,9 +8,9 @@ export async function GET(request: NextRequest) {
     const filter = {
       page: searchParams.get("page") || "1",
       limit: searchParams.get("limit") || "10",
-      teacherId: searchParams.get("teacherId"),
-      month: searchParams.get("month"),
-      status: searchParams.get("status"),
+      teacherId: searchParams.get("teacherId") || undefined,
+      month: searchParams.get("month") || undefined,
+      status: searchParams.get("status") || undefined,
     };
 
     const validated = teacherPayrollFilterSchema.parse(filter);
@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch payrolls";
+    console.error("Teacher payroll API error:", error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
