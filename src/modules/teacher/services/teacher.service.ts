@@ -31,7 +31,7 @@ export async function getTeachers(filter: TeacherFilter) {
     where.status = status;
   }
 
-  const [teachers, total] = await Promise.all([
+  const [items, total] = await Promise.all([
     prisma.teacher.findMany({
       where,
       skip,
@@ -43,7 +43,7 @@ export async function getTeachers(filter: TeacherFilter) {
   ]);
 
   return {
-    teachers,
+    items,
     total,
     page,
     limit,

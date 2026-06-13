@@ -55,7 +55,7 @@ export function StudentFeeForm({
     handleSubmit,
     formState: { errors },
   } = useForm<StudentFeeCreateInput | StudentFeeUpdateInput>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema as any), // eslint-disable-line @typescript-eslint/no-explicit-any
     defaultValues: isCreating
       ? {
           studentId: "",
@@ -71,7 +71,7 @@ export function StudentFeeForm({
         },
   });
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     try {
       setSubmitting(true);
       let response;
@@ -194,8 +194,8 @@ export function StudentFeeForm({
               select
               label="Trạng thái"
               {...register("status")}
-              error={!!errors.status}
-              helperText={errors.status?.message}
+              error={!!((errors as any).status)} // eslint-disable-line @typescript-eslint/no-explicit-any
+              helperText={((errors as any).status)?.message} // eslint-disable-line @typescript-eslint/no-explicit-any
               fullWidth
               slotProps={{
                 select: {
