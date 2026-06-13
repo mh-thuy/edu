@@ -1,3 +1,5 @@
+"use client";
+
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import { Button, Stack, Typography } from "@mui/material";
 import Link from "next/link";

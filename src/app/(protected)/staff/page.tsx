@@ -1,10 +1,9 @@
+"use client";
+
 import { Paper, Stack, Typography } from "@mui/material";
 import type { ReactElement } from "react";
-import { requireRole } from "@/lib/auth";
 
-export default async function StaffPage(): Promise<ReactElement> {
-  await requireRole(["ADMIN", "STAFF"]);
-
+export default function StaffPage(): ReactElement {
   return (
     <Paper sx={{ p: 3 }}>
       <Stack spacing={1}>
