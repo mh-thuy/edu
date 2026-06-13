@@ -129,3 +129,91 @@ model ClassSchedule {
 
   @@map("class_schedules")
 }
+
+model StudentFee {
+  id        String    @id @default(uuid())
+  studentId String    @map("student_id")
+  classId   String    @map("class_id")
+  month     String    @map("month") // YYYY-MM format
+  amount    Float
+  dueDate   DateTime  @map("due_date")
+  status    String    @default("unpaid") // unpaid, partial, paid
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  payments  Payment[]
+
+  @@unique([studentId, classId, month])
+  @@map("student_fees")
+}
+
+model Payment {
+  id         String    @id @default(uuid())
+  studentFeeId String  @map("student_fee_id")
+  amount     Float
+  method     String    // cash, transfer, wallet
+  paymentDate DateTime @map("payment_date")
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  studentFee StudentFee @relation(fields: [studentFeeId], references: [id], onDelete: Cascade)
+  receipts   Receipt[]
+
+  @@map("payments")
+}
+
+model Receipt {
+  id             String   @id @default(uuid())
+  paymentId      String   @unique @map("payment_id")
+  receiptNumber  String   @unique @map("receipt_number")
+  issueDate      DateTime @map("issue_date")
+  printedAt      DateTime? @map("printed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  payment        Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("receipts")
+}
+
+model ClassSalaryRule {
+  id                  String   @id @default(uuid())
+  classId             String   @unique @map("class_id")
+  commissionPercentage Float   @map("commission_percentage") // Center's percentage (e.g., 12%)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("class_salary_rules")
+}
+
+model TeacherPayroll {
+  id              String                @id @default(uuid())
+  teacherId       String                @map("teacher_id")
+  month           String                @map("month") // YYYY-MM format
+  totalRevenue    Float                 @default(0) @map("total_revenue")
+  centerFee       Float                 @default(0) @map("center_fee")
+  salaryAmount    Float                 @default(0) @map("salary_amount")
+  status          String                @default("draft") // draft, approved, paid
+  approvedAt      DateTime?             @map("approved_at")
+  paidAt          DateTime?             @map("paid_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  items           TeacherPayrollItem[]
+
+  @@unique([teacherId, month])
+  @@map("teacher_payrolls")
+}
+
+model TeacherPayrollItem {
+  id        String        @id @default(uuid())
+  payrollId String        @map("payroll_id")
+  classId   String        @map("class_id")
+  classCode String        @map("class_code")
+  studentCount Int        @map("student_count")
+  revenue   Float
+  fee       Float
+  salary    Float
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  payroll   TeacherPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+
+  @@map("teacher_payroll_items")
+}

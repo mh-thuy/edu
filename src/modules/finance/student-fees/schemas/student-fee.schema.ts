@@ -1,0 +1,31 @@
+import { z } from "zod";
+
+export const studentFeeCreateSchema = z.object({
+  studentId: z.string().min(1, "Student is required"),
+  classId: z.string().min(1, "Class is required"),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
+  amount: z.number().min(0, "Amount must be positive"),
+  dueDate: z.string().datetime("Invalid date format"),
+});
+
+export const studentFeeUpdateSchema = studentFeeCreateSchema.partial().extend({
+  status: z.enum(["unpaid", "partial", "paid"]).optional(),
+});
+
+export const studentFeeFilterSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().default(10),
+  status: z.string().optional().transform((val) => {
+    if (!val) return undefined;
+    // Support comma-separated values or single value
+    const statuses = val.split(",").map((s) => s.trim());
+    return statuses.length === 1 ? statuses[0] : statuses;
+  }),
+  classId: z.string().optional(),
+  studentId: z.string().optional(),
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+});
+
+export type StudentFeeCreate = z.infer<typeof studentFeeCreateSchema>;
+export type StudentFeeUpdate = z.infer<typeof studentFeeUpdateSchema>;
+export type StudentFeeFilter = z.infer<typeof studentFeeFilterSchema>;

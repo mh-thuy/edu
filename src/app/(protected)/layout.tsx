@@ -6,7 +6,8 @@ type ProtectedLayoutProps = {
   children: ReactNode;
 };
 
-export default async function ProtectedLayout({ children }: ProtectedLayoutProps): Promise<ReactElement> {
+export default async function ProtectedLayout({ children }: ProtectedLayoutProps
+): Promise<ReactElement> {
   const user = await requireAuth();
 
   return <AppLayout user={user}>{children}</AppLayout>;

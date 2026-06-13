@@ -2,7 +2,6 @@ import { requireAuth } from "@/lib/auth";
 import { ScheduleList } from "@/modules/schedule/components/ScheduleList";
 import type { ReactElement } from "react";
 
-export const dynamic = "force-dynamic";
 
 export default async function SchedulesPage(): Promise<ReactElement> {
   await requireAuth();

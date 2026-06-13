@@ -6,6 +6,11 @@ import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
 import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
+import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
+import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
+import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
+import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import { Box, Divider, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
 import type { Role } from "@prisma/client";
 import Link from "next/link";
@@ -54,6 +59,42 @@ const items: SidebarItem[] = [
     label: "Schedules",
     href: "/admin/schedules",
     icon: <ScheduleOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Student Fees",
+    href: "/admin/student-fees",
+    icon: <ReceiptOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Payments",
+    href: "/admin/payments",
+    icon: <PaymentOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Receipts",
+    href: "/admin/receipts",
+    icon: <ReceiptOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Teacher Payroll",
+    href: "/admin/teacher-payroll",
+    icon: <AttachMoneyOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Debt Tracking",
+    href: "/admin/debt-tracking",
+    icon: <WarningAmberOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Financial Reports",
+    href: "/admin/reports",
+    icon: <AssessmentOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
 ];
