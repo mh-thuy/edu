@@ -1,6 +1,18 @@
 "use client";
 
-import { Box, Stack, TextField, Button, Chip } from "@mui/material";
+import {
+  Box,
+  Stack,
+  TextField,
+  Button,
+  Chip,
+  Paper,
+  Typography,
+  InputAdornment,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import SearchIcon from "@mui/icons-material/Search";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
@@ -22,77 +34,171 @@ export interface Room {
   capacity: number;
   floor: number;
   location?: string;
-  status: string;
+  status: "AVAILABLE" | "OCCUPIED" | "MAINTENANCE";
   note?: string;
 }
 
 const columns: GridColDef[] = [
-  { field: "code", headerName: "Code", width: 100, flex: 0.5 },
-  { field: "name", headerName: "Name", width: 150, flex: 1 },
-  { field: "capacity", headerName: "Capacity", width: 100 },
-  { field: "floor", headerName: "Floor", width: 80 },
-  { field: "location", headerName: "Location", width: 120 },
+  {
+    field: "code",
+    headerName: "Mã phòng",
+    minWidth: 110,
+    flex: 0.6,
+  },
+  {
+    field: "name",
+    headerName: "Tên phòng",
+    minWidth: 180,
+    flex: 1,
+  },
+  {
+    field: "capacity",
+    headerName: "Sức chứa",
+    minWidth: 110,
+  },
+  {
+    field: "floor",
+    headerName: "Tầng",
+    minWidth: 90,
+  },
+  {
+    field: "location",
+    headerName: "Vị trí",
+    minWidth: 150,
+    flex: 0.8,
+  },
   {
     field: "status",
-    headerName: "Status",
-    width: 120,
-    renderCell: (params) => (
-      <Chip
-        label={params.value}
-        size="small"
-        color={
-          params.value === "AVAILABLE"
-            ? "success"
-            : params.value === "OCCUPIED"
-              ? "warning"
-              : "error"
-        }
-        variant="outlined"
-      />
-    ),
+    headerName: "Trạng thái",
+    minWidth: 140,
+    align: "center",
+    headerAlign: "center",
+    renderCell: (params) => {
+      const status = params.value;
+
+      const label =
+        status === "AVAILABLE"
+          ? "Trống"
+          : status === "OCCUPIED"
+            ? "Đang dùng"
+            : "Bảo trì";
+
+      return (
+        <Box
+          sx={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Chip
+            label={label}
+            size="small"
+            color={
+              status === "AVAILABLE"
+                ? "success"
+                : status === "OCCUPIED"
+                  ? "warning"
+                  : "error"
+            }
+            variant="outlined"
+            sx={{
+              minWidth: 90,
+              fontWeight: 600,
+              borderRadius: 999,
+            }}
+          />
+        </Box>
+      );
+    },
   },
   {
     field: "actions",
-    headerName: "Actions",
-    width: 150,
+    headerName: "Thao tác",
+    minWidth: 150,
     sortable: false,
+    filterable: false,
+    disableColumnMenu: true,
+    align: "center",
+    headerAlign: "center",
     renderCell: (params) => (
-      <Box sx={{ display: "flex", gap: 1 }}>
-        <Button size="small" variant="outlined" onClick={() => params.row._onEdit?.(params.row)}>
-          Edit
-        </Button>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="center"
+        sx={{
+          width: "100%",
+          height: "100%",
+        }}
+      >
         <Button
           size="small"
-          variant="outlined"
+          variant="contained"
+          onClick={() => params.row._onEdit?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
+        >
+          Sửa
+        </Button>
+
+        <Button
+          size="small"
+          variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
         >
-          Delete
+          Xóa
         </Button>
-      </Box>
+      </Stack>
     ),
   },
 ];
 
 export function RoomList(): ReactElement {
-  const { data, isLoading, error, page, limit, setPageNumber, setPageSize, refresh } =
-    useList<Room>("/api/rooms", { limit: 10 });
+  const [search, setSearch] = useState("");
+
+  const {
+    data,
+    isLoading,
+    error,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+    refresh,
+  } = useList<Room>("/api/rooms", { limit: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [search, setSearch] = useState("");
+
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const handleCreate = useCallback(() => {
     setEditingId(null);
+    setEditingRoom(null);
     setOpenDialog(true);
   }, []);
 
   const handleEdit = useCallback((room: Room) => {
     setEditingId(room.id);
+    setEditingRoom(room);
     setOpenDialog(true);
   }, []);
 
@@ -105,14 +211,16 @@ export function RoomList(): ReactElement {
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/rooms/${deleteId}`, { method: "DELETE" });
+      const response = await fetch(`/api/rooms/${deleteId}`, {
+        method: "DELETE",
+      });
       if (!response.ok) throw new Error("Failed to delete room");
 
-      showSuccess("Room deleted successfully");
+      showSuccess("Xóa phòng thành công");
       setDeleteId(null);
       refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Error deleting room");
+      showError(err instanceof Error ? err.message : "Lỗi khi xóa phòng");
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +238,7 @@ export function RoomList(): ReactElement {
             body: JSON.stringify(formData),
           });
           if (!response.ok) throw new Error("Failed to update room");
-          showSuccess("Room updated successfully");
+          showSuccess("Cập nhật phòng thành công");
         } else {
           const response = await fetch("/api/rooms", {
             method: "POST",
@@ -138,18 +246,18 @@ export function RoomList(): ReactElement {
             body: JSON.stringify(formData),
           });
           if (!response.ok) throw new Error("Failed to create room");
-          showSuccess("Room created successfully");
+          showSuccess("Thêm phòng thành công");
         }
 
         setOpenDialog(false);
         refresh();
       } catch (err) {
-        showError(err instanceof Error ? err.message : "Error saving room");
+        showError(err instanceof Error ? err.message : "Lỗi khi lưu phòng");
       } finally {
         setIsSubmitting(false);
       }
     },
-    [editingId, refresh, showSuccess, showError]
+    [editingId, refresh, showSuccess, showError],
   );
 
   const tableData = (data?.items || []).map((row) => ({
@@ -159,35 +267,115 @@ export function RoomList(): ReactElement {
   }));
 
   return (
-    <Stack spacing={2}>
-      <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
-        <TextField
-          placeholder="Search by code or name..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          size="small"
-          sx={{ flex: 1 }}
-        />
-        <Button variant="contained" onClick={handleCreate}>
-          Add Room
-        </Button>
-      </Box>
+    <Stack spacing={2.5}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+              }}
+            >
+              <MeetingRoomIcon />
+            </Box>
 
-      <BaseTable
-        columns={columns}
-        rows={tableData}
-        totalRows={data?.total || 0}
-        page={page}
-        pageSize={limit}
-        isLoading={isLoading}
-        onPageChange={setPageNumber}
-        onPageSizeChange={setPageSize}
-        error={error}
-      />
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Quản lý phòng
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Danh sách phòng học, trạng thái và sức chứa
+              </Typography>
+            </Box>
+          </Box>
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreate}
+            sx={{
+              borderRadius: 2,
+              px: 2.5,
+              height: 40,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Thêm phòng
+          </Button>
+        </Stack>
+
+        <Box sx={{ mt: 2.5 }}>
+          <TextField
+            placeholder="Tìm theo mã phòng hoặc tên phòng..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            size="small"
+            fullWidth
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              maxWidth: 420,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                bgcolor: "background.default",
+              },
+            }}
+          />
+        </Box>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          overflow: "hidden",
+          bgcolor: "background.paper",
+        }}
+      >
+        <BaseTable
+          columns={columns}
+          rows={tableData}
+          totalRows={data?.total || 0}
+          page={page}
+          pageSize={limit}
+          isLoading={isLoading}
+          onPageChange={setPageNumber}
+          onPageSizeChange={setPageSize}
+          error={error}
+        />
+      </Paper>
 
       <FormDialog
         open={openDialog}
-        title={editingId ? "Edit Room" : "Add Room"}
+        title={editingId ? "Sửa phòng" : "Thêm phòng"}
         onClose={() => setOpenDialog(false)}
         onSubmit={async () => {
           const form = document.querySelector("form") as HTMLFormElement;
@@ -195,13 +383,17 @@ export function RoomList(): ReactElement {
         }}
         isLoading={isSubmitting}
       >
-        <RoomForm onSubmit={handleSubmit} />
+        <RoomForm
+          key={editingId ?? "create"}
+          defaultValues={editingRoom ?? undefined}
+          onSubmit={handleSubmit}
+        />
       </FormDialog>
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Delete Room"
-        message="Are you sure you want to delete this room?"
+        title="Xóa phòng"
+        message="Bạn có chắc chắn muốn xóa phòng này không?"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
         isLoading={isSubmitting}

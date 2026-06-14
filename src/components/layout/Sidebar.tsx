@@ -11,7 +11,17 @@ import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
-import { Box, Divider, List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
+
+import {
+  Box,
+  Divider,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from "@mui/material";
+
 import type { Role } from "@prisma/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -26,73 +36,73 @@ type SidebarItem = {
 
 const items: SidebarItem[] = [
   {
-    label: "Dashboard",
+    label: "Tổng quan",
     href: "/",
     icon: <HomeOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF", "TEACHER"],
   },
   {
-    label: "Rooms",
+    label: "Quản lý phòng",
     href: "/admin/rooms",
     icon: <MeetingRoomOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Teachers",
+    label: "Giáo viên",
     href: "/admin/teachers",
     icon: <SchoolOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Students",
+    label: "Học viên",
     href: "/admin/students",
     icon: <GroupOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Classes",
+    label: "Lớp học",
     href: "/admin/classes",
     icon: <ClassOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Schedules",
+    label: "Lịch học",
     href: "/admin/schedules",
     icon: <ScheduleOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Student Fees",
+    label: "Học phí",
     href: "/admin/student-fees",
     icon: <ReceiptOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Payments",
+    label: "Thanh toán",
     href: "/admin/payments",
     icon: <PaymentOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Receipts",
+    label: "Biên lai",
     href: "/admin/receipts",
     icon: <ReceiptOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Teacher Payroll",
+    label: "Lương giáo viên",
     href: "/admin/teacher-payroll",
     icon: <AttachMoneyOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Debt Tracking",
+    label: "Công nợ",
     href: "/admin/debt-tracking",
     icon: <WarningAmberOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {
-    label: "Financial Reports",
+    label: "Báo cáo tài chính",
     href: "/admin/reports",
     icon: <AssessmentOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
@@ -105,19 +115,33 @@ type SidebarProps = {
 
 export function Sidebar({ role }: SidebarProps): ReactElement {
   const pathname = usePathname();
+
   const visibleItems = items.filter((item) => item.roles.includes(role));
 
   return (
-    <Box sx={{ width: 280, height: "100%", bgcolor: "background.paper", borderRight: "1px solid", borderColor: "divider" }}>
+    <Box
+      sx={{
+        width: 280,
+        height: "100%",
+        bgcolor: "background.paper",
+        borderRight: "1px solid",
+        borderColor: "divider",
+      }}
+    >
+      {/* Logo */}
       <Box sx={{ p: 3 }}>
         <Typography variant="h6" fontWeight={700} color="primary.main">
-          Edu Center
+          Trung Tâm Giáo Dục
         </Typography>
+
         <Typography variant="body2" color="text.secondary">
-          Classroom Rental
+          Hệ thống quản lý lớp học
         </Typography>
       </Box>
+
       <Divider />
+
+      {/* Menu */}
       <List sx={{ px: 1.5, py: 2 }}>
         {visibleItems.map((item) => {
           const selected = pathname === item.href;
@@ -128,10 +152,21 @@ export function Sidebar({ role }: SidebarProps): ReactElement {
               component={Link}
               href={item.href}
               selected={selected}
-              sx={{ borderRadius: 2, mb: 0.5 }}
+              sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                minHeight: 44,
+              }}
             >
               <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-              <ListItemText primary={item.label} />
+
+              <ListItemText
+                primary={item.label}
+                primaryTypographyProps={{
+                  fontSize: 14,
+                  fontWeight: selected ? 600 : 400,
+                }}
+              />
             </ListItemButton>
           );
         })}

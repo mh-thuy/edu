@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import type { Room } from "@prisma/client";
-import type { RoomCreate, RoomFilter, RoomUpdate } from "@/modules/room/schemas/room.schema";
+import type {
+  RoomCreate,
+  RoomFilter,
+  RoomUpdate,
+} from "@/modules/room/schemas/room.schema";
 
 export async function createRoom(data: RoomCreate): Promise<Room> {
   return prisma.room.create({
@@ -41,7 +45,7 @@ export async function getRooms(filter: RoomFilter) {
   ]);
 
   return {
-    rooms,
+    items: rooms,
     total,
     page,
     limit,
@@ -62,7 +66,12 @@ export async function deleteRoom(id: string): Promise<Room> {
   });
 }
 
-export async function checkRoomConflict(roomId: string, dayOfWeek: number, startTime: string, endTime: string): Promise<boolean> {
+export async function checkRoomConflict(
+  roomId: string,
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+): Promise<boolean> {
   const conflict = await prisma.classSchedule.findFirst({
     where: {
       roomId,
@@ -75,10 +84,7 @@ export async function checkRoomConflict(roomId: string, dayOfWeek: number, start
           ],
         },
         {
-          AND: [
-            { startTime: { lt: endTime } },
-            { endTime: { gte: endTime } },
-          ],
+          AND: [{ startTime: { lt: endTime } }, { endTime: { gte: endTime } }],
         },
       ],
     },
