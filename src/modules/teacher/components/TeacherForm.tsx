@@ -1,6 +1,15 @@
 "use client";
 
-import { TextField, Stack, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
+import {
+  TextField,
+  Stack,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  FormHelperText,
+  Box,
+} from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { teacherCreateSchema } from "@/modules/teacher/schemas/teacher.schema";
@@ -10,55 +19,63 @@ import type { ReactElement } from "react";
 type TeacherFormData = z.infer<typeof teacherCreateSchema>;
 
 export interface TeacherFormProps {
-  onSubmit: (data: TeacherFormData) => void;
+  onSubmit: (data: TeacherFormData) => void | Promise<void>;
   defaultValues?: Partial<TeacherFormData>;
 }
 
-export function TeacherForm({ onSubmit, defaultValues }: TeacherFormProps): ReactElement {
+export function TeacherForm({
+  onSubmit,
+  defaultValues,
+}: TeacherFormProps): ReactElement {
   const { control, handleSubmit } = useForm<TeacherFormData>({
     resolver: zodResolver(teacherCreateSchema),
     defaultValues: {
-      code: "",
-      phone: "",
-      email: "",
-      bankAccount: "",
-      specialty: "",
-      status: "ACTIVE",
-      ...defaultValues,
+      code: defaultValues?.code ?? "",
+      phone: defaultValues?.phone ?? "",
+      email: defaultValues?.email ?? "",
+      bankAccount: defaultValues?.bankAccount ?? "",
+      specialty: defaultValues?.specialty ?? "",
+      status: defaultValues?.status ?? "ACTIVE",
     },
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <Stack spacing={2}>
-        <Controller
-          name="code"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Teacher Code"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              placeholder="e.g., T001"
-            />
-          )}
-        />
-        <Controller
-          name="phone"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Phone"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              placeholder="e.g., 0912345678"
-            />
-          )}
-        />
+    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+      <Stack spacing={2.5}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Controller
+            name="code"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <TextField
+                {...field}
+                label="Mã giáo viên"
+                placeholder="VD: GV001"
+                error={!!error}
+                helperText={error?.message}
+                fullWidth
+                size="small"
+              />
+            )}
+          />
+
+          <Controller
+            name="phone"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <TextField
+                {...field}
+                label="Số điện thoại"
+                placeholder="VD: 0912345678"
+                error={!!error}
+                helperText={error?.message}
+                fullWidth
+                size="small"
+              />
+            )}
+          />
+        </Stack>
+
         <Controller
           name="email"
           control={control}
@@ -67,55 +84,67 @@ export function TeacherForm({ onSubmit, defaultValues }: TeacherFormProps): Reac
               {...field}
               label="Email"
               type="email"
+              placeholder="VD: giaovien@example.com"
               error={!!error}
               helperText={error?.message}
               fullWidth
-              placeholder="teacher@example.com"
+              size="small"
             />
           )}
         />
-        <Controller
-          name="bankAccount"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Bank Account"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              placeholder="e.g., 123456789"
-            />
-          )}
-        />
-        <Controller
-          name="specialty"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Specialty"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              placeholder="e.g., Mathematics"
-            />
-          )}
-        />
+
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Controller
+            name="bankAccount"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <TextField
+                {...field}
+                label="Tài khoản ngân hàng"
+                placeholder="VD: 123456789"
+                error={!!error}
+                helperText={error?.message}
+                fullWidth
+                size="small"
+              />
+            )}
+          />
+
+          <Controller
+            name="specialty"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <TextField
+                {...field}
+                label="Chuyên môn"
+                placeholder="VD: Toán học"
+                error={!!error}
+                helperText={error?.message}
+                fullWidth
+                size="small"
+              />
+            )}
+          />
+        </Stack>
+
         <Controller
           name="status"
           control={control}
           render={({ field, fieldState: { error } }) => (
-            <FormControl error={!!error} fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select {...field} label="Status">
-                <MenuItem value="ACTIVE">Active</MenuItem>
-                <MenuItem value="INACTIVE">Inactive</MenuItem>
+            <FormControl error={!!error} fullWidth size="small">
+              <InputLabel>Trạng thái</InputLabel>
+              <Select {...field} label="Trạng thái">
+                <MenuItem value="ACTIVE">Đang hoạt động</MenuItem>
+                <MenuItem value="INACTIVE">Ngừng hoạt động</MenuItem>
               </Select>
+
+              {error?.message && (
+                <FormHelperText>{error.message}</FormHelperText>
+              )}
             </FormControl>
           )}
         />
       </Stack>
-    </form>
+    </Box>
   );
 }

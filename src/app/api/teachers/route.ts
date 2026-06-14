@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
-import { teacherCreateSchema, teacherFilterSchema } from "@/modules/teacher/schemas/teacher.schema";
-import { createTeacher, getTeachers } from "@/modules/teacher/services/teacher.service";
+import {
+  teacherCreateSchema,
+  teacherFilterSchema,
+} from "@/modules/teacher/schemas/teacher.schema";
+import {
+  createTeacher,
+  getTeachers,
+} from "@/modules/teacher/services/teacher.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,7 +20,13 @@ export async function GET(request: NextRequest) {
     });
 
     const result = await getTeachers(filter);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      items: result.teachers,
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      pages: result.pages,
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

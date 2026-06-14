@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import type { Teacher } from "@prisma/client";
-import type { TeacherCreate, TeacherFilter, TeacherUpdate } from "@/modules/teacher/schemas/teacher.schema";
+import type {
+  TeacherCreate,
+  TeacherFilter,
+  TeacherUpdate,
+} from "@/modules/teacher/schemas/teacher.schema";
 
 export async function createTeacher(data: TeacherCreate): Promise<Teacher> {
   return prisma.teacher.create({
@@ -12,7 +16,6 @@ export async function createTeacher(data: TeacherCreate): Promise<Teacher> {
 export async function getTeacherById(id: string): Promise<any> {
   return prisma.teacher.findUnique({
     where: { id },
-    include: { user: true, classes: true },
   });
 }
 
@@ -24,7 +27,9 @@ export async function getTeachers(filter: TeacherFilter) {
   if (search) {
     where.OR = [
       { code: { contains: search, mode: "insensitive" } },
-      { user: { fullName: { contains: search, mode: "insensitive" } } },
+      { phone: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { specialty: { contains: search, mode: "insensitive" } },
     ];
   }
   if (status) {
@@ -36,7 +41,6 @@ export async function getTeachers(filter: TeacherFilter) {
       where,
       skip,
       take: limit,
-      include: { user: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.teacher.count({ where }),
@@ -51,11 +55,13 @@ export async function getTeachers(filter: TeacherFilter) {
   };
 }
 
-export async function updateTeacher(id: string, data: TeacherUpdate): Promise<Teacher> {
+export async function updateTeacher(
+  id: string,
+  data: TeacherUpdate,
+): Promise<Teacher> {
   return prisma.teacher.update({
     where: { id },
     data,
-    include: { user: true },
   });
 }
 
@@ -65,7 +71,12 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
   });
 }
 
-export async function checkTeacherScheduleConflict(teacherId: string, dayOfWeek: number, startTime: string, endTime: string): Promise<boolean> {
+export async function checkTeacherScheduleConflict(
+  teacherId: string,
+  dayOfWeek: number,
+  startTime: string,
+  endTime: string,
+): Promise<boolean> {
   // Check for schedule conflicts
   const schedules = await prisma.classSchedule.findMany({
     where: {
