@@ -3,6 +3,7 @@
 import { TextField, Stack, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslation } from "react-i18next";
 import { roomCreateSchema } from "@/modules/room/schemas/room.schema";
 import type { z } from "zod";
 import type { ReactElement } from "react";
@@ -15,6 +16,7 @@ export interface RoomFormProps {
 }
 
 export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactElement {
+  const { t } = useTranslation("room");
   const { control, handleSubmit } = useForm<RoomFormData>({
     resolver: zodResolver(roomCreateSchema),
     defaultValues: {
@@ -38,11 +40,11 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Room Code"
+              label={t("roomCode")}
               error={!!error}
               helperText={error?.message}
               fullWidth
-              placeholder="e.g., A101"
+              placeholder={t("roomPlaceholder")}
             />
           )}
         />
@@ -52,7 +54,7 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Room Name"
+              label={t("roomName")}
               error={!!error}
               helperText={error?.message}
               fullWidth
@@ -66,7 +68,7 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Capacity"
+              label={t("capacity")}
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -81,7 +83,7 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Floor"
+              label={t("floor")}
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -96,7 +98,7 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Location"
+              label={t("location")}
               error={!!error}
               helperText={error?.message}
               fullWidth
@@ -109,11 +111,11 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           control={control}
           render={({ field, fieldState: { error } }) => (
             <FormControl error={!!error} fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select {...field} label="Status">
-                <MenuItem value="AVAILABLE">Available</MenuItem>
+              <InputLabel>{t("status")}</InputLabel>
+              <Select {...field} label={t("status")}>
+                <MenuItem value="AVAILABLE">{t("available")}</MenuItem>
                 <MenuItem value="OCCUPIED">Occupied</MenuItem>
-                <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
+                <MenuItem value="MAINTENANCE">{t("maintenance")}</MenuItem>
               </Select>
             </FormControl>
           )}
@@ -124,7 +126,7 @@ export function RoomForm({ onSubmit, defaultValues }: RoomFormProps): ReactEleme
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label="Note"
+              label={t("note")}
               error={!!error}
               helperText={error?.message}
               fullWidth

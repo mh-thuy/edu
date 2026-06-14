@@ -1,0 +1,18 @@
+{
+  "teacherManagement": "Teacher Management",
+  "teachers": "Teachers",
+  "addTeacher": "Add Teacher",
+  "editTeacher": "Edit Teacher",
+  "deleteTeacher": "Delete Teacher",
+  "teacherName": "Teacher Name",
+  "email": "Email",
+  "phone": "Phone",
+  "department": "Department",
+  "specialty": "Specialty",
+  "createTeacherSuccess": "Teacher created successfully",
+  "updateTeacherSuccess": "Teacher updated successfully",
+  "deleteTeacherSuccess": "Teacher deleted successfully",
+  "createTeacherError": "Failed to create teacher",
+  "updateTeacherError": "Failed to update teacher",
+  "deleteTeacherError": "Failed to delete teacher"
+}

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import type { ReactElement, ReactNode } from "react";
 import { AppThemeProvider } from "@/components/providers/AppThemeProvider";
+import { I18nProvider } from "@/providers/I18nProvider";
 import "@/app/globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
@@ -23,7 +24,9 @@ export default function RootLayout({ children }: RootLayoutProps): ReactElement 
   return (
     <html lang="en">
       <body className={plusJakartaSans.variable}>
-        <AppThemeProvider>{children}</AppThemeProvider>
+        <I18nProvider>
+          <AppThemeProvider>{children}</AppThemeProvider>
+        </I18nProvider>
       </body>
     </html>
   );

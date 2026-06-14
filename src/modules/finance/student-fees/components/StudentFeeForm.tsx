@@ -3,6 +3,7 @@
 import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogTitle,
@@ -44,6 +45,8 @@ export function StudentFeeForm({
   onClose,
   onSuccess,
 }: StudentFeeFormProps) {
+  const { t: tFinance } = useTranslation("finance");
+  const { t: tCommon } = useTranslation("common");
   const snackbar = useSnackbar();
   const [submitting, setSubmitting] = React.useState(false);
   const isCreating = !initialData;
@@ -93,10 +96,10 @@ export function StudentFeeForm({
       }
 
       if (!response.ok) throw new Error("Failed to save");
-      snackbar.showSuccess(isCreating ? "Tạo thành công" : "Cập nhật thành công");
+      snackbar.showSuccess(isCreating ? tFinance("createFeeSuccess") : tFinance("updateFeeSuccess"));
       onSuccess();
     } catch {
-      snackbar.showError(isCreating ? "Tạo thất bại" : "Cập nhật thất bại");
+      snackbar.showError(isCreating ? tCommon("createError") : tCommon("updateError"));
     } finally {
       setSubmitting(false);
     }
@@ -114,14 +117,14 @@ export function StudentFeeForm({
       }}
     >
       <DialogTitle>
-        {isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}
+        {isCreating ? tFinance("createStudentFee") : tFinance("editStudentFee")}
       </DialogTitle>
       <DialogContent sx={{ mt: 2 }}>
         <Stack spacing={2}>
           {isCreating ? (
             <>
               <TextField
-                label="Mã học sinh"
+                label={tFinance("selectInvoice")}
                 {...register("studentId")}
                 error={!!errors.studentId}
                 helperText={errors.studentId?.message}
@@ -129,7 +132,7 @@ export function StudentFeeForm({
               />
 
               <TextField
-                label="Mã lớp"
+                label={tCommon("create")}
                 {...register("classId")}
                 error={!!errors.classId}
                 helperText={errors.classId?.message}
@@ -137,7 +140,7 @@ export function StudentFeeForm({
               />
 
               <TextField
-                label="Tháng (YYYY-MM)"
+                label={tFinance("month")}
                 type="month"
                 {...register("month")}
                 error={!!errors.month}
@@ -149,19 +152,19 @@ export function StudentFeeForm({
           ) : (
             <>
               <TextField
-                label="Học sinh"
+                label={tCommon("create")}
                 value={initialData?.studentId}
                 disabled
                 fullWidth
               />
               <TextField
-                label="Lớp"
+                label={tCommon("create")}
                 value={initialData?.classId}
                 disabled
                 fullWidth
               />
               <TextField
-                label="Tháng"
+                label={tFinance("month")}
                 value={initialData?.month}
                 disabled
                 fullWidth
@@ -170,7 +173,7 @@ export function StudentFeeForm({
           )}
 
           <TextField
-            label="Số tiền"
+            label={tFinance("amount")}
             type="number"
             {...register("amount", { valueAsNumber: true })}
             error={!!errors.amount}
@@ -180,7 +183,7 @@ export function StudentFeeForm({
           />
 
           <TextField
-            label="Hạn thanh toán"
+            label={tCommon("create")}
             type="date"
             {...register("dueDate")}
             error={!!errors.dueDate}
@@ -192,7 +195,7 @@ export function StudentFeeForm({
           {!isCreating && (
             <TextField
               select
-              label="Trạng thái"
+              label={tFinance("status")}
               {...register("status")}
               error={!!((errors as any).status)} // eslint-disable-line @typescript-eslint/no-explicit-any
               helperText={((errors as any).status)?.message} // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -203,22 +206,22 @@ export function StudentFeeForm({
                 },
               }}
             >
-              <option value="unpaid">Chưa thanh toán</option>
-              <option value="partial">Thanh toán một phần</option>
-              <option value="paid">Đã thanh toán</option>
+              <option value="unpaid">{tFinance("unpaid")}</option>
+              <option value="partial">{tFinance("partial")}</option>
+              <option value="paid">{tFinance("paid")}</option>
             </TextField>
           )}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Hủy</Button>
+        <Button onClick={onClose}>{tCommon("cancel")}</Button>
         <Button
           type="submit"
           variant="contained"
           disabled={submitting}
           startIcon={submitting ? <CircularProgress size={20} /> : undefined}
         >
-          {submitting ? "Đang xử lý..." : "Lưu"}
+          {submitting ? `${tCommon("loading")}` : tCommon("save")}
         </Button>
       </DialogActions>
     </Dialog>

@@ -1,0 +1,21 @@
+{
+  "studentManagement": "Quản lý học sinh",
+  "students": "Học sinh",
+  "addStudent": "Thêm học sinh",
+  "editStudent": "Sửa học sinh",
+  "deleteStudent": "Xóa học sinh",
+  "studentName": "Tên học sinh",
+  "studentId": "Mã học sinh",
+  "email": "Email",
+  "phone": "Điện thoại",
+  "dateOfBirth": "Ngày sinh",
+  "address": "Địa chỉ",
+  "guardianName": "Tên người giám hộ",
+  "guardianPhone": "Điện thoại người giám hộ",
+  "createStudentSuccess": "Tạo học sinh thành công",
+  "updateStudentSuccess": "Cập nhật học sinh thành công",
+  "deleteStudentSuccess": "Xóa học sinh thành công",
+  "createStudentError": "Tạo học sinh thất bại",
+  "updateStudentError": "Cập nhật học sinh thất bại",
+  "deleteStudentError": "Xóa học sinh thất bại"
+}

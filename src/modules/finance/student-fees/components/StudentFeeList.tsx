@@ -18,6 +18,7 @@ import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import { useTranslation } from "react-i18next";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -56,16 +57,17 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusLabel = (status: string) => {
+const getStatusLabel = (status: string, t: (key: string) => string) => {
   const labels: Record<string, string> = {
-    paid: "Đã thanh toán",
-    partial: "Thanh toán một phần",
-    unpaid: "Chưa thanh toán",
+    paid: t("finance:paidStatus"),
+    partial: t("finance:partialStatus"),
+    unpaid: t("finance:unpaidStatus"),
   };
   return labels[status] || status;
 };
 
 export function StudentFeeList() {
+  const { t } = useTranslation(["finance", "common"]);
   const snackbar = useSnackbar();
   const [editingFee, setEditingFee] = useState<StudentFee | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -112,23 +114,23 @@ export function StudentFeeList() {
   }, []);
 
   const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
+    if (!confirm(t("common:confirmDelete"))) return;
 
     try {
       const response = await fetch(`/api/student-fees/${id}`, {
         method: "DELETE",
       });
       if (!response.ok) throw new Error("Failed to delete");
-      snackbar.showSuccess("Xóa thành công");
+      snackbar.showSuccess(t("common:deleteSuccess"));
       refresh();
     } catch {
-      snackbar.showError("Xóa thất bại");
+      snackbar.showError(t("common:deleteError"));
     }
-  }, [refresh, snackbar]);
+  }, [refresh, snackbar, t]);
 
   const handleBulkCreate = useCallback(async () => {
     if (!bulkData.classId || !bulkData.month || bulkData.amount <= 0) {
-      snackbar.showError("Vui lòng điền đầy đủ thông tin");
+      snackbar.showError(t("common:error"));
       return;
     }
 
@@ -139,7 +141,7 @@ export function StudentFeeList() {
         body: JSON.stringify(bulkData),
       });
       if (!response.ok) throw new Error("Failed to create fees");
-      snackbar.showSuccess("Tạo hóa đơn thành công");
+      snackbar.showSuccess(t("finance:createFeeSuccess"));
       setShowBulkDialog(false);
       setBulkData({
         classId: "",
@@ -149,46 +151,46 @@ export function StudentFeeList() {
       });
       refresh();
     } catch {
-      snackbar.showError("Tạo hóa đơn thất bại");
+      snackbar.showError(t("common:error"));
     }
-  }, [bulkData, refresh, snackbar]);
+  }, [bulkData, refresh, snackbar, t]);
 
   const columns: GridColDef[] = useMemo(
     () => [
       { field: "id", headerName: "ID", width: 100 },
       {
         field: "studentId",
-        headerName: "Học sinh",
+        headerName: t("finance:student"),
         width: 150,
         valueGetter: (params) => params,
       },
       {
         field: "classId",
-        headerName: "Lớp",
+        headerName: t("finance:class"),
         width: 150,
         valueGetter: (params) => params,
       },
       {
         field: "month",
-        headerName: "Tháng",
+        headerName: t("finance:month"),
         width: 120,
         valueGetter: (params) => params,
       },
       {
         field: "amount",
-        headerName: "Số tiền",
+        headerName: t("finance:amount"),
         width: 120,
         valueGetter: (params: any) => `${(params.row?.amount || 0).toLocaleString()} VND`,
       },
       {
         field: "dueDate",
-        headerName: "Hạn thanh toán",
+        headerName: t("finance:dueDate"),
         width: 150,
         valueGetter: (params: any) => params.row?.dueDate ? new Date(params.row.dueDate).toLocaleDateString("vi-VN") : "",
       },
       {
         field: "status",
-        headerName: "Trạng thái",
+        headerName: t("finance:status"),
         width: 150,
         renderCell: (params) => (
           <Typography
@@ -201,7 +203,7 @@ export function StudentFeeList() {
               color: `${getStatusColor(params.value)}.dark`,
             }}
           >
-            {getStatusLabel(params.value)}
+            {getStatusLabel(params.value, t)}
           </Typography>
         ),
       },
@@ -213,19 +215,19 @@ export function StudentFeeList() {
           <GridActionsCellItem
             key="edit"
             icon={<EditIcon />}
-            label="Sửa"
+            label={t("common:edit")}
             onClick={() => handleEdit(params.row as StudentFee)}
           />,
           <GridActionsCellItem
             key="delete"
             icon={<DeleteIcon />}
-            label="Xóa"
+            label={t("common:delete")}
             onClick={() => handleDelete((params.row as StudentFee).id)}
           />,
         ],
       },
     ],
-    [handleDelete, handleEdit]
+    [handleDelete, handleEdit, t]
   );
 
   return (
@@ -237,13 +239,13 @@ export function StudentFeeList() {
             startIcon={<AddIcon />}
             onClick={handleCreate}
           >
-            Tạo hóa đơn
+            {t("finance:createStudentFee")}
           </Button>
           <Button
             variant="outlined"
             onClick={() => setShowBulkDialog(true)}
           >
-            Tạo hóa đơn hàng loạt
+            {t("finance:createStudentFee")}
           </Button>
         </Stack>
 
@@ -284,12 +286,12 @@ export function StudentFeeList() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Tạo hóa đơn hàng loạt</DialogTitle>
+        <DialogTitle>{t("finance:createStudentFee")}</DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           <Stack spacing={2}>
             <TextField
               select
-              label="Lớp"
+              label={t("finance:class")}
               value={bulkData.classId}
               onChange={(e) =>
                 setBulkData({ ...bulkData, classId: e.target.value })
@@ -302,17 +304,17 @@ export function StudentFeeList() {
                 },
               }}
             >
-              <option value="">-- Chọn lớp --</option>
+              <option value="">{t("finance:allStatus")}</option>
               {classes.map((cls) => (
                 <option key={cls.classId} value={cls.classId}>
-                  {cls.className} ({cls.studentCount} học sinh)
+                  {cls.className} ({cls.studentCount} {t("finance:student")})
                 </option>
               ))}
             </TextField>
 
             <TextField
               type="month"
-              label="Tháng"
+              label={t("finance:month")}
               value={bulkData.month}
               onChange={(e) =>
                 setBulkData({ ...bulkData, month: e.target.value })
@@ -323,7 +325,7 @@ export function StudentFeeList() {
 
             <TextField
               type="number"
-              label="Số tiền"
+              label={t("finance:amount")}
               value={bulkData.amount}
               onChange={(e) =>
                 setBulkData({
@@ -337,7 +339,7 @@ export function StudentFeeList() {
 
             <TextField
               type="date"
-              label="Hạn thanh toán"
+              label={t("finance:dueDate")}
               value={bulkData.dueDate}
               onChange={(e) =>
                 setBulkData({ ...bulkData, dueDate: e.target.value })
@@ -348,13 +350,13 @@ export function StudentFeeList() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowBulkDialog(false)}>Hủy</Button>
+          <Button onClick={() => setShowBulkDialog(false)}>{t("common:cancel")}</Button>
           <Button
             onClick={handleBulkCreate}
             variant="contained"
             disabled={!bulkData.classId || bulkData.amount <= 0}
           >
-            Tạo
+            {t("common:create")}
           </Button>
         </DialogActions>
       </Dialog>

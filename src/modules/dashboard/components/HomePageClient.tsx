@@ -3,6 +3,7 @@
 import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
 import { Alert, Card, CardContent, Chip, Stack, Typography } from "@mui/material";
 import type { ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import type { SessionUser } from "@/types/auth";
 
 type HomePageClientProps = {
@@ -10,22 +11,25 @@ type HomePageClientProps = {
 };
 
 export function HomePageClient({ user }: HomePageClientProps): ReactElement {
+  const { t } = useTranslation("dashboard");
+  const { t: tCommon } = useTranslation("common");
+
   return (
     <Stack spacing={2.5}>
       <Typography variant="h4" fontWeight={700}>
-        Welcome, {user.fullName}
+        {tCommon("welcome")}, {user.fullName}
       </Typography>
       <Card>
         <CardContent>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Stack direction="row" spacing={1.5} alignItems="center">
               <DashboardOutlinedIcon color="primary" />
-              <Typography variant="h6">System Foundation Ready</Typography>
+              <Typography variant="h6">{t("systemFoundationReady")}</Typography>
             </Stack>
             <Chip label={user.role} color="primary" variant="outlined" />
           </Stack>
           <Alert severity="info" sx={{ mt: 2 }}>
-            Business modules will be implemented in the next development steps.
+            {t("businessModulesWillBeImplemented")}
           </Alert>
         </CardContent>
       </Card>

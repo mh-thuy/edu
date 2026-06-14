@@ -22,6 +22,7 @@ import {
   Tab,
 } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
+import { useTranslation } from "react-i18next";
 
 import { useSnackbar } from "@/hooks/useSnackbar";
 
@@ -66,6 +67,7 @@ interface TeacherReportData {
 }
 
 export function ReportingDashboard() {
+  const { t } = useTranslation("finance");
   const snackbar = useSnackbar();
   const [activeTab, setActiveTab] = useState(0);
   const [dateStart, setDateStart] = useState("");
@@ -102,7 +104,7 @@ export function ReportingDashboard() {
       const result = await response.json();
       setRevenueReport(result);
     } catch (err) {
-      snackbar.showError("Tải báo cáo doanh thu thất bại");
+      snackbar.showError(t("loadRevenueReportError"));
     } finally {
       setLoading(false);
     }
@@ -134,7 +136,7 @@ export function ReportingDashboard() {
       };
       setDebtReport(debtData);
     } catch (err) {
-      snackbar.showError("Tải báo cáo nợ thất bại");
+      snackbar.showError(t("loadDebtReportError"));
     } finally {
       setLoading(false);
     }
@@ -166,7 +168,7 @@ export function ReportingDashboard() {
       });
       setTeacherReports(Array.from(grouped.values()));
     } catch (err) {
-      snackbar.showError("Tải báo cáo giáo viên thất bại");
+      snackbar.showError(t("loadTeacherReportError"));
     } finally {
       setLoading(false);
     }
@@ -197,7 +199,7 @@ export function ReportingDashboard() {
         <Stack direction="row" spacing={2} mb={3}>
           <TextField
             type="date"
-            label="Từ ngày"
+            label={t("fromDate")}
             value={dateStart}
             onChange={(e) => setDateStart(e.target.value)}
             InputLabelProps={{ shrink: true }}
@@ -205,7 +207,7 @@ export function ReportingDashboard() {
           />
           <TextField
             type="date"
-            label="Đến ngày"
+            label={t("toDate")}
             value={dateEnd}
             onChange={(e) => setDateEnd(e.target.value)}
             InputLabelProps={{ shrink: true }}
@@ -219,9 +221,9 @@ export function ReportingDashboard() {
             value={activeTab}
             onChange={(e, newValue) => setActiveTab(newValue)}
           >
-            <Tab label="Doanh thu" onClick={loadRevenueReport} />
-            <Tab label="Nợ học phí" onClick={loadDebtReport} />
-            <Tab label="Lương giáo viên" onClick={loadTeacherReport} />
+            <Tab label={t("revenueReport")} onClick={loadRevenueReport} />
+            <Tab label={t("debtReport")} onClick={loadDebtReport} />
+            <Tab label={t("teacherReport")} onClick={loadTeacherReport} />
           </Tabs>
         </Box>
 
@@ -245,7 +247,7 @@ export function ReportingDashboard() {
               <Box>
                 <Card sx={{ p: 2, backgroundColor: "#e3f2fd" }}>
                   <Typography color="text.secondary" variant="caption">
-                    Tổng doanh thu
+                    {t("totalRevenue")}
                   </Typography>
                   <Typography variant="h6">
                     {revenueReport.totalRevenue?.toLocaleString()} VND
@@ -255,7 +257,7 @@ export function ReportingDashboard() {
               <Box>
                 <Card sx={{ p: 2, backgroundColor: "#f3e5f5" }}>
                   <Typography color="text.secondary" variant="caption">
-                    Số giao dịch
+                    {t("transactionCount")}
                   </Typography>
                   <Typography variant="h6">
                     {revenueReport.paymentCount}
@@ -267,14 +269,14 @@ export function ReportingDashboard() {
             {revenueReport.methodSummary && (
               <Box>
                 <Typography variant="subtitle2" mb={2}>
-                  Doanh thu theo phương thức
+                  {t("revenueByMethod")}
                 </Typography>
                 <TableContainer component={Paper}>
                   <Table size="small">
                     <TableHead>
                       <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                        <TableCell>Phương thức</TableCell>
-                        <TableCell align="right">Số tiền (VND)</TableCell>
+                        <TableCell>{t("paymentMethod")}</TableCell>
+                        <TableCell align="right">{t("amount")} (VND)</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -304,7 +306,7 @@ export function ReportingDashboard() {
               }
               sx={{ mt: 2 }}
             >
-              Xuất CSV
+              {t("exportCSV")}
             </Button>
           </Box>
         )}
@@ -323,7 +325,7 @@ export function ReportingDashboard() {
               <Box>
                 <Card sx={{ p: 2, backgroundColor: "#ffe0e0" }}>
                   <Typography color="text.secondary" variant="caption">
-                    Tổng nợ
+                    {t("totalDebt")}
                   </Typography>
                   <Typography variant="h6" color="error">
                     {debtReport.totalDebt?.toLocaleString()} VND
@@ -333,7 +335,7 @@ export function ReportingDashboard() {
               <Box>
                 <Card sx={{ p: 2, backgroundColor: "#fff3e0" }}>
                   <Typography color="text.secondary" variant="caption">
-                    Chưa thanh toán
+                    {t("unpaidCountReporting")}
                   </Typography>
                   <Typography variant="h6">
                     {debtReport.unpaidCount}
@@ -343,7 +345,7 @@ export function ReportingDashboard() {
               <Box>
                 <Card sx={{ p: 2, backgroundColor: "#fff9c4" }}>
                   <Typography color="text.secondary" variant="caption">
-                    Quá hạn
+                    {t("overdueCountReporting")}
                   </Typography>
                   <Typography variant="h6">
                     {debtReport.overdueCount}
@@ -362,7 +364,7 @@ export function ReportingDashboard() {
               }
               sx={{ mt: 2 }}
             >
-              Xuất CSV
+              {t("exportCSV")}
             </Button>
           </Box>
         )}
@@ -374,11 +376,11 @@ export function ReportingDashboard() {
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                    <TableCell>Giáo viên</TableCell>
-                    <TableCell align="right">Tổng lương</TableCell>
-                    <TableCell align="right">Tổng doanh thu</TableCell>
-                    <TableCell align="right">Đã thanh toán</TableCell>
-                    <TableCell align="right">Chờ duyệt</TableCell>
+                    <TableCell>{t("selectTeacher")}</TableCell>
+                    <TableCell align="right">{t("totalSalary")}</TableCell>
+                    <TableCell align="right">{t("totalRevenue")}</TableCell>
+                    <TableCell align="right">{t("paidCountReporting")}</TableCell>
+                    <TableCell align="right">{t("approvedCountReporting")}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>

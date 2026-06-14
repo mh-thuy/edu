@@ -13,7 +13,9 @@ import {
   Typography,
 } from "@mui/material";
 import { useState, useTransition, type ReactElement } from "react";
+import { useTranslation } from "react-i18next";
 import { logoutAction } from "@/server-actions/auth.actions";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import type { SessionUser } from "@/types/auth";
 
 type HeaderProps = {
@@ -22,6 +24,7 @@ type HeaderProps = {
 };
 
 export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
+  const { t } = useTranslation("common");
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const open = Boolean(anchorEl);
@@ -56,7 +59,8 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
         </Typography>
       </Stack>
 
-      <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Stack direction="row" alignItems="center" spacing={2}>
+        <LanguageSwitcher />
         <Box textAlign="right">
           <Typography variant="body2" fontWeight={600}>
             {user.fullName}
@@ -87,7 +91,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
             <ListItemIcon>
               <LogoutOutlinedIcon fontSize="small" />
             </ListItemIcon>
-            {isLoggingOut ? "Logging out..." : "Logout"}
+            {isLoggingOut ? t("loggingOut") : t("logout")}
           </MenuItem>
         </Menu>
       </Stack>
