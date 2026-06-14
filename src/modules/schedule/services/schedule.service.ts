@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import type { ClassSchedule } from "@prisma/client";
-import type { ClassScheduleCreate, ClassScheduleUpdate, ScheduleFilter } from "@/modules/schedule/schemas/schedule.schema";
+import type {
+  ClassScheduleCreate,
+  ClassScheduleUpdate,
+  ScheduleFilter,
+} from "@/modules/schedule/schemas/schedule.schema";
 
 function timeToMinutes(time: string): number {
   const parts = time.split(":");
@@ -10,7 +14,12 @@ function timeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
-function hasTimeConflict(startTime1: string, endTime1: string, startTime2: string, endTime2: string): boolean {
+function hasTimeConflict(
+  startTime1: string,
+  endTime1: string,
+  startTime2: string,
+  endTime2: string,
+): boolean {
   const start1 = timeToMinutes(startTime1);
   const end1 = timeToMinutes(endTime1);
   const start2 = timeToMinutes(startTime2);
@@ -19,7 +28,9 @@ function hasTimeConflict(startTime1: string, endTime1: string, startTime2: strin
   return start1 < end2 && start2 < end1;
 }
 
-export async function createClassSchedule(data: ClassScheduleCreate): Promise<{ schedule: ClassSchedule; conflicts: any[] }> {
+export async function createClassSchedule(
+  data: ClassScheduleCreate,
+): Promise<{ schedule: ClassSchedule; conflicts: any[] }> {
   // Check room conflict
   const roomConflicts = data.roomId
     ? await prisma.classSchedule.findMany({
@@ -40,12 +51,18 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{ 
       },
     });
     // Filter by teacherId in memory
-    teacherConflicts = allSchedules.filter((s: any) => s.teacherId === data.teacherId);
+    teacherConflicts = allSchedules.filter(
+      (s: any) => s.teacherId === data.teacherId,
+    );
   }
 
   const allConflicts = [
-    ...roomConflicts.filter((s) => hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime)),
-    ...teacherConflicts.filter((s) => hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime)),
+    ...roomConflicts.filter((s) =>
+      hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime),
+    ),
+    ...teacherConflicts.filter((s) =>
+      hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime),
+    ),
   ];
 
   const schedule = await prisma.classSchedule.create({
@@ -83,7 +100,7 @@ export async function getSchedules(filter: ScheduleFilter) {
   ]);
 
   return {
-    schedules,
+    items: schedules,
     total,
     page,
     limit,
@@ -91,7 +108,10 @@ export async function getSchedules(filter: ScheduleFilter) {
   };
 }
 
-export async function updateClassSchedule(id: string, data: ClassScheduleUpdate): Promise<ClassSchedule> {
+export async function updateClassSchedule(
+  id: string,
+  data: ClassScheduleUpdate,
+): Promise<ClassSchedule> {
   return prisma.classSchedule.update({
     where: { id },
     data,

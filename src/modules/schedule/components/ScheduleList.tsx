@@ -1,6 +1,16 @@
 "use client";
 
-import { Box, Stack, Button, Typography } from "@mui/material";
+import {
+  Box,
+  Stack,
+  Button,
+  Chip,
+  Paper,
+  Typography,
+  Alert,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import EventNoteIcon from "@mui/icons-material/EventNote";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
@@ -15,7 +25,15 @@ import { classScheduleCreateSchema } from "@/modules/schedule/schemas/schedule.s
 
 type ScheduleFormData = z.infer<typeof classScheduleCreateSchema>;
 
-const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const dayNames = [
+  "Thứ 2",
+  "Thứ 3",
+  "Thứ 4",
+  "Thứ 5",
+  "Thứ 6",
+  "Thứ 7",
+  "Chủ nhật",
+];
 
 export interface Schedule {
   id: string;
@@ -23,49 +41,152 @@ export interface Schedule {
   startTime: string;
   endTime: string;
   classId: string;
-  roomId?: string;
+  roomId?: string | null;
+  class?: {
+    id: string;
+    name: string;
+    code: string;
+  };
+  room?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 }
 
-const columns: GridColDef[] = [
+type ScheduleRow = Schedule & {
+  _onEdit?: (schedule: Schedule) => void;
+  _onDelete?: (schedule: Schedule) => void;
+};
+
+const columns: GridColDef<ScheduleRow>[] = [
   {
     field: "dayOfWeek",
-    headerName: "Day",
-    width: 100,
-    renderCell: (params) => dayNames[params.value] || params.value,
+    headerName: "Ngày học",
+    minWidth: 120,
+    flex: 0.7,
+    renderCell: (params) => {
+      const dayIndex = Number(params.value);
+      return dayNames[dayIndex] || params.value;
+    },
   },
-  { field: "startTime", headerName: "Start Time", width: 120 },
-  { field: "endTime", headerName: "End Time", width: 120 },
-  { field: "classId", headerName: "Class", width: 150, flex: 1 },
-  { field: "roomId", headerName: "Room", width: 100 },
+  {
+    field: "startTime",
+    headerName: "Giờ bắt đầu",
+    minWidth: 120,
+  },
+  {
+    field: "endTime",
+    headerName: "Giờ kết thúc",
+    minWidth: 120,
+  },
+  {
+    field: "classId",
+    headerName: "Lớp học",
+    minWidth: 200,
+    flex: 1,
+    renderCell: (params) => {
+      const classData = params.row.class;
+      if (!classData) return params.value;
+      return `${classData.name} (${classData.code})`;
+    },
+  },
+  {
+    field: "roomId",
+    headerName: "Phòng",
+    minWidth: 150,
+    renderCell: (params) => {
+      const roomData = params.row.room;
+      if (!roomData) return "-";
+      return `${roomData.name} (${roomData.code})`;
+    },
+  },
+  {
+    field: "timeRange",
+    headerName: "Thời lượng",
+    minWidth: 150,
+    sortable: false,
+    filterable: false,
+    disableColumnMenu: true,
+    renderCell: (params) => (
+      <Chip
+        label={`${params.row.startTime} - ${params.row.endTime}`}
+        size="small"
+        variant="outlined"
+        sx={{
+          fontWeight: 600,
+          borderRadius: 999,
+        }}
+      />
+    ),
+  },
   {
     field: "actions",
-    headerName: "Actions",
-    width: 150,
+    headerName: "Thao tác",
+    minWidth: 150,
     sortable: false,
+    filterable: false,
+    disableColumnMenu: true,
+    align: "center",
+    headerAlign: "center",
     renderCell: (params) => (
-      <Box sx={{ display: "flex", gap: 1 }}>
-        <Button size="small" variant="outlined" onClick={() => params.row._onEdit?.(params.row)}>
-          Edit
-        </Button>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="center"
+        sx={{
+          width: "100%",
+          height: "100%",
+        }}
+      >
         <Button
           size="small"
-          variant="outlined"
+          variant="contained"
+          onClick={() => params.row._onEdit?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
+        >
+          Sửa
+        </Button>
+
+        <Button
+          size="small"
+          variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
         >
-          Delete
+          Xóa
         </Button>
-      </Box>
+      </Stack>
     ),
   },
 ];
 
 export function ScheduleList(): ReactElement {
-  const { data, isLoading, error, page, limit, setPageNumber, setPageSize, refresh } =
-    useList<Schedule>("/api/schedules", { limit: 10 });
+  const {
+    data,
+    isLoading,
+    error,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+    refresh,
+  } = useList<Schedule>("/api/schedules", { limit: 10 });
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
@@ -73,13 +194,13 @@ export function ScheduleList(): ReactElement {
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const handleCreate = useCallback(() => {
-    setEditingId(null);
+    setEditingSchedule(null);
     setOpenDialog(true);
     setConflictWarning(null);
   }, []);
 
   const handleEdit = useCallback((schedule: Schedule) => {
-    setEditingId(schedule.id);
+    setEditingSchedule(schedule);
     setOpenDialog(true);
     setConflictWarning(null);
   }, []);
@@ -88,19 +209,33 @@ export function ScheduleList(): ReactElement {
     setDeleteId(schedule.id);
   }, []);
 
+  const handleCloseDialog = useCallback(() => {
+    if (isSubmitting) return;
+
+    setOpenDialog(false);
+    setEditingSchedule(null);
+    setConflictWarning(null);
+  }, [isSubmitting]);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteId) return;
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/schedules/${deleteId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Failed to delete schedule");
 
-      showSuccess("Schedule deleted successfully");
+      const response = await fetch(`/api/schedules/${deleteId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Xóa lịch học thất bại");
+      }
+
+      showSuccess("Đã xóa lịch học thành công");
       setDeleteId(null);
-      refresh();
+      await refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Error deleting schedule");
+      showError(err instanceof Error ? err.message : "Có lỗi khi xóa lịch học");
     } finally {
       setIsSubmitting(false);
     }
@@ -111,94 +246,190 @@ export function ScheduleList(): ReactElement {
       try {
         setIsSubmitting(true);
 
-        if (editingId) {
-          const response = await fetch(`/api/schedules/${editingId}`, {
-            method: "PUT",
+        const isEdit = !!editingSchedule?.id;
+
+        const response = await fetch(
+          isEdit ? `/api/schedules/${editingSchedule.id}` : "/api/schedules",
+          {
+            method: isEdit ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
-          });
-          if (!response.ok) throw new Error("Failed to update schedule");
-          showSuccess("Schedule updated successfully");
-        } else {
-          const response = await fetch("/api/schedules", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formData),
-          });
-          if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || "Failed to create schedule");
+          },
+        );
+
+        if (!response.ok) {
+          let message = isEdit
+            ? "Cập nhật lịch học thất bại"
+            : "Thêm lịch học thất bại";
+
+          try {
+            const errorData = await response.json();
+            message = errorData.error || message;
+          } catch {
+            // Ignore JSON parse error
           }
-          showSuccess("Schedule created successfully");
+
+          throw new Error(message);
         }
 
+        showSuccess(
+          isEdit
+            ? "Đã cập nhật lịch học thành công"
+            : "Đã thêm lịch học thành công",
+        );
+
         setOpenDialog(false);
-        refresh();
+        setEditingSchedule(null);
+        setConflictWarning(null);
+        await refresh();
       } catch (err) {
-        showError(err instanceof Error ? err.message : "Error saving schedule");
+        showError(
+          err instanceof Error ? err.message : "Có lỗi khi lưu lịch học",
+        );
       } finally {
         setIsSubmitting(false);
       }
     },
-    [editingId, refresh, showSuccess, showError]
+    [editingSchedule, refresh, showSuccess, showError],
   );
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
+    roomId: row.roomId ?? "",
     _onEdit: handleEdit,
     _onDelete: handleDelete,
   }));
 
   return (
-    <Stack spacing={2}>
-      <Box sx={{ display: "flex", gap: 2 }}>
-        <Typography sx={{ flex: 1, alignSelf: "center", fontSize: "14px" }}>
-          Schedules with automatic conflict detection
-        </Typography>
-        <Button variant="contained" onClick={handleCreate}>
-          Add Schedule
-        </Button>
-      </Box>
+    <Stack spacing={2.5}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+              }}
+            >
+              <EventNoteIcon />
+            </Box>
 
-      <BaseTable
-        columns={columns}
-        rows={tableData}
-        totalRows={data?.total || 0}
-        page={page}
-        pageSize={limit}
-        isLoading={isLoading}
-        onPageChange={setPageNumber}
-        onPageSizeChange={setPageSize}
-        error={error}
-      />
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Quản lý lịch học
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Danh sách lịch học, phòng học và tự động kiểm tra trùng lịch
+              </Typography>
+            </Box>
+          </Box>
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreate}
+            sx={{
+              borderRadius: 2,
+              px: 2.5,
+              height: 40,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Thêm lịch học
+          </Button>
+        </Stack>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          overflow: "hidden",
+          bgcolor: "background.paper",
+        }}
+      >
+        <BaseTable
+          columns={columns}
+          rows={tableData}
+          totalRows={data?.total || 0}
+          page={page}
+          pageSize={limit}
+          isLoading={isLoading}
+          onPageChange={setPageNumber}
+          onPageSizeChange={setPageSize}
+          error={error}
+        />
+      </Paper>
 
       <FormDialog
         open={openDialog}
-        title={editingId ? "Edit Schedule" : "Add Schedule"}
-        onClose={() => setOpenDialog(false)}
+        title={editingSchedule ? "Sửa lịch học" : "Thêm lịch học"}
+        onClose={handleCloseDialog}
         onSubmit={async () => {
-          const form = document.querySelector("form") as HTMLFormElement;
+          const form = document.querySelector(
+            "#schedule-form",
+          ) as HTMLFormElement | null;
           form?.requestSubmit();
         }}
         isLoading={isSubmitting}
       >
         <ScheduleForm
+          key={editingSchedule?.id ?? "create"}
+          formId="schedule-form"
           onSubmit={handleSubmit}
+          defaultValues={
+            editingSchedule
+              ? {
+                  dayOfWeek: editingSchedule.dayOfWeek,
+                  startTime: editingSchedule.startTime ?? "",
+                  endTime: editingSchedule.endTime ?? "",
+                  classId: editingSchedule.classId ?? "",
+                  roomId: editingSchedule.roomId ?? "",
+                }
+              : undefined
+          }
           onConflictCheck={(data) => {
             if (data.hasConflict) {
-              setConflictWarning("Room conflict detected!");
+              setConflictWarning("Phát hiện trùng lịch phòng học!");
             } else {
               setConflictWarning(null);
             }
           }}
         />
-        {conflictWarning && <Box sx={{ color: "orange", fontSize: "12px", mt: 1 }}>{conflictWarning}</Box>}
+
+        {conflictWarning && (
+          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+            {conflictWarning}
+          </Alert>
+        )}
       </FormDialog>
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Delete Schedule"
-        message="Are you sure you want to delete this schedule?"
+        title="Xóa lịch học"
+        message="Bạn có chắc chắn muốn xóa lịch học này không?"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
         isLoading={isSubmitting}
