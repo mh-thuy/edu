@@ -1,0 +1,77 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    /**
+     * ワークスペース別の固有設定
+     */
+    // color
+    "workbench.colorCustomizations": {
+      "titleBar.inactiveBackground": "#283593",
+      "titleBar.activeBackground": "#1a237e",
+    },
+    // terminal
+    "terminal.integrated.cwd": "${workspaceFolder:edu}",
+
+    /**
+     * 共通設定
+     */
+    // editor
+    "workbench.iconTheme": "material-icon-theme",
+    "github.copilot.enable": {
+      "markdown": true,
+    },
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit",
+    },
+    "editor.minimap.enabled": false,
+    "editor.renderWhitespace": "all",
+    "files.trimTrailingWhitespace": true,
+
+    // javascript
+    "typescript.preferences.importModuleSpecifier": "non-relative",
+
+    // git
+    "git.autofetch": true,
+    "git.openRepositoryInParentFolders": "always",
+    "githubIssues.queries": [
+      // 無効化: グループが単一 かつ 0 件の場合に読み込み中のままになる不具合を回避
+      {
+        "label": "※この機能は使用しないでください",
+        // 0 件の結果を返す
+        "query": "repo:${owner}/${repository} label:area:wontfix is:open",
+      },
+      {
+        "label": "上記 PULL REQUESTS から Checkout もしくは Branch を直接開いてください",
+        // 0 件の結果を返す
+        "query": "repo:${owner}/${repository} label:area:wontfix is:open",
+      },
+    ],
+    "conventionalCommits.gitmoji": false,
+    "conventionalCommits.lineBreak": "\\n",
+
+    // Todo Tree
+    // 極端にパフォーマンスが悪くなるため `workspace` に設定しないこと
+    "todo-tree.tree.scanMode": "workspace only",
+    "todo-tree.general.tags": ["TODO"],
+    "chat.tools.terminal.autoApprove": {
+      "/^bash -c '\\./ansible/setup\\.sh && pnpm run migrate'$/": {
+        "approve": true,
+        "matchCommandLine": true,
+      },
+      "docker compose": true,
+      "/^bash -lc \"cd packages/oms-frontend && pnpm exec eslint \\./src --ext \\.ts,\\.tsx --fix\"$/": {
+        "approve": true,
+        "matchCommandLine": true,
+      },
+    },
+    "[typespec]": {
+      "editor.defaultFormatter": "typespec.typespec-vscode",
+    },
+  },
+}
