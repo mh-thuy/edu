@@ -1,6 +1,18 @@
 "use client";
 
-import { Box, Stack, TextField, Button, Chip } from "@mui/material";
+import {
+  Box,
+  Stack,
+  TextField,
+  Button,
+  Chip,
+  Paper,
+  Typography,
+  InputAdornment,
+} from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import SearchIcon from "@mui/icons-material/Search";
+import ClassIcon from "@mui/icons-material/Class";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
@@ -22,75 +34,184 @@ export interface Class {
   tuitionFee: number;
   totalSessions: number;
   maxStudents: number;
-  status: string;
+  status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
 }
 
-const columns: GridColDef[] = [
-  { field: "code", headerName: "Code", width: 100, flex: 0.5 },
-  { field: "name", headerName: "Name", width: 150, flex: 1 },
-  { field: "tuitionFee", headerName: "Tuition Fee", width: 120 },
-  { field: "totalSessions", headerName: "Sessions", width: 100 },
-  { field: "maxStudents", headerName: "Max Students", width: 120 },
+type ClassRow = Class & {
+  _onEdit?: (cls: Class) => void;
+  _onDelete?: (cls: Class) => void;
+};
+
+const formatCurrency = (value?: number | null): string =>
+  new Intl.NumberFormat("vi-VN").format(value ?? 0);
+
+const columns: GridColDef<ClassRow>[] = [
+  {
+    field: "code",
+    headerName: "Mã lớp",
+    minWidth: 110,
+    flex: 0.6,
+  },
+  {
+    field: "name",
+    headerName: "Tên lớp",
+    minWidth: 180,
+    flex: 1,
+  },
+  {
+    field: "tuitionFee",
+    headerName: "Học phí",
+    minWidth: 130,
+    align: "right",
+    headerAlign: "right",
+    valueFormatter: (value) => `${formatCurrency(Number(value))} đ`,
+  },
+  {
+    field: "totalSessions",
+    headerName: "Số buổi",
+    minWidth: 100,
+    align: "center",
+    headerAlign: "center",
+  },
+  {
+    field: "maxStudents",
+    headerName: "Sĩ số",
+    minWidth: 100,
+    align: "center",
+    headerAlign: "center",
+  },
   {
     field: "status",
-    headerName: "Status",
-    width: 100,
-    renderCell: (params) => (
-      <Chip
-        label={params.value}
-        size="small"
-        color={
-          params.value === "ACTIVE"
-            ? "success"
-            : params.value === "DRAFT"
-              ? "default"
-              : "error"
-        }
-        variant="outlined"
-      />
-    ),
+    headerName: "Trạng thái",
+    minWidth: 140,
+    align: "center",
+    headerAlign: "center",
+    renderCell: (params) => {
+      const status = params.value as Class["status"];
+
+      const label =
+        status === "ACTIVE"
+          ? "Hoạt động"
+          : status === "DRAFT"
+            ? "Nháp"
+            : status === "COMPLETED"
+              ? "Hoàn thành"
+              : "Đã hủy";
+
+      return (
+        <Box
+          sx={{
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Chip
+            label={label}
+            size="small"
+            color={
+              status === "ACTIVE"
+                ? "success"
+                : status === "DRAFT"
+                  ? "default"
+                  : status === "COMPLETED"
+                    ? "info"
+                    : "error"
+            }
+            variant="outlined"
+            sx={{
+              minWidth: 90,
+              fontWeight: 600,
+              borderRadius: 999,
+            }}
+          />
+        </Box>
+      );
+    },
   },
   {
     field: "actions",
-    headerName: "Actions",
-    width: 150,
+    headerName: "Thao tác",
+    minWidth: 150,
     sortable: false,
+    filterable: false,
+    disableColumnMenu: true,
+    align: "center",
+    headerAlign: "center",
     renderCell: (params) => (
-      <Box sx={{ display: "flex", gap: 1 }}>
-        <Button size="small" variant="outlined" onClick={() => params.row._onEdit?.(params.row)}>
-          Edit
-        </Button>
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="center"
+        sx={{
+          width: "100%",
+          height: "100%",
+        }}
+      >
         <Button
           size="small"
-          variant="outlined"
+          variant="contained"
+          onClick={() => params.row._onEdit?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
+        >
+          Sửa
+        </Button>
+
+        <Button
+          size="small"
+          variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          sx={{
+            minWidth: 56,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
         >
-          Delete
+          Xóa
         </Button>
-      </Box>
+      </Stack>
     ),
   },
 ];
 
 export function ClassList(): ReactElement {
-  const { data, isLoading, error, page, limit, setPageNumber, setPageSize, refresh } =
-    useList<Class>("/api/classes", { limit: 10 });
+  const [search, setSearch] = useState("");
+
+  const {
+    data,
+    isLoading,
+    error,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+    refresh,
+  } = useList<Class>("/api/classes", { limit: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const handleCreate = useCallback(() => {
-    setEditingId(null);
+    setEditingClass(null);
     setOpenDialog(true);
   }, []);
 
   const handleEdit = useCallback((cls: Class) => {
-    setEditingId(cls.id);
+    setEditingClass(cls);
     setOpenDialog(true);
   }, []);
 
@@ -98,19 +219,32 @@ export function ClassList(): ReactElement {
     setDeleteId(cls.id);
   }, []);
 
+  const handleCloseDialog = useCallback(() => {
+    if (isSubmitting) return;
+
+    setOpenDialog(false);
+    setEditingClass(null);
+  }, [isSubmitting]);
+
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteId) return;
 
     try {
       setIsSubmitting(true);
-      const response = await fetch(`/api/classes/${deleteId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Failed to delete class");
 
-      showSuccess("Class deleted successfully");
+      const response = await fetch(`/api/classes/${deleteId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Xóa lớp học thất bại");
+      }
+
+      showSuccess("Đã xóa lớp học thành công");
       setDeleteId(null);
-      refresh();
+      await refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Error deleting class");
+      showError(err instanceof Error ? err.message : "Có lỗi khi xóa lớp học");
     } finally {
       setIsSubmitting(false);
     }
@@ -121,79 +255,194 @@ export function ClassList(): ReactElement {
       try {
         setIsSubmitting(true);
 
-        if (editingId) {
-          const response = await fetch(`/api/classes/${editingId}`, {
-            method: "PUT",
+        const isEdit = !!editingClass?.id;
+
+        const response = await fetch(
+          isEdit ? `/api/classes/${editingClass.id}` : "/api/classes",
+          {
+            method: isEdit ? "PUT" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
-          });
-          if (!response.ok) throw new Error("Failed to update class");
-          showSuccess("Class updated successfully");
-        } else {
-          const response = await fetch("/api/classes", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formData),
-          });
-          if (!response.ok) throw new Error("Failed to create class");
-          showSuccess("Class created successfully");
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            isEdit ? "Cập nhật lớp học thất bại" : "Thêm lớp học thất bại",
+          );
         }
 
+        showSuccess(
+          isEdit
+            ? "Đã cập nhật lớp học thành công"
+            : "Đã thêm lớp học thành công",
+        );
+
         setOpenDialog(false);
-        refresh();
+        setEditingClass(null);
+        await refresh();
       } catch (err) {
-        showError(err instanceof Error ? err.message : "Error saving class");
+        showError(
+          err instanceof Error ? err.message : "Có lỗi khi lưu lớp học",
+        );
       } finally {
         setIsSubmitting(false);
       }
     },
-    [editingId, refresh, showSuccess, showError]
+    [editingClass, refresh, showSuccess, showError],
   );
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
+    tuitionFee: row.tuitionFee ?? 0,
+    totalSessions: row.totalSessions ?? 0,
+    maxStudents: row.maxStudents ?? 0,
     _onEdit: handleEdit,
     _onDelete: handleDelete,
   }));
 
   return (
-    <Stack spacing={2}>
-      <Box sx={{ display: "flex", gap: 2 }}>
-        <TextField placeholder="Search..." size="small" sx={{ flex: 1 }} />
-        <Button variant="contained" onClick={handleCreate}>
-          Add Class
-        </Button>
-      </Box>
+    <Stack spacing={2.5}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "stretch", md: "center" }}
+          justifyContent="space-between"
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+              }}
+            >
+              <ClassIcon />
+            </Box>
 
-      <BaseTable
-        columns={columns}
-        rows={tableData}
-        totalRows={data?.total || 0}
-        page={page}
-        pageSize={limit}
-        isLoading={isLoading}
-        onPageChange={setPageNumber}
-        onPageSizeChange={setPageSize}
-        error={error}
-      />
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Quản lý lớp học
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Danh sách lớp học, học phí, số buổi và trạng thái
+              </Typography>
+            </Box>
+          </Box>
+
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleCreate}
+            sx={{
+              borderRadius: 2,
+              px: 2.5,
+              height: 40,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Thêm lớp học
+          </Button>
+        </Stack>
+
+        <Box sx={{ mt: 2.5 }}>
+          <TextField
+            placeholder="Tìm theo mã lớp hoặc tên lớp..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            size="small"
+            fullWidth
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              maxWidth: 420,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+                bgcolor: "background.default",
+              },
+            }}
+          />
+        </Box>
+      </Paper>
+
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+          overflow: "hidden",
+          bgcolor: "background.paper",
+        }}
+      >
+        <BaseTable
+          columns={columns}
+          rows={tableData}
+          totalRows={data?.total || 0}
+          page={page}
+          pageSize={limit}
+          isLoading={isLoading}
+          onPageChange={setPageNumber}
+          onPageSizeChange={setPageSize}
+          error={error}
+        />
+      </Paper>
 
       <FormDialog
         open={openDialog}
-        title={editingId ? "Edit Class" : "Add Class"}
-        onClose={() => setOpenDialog(false)}
+        title={editingClass ? "Sửa lớp học" : "Thêm lớp học"}
+        onClose={handleCloseDialog}
         onSubmit={async () => {
-          const form = document.querySelector("form") as HTMLFormElement;
+          const form = document.querySelector(
+            "#class-form",
+          ) as HTMLFormElement | null;
           form?.requestSubmit();
         }}
         isLoading={isSubmitting}
       >
-        <ClassForm onSubmit={handleSubmit} />
+        <ClassForm
+          key={editingClass?.id ?? "create"}
+          formId="class-form"
+          onSubmit={handleSubmit}
+          defaultValues={
+            editingClass
+              ? {
+                  code: editingClass.code ?? "",
+                  name: editingClass.name ?? "",
+                  tuitionFee: editingClass.tuitionFee ?? 0,
+                  totalSessions: editingClass.totalSessions ?? 0,
+                  maxStudents: editingClass.maxStudents ?? 0,
+                  status: editingClass.status ?? "DRAFT",
+                }
+              : undefined
+          }
+        />
       </FormDialog>
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Delete Class"
-        message="Are you sure you want to delete this class?"
+        title="Xóa lớp học"
+        message="Bạn có chắc chắn muốn xóa lớp học này không?"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
         isLoading={isSubmitting}

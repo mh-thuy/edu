@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import type { Student } from "@prisma/client";
-import type { StudentCreate, StudentFilter, StudentUpdate } from "@/modules/student/schemas/student.schema";
+import type {
+  StudentCreate,
+  StudentFilter,
+  StudentUpdate,
+} from "@/modules/student/schemas/student.schema";
 
 export async function createStudent(data: StudentCreate): Promise<Student> {
   return prisma.student.create({
@@ -42,7 +46,7 @@ export async function getStudents(filter: StudentFilter) {
   ]);
 
   return {
-    students,
+    items: students,
     total,
     page,
     limit,
@@ -50,7 +54,10 @@ export async function getStudents(filter: StudentFilter) {
   };
 }
 
-export async function updateStudent(id: string, data: StudentUpdate): Promise<Student> {
+export async function updateStudent(
+  id: string,
+  data: StudentUpdate,
+): Promise<Student> {
   return prisma.student.update({
     where: { id },
     data,

@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
 import type { Class } from "@prisma/client";
-import type { ClassCreate, ClassFilter, ClassUpdate } from "@/modules/class/schemas/class.schema";
+import type {
+  ClassCreate,
+  ClassFilter,
+  ClassUpdate,
+} from "@/modules/class/schemas/class.schema";
 
 export async function createClass(data: ClassCreate): Promise<Class> {
   return prisma.class.create({
@@ -12,7 +16,7 @@ export async function createClass(data: ClassCreate): Promise<Class> {
 export async function getClassById(id: string): Promise<any> {
   return prisma.class.findUnique({
     where: { id },
-    include: { 
+    include: {
       teacher: { include: { user: true } },
       room: true,
       classStudents: { include: { student: true } },
@@ -41,7 +45,7 @@ export async function getClasses(filter: ClassFilter) {
       where,
       skip,
       take: limit,
-      include: { 
+      include: {
         teacher: { include: { user: true } },
         room: true,
       },
@@ -51,7 +55,7 @@ export async function getClasses(filter: ClassFilter) {
   ]);
 
   return {
-    classes,
+    items: classes,
     total,
     page,
     limit,
@@ -59,7 +63,10 @@ export async function getClasses(filter: ClassFilter) {
   };
 }
 
-export async function updateClass(id: string, data: ClassUpdate): Promise<Class> {
+export async function updateClass(
+  id: string,
+  data: ClassUpdate,
+): Promise<Class> {
   return prisma.class.update({
     where: { id },
     data,
@@ -72,7 +79,10 @@ export async function deleteClass(id: string): Promise<Class> {
   });
 }
 
-export async function assignStudentToClass(classId: string, studentId: string): Promise<any> {
+export async function assignStudentToClass(
+  classId: string,
+  studentId: string,
+): Promise<any> {
   return prisma.classStudent.upsert({
     where: { classId_studentId: { classId, studentId } },
     create: { classId, studentId },
@@ -81,7 +91,10 @@ export async function assignStudentToClass(classId: string, studentId: string): 
   });
 }
 
-export async function removeStudentFromClass(classId: string, studentId: string): Promise<void> {
+export async function removeStudentFromClass(
+  classId: string,
+  studentId: string,
+): Promise<void> {
   await prisma.classStudent.delete({
     where: { classId_studentId: { classId, studentId } },
   });
