@@ -30,7 +30,7 @@ export async function getRooms(filter: RoomFilter) {
     where.status = status;
   }
 
-  const [items, total] = await Promise.all([
+  const [rooms, total] = await Promise.all([
     prisma.room.findMany({
       where,
       skip,
@@ -41,7 +41,7 @@ export async function getRooms(filter: RoomFilter) {
   ]);
 
   return {
-    items,
+    rooms,
     total,
     page,
     limit,

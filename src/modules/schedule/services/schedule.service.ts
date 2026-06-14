@@ -71,7 +71,7 @@ export async function getSchedules(filter: ScheduleFilter) {
   if (classId) where.classId = classId;
   if (dayOfWeek !== undefined) where.dayOfWeek = dayOfWeek;
 
-  const [items, total] = await Promise.all([
+  const [schedules, total] = await Promise.all([
     prisma.classSchedule.findMany({
       where,
       skip,
@@ -83,7 +83,7 @@ export async function getSchedules(filter: ScheduleFilter) {
   ]);
 
   return {
-    items,
+    schedules,
     total,
     page,
     limit,

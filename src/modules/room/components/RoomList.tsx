@@ -80,7 +80,6 @@ export function RoomList(): ReactElement {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [search, setSearch] = useState("");
@@ -89,13 +88,11 @@ export function RoomList(): ReactElement {
 
   const handleCreate = useCallback(() => {
     setEditingId(null);
-    setEditingRoom(null);
     setOpenDialog(true);
   }, []);
 
   const handleEdit = useCallback((room: Room) => {
     setEditingId(room.id);
-    setEditingRoom(room);
     setOpenDialog(true);
   }, []);
 
@@ -191,26 +188,14 @@ export function RoomList(): ReactElement {
       <FormDialog
         open={openDialog}
         title={editingId ? "Edit Room" : "Add Room"}
-        onClose={() => {
-          setOpenDialog(false);
-          setEditingId(null);
-          setEditingRoom(null);
-        }}
+        onClose={() => setOpenDialog(false)}
         onSubmit={async () => {
           const form = document.querySelector("form") as HTMLFormElement;
           form?.requestSubmit();
         }}
         isLoading={isSubmitting}
       >
-        <RoomForm onSubmit={handleSubmit} defaultValues={editingRoom ? {
-          code: editingRoom.code,
-          name: editingRoom.name,
-          capacity: editingRoom.capacity,
-          floor: editingRoom.floor,
-          location: editingRoom.location,
-          status: editingRoom.status as "AVAILABLE" | "OCCUPIED" | "MAINTENANCE",
-          note: editingRoom.note,
-        } : undefined} />
+        <RoomForm onSubmit={handleSubmit} />
       </FormDialog>
 
       <ConfirmDialog

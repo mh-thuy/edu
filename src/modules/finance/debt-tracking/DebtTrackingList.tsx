@@ -60,7 +60,7 @@ const getStatusLabel = (status: string) => {
 };
 
 export function DebtTrackingList() {
-  const snackbar = useSnackbar(); // eslint-disable-line @typescript-eslint/no-unused-vars
+  const snackbar = useSnackbar();
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterStudent, setFilterStudent] = useState<string>("");
   const [filterClass, setFilterClass] = useState<string>("");
@@ -71,7 +71,7 @@ export function DebtTrackingList() {
   if (filterStudent) queryParams.append("studentId", filterStudent);
   if (filterClass) queryParams.append("classId", filterClass);
 
-  const { data: debts, isLoading, error, refresh: refreshDebts } = useList<StudentDebt>( // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { data: debts, isLoading, error, refresh } = useList<StudentDebt>(
     `/api/student-fees/debt-tracking${queryParams.toString() ? "?" + queryParams.toString() : ""}`
   );
 

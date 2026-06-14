@@ -36,7 +36,7 @@ export async function getClasses(filter: ClassFilter) {
     where.status = status;
   }
 
-  const [items, total] = await Promise.all([
+  const [classes, total] = await Promise.all([
     prisma.class.findMany({
       where,
       skip,
@@ -51,7 +51,7 @@ export async function getClasses(filter: ClassFilter) {
   ]);
 
   return {
-    items,
+    classes,
     total,
     page,
     limit,
