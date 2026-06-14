@@ -2,7 +2,15 @@
 
 "use client";
 
-import { TextField, Stack, FormControl, InputLabel, Select, MenuItem, Alert } from "@mui/material";
+import {
+  TextField,
+  Stack,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Alert,
+} from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { classScheduleCreateSchema } from "@/modules/schedule/schemas/schedule.schema";
@@ -39,7 +47,6 @@ export function ScheduleForm({
   const startTime = watch("startTime");
   const endTime = watch("endTime");
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const checkConflicts = async () => {
       if (!roomId || dayOfWeek === undefined) return;
@@ -59,7 +66,7 @@ export function ScheduleForm({
     };
 
     checkConflicts();
-  }, [roomId, dayOfWeek, startTime, endTime]);
+  }, [roomId, dayOfWeek, startTime, endTime, onConflictCheck]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -94,7 +101,11 @@ export function ScheduleForm({
           render={({ field, fieldState: { error } }) => (
             <FormControl error={!!error} fullWidth>
               <InputLabel>Day of Week</InputLabel>
-              <Select {...field} label="Day of Week" onChange={(e) => field.onChange(Number(e.target.value))}>
+              <Select
+                {...field}
+                label="Day of Week"
+                onChange={(e) => field.onChange(Number(e.target.value))}
+              >
                 <MenuItem value={0}>Monday</MenuItem>
                 <MenuItem value={1}>Tuesday</MenuItem>
                 <MenuItem value={2}>Wednesday</MenuItem>

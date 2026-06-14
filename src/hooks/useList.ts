@@ -24,9 +24,16 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(options.page || 1);
   const [limit, setLimit] = useState(options.limit || 10);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const restOptions = { ...options };
+  delete restOptions.page;
+  delete restOptions.limit;
+  const optionsKey = JSON.stringify(restOptions);
+
   useEffect(() => {
+    let cancelled = false;
+
     const fetchData = async () => {
       try {
         setIsLoading(true);
@@ -35,8 +42,8 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
         const params = new URLSearchParams();
         params.set("page", String(page));
         params.set("limit", String(limit));
-        
-        Object.entries(options).forEach(([key, value]) => {
+
+        Object.entries(restOptions).forEach(([key, value]) => {
           if (value !== undefined) {
             params.set(key, String(value));
           }
@@ -46,21 +53,28 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const result = await response.json();
-        setData(result);
+        if (!cancelled) setData(result);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to fetch data";
-        setError(message);
+        if (!cancelled) {
+          const message =
+            err instanceof Error ? err.message : "Failed to fetch data";
+          setError(message);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     fetchData();
-  }, [endpoint, page, limit]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endpoint, page, limit, optionsKey, refreshKey]);
 
   const refresh = useCallback(() => {
-    setPage(options.page || 1);
-  }, [options]);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const setPageNumber = (p: number) => setPage(p);
   const setPageSize = (l: number) => {
@@ -68,5 +82,14 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
     setPage(1);
   };
 
-  return { data, isLoading, error, page, limit, setPageNumber, setPageSize, refresh };
+  return {
+    data,
+    isLoading,
+    error,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+    refresh,
+  };
 }

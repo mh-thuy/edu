@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Dialog,
@@ -48,14 +49,18 @@ export function StudentFeeForm({
   const [submitting, setSubmitting] = React.useState(false);
   const isCreating = !initialData;
 
-  const schema = isCreating ? studentFeeCreateSchema : studentFeeUpdateSchema;
+  const resolver: Resolver<StudentFeeUpdateInput> = (
+    isCreating
+      ? (zodResolver(studentFeeCreateSchema) as unknown)
+      : (zodResolver(studentFeeUpdateSchema) as unknown)
+  ) as Resolver<StudentFeeUpdateInput>;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<StudentFeeCreateInput | StudentFeeUpdateInput>({
-    resolver: zodResolver(schema),
+  } = useForm<StudentFeeUpdateInput>({
+    resolver,
     defaultValues: isCreating
       ? {
           studentId: "",
@@ -71,7 +76,9 @@ export function StudentFeeForm({
         },
   });
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (
+    data: StudentFeeCreateInput | StudentFeeUpdateInput,
+  ) => {
     try {
       setSubmitting(true);
       let response;
@@ -93,7 +100,9 @@ export function StudentFeeForm({
       }
 
       if (!response.ok) throw new Error("Failed to save");
-      snackbar.showSuccess(isCreating ? "Tạo thành công" : "Cập nhật thành công");
+      snackbar.showSuccess(
+        isCreating ? "Tạo thành công" : "Cập nhật thành công",
+      );
       onSuccess();
     } catch {
       snackbar.showError(isCreating ? "Tạo thất bại" : "Cập nhật thất bại");
@@ -113,9 +122,7 @@ export function StudentFeeForm({
         onSubmit: handleSubmit(onSubmit),
       }}
     >
-      <DialogTitle>
-        {isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}
-      </DialogTitle>
+      <DialogTitle>{isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}</DialogTitle>
       <DialogContent sx={{ mt: 2 }}>
         <Stack spacing={2}>
           {isCreating ? (

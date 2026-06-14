@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useCallback, useState } from "react";
 import {
   Box,
   Button,
@@ -21,7 +21,6 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
-import { useState } from "react";
 
 interface Receipt {
   id: string;
@@ -45,17 +44,23 @@ interface Receipt {
 
 export function ReceiptList() {
   const snackbar = useSnackbar();
+  const { showSuccess } = snackbar;
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const { data: receipts, isLoading, error } = useList<Receipt>(
-    "/api/payments?withReceipts=true"
-  );
+  const {
+    data: receipts,
+    isLoading,
+    error,
+  } = useList<Receipt>("/api/payments?withReceipts=true");
 
-  const handlePrint = (receipt: Receipt) => {
-    window.print();
-    snackbar.showSuccess("Phiếu thu sẵn sàng để in");
-  };
+  const handlePrint = useCallback(
+    (receipt: Receipt) => {
+      window.print();
+      showSuccess?.("Phiếu thu sẵn sàng để in");
+    },
+    [showSuccess],
+  );
 
   const handlePreview = (receipt: Receipt) => {
     setSelectedReceipt(receipt);
@@ -86,8 +91,7 @@ export function ReceiptList() {
         field: "printedAt",
         headerName: "Đã in",
         width: 120,
-        valueGetter: (params) =>
-          params ? "Có" : "Chưa",
+        valueGetter: (params) => (params ? "Có" : "Chưa"),
       },
       {
         field: "actions",
@@ -109,7 +113,7 @@ export function ReceiptList() {
         ],
       },
     ],
-    [handlePrint]
+    [handlePrint],
   );
 
   return (
@@ -142,9 +146,7 @@ export function ReceiptList() {
       {/* Receipt Preview */}
       {showPreview && selectedReceipt && (
         <Dialog open maxWidth="md" fullWidth>
-          <DialogTitle>
-            Phiếu thu - {selectedReceipt.receiptNumber}
-          </DialogTitle>
+          <DialogTitle>Phiếu thu - {selectedReceipt.receiptNumber}</DialogTitle>
           <DialogContent>
             <Box sx={{ p: 3, backgroundColor: "#f5f5f5", borderRadius: 1 }}>
               <Box sx={{ textAlign: "center", mb: 3 }}>
@@ -161,7 +163,7 @@ export function ReceiptList() {
                   <Typography variant="body2">
                     <strong>Ngày phát hành:</strong>{" "}
                     {new Date(selectedReceipt.issueDate).toLocaleDateString(
-                      "vi-VN"
+                      "vi-VN",
                     )}
                   </Typography>
                   <Typography variant="body2">
@@ -205,7 +207,7 @@ export function ReceiptList() {
                   Ngày thanh toán:{" "}
                   {selectedReceipt.payment?.paymentDate
                     ? new Date(
-                        selectedReceipt.payment.paymentDate
+                        selectedReceipt.payment.paymentDate,
                       ).toLocaleDateString("vi-VN")
                     : "N/A"}
                 </Typography>
@@ -219,7 +221,7 @@ export function ReceiptList() {
               startIcon={<PrintIcon />}
               onClick={() => {
                 window.print();
-                snackbar.showSuccess("Đã gửi lệnh in");
+                showSuccess?.("Đã gửi lệnh in");
               }}
             >
               In phiếu

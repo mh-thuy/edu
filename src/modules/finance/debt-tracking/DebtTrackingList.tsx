@@ -71,8 +71,12 @@ export function DebtTrackingList() {
   if (filterStudent) queryParams.append("studentId", filterStudent);
   if (filterClass) queryParams.append("classId", filterClass);
 
-  const { data: debts, isLoading, error, refresh } = useList<StudentDebt>(
-    `/api/student-fees/debt-tracking${queryParams.toString() ? "?" + queryParams.toString() : ""}`
+  const {
+    data: debts,
+    isLoading,
+    error,
+  } = useList<StudentDebt>(
+    `/api/student-fees/debt-tracking${queryParams.toString() ? "?" + queryParams.toString() : ""}`,
   );
 
   // Load summary statistics
@@ -85,6 +89,7 @@ export function DebtTrackingList() {
         setSummary(result);
       } catch (err) {
         console.error("Failed to load debt summary:", err);
+        snackbar.showError?.("Không tải được thông tin tổng hợp nợ");
       }
     };
     loadSummary();
@@ -113,19 +118,22 @@ export function DebtTrackingList() {
         field: "totalAmount",
         headerName: "Tổng tiền",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.totalAmount || 0).toLocaleString()} VND`,
+        valueGetter: (params: any) =>
+          `${(params.row?.totalAmount || 0).toLocaleString()} VND`,
       },
       {
         field: "totalPaid",
         headerName: "Đã thanh toán",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.totalPaid || 0).toLocaleString()} VND`,
+        valueGetter: (params: any) =>
+          `${(params.row?.totalPaid || 0).toLocaleString()} VND`,
       },
       {
         field: "outstanding",
         headerName: "Nợ còn lại",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.outstanding || 0).toLocaleString()} VND`,
+        valueGetter: (params: any) =>
+          `${(params.row?.outstanding || 0).toLocaleString()} VND`,
       },
       {
         field: "status",
@@ -147,7 +155,7 @@ export function DebtTrackingList() {
         valueGetter: (params) => new Date(params).toLocaleDateString("vi-VN"),
       },
     ],
-    []
+    [],
   );
 
   return (

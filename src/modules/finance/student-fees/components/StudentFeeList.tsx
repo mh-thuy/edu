@@ -67,6 +67,7 @@ const getStatusLabel = (status: string) => {
 
 export function StudentFeeList() {
   const snackbar = useSnackbar();
+  const { showError } = snackbar;
   const [editingFee, setEditingFee] = useState<StudentFee | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
@@ -79,9 +80,16 @@ export function StudentFeeList() {
   const [classes, setClasses] = useState<ClassInfo[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
 
-  const { data: fees, isLoading, error, refresh, page, limit, setPageNumber, setPageSize } = useList<StudentFee>(
-    "/api/student-fees"
-  );
+  const {
+    data: fees,
+    isLoading,
+    error,
+    refresh,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+  } = useList<StudentFee>("/api/student-fees");
 
   // Load classes for bulk fee creation
   React.useEffect(() => {
@@ -93,13 +101,13 @@ export function StudentFeeList() {
         const result = await response.json();
         setClasses(result.data || []);
       } catch {
-        snackbar.showError("Failed to load classes");
+        showError("Failed to load classes");
       } finally {
         setLoadingClasses(false);
       }
     };
     loadClasses();
-  }, []);
+  }, [showError]);
 
   const handleCreate = useCallback(() => {
     setEditingFee(null);
@@ -111,20 +119,23 @@ export function StudentFeeList() {
     setShowForm(true);
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
 
-    try {
-      const response = await fetch(`/api/student-fees/${id}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete");
-      snackbar.showSuccess("Xóa thành công");
-      refresh();
-    } catch {
-      snackbar.showError("Xóa thất bại");
-    }
-  }, [refresh, snackbar]);
+      try {
+        const response = await fetch(`/api/student-fees/${id}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) throw new Error("Failed to delete");
+        snackbar.showSuccess("Xóa thành công");
+        refresh();
+      } catch {
+        snackbar.showError("Xóa thất bại");
+      }
+    },
+    [refresh, snackbar],
+  );
 
   const handleBulkCreate = useCallback(async () => {
     if (!bulkData.classId || !bulkData.month || bulkData.amount <= 0) {
@@ -178,13 +189,17 @@ export function StudentFeeList() {
         field: "amount",
         headerName: "Số tiền",
         width: 120,
-        valueGetter: (params: any) => `${(params.row?.amount || 0).toLocaleString()} VND`,
+        valueGetter: (params: any) =>
+          `${(params.row?.amount || 0).toLocaleString()} VND`,
       },
       {
         field: "dueDate",
         headerName: "Hạn thanh toán",
         width: 150,
-        valueGetter: (params: any) => params.row?.dueDate ? new Date(params.row.dueDate).toLocaleDateString("vi-VN") : "",
+        valueGetter: (params: any) =>
+          params.row?.dueDate
+            ? new Date(params.row.dueDate).toLocaleDateString("vi-VN")
+            : "",
       },
       {
         field: "status",
@@ -225,7 +240,7 @@ export function StudentFeeList() {
         ],
       },
     ],
-    [handleDelete, handleEdit]
+    [handleDelete, handleEdit],
   );
 
   return (
@@ -239,10 +254,7 @@ export function StudentFeeList() {
           >
             Tạo hóa đơn
           </Button>
-          <Button
-            variant="outlined"
-            onClick={() => setShowBulkDialog(true)}
-          >
+          <Button variant="outlined" onClick={() => setShowBulkDialog(true)}>
             Tạo hóa đơn hàng loạt
           </Button>
         </Stack>
