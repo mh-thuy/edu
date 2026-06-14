@@ -17,7 +17,6 @@ import {
 import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
 import PrintIcon from "@mui/icons-material/Print";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import { useTranslation } from "react-i18next";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -45,7 +44,6 @@ interface Receipt {
 }
 
 export function ReceiptList() {
-  const { t } = useTranslation(["finance", "common"]);
   const snackbar = useSnackbar();
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -56,7 +54,7 @@ export function ReceiptList() {
 
   const handlePrint = (receipt: Receipt) => {
     window.print();
-    snackbar.showSuccess(t("finance:printSuccess"));
+    snackbar.showSuccess("Phiếu thu sẵn sàng để in");
   };
 
   const handlePreview = (receipt: Receipt) => {
@@ -69,27 +67,27 @@ export function ReceiptList() {
       { field: "id", headerName: "ID", width: 100 },
       {
         field: "receiptNumber",
-        headerName: t("finance:receiptNumber"),
+        headerName: "Số phiếu thu",
         width: 150,
         fontWeight: "bold",
       },
       {
         field: "paymentId",
-        headerName: t("finance:payments"),
+        headerName: "ID Thanh toán",
         width: 120,
       },
       {
         field: "issueDate",
-        headerName: t("finance:receiptIssueDate"),
+        headerName: "Ngày phát hành",
         width: 150,
         valueGetter: (params) => new Date(params).toLocaleDateString("vi-VN"),
       },
       {
         field: "printedAt",
-        headerName: t("finance:printed"),
+        headerName: "Đã in",
         width: 120,
         valueGetter: (params) =>
-          params ? t("finance:printed") : t("finance:notPrinted"),
+          params ? "Có" : "Chưa",
       },
       {
         field: "actions",
@@ -99,19 +97,19 @@ export function ReceiptList() {
           <GridActionsCellItem
             key="preview"
             icon={<VisibilityIcon />}
-            label={t("finance:preview")}
+            label="Xem"
             onClick={() => handlePreview(params.row as Receipt)}
           />,
           <GridActionsCellItem
             key="print"
             icon={<PrintIcon />}
-            label={t("finance:print")}
+            label="In"
             onClick={() => handlePrint(params.row as Receipt)}
           />,
         ],
       },
     ],
-    [t, handlePrint]
+    [handlePrint]
   );
 
   return (
@@ -119,7 +117,7 @@ export function ReceiptList() {
       <Card>
         <Box p={2}>
           <Stack direction="row" spacing={2} mb={2}>
-            <Typography variant="h6">{t("finance:receiptManagement")}</Typography>
+            <Typography variant="h6">Quản lý phiếu thu</Typography>
           </Stack>
 
           {error && (
@@ -145,14 +143,13 @@ export function ReceiptList() {
       {showPreview && selectedReceipt && (
         <Dialog open maxWidth="md" fullWidth>
           <DialogTitle>
-            {t("finance:receiptPreview")}
-            {selectedReceipt.receiptNumber}
+            Phiếu thu - {selectedReceipt.receiptNumber}
           </DialogTitle>
           <DialogContent>
             <Box sx={{ p: 3, backgroundColor: "#f5f5f5", borderRadius: 1 }}>
               <Box sx={{ textAlign: "center", mb: 3 }}>
                 <Typography variant="h6" fontWeight="bold">
-                  {t("finance:receipts")}
+                  PHIẾU THU
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {selectedReceipt.receiptNumber}
@@ -162,13 +159,13 @@ export function ReceiptList() {
               <Stack spacing={2}>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
                   <Typography variant="body2">
-                    <strong>{t("finance:receiptIssueDate")}:</strong>{" "}
+                    <strong>Ngày phát hành:</strong>{" "}
                     {new Date(selectedReceipt.issueDate).toLocaleDateString(
                       "vi-VN"
                     )}
                   </Typography>
                   <Typography variant="body2">
-                    <strong>{t("finance:paymentMethod")}:</strong>{" "}
+                    <strong>Phương thức:</strong>{" "}
                     {selectedReceipt.payment?.method || "N/A"}
                   </Typography>
                 </Box>
@@ -176,15 +173,15 @@ export function ReceiptList() {
                 {selectedReceipt.payment?.studentFee && (
                   <>
                     <Typography variant="body2">
-                      <strong>{t("finance:student")}:</strong>{" "}
+                      <strong>Học sinh:</strong>{" "}
                       {selectedReceipt.payment.studentFee.studentId}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>{t("finance:class")}:</strong>{" "}
+                      <strong>Lớp:</strong>{" "}
                       {selectedReceipt.payment.studentFee.classId}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>{t("finance:month")}:</strong>{" "}
+                      <strong>Tháng:</strong>{" "}
                       {selectedReceipt.payment.studentFee.month}
                     </Typography>
                   </>
@@ -194,7 +191,7 @@ export function ReceiptList() {
                   variant="h6"
                   sx={{ pt: 2, borderTop: "1px solid #ddd" }}
                 >
-                  {t("finance:amount")}:{" "}
+                  Số tiền:{" "}
                   <span style={{ color: "green", fontWeight: "bold" }}>
                     {selectedReceipt.payment?.amount?.toLocaleString()} VND
                   </span>
@@ -205,7 +202,7 @@ export function ReceiptList() {
                   color="text.secondary"
                   sx={{ pt: 2 }}
                 >
-                  {t("finance:paymentDate")}:{" "}
+                  Ngày thanh toán:{" "}
                   {selectedReceipt.payment?.paymentDate
                     ? new Date(
                         selectedReceipt.payment.paymentDate
@@ -216,16 +213,16 @@ export function ReceiptList() {
             </Box>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowPreview(false)}>{t("common:close")}</Button>
+            <Button onClick={() => setShowPreview(false)}>Đóng</Button>
             <Button
               variant="contained"
               startIcon={<PrintIcon />}
               onClick={() => {
                 window.print();
-                snackbar.showSuccess(t("finance:printCommand"));
+                snackbar.showSuccess("Đã gửi lệnh in");
               }}
             >
-              {t("finance:printReceipt")}
+              In phiếu
             </Button>
           </DialogActions>
         </Dialog>

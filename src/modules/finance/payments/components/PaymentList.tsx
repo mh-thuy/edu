@@ -16,7 +16,6 @@ import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReceiptIcon from "@mui/icons-material/Receipt";
-import { useTranslation } from "react-i18next";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -35,17 +34,16 @@ interface Payment {
   updatedAt: string;
 }
 
-const getMethodLabel = (method: string, t: (key: string) => string) => {
+const getMethodLabel = (method: string) => {
   const labels: Record<string, string> = {
-    cash: t("finance:cash"),
-    transfer: t("finance:transfer"),
-    wallet: t("finance:wallet"),
+    cash: "Tiền mặt",
+    transfer: "Chuyển khoản",
+    wallet: "Ví điện tử",
   };
   return labels[method] || method;
 };
 
 export function PaymentList() {
-  const { t } = useTranslation(["finance", "common"]);
   const snackbar = useSnackbar();
   const [showForm, setShowForm] = useState(false);
   const [filterMethod, setFilterMethod] = useState<string>("");
@@ -63,20 +61,20 @@ export function PaymentList() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!confirm(t("common:confirmDelete"))) return;
+      if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
 
       try {
         const response = await fetch(`/api/payments/${id}`, {
           method: "DELETE",
         });
         if (!response.ok) throw new Error("Failed to delete");
-        snackbar.showSuccess(t("common:deleteSuccess"));
+        snackbar.showSuccess("Xóa thành công");
         refresh();
       } catch {
-        snackbar.showError(t("common:deleteError"));
+        snackbar.showError("Xóa thất bại");
       }
     },
-    [refresh, snackbar, t]
+    [refresh, snackbar]
   );
 
   const handleGenerateReceipt = useCallback(
@@ -89,14 +87,14 @@ export function PaymentList() {
         if (!response.ok) throw new Error("Failed to generate receipt");
         const result = await response.json();
         snackbar.showSuccess(
-          `${t("finance:receiptCreated")}${result.receiptNumber}`
+          `Phiếu thu được tạo: ${result.receiptNumber}`
         );
         refresh();
       } catch {
-        snackbar.showError(t("finance:generateReceiptError"));
+        snackbar.showError("Tạo phiếu thu thất bại");
       }
     },
-    [refresh, snackbar, t]
+    [refresh, snackbar]
   );
 
   const columns: GridColDef[] = useMemo(
@@ -104,22 +102,22 @@ export function PaymentList() {
       { field: "id", headerName: "ID", width: 100 },
       {
         field: "studentFeeId",
-        headerName: t("finance:invoice"),
+        headerName: "Hóa đơn",
         width: 150,
       },
       {
         field: "amount",
-        headerName: t("finance:amount"),
+        headerName: "Số tiền",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.amount || 0).toLocaleString()} VND`,
       },
       {
         field: "method",
-        headerName: t("finance:paymentMethod"),
+        headerName: "Phương thức",
         width: 130,
         renderCell: (params) => (
           <Chip
-            label={getMethodLabel(params.value, t)}
+            label={getMethodLabel(params.value)}
             size="small"
             variant="outlined"
           />
@@ -127,13 +125,13 @@ export function PaymentList() {
       },
       {
         field: "paymentDate",
-        headerName: t("finance:paymentDate"),
+        headerName: "Ngày thanh toán",
         width: 150,
         valueGetter: (params: any) => new Date(params.row?.paymentDate || Date.now()).toLocaleDateString("vi-VN"),
       },
       {
         field: "notes",
-        headerName: t("common:notes"),
+        headerName: "Ghi chú",
         width: 200,
       },
       {
@@ -144,19 +142,19 @@ export function PaymentList() {
           <GridActionsCellItem
             key="receipt"
             icon={<ReceiptIcon />}
-            label={t("finance:receipts")}
+            label="Phiếu thu"
             onClick={() => handleGenerateReceipt((params.row as Payment).id)}
           />,
           <GridActionsCellItem
             key="delete"
             icon={<DeleteIcon />}
-            label={t("common:delete")}
+            label="Xóa"
             onClick={() => handleDelete((params.row as Payment).id)}
           />,
         ],
       },
     ],
-    [handleDelete, handleGenerateReceipt, t]
+    [handleDelete, handleGenerateReceipt]
   );
 
   return (
@@ -168,7 +166,7 @@ export function PaymentList() {
             startIcon={<AddIcon />}
             onClick={() => setShowForm(true)}
           >
-            {t("finance:recordPayment")}
+            Ghi nhận thanh toán
           </Button>
         </Stack>
 
@@ -176,7 +174,7 @@ export function PaymentList() {
         <Stack direction="row" spacing={2} mb={2}>
           <TextField
             select
-            label={t("finance:paymentMethod")}
+            label="Phương thức"
             value={filterMethod}
             onChange={(e) => setFilterMethod(e.target.value)}
             size="small"
@@ -187,15 +185,15 @@ export function PaymentList() {
               },
             }}
           >
-            <option value="">{t("finance:allStatus")}</option>
-            <option value="cash">{t("finance:cash")}</option>
-            <option value="transfer">{t("finance:transfer")}</option>
-            <option value="wallet">{t("finance:wallet")}</option>
+            <option value="">-- Tất cả --</option>
+            <option value="cash">Tiền mặt</option>
+            <option value="transfer">Chuyển khoản</option>
+            <option value="wallet">Ví điện tử</option>
           </TextField>
 
           <TextField
             type="date"
-            label={t("common:from")}
+            label="Từ ngày"
             value={filterDateStart}
             onChange={(e) => setFilterDateStart(e.target.value)}
             size="small"
@@ -205,7 +203,7 @@ export function PaymentList() {
 
           <TextField
             type="date"
-            label={t("common:to")}
+            label="Đến ngày"
             value={filterDateEnd}
             onChange={(e) => setFilterDateEnd(e.target.value)}
             size="small"
@@ -222,7 +220,7 @@ export function PaymentList() {
                 setFilterDateEnd("");
               }}
             >
-              {t("finance:clearFilters")}
+              Xóa bộ lọc
             </Button>
           )}
         </Stack>

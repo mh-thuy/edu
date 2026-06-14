@@ -4,11 +4,8 @@ import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import { Button, Stack, Typography } from "@mui/material";
 import Link from "next/link";
 import type { ReactElement } from "react";
-import { useTranslation } from "react-i18next";
 
 export default function ForbiddenPage(): ReactElement {
-  const { t } = useTranslation("auth");
-
   return (
     <Stack
       spacing={2}
@@ -18,13 +15,13 @@ export default function ForbiddenPage(): ReactElement {
     >
       <BlockOutlinedIcon color="error" sx={{ fontSize: 54 }} />
       <Typography variant="h4" fontWeight={700}>
-        {t("accessForbidden")}
+        Access Forbidden
       </Typography>
       <Typography color="text.secondary">
-        {t("youDoNotHavePermission")}
+        You do not have permission to access this resource.
       </Typography>
       <Button component={Link} href="/" variant="contained">
-        {t("backToDashboard")}
+        Back to Dashboard
       </Button>
     </Stack>
   );

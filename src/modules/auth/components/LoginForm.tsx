@@ -16,7 +16,6 @@ import {
 } from "@mui/material";
 import { useState, useTransition, type ReactElement } from "react";
 import { useForm } from "react-hook-form";
-import { useTranslation } from "react-i18next";
 import { loginAction } from "@/server-actions/auth.actions";
 import { loginSchema, type LoginInput } from "@/schemas/auth.schema";
 import type { AuthActionState } from "@/types/auth";
@@ -26,7 +25,6 @@ const initialState: AuthActionState = {
 };
 
 export function LoginForm(): ReactElement {
-  const { t } = useTranslation("auth");
   const [serverState, setServerState] = useState<AuthActionState>(initialState);
   const [pending, startTransition] = useTransition();
 
@@ -64,10 +62,10 @@ export function LoginForm(): ReactElement {
         <Stack spacing={3}>
           <Box>
             <Typography variant="h4" fontWeight={700} gutterBottom>
-              {t("signIn")}
+              Sign in
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t("loginDescription")}
+              Login to manage classroom rental operations.
             </Typography>
           </Box>
 
@@ -75,7 +73,7 @@ export function LoginForm(): ReactElement {
 
           <Stack component="form" spacing={2} onSubmit={onSubmit} noValidate>
             <TextField
-              label={t("email")}
+              label="Email"
               type="email"
               fullWidth
               autoComplete="email"
@@ -84,7 +82,7 @@ export function LoginForm(): ReactElement {
               {...register("email")}
             />
             <TextField
-              label={t("password")}
+              label="Password"
               type="password"
               fullWidth
               autoComplete="current-password"
@@ -93,7 +91,7 @@ export function LoginForm(): ReactElement {
               {...register("password")}
             />
 
-            <FormControlLabel control={<Checkbox {...register("rememberMe")} />} label={t("rememberMe")} />
+            <FormControlLabel control={<Checkbox {...register("rememberMe")} />} label="Remember me" />
 
             <Button
               type="submit"
@@ -102,12 +100,12 @@ export function LoginForm(): ReactElement {
               disabled={pending}
               startIcon={<LoginOutlinedIcon />}
             >
-              {pending ? t("signingIn") : t("login")}
+              {pending ? "Signing in..." : "Login"}
             </Button>
           </Stack>
 
           <Typography variant="caption" color="text.secondary">
-            {t("demoAccounts")}
+            Demo accounts: admin@example.com / staff@example.com / teacher@example.com
           </Typography>
         </Stack>
       </CardContent>

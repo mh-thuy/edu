@@ -3,7 +3,6 @@
 import { TextField, Stack, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslation } from "react-i18next";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
 import type { ReactElement } from "react";
@@ -16,7 +15,6 @@ export interface ClassFormProps {
 }
 
 export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactElement {
-  const { t } = useTranslation("class");
   const { control, handleSubmit } = useForm<ClassFormData>({
     resolver: zodResolver(classCreateSchema),
     defaultValues: {
@@ -39,11 +37,11 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label={t("classCode")}
+              label="Class Code"
               error={!!error}
               helperText={error?.message}
               fullWidth
-              placeholder={t("classPlaceholder")}
+              placeholder="e.g., C001"
             />
           )}
         />
@@ -53,7 +51,7 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label={t("className")}
+              label="Class Name"
               error={!!error}
               helperText={error?.message}
               fullWidth
@@ -67,7 +65,7 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label={t("tuitionFee")}
+              label="Tuition Fee"
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -82,7 +80,7 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label={t("totalSessions")}
+              label="Total Sessions"
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -97,7 +95,7 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           render={({ field, fieldState: { error } }) => (
             <TextField
               {...field}
-              label={t("maxStudents")}
+              label="Max Students"
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -111,11 +109,11 @@ export function ClassForm({ onSubmit, defaultValues }: ClassFormProps): ReactEle
           control={control}
           render={({ field, fieldState: { error } }) => (
             <FormControl error={!!error} fullWidth>
-              <InputLabel>{t("status")}</InputLabel>
-              <Select {...field} label={t("status")}>
-                <MenuItem value="DRAFT">{t("draft")}</MenuItem>
-                <MenuItem value="ACTIVE">{t("active")}</MenuItem>
-                <MenuItem value="COMPLETED">{t("completed")}</MenuItem>
+              <InputLabel>Status</InputLabel>
+              <Select {...field} label="Status">
+                <MenuItem value="DRAFT">Draft</MenuItem>
+                <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="COMPLETED">Completed</MenuItem>
                 <MenuItem value="CANCELLED">Cancelled</MenuItem>
               </Select>
             </FormControl>

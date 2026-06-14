@@ -28,7 +28,6 @@ import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PaymentIcon from "@mui/icons-material/Payment";
-import { useTranslation } from "react-i18next";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -78,17 +77,16 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusLabel = (status: string, t: (key: string) => string) => {
+const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
-    draft: t("finance:draft"),
-    approved: t("finance:approved"),
-    paid: t("finance:paidStatus"),
+    draft: "Nháp",
+    approved: "Đã duyệt",
+    paid: "Đã thanh toán",
   };
   return labels[status] || status;
 };
 
 export function PayrollList() {
-  const { t } = useTranslation(["finance", "common"]);
   const snackbar = useSnackbar();
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loadingTeachers, setLoadingTeachers] = useState(false);
@@ -145,12 +143,13 @@ export function PayrollList() {
       });
       refresh();
     } catch {
-        snackbar.showError(t("finance:calculatePayrollError"));
-      }
-    }, [calculateData, refresh, snackbar, t]);
+      snackbar.showError("Tính lương thất bại");
+    }
+  }, [calculateData, refresh, snackbar]);
+
   const handleApprovePayroll = useCallback(
     async (payrollId: string) => {
-      if (!confirm(t("finance:confirmApprovePayroll"))) return;
+      if (!confirm("Bạn có chắc chắn muốn duyệt bảng lương này?")) return;
 
       try {
         const response = await fetch(
@@ -158,18 +157,18 @@ export function PayrollList() {
           { method: "POST" }
         );
         if (!response.ok) throw new Error("Failed to approve payroll");
-        snackbar.showSuccess(t("finance:approvePayrollSuccess"));
+        snackbar.showSuccess("Duyệt bảng lương thành công");
         refresh();
       } catch {
-        snackbar.showError(t("finance:approvePayrollError"));
+        snackbar.showError("Duyệt bảng lương thất bại");
       }
     },
-    [refresh, snackbar, t]
+    [refresh, snackbar]
   );
 
   const handleMarkAsPaid = useCallback(
     async (payrollId: string) => {
-      if (!confirm(t("finance:confirmMarkAsPaid")))
+      if (!confirm("Bạn có chắc chắn muốn đánh dấu là đã thanh toán?"))
         return;
 
       try {
@@ -178,13 +177,13 @@ export function PayrollList() {
           { method: "POST" }
         );
         if (!response.ok) throw new Error("Failed to mark as paid");
-        snackbar.showSuccess(t("finance:markPaidSuccess"));
+        snackbar.showSuccess("Đánh dấu thành công");
         refresh();
       } catch {
-        snackbar.showError(t("finance:markPaidError"));
+        snackbar.showError("Đánh dấu thất bại");
       }
     },
-    [refresh, snackbar, t]
+    [refresh, snackbar]
   );
 
   const columns: GridColDef[] = useMemo(
@@ -192,39 +191,39 @@ export function PayrollList() {
       { field: "id", headerName: "ID", width: 100 },
       {
         field: "teacherId",
-        headerName: t("finance:selectTeacher"),
+        headerName: "Giáo viên",
         width: 150,
       },
       {
         field: "month",
-        headerName: t("finance:selectMonth"),
+        headerName: "Tháng",
         width: 120,
       },
       {
         field: "totalRevenue",
-        headerName: t("finance:totalRevenue"),
+        headerName: "Doanh thu",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.totalRevenue || 0).toLocaleString()} VND`,
       },
       {
         field: "centerFee",
-        headerName: t("finance:centerFee"),
+        headerName: "Phí trung tâm",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.centerFee || 0).toLocaleString()} VND`,
       },
       {
         field: "salaryAmount",
-        headerName: t("finance:salary"),
+        headerName: "Lương",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.salaryAmount || 0).toLocaleString()} VND`,
       },
       {
         field: "status",
-        headerName: t("finance:status"),
+        headerName: "Trạng thái",
         width: 120,
         renderCell: (params) => (
           <Chip
-            label={getStatusLabel(params.value, t)}
+            label={getStatusLabel(params.value)}
             size="small"
             color={getStatusColor(params.value) as any}
           />
@@ -240,7 +239,7 @@ export function PayrollList() {
             <GridActionsCellItem
               key="view"
               icon={<VisibilityIcon />}
-              label={t("finance:view")}
+              label="Xem"
               onClick={() => {
                 setSelectedPayroll(payroll);
                 setShowDetailsDialog(true);
@@ -253,7 +252,7 @@ export function PayrollList() {
               <GridActionsCellItem
                 key="approve"
                 icon={<CheckCircleIcon />}
-                label={t("finance:approve")}
+                label="Duyệt"
                 onClick={() => handleApprovePayroll(payroll.id)}
               />
             );
@@ -264,7 +263,7 @@ export function PayrollList() {
               <GridActionsCellItem
                 key="pay"
                 icon={<PaymentIcon />}
-                label={t("finance:markAsPaid")}
+                label="Thanh toán"
                 onClick={() => handleMarkAsPaid(payroll.id)}
               />
             );
@@ -274,7 +273,7 @@ export function PayrollList() {
         },
       },
     ],
-    [handleApprovePayroll, handleMarkAsPaid, t]
+    [handleApprovePayroll, handleMarkAsPaid]
   );
 
   return (
@@ -317,12 +316,12 @@ export function PayrollList() {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>{t("calculatePayroll")}</DialogTitle>
+        <DialogTitle>Tính lương hàng tháng</DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           <Stack spacing={2}>
             <TextField
               select
-              label={t("selectTeacher")}
+              label="Giáo viên"
               value={calculateData.teacherId}
               onChange={(e) =>
                 setCalculateData({
@@ -338,7 +337,7 @@ export function PayrollList() {
                 },
               }}
             >
-              <option value="">{t("chooseTeacher")}</option>
+              <option value="">-- Chọn giáo viên --</option>
               {teachers.map((teacher) => (
                 <option key={teacher.id} value={teacher.id}>
                   {teacher.name} ({teacher.code})
@@ -348,7 +347,7 @@ export function PayrollList() {
 
             <TextField
               type="month"
-              label={t("calculatePayrollMonth")}
+              label="Tháng"
               value={calculateData.month}
               onChange={(e) =>
                 setCalculateData({
@@ -362,13 +361,13 @@ export function PayrollList() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowCalculateDialog(false)}>{t("common:cancel")}</Button>
+          <Button onClick={() => setShowCalculateDialog(false)}>Hủy</Button>
           <Button
             onClick={handleCalculatePayroll}
             variant="contained"
             disabled={!calculateData.teacherId}
           >
-            {t("finance:calculate")}
+            Tính toán
           </Button>
         </DialogActions>
       </Dialog>
@@ -377,7 +376,7 @@ export function PayrollList() {
       {showDetailsDialog && selectedPayroll && (
         <Dialog open maxWidth="md" fullWidth>
           <DialogTitle>
-            {t("finance:payrollDetails")} {selectedPayroll.teacherId} ({selectedPayroll.month})
+            Chi tiết bảng lương - {selectedPayroll.teacherId} ({selectedPayroll.month})
           </DialogTitle>
           <DialogContent sx={{ mt: 2 }}>
             <Stack spacing={2}>
@@ -389,18 +388,18 @@ export function PayrollList() {
                 }}
               >
                 <Typography variant="body2">
-                  <strong>{t("finance:status")}:</strong> {getStatusLabel(selectedPayroll.status, t)}
+                  <strong>Trạng thái:</strong> {getStatusLabel(selectedPayroll.status)}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>{t("finance:totalRevenue")}:</strong>{" "}
+                  <strong>Doanh thu:</strong>{" "}
                   {selectedPayroll.totalRevenue.toLocaleString()} VND
                 </Typography>
                 <Typography variant="body2">
-                  <strong>{t("finance:centerFee")}:</strong>{" "}
+                  <strong>Phí trung tâm:</strong>{" "}
                   {selectedPayroll.centerFee.toLocaleString()} VND
                 </Typography>
                 <Typography variant="body2">
-                  <strong>{t("finance:salary")}:</strong>{" "}
+                  <strong>Lương:</strong>{" "}
                   {selectedPayroll.salaryAmount.toLocaleString()} VND
                 </Typography>
               </Box>
@@ -408,17 +407,17 @@ export function PayrollList() {
               {selectedPayroll.items && selectedPayroll.items.length > 0 && (
                 <>
                   <Typography variant="subtitle2" sx={{ mt: 2 }}>
-                    {t("finance:breakdownByClass")}
+                    Breakdown theo lớp
                   </Typography>
                   <TableContainer component={Paper}>
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                          <TableCell>{t("finance:classCode")}</TableCell>
-                          <TableCell align="right">{t("finance:studentCount")}</TableCell>
-                          <TableCell align="right">{t("finance:revenue")}</TableCell>
-                          <TableCell align="right">{t("finance:fee")}</TableCell>
-                          <TableCell align="right">{t("finance:salary")}</TableCell>
+                          <TableCell>Lớp</TableCell>
+                          <TableCell align="right">Số HS</TableCell>
+                          <TableCell align="right">Doanh thu</TableCell>
+                          <TableCell align="right">Phí (%)</TableCell>
+                          <TableCell align="right">Lương</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -447,7 +446,7 @@ export function PayrollList() {
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setShowDetailsDialog(false)}>{t("common:close")}</Button>
+            <Button onClick={() => setShowDetailsDialog(false)}>Đóng</Button>
           </DialogActions>
         </Dialog>
       )}

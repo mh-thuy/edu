@@ -13,7 +13,6 @@ import {
   Button,
 } from "@mui/material";
 import { GridColDef } from "@mui/x-data-grid";
-import { useTranslation } from "react-i18next";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -51,17 +50,16 @@ const getStatusColor = (status: string) => {
   }
 };
 
-const getStatusLabel = (status: string, t: (key: string) => string) => {
+const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
-    paid: t("finance:paidStatus"),
-    partial: t("finance:partialStatus"),
-    unpaid: t("finance:unpaidStatus"),
+    paid: "Đã thanh toán",
+    partial: "Thanh toán một phần",
+    unpaid: "Chưa thanh toán",
   };
   return labels[status] || status;
 };
 
 export function DebtTrackingList() {
-  const { t } = useTranslation(["finance", "common"]);
   const snackbar = useSnackbar(); // eslint-disable-line @typescript-eslint/no-unused-vars
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterStudent, setFilterStudent] = useState<string>("");
@@ -98,44 +96,44 @@ export function DebtTrackingList() {
       { field: "id", headerName: "ID", width: 100 },
       {
         field: "studentId",
-        headerName: t("finance:student"),
+        headerName: "Học sinh",
         width: 120,
       },
       {
         field: "className",
-        headerName: t("finance:class"),
+        headerName: "Lớp",
         width: 150,
       },
       {
         field: "month",
-        headerName: t("finance:month"),
+        headerName: "Tháng",
         width: 120,
       },
       {
         field: "totalAmount",
-        headerName: t("finance:totalAmount"),
+        headerName: "Tổng tiền",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.totalAmount || 0).toLocaleString()} VND`,
       },
       {
         field: "totalPaid",
-        headerName: t("finance:paidAmount"),
+        headerName: "Đã thanh toán",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.totalPaid || 0).toLocaleString()} VND`,
       },
       {
         field: "outstanding",
-        headerName: t("finance:outstandingAmount"),
+        headerName: "Nợ còn lại",
         width: 150,
         valueGetter: (params: any) => `${(params.row?.outstanding || 0).toLocaleString()} VND`,
       },
       {
         field: "status",
-        headerName: t("finance:status"),
+        headerName: "Trạng thái",
         width: 150,
         renderCell: (params) => (
           <Chip
-            label={getStatusLabel(params.value, t)}
+            label={getStatusLabel(params.value)}
             size="small"
             color={getStatusColor(params.value) as any}
             variant="outlined"
@@ -144,12 +142,12 @@ export function DebtTrackingList() {
       },
       {
         field: "dueDate",
-        headerName: t("finance:dueDate"),
+        headerName: "Hạn thanh toán",
         width: 150,
         valueGetter: (params) => new Date(params).toLocaleDateString("vi-VN"),
       },
     ],
-    [t]
+    []
   );
 
   return (
@@ -171,7 +169,7 @@ export function DebtTrackingList() {
           <Box>
             <Card sx={{ p: 2 }}>
               <Typography color="text.secondary" variant="caption">
-                {t("finance:totalDebt")}
+                Tổng nợ
               </Typography>
               <Typography variant="h6">
                 {summary.totalDebt.toLocaleString()} VND
@@ -181,7 +179,7 @@ export function DebtTrackingList() {
           <Box>
             <Card sx={{ p: 2 }}>
               <Typography color="text.secondary" variant="caption">
-                {t("finance:unpaidStatus")}
+                Chưa thanh toán
               </Typography>
               <Typography variant="h6">{summary.unpaidCount}</Typography>
             </Card>
@@ -189,7 +187,7 @@ export function DebtTrackingList() {
           <Box>
             <Card sx={{ p: 2 }}>
               <Typography color="text.secondary" variant="caption">
-                {t("finance:partialStatus")}
+                Thanh toán một phần
               </Typography>
               <Typography variant="h6">{summary.partialCount}</Typography>
             </Card>
@@ -197,7 +195,7 @@ export function DebtTrackingList() {
           <Box>
             <Card sx={{ p: 2 }}>
               <Typography color="text.secondary" variant="caption">
-                {t("finance:overdueCount")}
+                Quá hạn
               </Typography>
               <Typography variant="h6" color="error">
                 {summary.overdueCount}
@@ -214,7 +212,7 @@ export function DebtTrackingList() {
           <Stack direction="row" spacing={2} mb={2} flexWrap="wrap">
             <TextField
               select
-              label={t("finance:status")}
+              label="Trạng thái"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
               size="small"
@@ -225,27 +223,27 @@ export function DebtTrackingList() {
                 },
               }}
             >
-              <option value="">{t("finance:allStatus")}</option>
-              <option value="unpaid">{t("finance:unpaidStatus")}</option>
-              <option value="partial">{t("finance:partialStatus")}</option>
-              <option value="paid">{t("finance:paidStatus")}</option>
+              <option value="">-- Tất cả --</option>
+              <option value="unpaid">Chưa thanh toán</option>
+              <option value="partial">Thanh toán một phần</option>
+              <option value="paid">Đã thanh toán</option>
             </TextField>
 
             <TextField
-              label={t("finance:student")}
+              label="Học sinh"
               value={filterStudent}
               onChange={(e) => setFilterStudent(e.target.value)}
               size="small"
-              placeholder="Student ID"
+              placeholder="Mã học sinh"
               sx={{ width: 150 }}
             />
 
             <TextField
-              label={t("finance:class")}
+              label="Lớp"
               value={filterClass}
               onChange={(e) => setFilterClass(e.target.value)}
               size="small"
-              placeholder="Class ID"
+              placeholder="Mã lớp"
               sx={{ width: 150 }}
             />
 
@@ -258,7 +256,7 @@ export function DebtTrackingList() {
                   setFilterClass("");
                 }}
               >
-                {t("finance:clearFilters")}
+                Xóa bộ lọc
               </Button>
             )}
           </Stack>

@@ -5,7 +5,6 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogTitle,
@@ -40,8 +39,6 @@ interface StudentFeeInfo {
 }
 
 export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
-  const { t: tFinance } = useTranslation("finance");
-  const { t: tCommon } = useTranslation("common");
   const snackbar = useSnackbar();
   const [submitting, setSubmitting] = useState(false);
   const [selectedFee, setSelectedFee] = useState<StudentFeeInfo | null>(null);
@@ -76,13 +73,13 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
         const result = await response.json();
         setFees(result.data || []);
       } catch {
-        snackbar.showError(tCommon("error"));
+        snackbar.showError("Failed to load fees");
       } finally {
         setLoadingFees(false);
       }
     };
     loadFees();
-  }, [snackbar, tCommon]);
+  }, [snackbar]);
 
   // Update selected fee info when fee is selected
   React.useEffect(() => {
@@ -96,13 +93,13 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
 
   const onSubmit = async (data: PaymentCreateInput) => {
     if (!selectedFee) {
-      snackbar.showError(tFinance("chooseInvoice"));
+      snackbar.showError("Vui lòng chọn hóa đơn");
       return;
     }
 
     if (amount > selectedFee.outstanding) {
       snackbar.showError(
-        `${tFinance("amountRequired")} ${selectedFee.outstanding.toLocaleString()} VND`
+        `Số tiền không được vượt quá nợ cần thanh toán: ${selectedFee.outstanding.toLocaleString()} VND`
       );
       return;
     }
@@ -116,10 +113,10 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
       });
 
       if (!response.ok) throw new Error("Failed to record payment");
-      snackbar.showSuccess(tFinance("recordPaymentSuccess"));
+      snackbar.showSuccess("Ghi nhận thanh toán thành công");
       onSuccess();
     } catch {
-      snackbar.showError(tFinance("recordPaymentError"));
+      snackbar.showError("Ghi nhận thanh toán thất bại");
     } finally {
       setSubmitting(false);
     }
@@ -136,12 +133,12 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
         onSubmit: handleSubmit(onSubmit),
       }}
     >
-      <DialogTitle>{tFinance("recordPayment")}</DialogTitle>
+      <DialogTitle>Ghi nhận thanh toán</DialogTitle>
       <DialogContent sx={{ mt: 2 }}>
         <Stack spacing={2}>
           <TextField
             select
-            label={tFinance("invoice")}
+            label="Hóa đơn"
             {...register("studentFeeId")}
             error={!!errors.studentFeeId}
             helperText={errors.studentFeeId?.message}
@@ -153,7 +150,7 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
               },
             }}
           >
-            <option value="">{tFinance("chooseInvoice")}</option>
+            <option value="">-- Chọn hóa đơn --</option>
             {fees.map((fee) => (
               <option key={fee.id} value={fee.id}>
                 {fee.studentId} - {fee.amount.toLocaleString()} VND
@@ -165,20 +162,20 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
             <>
               <Divider />
               <Typography variant="caption" color="text.secondary">
-                {tFinance("totalAmount")}: {selectedFee.amount.toLocaleString()} VND
+                Tổng tiền: {selectedFee.amount.toLocaleString()} VND
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {tFinance("remainingAmount")}: {selectedFee.outstanding.toLocaleString()} VND
+                Nợ còn lại: {selectedFee.outstanding.toLocaleString()} VND
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {tFinance("status")}: {selectedFee.status}
+                Trạng thái: {selectedFee.status}
               </Typography>
             </>
           )}
 
           <TextField
             type="number"
-            label={tFinance("amount")}
+            label="Số tiền thanh toán"
             {...register("amount", { valueAsNumber: true })}
             error={!!errors.amount}
             helperText={errors.amount?.message}
@@ -188,7 +185,7 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
 
           <TextField
             select
-            label={tFinance("paymentMethod")}
+            label="Phương thức"
             {...register("method")}
             error={!!errors.method}
             helperText={errors.method?.message}
@@ -199,14 +196,14 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
               },
             }}
           >
-            <option value="cash">{tFinance("cash")}</option>
-            <option value="transfer">{tFinance("bank")}</option>
-            <option value="wallet">{tFinance("card")}</option>
+            <option value="cash">Tiền mặt</option>
+            <option value="transfer">Chuyển khoản</option>
+            <option value="wallet">Ví điện tử</option>
           </TextField>
 
           <TextField
             type="date"
-            label={tFinance("paymentDate")}
+            label="Ngày thanh toán"
             {...register("paymentDate")}
             error={!!errors.paymentDate}
             helperText={errors.paymentDate?.message}
@@ -215,7 +212,7 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
           />
 
           <TextField
-            label={tCommon("note")}
+            label="Ghi chú"
             {...register("notes")}
             fullWidth
             multiline
@@ -224,14 +221,14 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{tCommon("cancel")}</Button>
+        <Button onClick={onClose}>Hủy</Button>
         <Button
           type="submit"
           variant="contained"
           disabled={submitting || !selectedFee}
           startIcon={submitting ? <CircularProgress size={20} /> : undefined}
         >
-          {submitting ? `${tCommon("loading")}` : tCommon("save")}
+          {submitting ? "Đang xử lý..." : "Lưu"}
         </Button>
       </DialogActions>
     </Dialog>

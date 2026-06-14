@@ -13,7 +13,6 @@ import {
   Skeleton,
   Alert,
 } from "@mui/material";
-import { useTranslation } from "react-i18next";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PaymentIcon from "@mui/icons-material/Payment";
 import GroupIcon from "@mui/icons-material/Group";
@@ -90,7 +89,6 @@ function StatCard({
 }
 
 export default function AdminPage() {
-  const { t } = useTranslation("dashboard");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,23 +150,23 @@ export default function AdminPage() {
           activeClasses,
         });
       } catch {
-        setError(t("errorLoadingData"));
+        setError("Lỗi khi tải dữ liệu");
       } finally {
         setLoading(false);
       }
     };
 
     loadStats();
-  }, [t]);
+  }, []);
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Box mb={4}>
         <Typography variant="h4" component="h1" gutterBottom>
-          {t("adminDashboard")}
+          Trang chủ quản lý
         </Typography>
         <Typography color="text.secondary">
-          {t("financialAndActivityOverview")}
+          Tổng quan thông tin tài chính và hoạt động
         </Typography>
       </Box>
 
@@ -190,9 +188,9 @@ export default function AdminPage() {
         <Box>
           <StatCard
             icon={<TrendingUpIcon />}
-            title={t("totalTuition")}
+            title="Tổng doanh thu"
             value={stats?.totalRevenue ? `${(stats.totalRevenue / 1000000).toFixed(1)}M` : "0"}
-            subtitle={t("allPayments")}
+            subtitle="Tất cả thanh toán"
             loading={loading}
             color="success"
           />
@@ -201,9 +199,9 @@ export default function AdminPage() {
         <Box>
           <StatCard
             icon={<PaymentIcon />}
-            title={t("totalStudentDebt")}
+            title="Nợ học phí"
             value={stats?.totalDebt ? `${(stats.totalDebt / 1000000).toFixed(1)}M` : "0"}
-            subtitle={t("unpaid")}
+            subtitle="Chưa thanh toán"
             loading={loading}
             color="error"
           />
@@ -212,9 +210,9 @@ export default function AdminPage() {
         <Box>
           <StatCard
             icon={<ReceiptIcon />}
-            title={t("totalCollected")}
+            title="Đã thu"
             value={stats?.totalCollected ? `${(stats.totalCollected / 1000000).toFixed(1)}M` : "0"}
-            subtitle={t("paidInvoices")}
+            subtitle="Hóa đơn thanh toán đủ"
             loading={loading}
             color="info"
           />
@@ -223,9 +221,9 @@ export default function AdminPage() {
         <Box>
           <StatCard
             icon={<AssignmentIcon />}
-            title={t("teacherPayroll")}
+            title="Lương giáo viên"
             value={stats?.totalPayroll ? `${(stats.totalPayroll / 1000000).toFixed(1)}M` : "0"}
-            subtitle={t("totalExpended")}
+            subtitle="Tổng chi trả"
             loading={loading}
             color="warning"
           />
@@ -234,9 +232,9 @@ export default function AdminPage() {
         <Box>
           <StatCard
             icon={<GroupIcon />}
-            title={t("activeClasses")}
+            title="Lớp hoạt động"
             value={stats?.activeClasses || 0}
-            subtitle={t("classesOpened")}
+            subtitle="Số lớp đang mở"
             loading={loading}
             color="primary"
           />
@@ -247,7 +245,7 @@ export default function AdminPage() {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                {t("quickLinks")}
+                Mục nhanh
               </Typography>
               <Stack
                 direction="row"
@@ -256,21 +254,21 @@ export default function AdminPage() {
                 useFlexGap
               >
                 <Typography variant="caption" color="text.secondary" sx={{flex: '1 0 auto'}}>
-                  {t("manage")}:{" "}
+                  Quản lý:{" "}
                   <a href="/admin/student-fees" style={{ color: "#1976d2" }}>
-                    {t("invoices")}
+                    Hóa đơn
                   </a>
                   {" | "}
                   <a href="/admin/payments" style={{ color: "#1976d2" }}>
-                    {t("payments")}
+                    Thanh toán
                   </a>
                   {" | "}
                   <a href="/admin/teacher-payroll" style={{ color: "#1976d2" }}>
-                    {t("salary")}
+                    Lương
                   </a>
                   {" | "}
                   <a href="/admin/reports" style={{ color: "#1976d2" }}>
-                    {t("reports")}
+                    Báo cáo
                   </a>
                 </Typography>
               </Stack>
