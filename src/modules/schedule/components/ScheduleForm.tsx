@@ -11,22 +11,20 @@ import {
   MenuItem,
   Alert,
   FormHelperText,
-  CircularProgress,
   Box,
+  Button,
 } from "@mui/material";
+import InputAdornment from "@mui/material/InputAdornment";
+import SearchIcon from "@mui/icons-material/Search";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { classScheduleCreateSchema } from "@/modules/schedule/schemas/schedule.schema";
 import type { z } from "zod";
 import { useState, useEffect, type ReactElement } from "react";
+import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
+import { RoomSelectDialog } from "@/components/shared/RoomSelectDialog";
 
 type ScheduleFormData = z.infer<typeof classScheduleCreateSchema>;
-
-interface DropdownOption {
-  id: string;
-  name: string;
-  code?: string;
-}
 
 export interface ScheduleFormProps {
   formId?: string;
@@ -41,11 +39,15 @@ export function ScheduleForm({
   defaultValues,
   onConflictCheck,
 }: ScheduleFormProps): ReactElement {
-  const { control, handleSubmit, watch } = useForm<ScheduleFormData>({
+  const { control, handleSubmit, watch, setValue } = useForm<ScheduleFormData>({
     resolver: zodResolver(classScheduleCreateSchema),
     defaultValues: {
       classId: defaultValues?.classId ?? "",
+      classCode: defaultValues?.classCode ?? "",
+      className: defaultValues?.className ?? "",
       roomId: defaultValues?.roomId ?? "",
+      roomCode: defaultValues?.roomCode ?? "",
+      roomName: defaultValues?.roomName ?? "",
       dayOfWeek: defaultValues?.dayOfWeek ?? 0,
       startTime: defaultValues?.startTime ?? "08:00",
       endTime: defaultValues?.endTime ?? "10:00",
@@ -53,55 +55,27 @@ export function ScheduleForm({
   });
 
   const [conflicts, setConflicts] = useState<any>(null);
-  const [classes, setClasses] = useState<DropdownOption[]>([]);
-  const [rooms, setRooms] = useState<DropdownOption[]>([]);
-  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(true);
+  const [openClassDialog, setOpenClassDialog] = useState(false);
+  const [openRoomDialog, setOpenRoomDialog] = useState(false);
 
   const roomId = watch("roomId");
   const dayOfWeek = watch("dayOfWeek");
   const startTime = watch("startTime");
   const endTime = watch("endTime");
 
-  // Fetch classes and rooms on mount
-  useEffect(() => {
-    const fetchDropdownOptions = async () => {
-      try {
-        setIsLoadingDropdowns(true);
-        const [classRes, roomRes] = await Promise.all([
-          fetch("/api/classes?limit=100&page=1"),
-          fetch("/api/rooms?limit=100&page=1"),
-        ]);
+  // Handle class selection from dialog
+  const handleClassSelect = (classItem: any) => {
+    setValue("classId", classItem.id);
+    setValue("classCode", classItem.code);
+    setValue("className", classItem.name);
+  };
 
-        if (classRes.ok) {
-          const classData = await classRes.json();
-          setClasses(
-            classData.items?.map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              code: c.code,
-            })) || [],
-          );
-        }
-
-        if (roomRes.ok) {
-          const roomData = await roomRes.json();
-          setRooms(
-            roomData.items?.map((r: any) => ({
-              id: r.id,
-              name: r.name,
-              code: r.code,
-            })) || [],
-          );
-        }
-      } catch (err) {
-        console.error("Failed to fetch dropdown options:", err);
-      } finally {
-        setIsLoadingDropdowns(false);
-      }
-    };
-
-    fetchDropdownOptions();
-  }, []);
+  // Handle room selection from dialog
+  const handleRoomSelect = (roomItem: any) => {
+    setValue("roomId", roomItem.id);
+    setValue("roomCode", roomItem.code);
+    setValue("roomName", roomItem.name);
+  };
 
   // Check room conflicts
   useEffect(() => {
@@ -144,64 +118,172 @@ export function ScheduleForm({
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2}>
-        <Controller
-          name="classId"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <FormControl
-              error={!!error}
-              fullWidth
-              disabled={isLoadingDropdowns}
-            >
-              <InputLabel>Lớp học</InputLabel>
-              <Select {...field} value={field.value ?? ""} label="Lớp học">
-                <MenuItem value="">
-                  {isLoadingDropdowns ? "Đang tải..." : "Chọn lớp học"}
-                </MenuItem>
-                {classes.map((cls) => (
-                  <MenuItem key={cls.id} value={cls.id}>
-                    {cls.name} ({cls.code})
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>{error?.message}</FormHelperText>
-            </FormControl>
-          )}
-        />
+        {/* Class Selection Section */}
+        <Box
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+            p: 2,
+            borderRadius: 2,
+            bgcolor: "background.paper",
+          }}
+        >
+          <Controller
+            name="classId"
+            control={control}
+            render={({ fieldState: { error } }) => (
+              <FormControl fullWidth error={!!error}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  alignItems="flex-start"
+                >
+                  <Controller
+                    name="classCode"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Mã lớp"
+                        value={field.value ?? ""}
+                        fullWidth
+                        size="small"
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  startIcon={<SearchIcon />}
+                                  onClick={() => setOpenClassDialog(true)}
+                                  sx={{
+                                    height: 30,
+                                    whiteSpace: "nowrap",
+                                    mr: -0.5,
+                                  }}
+                                >
+                                  Chọn
+                                </Button>
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                    )}
+                  />
 
-        <Controller
-          name="roomId"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <FormControl
-              error={!!error}
-              fullWidth
-              disabled={isLoadingDropdowns}
-            >
-              <InputLabel>Phòng học</InputLabel>
-              <Select
-                {...field}
-                value={field.value ?? ""}
-                label="Phòng học"
-                sx={{
-                  "& .MuiSelect-select": {
-                    minHeight: "auto",
-                  },
-                }}
-              >
-                <MenuItem value="">
-                  {isLoadingDropdowns ? "Đang tải..." : "Chọn phòng học"}
-                </MenuItem>
-                {rooms.map((room) => (
-                  <MenuItem key={room.id} value={room.id}>
-                    {room.name} ({room.code})
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>{error?.message}</FormHelperText>
-            </FormControl>
-          )}
-        />
+                  <Controller
+                    name="className"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Tên lớp"
+                        value={field.value ?? ""}
+                        fullWidth
+                        size="small"
+                        error={!!error}
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                          },
+                        }}
+                      />
+                    )}
+                  />
+                </Stack>
+
+                {error && <FormHelperText>{error.message}</FormHelperText>}
+              </FormControl>
+            )}
+          />
+        </Box>
+
+        {/* Room Selection Section */}
+        <Box
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+            p: 2,
+            borderRadius: 2,
+            bgcolor: "background.paper",
+          }}
+        >
+          <Controller
+            name="roomId"
+            control={control}
+            render={({ fieldState: { error } }) => (
+              <FormControl fullWidth error={!!error}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1.5}
+                  alignItems="flex-start"
+                >
+                  <Controller
+                    name="roomCode"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Mã phòng"
+                        value={field.value ?? ""}
+                        fullWidth
+                        size="small"
+                        error={!!error}
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  startIcon={<SearchIcon />}
+                                  onClick={() => setOpenRoomDialog(true)}
+                                  sx={{
+                                    height: 30,
+                                    whiteSpace: "nowrap",
+                                    mr: -0.5,
+                                  }}
+                                >
+                                  Chọn
+                                </Button>
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    name="roomName"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        label="Tên phòng"
+                        value={field.value ?? ""}
+                        fullWidth
+                        size="small"
+                        error={!!error}
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                          },
+                        }}
+                      />
+                    )}
+                  />
+                </Stack>
+
+                {error && <FormHelperText>{error.message}</FormHelperText>}
+              </FormControl>
+            )}
+          />
+        </Box>
 
         <Controller
           name="dayOfWeek"
@@ -269,14 +351,21 @@ export function ScheduleForm({
             Phòng học bị trùng lịch. Vui lòng chọn thời gian khác.
           </Alert>
         )}
-
-        {isLoadingDropdowns && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-            <CircularProgress size={20} />
-            <span>Đang tải dữ liệu...</span>
-          </Box>
-        )}
       </Stack>
+
+      {/* Class Select Dialog */}
+      <ClassSelectDialog
+        open={openClassDialog}
+        onClose={() => setOpenClassDialog(false)}
+        onSelect={handleClassSelect}
+      />
+
+      {/* Room Select Dialog */}
+      <RoomSelectDialog
+        open={openRoomDialog}
+        onClose={() => setOpenRoomDialog(false)}
+        onSelect={handleRoomSelect}
+      />
     </form>
   );
 }
