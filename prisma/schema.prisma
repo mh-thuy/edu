@@ -138,8 +138,10 @@ model StudentFee {
   classId   String    @map("class_id")
   month     String    @map("month") // YYYY-MM format
   amount    Float
+  discount  Float     @default(0)
   dueDate   DateTime  @map("due_date")
   status    String    @default("unpaid") // unpaid, partial, paid
+  note      String?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

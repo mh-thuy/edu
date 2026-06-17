@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -20,6 +20,13 @@ import {
   studentFeeUpdateSchema,
 } from "@/modules/finance/student-fees/schemas/student-fee.schema";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import {
+  MasterSelectField,
+  type MasterSelectValue,
+} from "@/components/shared/MasterSelectField";
+import { StudentSelectDialog } from "@/components/shared/StudentSelectDialog";
+import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
+import { useDisclosure } from "@/hooks/useDisclosure";
 
 import type { z } from "zod";
 
@@ -49,6 +56,15 @@ export function StudentFeeForm({
   const [submitting, setSubmitting] = React.useState(false);
   const isCreating = !initialData;
 
+  // Local display state for selected student/class (id stored in form)
+  const [selectedStudent, setSelectedStudent] =
+    React.useState<MasterSelectValue | null>(null);
+  const [selectedClass, setSelectedClass] =
+    React.useState<MasterSelectValue | null>(null);
+
+  const studentDialog = useDisclosure();
+  const classDialog = useDisclosure();
+
   const resolver: Resolver<StudentFeeUpdateInput> = (
     isCreating
       ? (zodResolver(studentFeeCreateSchema) as unknown)
@@ -58,6 +74,8 @@ export function StudentFeeForm({
   const {
     register,
     handleSubmit,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<StudentFeeUpdateInput>({
     resolver,
@@ -84,14 +102,12 @@ export function StudentFeeForm({
       let response;
 
       if (isCreating) {
-        // CREATE mode - POST to /api/student-fees
         response = await fetch("/api/student-fees", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
       } else {
-        // UPDATE mode - PUT to /api/student-fees/{id}
         response = await fetch(`/api/student-fees/${initialData?.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -99,135 +115,191 @@ export function StudentFeeForm({
         });
       }
 
-      if (!response.ok) throw new Error("Failed to save");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to save");
+      }
       snackbar.showSuccess(
         isCreating ? "Tạo thành công" : "Cập nhật thành công",
       );
       onSuccess();
-    } catch {
-      snackbar.showError(isCreating ? "Tạo thất bại" : "Cập nhật thất bại");
+    } catch (err) {
+      snackbar.showError(
+        err instanceof Error
+          ? err.message
+          : isCreating
+            ? "Tạo thất bại"
+            : "Cập nhật thất bại",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Dialog
-      open
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        component: "form",
-        onSubmit: handleSubmit(onSubmit),
-      }}
-    >
-      <DialogTitle>{isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}</DialogTitle>
-      <DialogContent sx={{ mt: 2 }}>
-        <Stack spacing={2}>
-          {isCreating ? (
-            <>
-              <TextField
-                label="Mã học sinh"
-                {...register("studentId")}
-                error={!!errors.studentId}
-                helperText={errors.studentId?.message}
-                fullWidth
-              />
+    <>
+      <Dialog
+        open
+        onClose={onClose}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: "form",
+          onSubmit: handleSubmit(onSubmit),
+        }}
+      >
+        <DialogTitle>{isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}</DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Stack spacing={2}>
+            {isCreating ? (
+              <>
+                {/* Student picker */}
+                <Controller
+                  name="studentId"
+                  control={control}
+                  render={() => (
+                    <MasterSelectField
+                      label="Học sinh"
+                      required
+                      value={selectedStudent}
+                      onOpen={studentDialog.onOpen}
+                      error={errors.studentId?.message}
+                      codeLabel="Mã"
+                      nameLabel="Tên"
+                    />
+                  )}
+                />
 
-              <TextField
-                label="Mã lớp"
-                {...register("classId")}
-                error={!!errors.classId}
-                helperText={errors.classId?.message}
-                fullWidth
-              />
+                {/* Class picker */}
+                <Controller
+                  name="classId"
+                  control={control}
+                  render={() => (
+                    <MasterSelectField
+                      label="Lớp"
+                      required
+                      value={selectedClass}
+                      onOpen={classDialog.onOpen}
+                      error={errors.classId?.message}
+                      codeLabel="Mã"
+                      nameLabel="Tên"
+                    />
+                  )}
+                />
 
-              <TextField
-                label="Tháng (YYYY-MM)"
-                type="month"
-                {...register("month")}
-                error={!!errors.month}
-                helperText={errors.month?.message}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </>
-          ) : (
-            <>
-              <TextField
-                label="Học sinh"
-                value={initialData?.studentId}
-                disabled
-                fullWidth
-              />
-              <TextField
-                label="Lớp"
-                value={initialData?.classId}
-                disabled
-                fullWidth
-              />
-              <TextField
-                label="Tháng"
-                value={initialData?.month}
-                disabled
-                fullWidth
-              />
-            </>
-          )}
+                <TextField
+                  label="Tháng (YYYY-MM)"
+                  type="month"
+                  {...register("month")}
+                  error={!!errors.month}
+                  helperText={errors.month?.message}
+                  fullWidth
+                  InputLabelProps={{ shrink: true }}
+                />
+              </>
+            ) : (
+              <>
+                <TextField
+                  label="Học sinh (ID)"
+                  value={initialData?.studentId}
+                  disabled
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Lớp (ID)"
+                  value={initialData?.classId}
+                  disabled
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Tháng"
+                  value={initialData?.month}
+                  disabled
+                  fullWidth
+                  size="small"
+                />
+              </>
+            )}
 
-          <TextField
-            label="Số tiền"
-            type="number"
-            {...register("amount", { valueAsNumber: true })}
-            error={!!errors.amount}
-            helperText={errors.amount?.message}
-            fullWidth
-            inputProps={{ step: "100" }}
-          />
-
-          <TextField
-            label="Hạn thanh toán"
-            type="date"
-            {...register("dueDate")}
-            error={!!errors.dueDate}
-            helperText={errors.dueDate?.message}
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-          />
-
-          {!isCreating && (
             <TextField
-              select
-              label="Trạng thái"
-              {...register("status")}
-              error={!!errors.status}
-              helperText={errors.status?.message}
+              label="Số tiền"
+              type="number"
+              {...register("amount", { valueAsNumber: true })}
+              error={!!errors.amount}
+              helperText={errors.amount?.message}
               fullWidth
-              slotProps={{
-                select: {
-                  native: true,
-                },
-              }}
-            >
-              <option value="unpaid">Chưa thanh toán</option>
-              <option value="partial">Thanh toán một phần</option>
-              <option value="paid">Đã thanh toán</option>
-            </TextField>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Hủy</Button>
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={submitting}
-          startIcon={submitting ? <CircularProgress size={20} /> : undefined}
-        >
-          {submitting ? "Đang xử lý..." : "Lưu"}
-        </Button>
-      </DialogActions>
-    </Dialog>
+              inputProps={{ step: "1000", min: 0 }}
+            />
+
+            <TextField
+              label="Hạn thanh toán"
+              type="date"
+              {...register("dueDate")}
+              error={!!errors.dueDate}
+              helperText={errors.dueDate?.message}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+
+            {!isCreating && (
+              <TextField
+                select
+                label="Trạng thái"
+                {...register("status")}
+                error={!!errors.status}
+                helperText={errors.status?.message}
+                fullWidth
+                slotProps={{ select: { native: true } }}
+              >
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="partial">Thanh toán một phần</option>
+                <option value="paid">Đã thanh toán</option>
+              </TextField>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose} disabled={submitting}>
+            Hủy
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={submitting}
+            startIcon={submitting ? <CircularProgress size={20} /> : undefined}
+          >
+            {submitting ? "Đang xử lý..." : "Lưu"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Student picker dialog */}
+      <StudentSelectDialog
+        open={studentDialog.open}
+        onClose={studentDialog.onClose}
+        onSelect={(item) => {
+          const display = { id: item.id, code: item.code, name: item.fullName };
+          setSelectedStudent(display);
+          setValue("studentId", item.id, { shouldValidate: true });
+          studentDialog.onClose();
+        }}
+      />
+
+      {/* Class picker dialog */}
+      <ClassSelectDialog
+        open={classDialog.open}
+        onClose={classDialog.onClose}
+        onSelect={(item) => {
+          const display = { id: item.id, code: item.code, name: item.name };
+          setSelectedClass(display);
+          setValue("classId", item.id, { shouldValidate: true });
+          classDialog.onClose();
+        }}
+      />
+
+      {snackbar.Snackbar}
+    </>
   );
 }

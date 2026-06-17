@@ -1,15 +1,36 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
-import type { Room } from "@prisma/client";
+import type { Prisma, Room } from "@prisma/client";
 import type {
   RoomCreate,
   RoomFilter,
   RoomUpdate,
 } from "@/modules/room/schemas/room.schema";
 
+function normalizeEmptyToNull(value?: string | null): string | null {
+  return value?.trim() ? value : null;
+}
+
+function buildRoomCreateInput(data: RoomCreate): Prisma.RoomCreateInput {
+  return {
+    code: data.code,
+    name: data.name,
+    capacity: data.capacity,
+    status: data.status,
+  };
+}
+
+function buildRoomUpdateInput(data: RoomUpdate): Prisma.RoomUpdateInput {
+  return {
+    ...(data.code !== undefined && { code: data.code }),
+    ...(data.name !== undefined && { name: data.name }),
+    ...(data.capacity !== undefined && { capacity: data.capacity }),
+    ...(data.status !== undefined && { status: data.status }),
+  };
+}
+
 export async function createRoom(data: RoomCreate): Promise<Room> {
   return prisma.room.create({
-    data,
+    data: buildRoomCreateInput(data),
   });
 }
 
@@ -20,28 +41,44 @@ export async function getRoomById(id: string): Promise<Room | null> {
 }
 
 export async function getRooms(filter: RoomFilter) {
-  const { search, status, page, limit } = filter;
+  const page = Math.max(filter.page ?? 1, 1);
+  const limit = Math.max(filter.limit ?? 10, 1);
   const skip = (page - 1) * limit;
 
-  const where: any = {};
-  if (search) {
-    where.OR = [
-      { code: { contains: search, mode: "insensitive" } },
-      { name: { contains: search, mode: "insensitive" } },
-    ];
-  }
-  if (status) {
-    where.status = status;
-  }
+  const where: Prisma.RoomWhereInput = {
+    ...(filter.search && {
+      OR: [
+        {
+          code: {
+            contains: filter.search,
+            mode: "insensitive",
+          },
+        },
+        {
+          name: {
+            contains: filter.search,
+            mode: "insensitive",
+          },
+        },
+      ],
+    }),
+    ...(filter.status && {
+      status: filter.status,
+    }),
+  };
 
   const [rooms, total] = await Promise.all([
     prisma.room.findMany({
       where,
       skip,
       take: limit,
-      orderBy: { createdAt: "desc" },
+      orderBy: {
+        createdAt: "desc",
+      },
     }),
-    prisma.room.count({ where }),
+    prisma.room.count({
+      where,
+    }),
   ]);
 
   return {
@@ -56,7 +93,7 @@ export async function getRooms(filter: RoomFilter) {
 export async function updateRoom(id: string, data: RoomUpdate): Promise<Room> {
   return prisma.room.update({
     where: { id },
-    data,
+    data: buildRoomUpdateInput(data),
   });
 }
 
@@ -71,22 +108,26 @@ export async function checkRoomConflict(
   dayOfWeek: number,
   startTime: string,
   endTime: string,
+  excludeScheduleId?: string,
 ): Promise<boolean> {
   const conflict = await prisma.classSchedule.findFirst({
     where: {
       roomId,
       dayOfWeek,
-      OR: [
-        {
-          AND: [
-            { startTime: { lte: startTime } },
-            { endTime: { gt: startTime } },
-          ],
+      ...(excludeScheduleId && {
+        id: {
+          not: excludeScheduleId,
         },
-        {
-          AND: [{ startTime: { lt: endTime } }, { endTime: { gte: endTime } }],
-        },
-      ],
+      }),
+      startTime: {
+        lt: endTime,
+      },
+      endTime: {
+        gt: startTime,
+      },
+    },
+    select: {
+      id: true,
     },
   });
 

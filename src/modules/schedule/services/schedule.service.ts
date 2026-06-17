@@ -1,17 +1,24 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from "@/lib/prisma";
-import type { ClassSchedule } from "@prisma/client";
+import type { ClassSchedule, Prisma } from "@prisma/client";
 import type {
   ClassScheduleCreate,
   ClassScheduleUpdate,
   ScheduleFilter,
 } from "@/modules/schedule/schemas/schedule.schema";
 
+type ClassScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
+  include: {
+    class: true;
+    room: true;
+    teacher: true;
+  };
+}>;
+
+type ScheduleConflict = ClassScheduleWithRelations;
+
 function timeToMinutes(time: string): number {
-  const parts = time.split(":");
-  const hours = Number(parts[0]) || 0;
-  const minutes = Number(parts[1]) || 0;
-  return hours * 60 + minutes;
+  const [hours = "0", minutes = "0"] = time.split(":");
+  return Number(hours) * 60 + Number(minutes);
 }
 
 function hasTimeConflict(
@@ -28,72 +35,130 @@ function hasTimeConflict(
   return start1 < end2 && start2 < end1;
 }
 
-export async function createClassSchedule(
+function toClassScheduleCreateInput(
   data: ClassScheduleCreate,
-): Promise<{ schedule: ClassSchedule; conflicts: any[] }> {
-  // Check room conflict
-  const roomConflicts = data.roomId
-    ? await prisma.classSchedule.findMany({
-        where: {
-          roomId: data.roomId,
-          dayOfWeek: data.dayOfWeek,
-        },
-        include: { class: true, room: true },
-      })
-    : [];
-
-  // Check teacher conflict
-  let teacherConflicts: any[] = [];
-  if (data.teacherId) {
-    const allSchedules = await prisma.classSchedule.findMany({
-      where: {
-        dayOfWeek: data.dayOfWeek,
-      },
-    });
-    // Filter by teacherId in memory
-    teacherConflicts = allSchedules.filter(
-      (s: any) => s.teacherId === data.teacherId,
-    );
-  }
-
-  const allConflicts = [
-    ...roomConflicts.filter((s) =>
-      hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime),
-    ),
-    ...teacherConflicts.filter((s) =>
-      hasTimeConflict(data.startTime, data.endTime, s.startTime, s.endTime),
-    ),
-  ];
-
-  const schedule = await prisma.classSchedule.create({
-    data,
-    include: { class: true, room: true },
-  });
-
-  return { schedule, conflicts: allConflicts };
+): Prisma.ClassScheduleUncheckedCreateInput {
+  return {
+    classId: data.classId,
+    roomId: data.roomId || null,
+    teacherId: data.teacherId || null,
+    dayOfWeek: data.dayOfWeek,
+    startTime: data.startTime,
+    endTime: data.endTime,
+  };
 }
 
-export async function getClassScheduleById(id: string): Promise<any> {
+function toClassScheduleUpdateInput(
+  data: ClassScheduleUpdate,
+): Prisma.ClassScheduleUncheckedUpdateInput {
+  return {
+    ...(data.classId !== undefined && { classId: data.classId }),
+    ...(data.roomId !== undefined && { roomId: data.roomId || null }),
+    ...(data.teacherId !== undefined && { teacherId: data.teacherId || null }),
+    ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
+    ...(data.startTime !== undefined && { startTime: data.startTime }),
+    ...(data.endTime !== undefined && { endTime: data.endTime }),
+  };
+}
+
+async function findScheduleConflicts(
+  data: {
+    roomId?: string | null;
+    teacherId?: string | null;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  },
+  excludeId?: string,
+): Promise<ScheduleConflict[]> {
+  const where: Prisma.ClassScheduleWhereInput = {
+    dayOfWeek: data.dayOfWeek,
+    ...(excludeId && {
+      id: {
+        not: excludeId,
+      },
+    }),
+    OR: [
+      ...(data.roomId ? [{ roomId: data.roomId }] : []),
+      ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
+    ],
+  };
+
+  if (!where.OR?.length) return [];
+
+  const schedules = await prisma.classSchedule.findMany({
+    where,
+    include: {
+      class: true,
+      room: true,
+      teacher: true,
+    },
+  });
+
+  return schedules.filter((schedule) =>
+    hasTimeConflict(
+      data.startTime,
+      data.endTime,
+      schedule.startTime,
+      schedule.endTime,
+    ),
+  );
+}
+
+export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
+  schedule: ClassScheduleWithRelations;
+  conflicts: ScheduleConflict[];
+}> {
+  const conflicts = await findScheduleConflicts(data);
+
+  const schedule = await prisma.classSchedule.create({
+    data: toClassScheduleCreateInput(data),
+    include: {
+      class: true,
+      room: true,
+      teacher: true,
+    },
+  });
+
+  return {
+    schedule,
+    conflicts,
+  };
+}
+
+export async function getClassScheduleById(
+  id: string,
+): Promise<ClassScheduleWithRelations | null> {
   return prisma.classSchedule.findUnique({
     where: { id },
-    include: { class: true, room: true },
+    include: {
+      class: true,
+      room: true,
+      teacher: true,
+    },
   });
 }
 
 export async function getSchedules(filter: ScheduleFilter) {
-  const { classId, dayOfWeek, page, limit } = filter;
+  const page = Math.max(filter.page ?? 1, 1);
+  const limit = Math.max(filter.limit ?? 10, 1);
   const skip = (page - 1) * limit;
 
-  const where: any = {};
-  if (classId) where.classId = classId;
-  if (dayOfWeek !== undefined) where.dayOfWeek = dayOfWeek;
+  const where: Prisma.ClassScheduleWhereInput = {
+    ...(filter.classId && { classId: filter.classId }),
+    ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
+  };
 
   const [schedules, total] = await Promise.all([
     prisma.classSchedule.findMany({
       where,
       skip,
       take: limit,
-      include: { class: true, room: true },
+      include: {
+        class: true,
+        room: true,
+        teacher: true,
+      },
       orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
     }),
     prisma.classSchedule.count({ where }),
@@ -111,11 +176,44 @@ export async function getSchedules(filter: ScheduleFilter) {
 export async function updateClassSchedule(
   id: string,
   data: ClassScheduleUpdate,
-): Promise<ClassSchedule> {
-  return prisma.classSchedule.update({
+): Promise<{
+  schedule: ClassScheduleWithRelations;
+  conflicts: ScheduleConflict[];
+}> {
+  const current = await prisma.classSchedule.findUnique({
     where: { id },
-    data,
   });
+
+  if (!current) {
+    throw new Error("Schedule not found");
+  }
+
+  const merged = {
+    classId: data.classId ?? current.classId,
+    roomId: data.roomId !== undefined ? data.roomId || null : current.roomId,
+    teacherId:
+      data.teacherId !== undefined ? data.teacherId || null : current.teacherId,
+    dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
+    startTime: data.startTime ?? current.startTime,
+    endTime: data.endTime ?? current.endTime,
+  };
+
+  const conflicts = await findScheduleConflicts(merged, id);
+
+  const schedule = await prisma.classSchedule.update({
+    where: { id },
+    data: toClassScheduleUpdateInput(data),
+    include: {
+      class: true,
+      room: true,
+      teacher: true,
+    },
+  });
+
+  return {
+    schedule,
+    conflicts,
+  };
 }
 
 export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
@@ -124,7 +222,9 @@ export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
   });
 }
 
-export async function getWeeklySchedule(startDate: Date): Promise<any> {
+export async function getWeeklySchedule(
+  startDate: Date,
+): Promise<ClassScheduleWithRelations[]> {
   const endDate = new Date(startDate);
   endDate.setDate(endDate.getDate() + 7);
 
@@ -135,7 +235,11 @@ export async function getWeeklySchedule(startDate: Date): Promise<any> {
         endDate: { gte: startDate },
       },
     },
-    include: { class: true, room: true },
+    include: {
+      class: true,
+      room: true,
+      teacher: true,
+    },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }

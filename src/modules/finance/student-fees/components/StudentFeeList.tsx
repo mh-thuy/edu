@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Card,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -38,9 +39,8 @@ interface StudentFee {
 }
 
 interface ClassInfo {
-  classId: string;
-  className: string;
-  studentCount: number;
+  id: string;
+  name: string;
 }
 
 const getStatusColor = (status: string) => {
@@ -71,6 +71,7 @@ export function StudentFeeList() {
   const [editingFee, setEditingFee] = useState<StudentFee | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [bulkData, setBulkData] = useState({
     classId: "",
     month: new Date().toISOString().slice(0, 7),
@@ -99,7 +100,7 @@ export function StudentFeeList() {
         const response = await fetch("/api/classes");
         if (!response.ok) throw new Error("Failed to load classes");
         const result = await response.json();
-        setClasses(result.data || []);
+        setClasses(result.items || []);
       } catch {
         showError("Failed to load classes");
       } finally {
@@ -138,19 +139,28 @@ export function StudentFeeList() {
   );
 
   const handleBulkCreate = useCallback(async () => {
-    if (!bulkData.classId || !bulkData.month || bulkData.amount <= 0) {
+    if (
+      !bulkData.classId ||
+      !bulkData.month ||
+      bulkData.amount <= 0 ||
+      !bulkData.dueDate
+    ) {
       snackbar.showError("Vui lòng điền đầy đủ thông tin");
       return;
     }
 
     try {
-      const response = await fetch("/api/student-fees", {
+      setBulkSubmitting(true);
+      const response = await fetch("/api/student-fees/bulk-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bulkData),
       });
-      if (!response.ok) throw new Error("Failed to create fees");
-      snackbar.showSuccess("Tạo hóa đơn thành công");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to create fees");
+      snackbar.showSuccess(
+        `Tạo hóa đơn thành công: ${data.created} mới, ${data.skipped} bỏ qua (đã tồn tại)`,
+      );
       setShowBulkDialog(false);
       setBulkData({
         classId: "",
@@ -159,8 +169,12 @@ export function StudentFeeList() {
         dueDate: "",
       });
       refresh();
-    } catch {
-      snackbar.showError("Tạo hóa đơn thất bại");
+    } catch (err) {
+      snackbar.showError(
+        err instanceof Error ? err.message : "Tạo hóa đơn thất bại",
+      );
+    } finally {
+      setBulkSubmitting(false);
     }
   }, [bulkData, refresh, snackbar]);
 
@@ -171,35 +185,29 @@ export function StudentFeeList() {
         field: "studentId",
         headerName: "Học sinh",
         width: 150,
-        valueGetter: (params) => params,
       },
       {
         field: "classId",
         headerName: "Lớp",
         width: 150,
-        valueGetter: (params) => params,
       },
       {
         field: "month",
         headerName: "Tháng",
         width: 120,
-        valueGetter: (params) => params,
       },
       {
         field: "amount",
         headerName: "Số tiền",
         width: 120,
-        valueGetter: (params: any) =>
-          `${(params.row?.amount || 0).toLocaleString()} VND`,
+        valueGetter: (value: number) => `${(value || 0).toLocaleString()} VND`,
       },
       {
         field: "dueDate",
         headerName: "Hạn thanh toán",
         width: 150,
-        valueGetter: (params: any) =>
-          params.row?.dueDate
-            ? new Date(params.row.dueDate).toLocaleDateString("vi-VN")
-            : "",
+        valueGetter: (value: string) =>
+          value ? new Date(value).toLocaleDateString("vi-VN") : "",
       },
       {
         field: "status",
@@ -270,9 +278,9 @@ export function StudentFeeList() {
           columns={columns}
           isLoading={isLoading}
           totalRows={fees?.total || 0}
-          page={page - 1}
+          page={page}
           pageSize={limit}
-          onPageChange={(newPage) => setPageNumber(newPage + 1)}
+          onPageChange={(newPage) => setPageNumber(newPage)}
           onPageSizeChange={setPageSize}
         />
       </Box>
@@ -316,8 +324,8 @@ export function StudentFeeList() {
             >
               <option value="">-- Chọn lớp --</option>
               {classes.map((cls) => (
-                <option key={cls.classId} value={cls.classId}>
-                  {cls.className} ({cls.studentCount} học sinh)
+                <option key={cls.id} value={cls.id}>
+                  {cls.name}
                 </option>
               ))}
             </TextField>
@@ -360,16 +368,31 @@ export function StudentFeeList() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowBulkDialog(false)}>Hủy</Button>
+          <Button
+            onClick={() => setShowBulkDialog(false)}
+            disabled={bulkSubmitting}
+          >
+            Hủy
+          </Button>
           <Button
             onClick={handleBulkCreate}
             variant="contained"
-            disabled={!bulkData.classId || bulkData.amount <= 0}
+            disabled={
+              !bulkData.classId ||
+              bulkData.amount <= 0 ||
+              !bulkData.dueDate ||
+              bulkSubmitting
+            }
+            startIcon={
+              bulkSubmitting ? <CircularProgress size={18} /> : undefined
+            }
           >
-            Tạo
+            {bulkSubmitting ? "Đang tạo..." : "Tạo"}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {snackbar.Snackbar}
     </Card>
   );
 }

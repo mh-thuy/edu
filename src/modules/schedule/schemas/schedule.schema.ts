@@ -1,12 +1,28 @@
 import { z } from "zod";
 
+export const classScheduleFormSchema = z.object({
+  classId: z.string().min(1, "Lớp học là bắt buộc"),
+  classCode: z.string().optional(),
+  className: z.string().optional(),
+
+  roomId: z.string().optional(),
+  roomCode: z.string().optional(),
+  roomName: z.string().optional(),
+
+  teacherId: z.string().optional(),
+
+  dayOfWeek: z.number().min(0).max(6),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
 export const classScheduleCreateSchema = z.object({
   classId: z.string().min(1, "Lớp học là bắt buộc"),
   roomId: z.string().optional(),
   teacherId: z.string().optional(),
   dayOfWeek: z.number().min(0).max(6),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Giờ bắt đầu không hợp lệ"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Giờ kết thúc không hợp lệ"),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
 });
 
 export const classScheduleUpdateSchema = classScheduleCreateSchema.partial();

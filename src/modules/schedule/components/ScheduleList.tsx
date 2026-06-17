@@ -1,53 +1,63 @@
 "use client";
 
 import {
+  Alert,
   Box,
-  Stack,
   Button,
   Chip,
   Paper,
+  Stack,
   Typography,
-  Alert,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EventNoteIcon from "@mui/icons-material/EventNote";
-import { GridColDef } from "@mui/x-data-grid";
-import { useState, useCallback } from "react";
+import type { GridColDef } from "@mui/x-data-grid";
+import { useCallback, useState, type ReactElement } from "react";
+
 import { BaseTable } from "@/components/BaseTable";
-import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FormDialog } from "@/components/FormDialog";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { ScheduleForm } from "./ScheduleForm";
-import type { ReactElement } from "react";
-import type { z } from "zod";
-import { classScheduleCreateSchema } from "@/modules/schedule/schemas/schedule.schema";
 
-type ScheduleFormData = z.infer<typeof classScheduleCreateSchema>;
+type ScheduleSubmitData = {
+  classId: string;
+  roomId?: string | null;
+  teacherId?: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
 
-const dayNames = [
-  "Thứ 2",
-  "Thứ 3",
-  "Thứ 4",
-  "Thứ 5",
-  "Thứ 6",
-  "Thứ 7",
-  "Chủ nhật",
-];
+type ConflictResult = {
+  hasConflict: boolean;
+  conflicts?: unknown[];
+};
 
 export interface Schedule {
   id: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
+
   classId: string;
   roomId?: string | null;
+  teacherId?: string | null;
+
   class?: {
     id: string;
     name: string;
     code: string;
   };
+
   room?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+
+  teacher?: {
     id: string;
     name: string;
     code: string;
@@ -59,6 +69,16 @@ type ScheduleRow = Schedule & {
   _onDelete?: (schedule: Schedule) => void;
 };
 
+const dayNames = [
+  "Thứ 2",
+  "Thứ 3",
+  "Thứ 4",
+  "Thứ 5",
+  "Thứ 6",
+  "Thứ 7",
+  "Chủ nhật",
+];
+
 const columns: GridColDef<ScheduleRow>[] = [
   {
     field: "dayOfWeek",
@@ -67,7 +87,7 @@ const columns: GridColDef<ScheduleRow>[] = [
     flex: 0.7,
     renderCell: (params) => {
       const dayIndex = Number(params.value);
-      return dayNames[dayIndex] || params.value;
+      return dayNames[dayIndex] ?? params.value;
     },
   },
   {
@@ -87,7 +107,9 @@ const columns: GridColDef<ScheduleRow>[] = [
     flex: 1,
     renderCell: (params) => {
       const classData = params.row.class;
+
       if (!classData) return params.value;
+
       return `${classData.name} (${classData.code})`;
     },
   },
@@ -97,7 +119,9 @@ const columns: GridColDef<ScheduleRow>[] = [
     minWidth: 150,
     renderCell: (params) => {
       const roomData = params.row.room;
+
       if (!roomData) return "-";
+
       return `${roomData.name} (${roomData.code})`;
     },
   },
@@ -188,21 +212,25 @@ export function ScheduleList(): ReactElement {
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasConflict, setHasConflict] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const handleCreate = useCallback(() => {
     setEditingSchedule(null);
-    setOpenDialog(true);
     setConflictWarning(null);
+    setHasConflict(false);
+    setOpenDialog(true);
   }, []);
 
   const handleEdit = useCallback((schedule: Schedule) => {
     setEditingSchedule(schedule);
-    setOpenDialog(true);
     setConflictWarning(null);
+    setHasConflict(false);
+    setOpenDialog(true);
   }, []);
 
   const handleDelete = useCallback((schedule: Schedule) => {
@@ -215,6 +243,7 @@ export function ScheduleList(): ReactElement {
     setOpenDialog(false);
     setEditingSchedule(null);
     setConflictWarning(null);
+    setHasConflict(false);
   }, [isSubmitting]);
 
   const handleConfirmDelete = useCallback(async () => {
@@ -242,7 +271,12 @@ export function ScheduleList(): ReactElement {
   }, [deleteId, refresh, showSuccess, showError]);
 
   const handleSubmit = useCallback(
-    async (formData: ScheduleFormData) => {
+    async (formData: ScheduleSubmitData) => {
+      if (hasConflict) {
+        showError("Không thể lưu do trùng lịch phòng học");
+        return;
+      }
+
       try {
         setIsSubmitting(true);
 
@@ -263,7 +297,7 @@ export function ScheduleList(): ReactElement {
             : "Thêm lịch học thất bại";
 
           try {
-            const errorData = await response.json();
+            const errorData = (await response.json()) as { error?: string };
             message = errorData.error || message;
           } catch {
             // Ignore JSON parse error
@@ -281,6 +315,7 @@ export function ScheduleList(): ReactElement {
         setOpenDialog(false);
         setEditingSchedule(null);
         setConflictWarning(null);
+        setHasConflict(false);
         await refresh();
       } catch (err) {
         showError(
@@ -290,10 +325,10 @@ export function ScheduleList(): ReactElement {
         setIsSubmitting(false);
       }
     },
-    [editingSchedule, refresh, showSuccess, showError],
+    [editingSchedule, hasConflict, refresh, showSuccess, showError],
   );
 
-  const tableData = (data?.items || []).map((row) => ({
+  const tableData: ScheduleRow[] = (data?.items ?? []).map((row) => ({
     ...row,
     roomId: row.roomId ?? "",
     _onEdit: handleEdit,
@@ -373,7 +408,7 @@ export function ScheduleList(): ReactElement {
         <BaseTable
           columns={columns}
           rows={tableData}
-          totalRows={data?.total || 0}
+          totalRows={data?.total ?? 0}
           page={page}
           pageSize={limit}
           isLoading={isLoading}
@@ -391,6 +426,7 @@ export function ScheduleList(): ReactElement {
           const form = document.querySelector(
             "#schedule-form",
           ) as HTMLFormElement | null;
+
           form?.requestSubmit();
         }}
         isLoading={isSubmitting}
@@ -402,15 +438,25 @@ export function ScheduleList(): ReactElement {
           defaultValues={
             editingSchedule
               ? {
+                  classId: editingSchedule.classId ?? "",
+                  classCode: editingSchedule.class?.code ?? "",
+                  className: editingSchedule.class?.name ?? "",
+
+                  roomId: editingSchedule.roomId ?? "",
+                  roomCode: editingSchedule.room?.code ?? "",
+                  roomName: editingSchedule.room?.name ?? "",
+
+                  teacherId: editingSchedule.teacherId ?? "",
+
                   dayOfWeek: editingSchedule.dayOfWeek,
                   startTime: editingSchedule.startTime ?? "",
                   endTime: editingSchedule.endTime ?? "",
-                  classId: editingSchedule.classId ?? "",
-                  roomId: editingSchedule.roomId ?? "",
                 }
               : undefined
           }
-          onConflictCheck={(data) => {
+          onConflictCheck={(data: ConflictResult) => {
+            setHasConflict(data.hasConflict);
+
             if (data.hasConflict) {
               setConflictWarning("Phát hiện trùng lịch phòng học!");
             } else {

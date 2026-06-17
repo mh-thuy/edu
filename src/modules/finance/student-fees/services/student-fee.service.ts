@@ -55,7 +55,9 @@ export class StudentFeeService {
     classId: string,
     month: string,
     amount: number,
-    dueDate: Date
+    discount: number,
+    dueDate: Date,
+    note?: string,
   ) {
     // Get all students in the class
     const classStudents = await prisma.classStudent.findMany({
@@ -90,8 +92,10 @@ export class StudentFeeService {
               classId,
               month,
               amount,
+              discount,
               dueDate,
               status: "unpaid",
+              note,
             },
           });
           created++;
@@ -114,7 +118,7 @@ export class StudentFeeService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    
+
     // Handle both single status and array of statuses
     if (status) {
       if (Array.isArray(status)) {
@@ -123,7 +127,7 @@ export class StudentFeeService {
         where.status = status;
       }
     }
-    
+
     if (classId) where.classId = classId;
     if (studentId) where.studentId = studentId;
     if (month) where.month = month;
@@ -183,7 +187,8 @@ export class StudentFeeService {
     });
 
     if (!fee) throw new Error("Student fee not found");
-    if (fee.payments.length > 0) throw new Error("Cannot delete: payments already recorded");
+    if (fee.payments.length > 0)
+      throw new Error("Cannot delete: payments already recorded");
 
     return prisma.studentFee.delete({ where: { id } });
   }

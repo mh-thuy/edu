@@ -1,37 +1,67 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 "use client";
 
 import {
-  TextField,
-  Stack,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
+  FormControl,
   FormHelperText,
-  Box,
-  Button,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
 } from "@mui/material";
-import InputAdornment from "@mui/material/InputAdornment";
-import SearchIcon from "@mui/icons-material/Search";
-import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { classScheduleCreateSchema } from "@/modules/schedule/schemas/schedule.schema";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import type { z } from "zod";
-import { useState, useEffect, type ReactElement } from "react";
+
+import { classScheduleFormSchema } from "@/modules/schedule/schemas/schedule.schema";
 import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
 import { RoomSelectDialog } from "@/components/shared/RoomSelectDialog";
+import {
+  MasterSelectField,
+  type MasterSelectValue,
+} from "@/components/shared/MasterSelectField";
+import { useDisclosure } from "@/hooks/useDisclosure";
 
-type ScheduleFormData = z.infer<typeof classScheduleCreateSchema>;
+type ScheduleFormData = z.infer<typeof classScheduleFormSchema>;
+
+type MasterItem = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+type ConflictResult = {
+  hasConflict: boolean;
+  conflicts?: unknown[];
+};
+
+type ScheduleSubmitData = {
+  classId: string;
+  roomId?: string | null;
+  teacherId?: string | null;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+};
 
 export interface ScheduleFormProps {
   formId?: string;
-  onSubmit: (data: ScheduleFormData) => void | Promise<void>;
+  onSubmit: (data: ScheduleSubmitData) => void | Promise<void>;
   defaultValues?: Partial<ScheduleFormData>;
-  onConflictCheck?: (conflicts: any) => void;
+  onConflictCheck?: (result: ConflictResult) => void;
 }
+
+const DAY_OPTIONS = [
+  { value: 0, label: "Thứ 2" },
+  { value: 1, label: "Thứ 3" },
+  { value: 2, label: "Thứ 4" },
+  { value: 3, label: "Thứ 5" },
+  { value: 4, label: "Thứ 6" },
+  { value: 5, label: "Thứ 7" },
+  { value: 6, label: "Chủ nhật" },
+];
 
 export function ScheduleForm({
   formId,
@@ -39,8 +69,13 @@ export function ScheduleForm({
   defaultValues,
   onConflictCheck,
 }: ScheduleFormProps): ReactElement {
-  const { control, handleSubmit, watch, setValue } = useForm<ScheduleFormData>({
-    resolver: zodResolver(classScheduleCreateSchema),
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<ScheduleFormData>({
+    resolver: zodResolver(classScheduleFormSchema),
     defaultValues: {
       classId: defaultValues?.classId ?? "",
       classCode: defaultValues?.classCode ?? "",
@@ -48,266 +83,199 @@ export function ScheduleForm({
       roomId: defaultValues?.roomId ?? "",
       roomCode: defaultValues?.roomCode ?? "",
       roomName: defaultValues?.roomName ?? "",
+      teacherId: defaultValues?.teacherId ?? "",
       dayOfWeek: defaultValues?.dayOfWeek ?? 0,
       startTime: defaultValues?.startTime ?? "08:00",
       endTime: defaultValues?.endTime ?? "10:00",
     },
   });
 
-  const [conflicts, setConflicts] = useState<any>(null);
-  const [openClassDialog, setOpenClassDialog] = useState(false);
-  const [openRoomDialog, setOpenRoomDialog] = useState(false);
+  const classDialog = useDisclosure();
+  const roomDialog = useDisclosure();
 
-  const roomId = watch("roomId");
-  const dayOfWeek = watch("dayOfWeek");
-  const startTime = watch("startTime");
-  const endTime = watch("endTime");
+  const [conflict, setConflict] = useState<ConflictResult | null>(null);
 
-  // Handle class selection from dialog
-  const handleClassSelect = (classItem: any) => {
-    setValue("classId", classItem.id);
-    setValue("classCode", classItem.code);
-    setValue("className", classItem.name);
+  const [
+    classId,
+    classCode,
+    className,
+    roomId,
+    roomCode,
+    roomName,
+    dayOfWeek,
+    startTime,
+    endTime,
+  ] = useWatch({
+    control,
+    name: [
+      "classId",
+      "classCode",
+      "className",
+      "roomId",
+      "roomCode",
+      "roomName",
+      "dayOfWeek",
+      "startTime",
+      "endTime",
+    ],
+  });
+
+  const selectedClass = useMemo<MasterSelectValue | null>(() => {
+    if (!classId) return null;
+
+    return {
+      id: classId,
+      code: classCode ?? "",
+      name: className ?? "",
+    };
+  }, [classId, classCode, className]);
+
+  const selectedRoom = useMemo<MasterSelectValue | null>(() => {
+    if (!roomId) return null;
+
+    return {
+      id: roomId,
+      code: roomCode ?? "",
+      name: roomName ?? "",
+    };
+  }, [roomId, roomCode, roomName]);
+
+  const handleClassSelect = (item: MasterItem) => {
+    setValue("classId", item.id, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("classCode", item.code, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("className", item.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+
+    classDialog.onClose();
   };
 
-  // Handle room selection from dialog
-  const handleRoomSelect = (roomItem: any) => {
-    setValue("roomId", roomItem.id);
-    setValue("roomCode", roomItem.code);
-    setValue("roomName", roomItem.name);
+  const handleRoomSelect = (item: MasterItem) => {
+    setValue("roomId", item.id, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("roomCode", item.code, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("roomName", item.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+
+    roomDialog.onClose();
   };
 
-  // Check room conflicts
+  const handleFormSubmit = async (data: ScheduleFormData) => {
+    await onSubmit({
+      classId: data.classId,
+      roomId: data.roomId || null,
+      teacherId: data.teacherId || null,
+      dayOfWeek: data.dayOfWeek,
+      startTime: data.startTime,
+      endTime: data.endTime,
+    });
+  };
+
   useEffect(() => {
-    const checkConflicts = async () => {
-      if (!roomId || dayOfWeek === undefined || !startTime || !endTime) {
-        setConflicts(null);
-        onConflictCheck?.({ hasConflict: false });
-        return;
-      }
+    if (!roomId || dayOfWeek === undefined || !startTime || !endTime) {
+      setConflict(null);
+      onConflictCheck?.({ hasConflict: false });
+      return;
+    }
 
+    const controller = new AbortController();
+
+    const timeoutId = window.setTimeout(async () => {
       try {
         const response = await fetch("/api/rooms/check-conflict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ roomId, dayOfWeek, startTime, endTime }),
+          body: JSON.stringify({
+            roomId,
+            dayOfWeek,
+            startTime,
+            endTime,
+          }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
-          setConflicts(null);
+          setConflict(null);
           return;
         }
 
-        const data = await response.json();
+        const result = (await response.json()) as ConflictResult;
 
-        setConflicts(data.hasConflict ? data : null);
-        onConflictCheck?.(data);
-      } catch (err) {
-        console.error("Conflict check failed:", err);
-        setConflicts(null);
+        setConflict(result.hasConflict ? result : null);
+        onConflictCheck?.(result);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        console.error("Conflict check failed:", error);
+        setConflict(null);
       }
-    };
-
-    const timeoutId = window.setTimeout(checkConflicts, 300);
+    }, 300);
 
     return () => {
       window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [roomId, dayOfWeek, startTime, endTime, onConflictCheck]);
 
   return (
-    <form id={formId} onSubmit={handleSubmit(onSubmit)}>
+    <form id={formId} onSubmit={handleSubmit(handleFormSubmit)}>
       <Stack spacing={2}>
-        {/* Class Selection Section */}
-        <Box
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            p: 2,
-            borderRadius: 2,
-            bgcolor: "background.paper",
-          }}
-        >
-          <Controller
-            name="classId"
-            control={control}
-            render={({ fieldState: { error } }) => (
-              <FormControl fullWidth error={!!error}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1.5}
-                  alignItems="flex-start"
-                >
-                  <Controller
-                    name="classCode"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Mã lớp"
-                        value={field.value ?? ""}
-                        fullWidth
-                        size="small"
-                        slotProps={{
-                          input: {
-                            readOnly: true,
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  startIcon={<SearchIcon />}
-                                  onClick={() => setOpenClassDialog(true)}
-                                  sx={{
-                                    height: 30,
-                                    whiteSpace: "nowrap",
-                                    mr: -0.5,
-                                  }}
-                                >
-                                  Chọn
-                                </Button>
-                              </InputAdornment>
-                            ),
-                          },
-                        }}
-                      />
-                    )}
-                  />
+        <MasterSelectField
+          label="Chọn lớp học"
+          value={selectedClass}
+          onOpen={classDialog.onOpen}
+          codeLabel="Mã lớp"
+          nameLabel="Tên lớp"
+          required
+          error={errors.classId?.message}
+        />
 
-                  <Controller
-                    name="className"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Tên lớp"
-                        value={field.value ?? ""}
-                        fullWidth
-                        size="small"
-                        error={!!error}
-                        slotProps={{
-                          input: {
-                            readOnly: true,
-                          },
-                        }}
-                      />
-                    )}
-                  />
-                </Stack>
-
-                {error && <FormHelperText>{error.message}</FormHelperText>}
-              </FormControl>
-            )}
-          />
-        </Box>
-
-        {/* Room Selection Section */}
-        <Box
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            p: 2,
-            borderRadius: 2,
-            bgcolor: "background.paper",
-          }}
-        >
-          <Controller
-            name="roomId"
-            control={control}
-            render={({ fieldState: { error } }) => (
-              <FormControl fullWidth error={!!error}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1.5}
-                  alignItems="flex-start"
-                >
-                  <Controller
-                    name="roomCode"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Mã phòng"
-                        value={field.value ?? ""}
-                        fullWidth
-                        size="small"
-                        error={!!error}
-                        slotProps={{
-                          input: {
-                            readOnly: true,
-                            endAdornment: (
-                              <InputAdornment position="end">
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  startIcon={<SearchIcon />}
-                                  onClick={() => setOpenRoomDialog(true)}
-                                  sx={{
-                                    height: 30,
-                                    whiteSpace: "nowrap",
-                                    mr: -0.5,
-                                  }}
-                                >
-                                  Chọn
-                                </Button>
-                              </InputAdornment>
-                            ),
-                          },
-                        }}
-                      />
-                    )}
-                  />
-
-                  <Controller
-                    name="roomName"
-                    control={control}
-                    render={({ field }) => (
-                      <TextField
-                        {...field}
-                        label="Tên phòng"
-                        value={field.value ?? ""}
-                        fullWidth
-                        size="small"
-                        error={!!error}
-                        slotProps={{
-                          input: {
-                            readOnly: true,
-                          },
-                        }}
-                      />
-                    )}
-                  />
-                </Stack>
-
-                {error && <FormHelperText>{error.message}</FormHelperText>}
-              </FormControl>
-            )}
-          />
-        </Box>
+        <MasterSelectField
+          label="Chọn phòng học"
+          value={selectedRoom}
+          onOpen={roomDialog.onOpen}
+          codeLabel="Mã phòng"
+          nameLabel="Tên phòng"
+          error={errors.roomId?.message}
+        />
 
         <Controller
           name="dayOfWeek"
           control={control}
-          render={({ field, fieldState: { error } }) => (
-            <FormControl error={!!error} fullWidth>
+          render={({ field, fieldState }) => (
+            <FormControl error={!!fieldState.error} fullWidth>
               <InputLabel>Ngày trong tuần</InputLabel>
+
               <Select
                 {...field}
                 value={field.value ?? 0}
                 label="Ngày trong tuần"
-                onChange={(event) => {
-                  field.onChange(Number(event.target.value));
-                }}
+                onChange={(event) => field.onChange(Number(event.target.value))}
               >
-                <MenuItem value={0}>Thứ 2</MenuItem>
-                <MenuItem value={1}>Thứ 3</MenuItem>
-                <MenuItem value={2}>Thứ 4</MenuItem>
-                <MenuItem value={3}>Thứ 5</MenuItem>
-                <MenuItem value={4}>Thứ 6</MenuItem>
-                <MenuItem value={5}>Thứ 7</MenuItem>
-                <MenuItem value={6}>Chủ nhật</MenuItem>
+                {DAY_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </Select>
-              <FormHelperText>{error?.message}</FormHelperText>
+
+              <FormHelperText>{fieldState.error?.message}</FormHelperText>
             </FormControl>
           )}
         />
@@ -315,14 +283,14 @@ export function ScheduleForm({
         <Controller
           name="startTime"
           control={control}
-          render={({ field, fieldState: { error } }) => (
+          render={({ field, fieldState }) => (
             <TextField
               {...field}
               value={field.value ?? ""}
               label="Giờ bắt đầu"
               type="time"
-              error={!!error}
-              helperText={error?.message}
+              error={!!fieldState.error}
+              helperText={fieldState.error?.message}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
@@ -332,38 +300,36 @@ export function ScheduleForm({
         <Controller
           name="endTime"
           control={control}
-          render={({ field, fieldState: { error } }) => (
+          render={({ field, fieldState }) => (
             <TextField
               {...field}
               value={field.value ?? ""}
               label="Giờ kết thúc"
               type="time"
-              error={!!error}
-              helperText={error?.message}
+              error={!!fieldState.error}
+              helperText={fieldState.error?.message}
               fullWidth
               InputLabelProps={{ shrink: true }}
             />
           )}
         />
 
-        {conflicts && (
+        {conflict && (
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
             Phòng học bị trùng lịch. Vui lòng chọn thời gian khác.
           </Alert>
         )}
       </Stack>
 
-      {/* Class Select Dialog */}
       <ClassSelectDialog
-        open={openClassDialog}
-        onClose={() => setOpenClassDialog(false)}
+        open={classDialog.open}
+        onClose={classDialog.onClose}
         onSelect={handleClassSelect}
       />
 
-      {/* Room Select Dialog */}
       <RoomSelectDialog
-        open={openRoomDialog}
-        onClose={() => setOpenRoomDialog(false)}
+        open={roomDialog.open}
+        onClose={roomDialog.onClose}
         onSelect={handleRoomSelect}
       />
     </form>
