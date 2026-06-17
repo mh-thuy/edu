@@ -19,11 +19,13 @@ import type { ReactElement } from "react";
 type RoomFormData = z.infer<typeof roomCreateSchema>;
 
 export interface RoomFormProps {
+  formId?: string;
   onSubmit: (data: RoomFormData) => void;
   defaultValues?: Partial<RoomFormData>;
 }
 
 export function RoomForm({
+  formId,
   onSubmit,
   defaultValues,
 }: RoomFormProps): ReactElement {
@@ -42,7 +44,7 @@ export function RoomForm({
   });
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+    <Box component="form" id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2.5}>
         {/* Hàng 1 */}
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>

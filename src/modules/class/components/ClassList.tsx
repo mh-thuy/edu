@@ -426,12 +426,7 @@ export function ClassList(): ReactElement {
         open={openDialog}
         title={editingClass ? "Sửa lớp học" : "Thêm lớp học"}
         onClose={handleCloseDialog}
-        onSubmit={async () => {
-          const form = document.querySelector(
-            "#class-form",
-          ) as HTMLFormElement | null;
-          form?.requestSubmit();
-        }}
+        formId="class-form"
         isLoading={isSubmitting}
       >
         <ClassForm

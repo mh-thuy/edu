@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/errors";
 import { classUpdateSchema } from "@/modules/class/schemas/class.schema";
 import { getClassById, updateClass, deleteClass } from "@/modules/class/services/class.service";
 
@@ -15,8 +15,8 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
       return NextResponse.json({ error: "Class not found" }, { status: 404 });
     }
     return NextResponse.json(classData);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -28,8 +28,8 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
 
     const classData = await updateClass(id, data);
     return NextResponse.json(classData);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -38,7 +38,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     const { id } = await params;
     const classData = await deleteClass(id);
     return NextResponse.json(classData);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

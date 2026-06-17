@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
 
 export class TeacherPayrollService {
@@ -43,7 +42,14 @@ export class TeacherPayrollService {
     }
 
     let totalRevenue = 0;
-    const items = [];
+    const items: Array<{
+      classId: string;
+      classCode: string;
+      studentCount: number;
+      revenue: number;
+      fee: number;
+      salary: number;
+    }> = [];
 
     // For each class, calculate revenue from actual collected payments
     for (const cls of classes) {
@@ -145,10 +151,11 @@ export class TeacherPayrollService {
     const { page, limit, teacherId, month, status } = filter;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (teacherId) where.teacherId = teacherId;
-    if (month) where.month = month;
-    if (status) where.status = status;
+    const where: Prisma.TeacherPayrollWhereInput = {
+      ...(teacherId && { teacherId }),
+      ...(month && { month }),
+      ...(status && { status }),
+    };
 
     const [items, total] = await Promise.all([
       prisma.teacherPayroll.findMany({

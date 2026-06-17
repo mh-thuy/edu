@@ -21,7 +21,7 @@ import { useState, useCallback, type ReactElement } from "react";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useList } from "@/hooks/useList";
 
-// Minimum interface any selectable item must satisfy
+// Minimum interface selectable items must satisfy
 export interface SelectableItem {
   id: string;
 }

@@ -377,13 +377,11 @@ export function RoomList(): ReactElement {
         open={openDialog}
         title={editingId ? "Sửa phòng" : "Thêm phòng"}
         onClose={() => setOpenDialog(false)}
-        onSubmit={async () => {
-          const form = document.querySelector("form") as HTMLFormElement;
-          form?.requestSubmit();
-        }}
+        formId="room-form"
         isLoading={isSubmitting}
       >
         <RoomForm
+          formId="room-form"
           key={editingId ?? "create"}
           defaultValues={editingRoom ?? undefined}
           onSubmit={handleSubmit}

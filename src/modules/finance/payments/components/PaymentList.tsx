@@ -1,18 +1,20 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Box,
   Button,
   Card,
+  Chip,
   Stack,
   TextField,
   Typography,
-  Chip,
 } from "@mui/material";
-import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridRenderCellParams,
+} from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ReceiptIcon from "@mui/icons-material/Receipt";
@@ -97,7 +99,7 @@ export function PaymentList() {
     [refresh, snackbar]
   );
 
-  const columns: GridColDef[] = useMemo(
+  const columns: GridColDef<Payment>[] = useMemo(
     () => [
       { field: "id", headerName: "ID", width: 100 },
       {
@@ -109,7 +111,8 @@ export function PaymentList() {
         field: "amount",
         headerName: "Số tiền",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.amount || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<Payment, number>) =>
+          `${(row.amount || 0).toLocaleString()} VND`,
       },
       {
         field: "method",
@@ -127,7 +130,8 @@ export function PaymentList() {
         field: "paymentDate",
         headerName: "Ngày thanh toán",
         width: 150,
-        valueGetter: (params: any) => new Date(params.row?.paymentDate || Date.now()).toLocaleDateString("vi-VN"),
+        renderCell: ({ row }: GridRenderCellParams<Payment, string>) =>
+          new Date(row.paymentDate || Date.now()).toLocaleDateString("vi-VN"),
       },
       {
         field: "notes",

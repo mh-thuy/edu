@@ -378,13 +378,11 @@ export function TeacherList(): ReactElement {
           setEditingId(null);
           setEditingTeacher(null);
         }}
-        onSubmit={async () => {
-          const form = document.querySelector("form") as HTMLFormElement;
-          form?.requestSubmit();
-        }}
+        formId="teacher-form"
         isLoading={isSubmitting}
       >
         <TeacherForm
+          formId="teacher-form"
           key={editingId ?? "create"}
           defaultValues={editingTeacher ?? undefined}
           onSubmit={handleSubmit}

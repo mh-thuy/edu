@@ -1,12 +1,12 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Box,
   Button,
   Card,
+  Chip,
+  type ChipProps,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,7 +14,6 @@ import {
   Stack,
   TextField,
   Typography,
-  Chip,
   Table,
   TableBody,
   TableCell,
@@ -23,7 +22,11 @@ import {
   TableRow,
   Paper,
 } from "@mui/material";
-import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridRenderCellParams,
+} from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
@@ -64,7 +67,7 @@ interface Teacher {
   code: string;
 }
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string): NonNullable<ChipProps["color"]> => {
   switch (status) {
     case "paid":
       return "success";
@@ -186,7 +189,7 @@ export function PayrollList() {
     [refresh, snackbar]
   );
 
-  const columns: GridColDef[] = useMemo(
+  const columns: GridColDef<TeacherPayroll>[] = useMemo(
     () => [
       { field: "id", headerName: "ID", width: 100 },
       {
@@ -203,19 +206,22 @@ export function PayrollList() {
         field: "totalRevenue",
         headerName: "Doanh thu",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.totalRevenue || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<TeacherPayroll, number>) =>
+          `${(row.totalRevenue || 0).toLocaleString()} VND`,
       },
       {
         field: "centerFee",
         headerName: "Phí trung tâm",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.centerFee || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<TeacherPayroll, number>) =>
+          `${(row.centerFee || 0).toLocaleString()} VND`,
       },
       {
         field: "salaryAmount",
         headerName: "Lương",
         width: 150,
-        valueGetter: (params: any) => `${(params.row?.salaryAmount || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<TeacherPayroll, number>) =>
+          `${(row.salaryAmount || 0).toLocaleString()} VND`,
       },
       {
         field: "status",
@@ -225,7 +231,7 @@ export function PayrollList() {
           <Chip
             label={getStatusLabel(params.value)}
             size="small"
-            color={getStatusColor(params.value) as any}
+            color={getStatusColor(params.value)}
           />
         ),
       },
@@ -269,7 +275,7 @@ export function PayrollList() {
             );
           }
 
-          return actions as any[];
+          return actions;
         },
       },
     ],

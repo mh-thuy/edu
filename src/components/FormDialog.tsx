@@ -15,7 +15,8 @@ export interface FormDialogProps {
   open: boolean;
   title: string;
   onClose: () => void;
-  onSubmit: () => Promise<void>;
+  onSubmit?: () => Promise<void> | void;
+  formId?: string;
   children: ReactNode;
   isLoading?: boolean;
   submitText?: string;
@@ -27,6 +28,7 @@ export function FormDialog({
   title,
   onClose,
   onSubmit,
+  formId,
   children,
   isLoading = false,
   submitText = "Save",
@@ -42,7 +44,13 @@ export function FormDialog({
         <Button onClick={onClose} disabled={isLoading}>
           {cancelText}
         </Button>
-        <Button onClick={onSubmit} variant="contained" disabled={isLoading}>
+        <Button
+          type={formId ? "submit" : "button"}
+          form={formId}
+          onClick={formId ? undefined : onSubmit}
+          variant="contained"
+          disabled={isLoading}
+        >
           {isLoading ? <CircularProgress size={24} /> : submitText}
         </Button>
       </DialogActions>

@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { classScheduleUpdateSchema } from "@/modules/schedule/schemas/schedule.schema";
+import { getErrorMessage } from "@/lib/errors";
 import {
   getClassScheduleById,
   updateClassSchedule,
@@ -26,8 +26,8 @@ export async function GET(
       );
     }
     return NextResponse.json(schedule);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -47,8 +47,8 @@ export async function PUT(
       include: { class: true, room: true },
     });
     return NextResponse.json(schedule);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -60,7 +60,7 @@ export async function DELETE(
     const { id } = await params;
     const schedule = await deleteClassSchedule(id);
     return NextResponse.json(schedule);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

@@ -1,8 +1,6 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
-
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -65,6 +63,32 @@ interface TeacherReportData {
   }>;
 }
 
+interface StudentFeeDebtItem {
+  id: string;
+  studentId: string;
+  amount: number;
+  outstanding: number;
+  status: string;
+  dueDate: string;
+}
+
+interface TeacherPayrollSummaryItem {
+  id: string;
+  teacherId: string;
+  month: string;
+  salaryAmount: number;
+  totalRevenue: number;
+  status: string;
+}
+
+interface StudentFeesResponse {
+  items: StudentFeeDebtItem[];
+}
+
+interface TeacherPayrollsResponse {
+  items: TeacherPayrollSummaryItem[];
+}
+
 export function ReportingDashboard() {
   const snackbar = useSnackbar();
   const [activeTab, setActiveTab] = useState(0);
@@ -74,6 +98,9 @@ export function ReportingDashboard() {
   const [revenueReport, setRevenueReport] = useState<ReportData | null>(null);
   const [debtReport, setDebtReport] = useState<DebtReportData | null>(null);
   const [teacherReports, setTeacherReports] = useState<TeacherReportData[]>([]);
+  const [csvDownloadUrl, setCsvDownloadUrl] = useState<string | null>(null);
+  const [csvFilename, setCsvFilename] = useState<string>("");
+  const csvDownloadRef = useRef<HTMLAnchorElement | null>(null);
 
   // Initialize date range to current month
   useEffect(() => {
@@ -99,9 +126,9 @@ export function ReportingDashboard() {
       }).toString();
       const response = await fetch(`/api/payments?${query}`);
       if (!response.ok) throw new Error("Failed to load revenue report");
-      const result = await response.json();
+      const result: ReportData = await response.json();
       setRevenueReport(result);
-    } catch (err) {
+    } catch {
       snackbar.showError("Tải báo cáo doanh thu thất bại");
     } finally {
       setLoading(false);
@@ -113,27 +140,27 @@ export function ReportingDashboard() {
       setLoading(true);
       const response = await fetch("/api/student-fees?status=unpaid,partial");
       if (!response.ok) throw new Error("Failed to load debt report");
-      const result = await response.json();
+      const result: StudentFeesResponse = await response.json();
       // Calculate summary
       const debtData: DebtReportData = {
-        totalDebt: result.data.reduce(
-          (sum: number, fee: any) => sum + (fee.outstanding || 0),
+        totalDebt: result.items.reduce(
+          (sum, fee) => sum + (fee.outstanding || 0),
           0
         ),
-        unpaidCount: result.data.filter(
-          (fee: any) => fee.status === "unpaid"
+        unpaidCount: result.items.filter(
+          (fee) => fee.status === "unpaid"
         ).length,
-        partialCount: result.data.filter(
-          (fee: any) => fee.status === "partial"
+        partialCount: result.items.filter(
+          (fee) => fee.status === "partial"
         ).length,
-        overdueCount: result.data.filter(
-          (fee: any) =>
+        overdueCount: result.items.filter(
+          (fee) =>
             new Date(fee.dueDate) < new Date() && fee.status !== "paid"
         ).length,
-        fees: result.data,
+        fees: result.items,
       };
       setDebtReport(debtData);
-    } catch (err) {
+    } catch {
       snackbar.showError("Tải báo cáo nợ thất bại");
     } finally {
       setLoading(false);
@@ -145,10 +172,10 @@ export function ReportingDashboard() {
       setLoading(true);
       const response = await fetch("/api/teacher-payroll");
       if (!response.ok) throw new Error("Failed to load teacher report");
-      const result = await response.json();
+      const result: TeacherPayrollsResponse = await response.json();
       // Group by teacher
-      const grouped = new Map<string, any>();
-      (result.data || []).forEach((payroll: any) => {
+      const grouped = new Map<string, TeacherReportData>();
+      (result.items || []).forEach((payroll) => {
         const existing = grouped.get(payroll.teacherId) || {
           teacherId: payroll.teacherId,
           totalSalary: 0,
@@ -161,20 +188,32 @@ export function ReportingDashboard() {
         existing.totalRevenue += payroll.totalRevenue;
         if (payroll.status === "paid") existing.paidCount++;
         if (payroll.status === "approved") existing.approvedCount++;
-        (existing.payrolls as any[]).push(payroll);
+        existing.payrolls?.push(payroll);
         grouped.set(payroll.teacherId, existing);
       });
       setTeacherReports(Array.from(grouped.values()));
-    } catch (err) {
+    } catch {
       snackbar.showError("Tải báo cáo giáo viên thất bại");
     } finally {
       setLoading(false);
     }
   };
 
-  const exportToCSV = (data: any[], filename: string) => {
+  const exportToCSV = (
+    data: ReadonlyArray<Record<string, string | number>>,
+    filename: string,
+  ) => {
+    if (data.length === 0) {
+      return;
+    }
+
+    const [firstRow] = data;
+    if (!firstRow) {
+      return;
+    }
+
     const csv = [
-      Object.keys(data[0]).join(","),
+      Object.keys(firstRow).join(","),
       ...data.map((row) =>
         Object.values(row)
           .map((val) => `"${val}"`)
@@ -183,16 +222,44 @@ export function ReportingDashboard() {
     ].join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
+    setCsvDownloadUrl((previousUrl) => {
+      if (previousUrl) {
+        window.URL.revokeObjectURL(previousUrl);
+      }
+
+      return window.URL.createObjectURL(blob);
+    });
+    setCsvFilename(filename);
   };
+
+  useEffect(() => {
+    if (csvDownloadUrl) {
+      csvDownloadRef.current?.click();
+    }
+  }, [csvDownloadUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (csvDownloadUrl) {
+        window.URL.revokeObjectURL(csvDownloadUrl);
+      }
+    };
+  }, [csvDownloadUrl]);
 
   return (
     <Card>
       <Box p={2}>
+        {csvDownloadUrl && (
+          <a
+            ref={csvDownloadRef}
+            href={csvDownloadUrl}
+            download={csvFilename}
+            style={{ display: "none" }}
+            aria-hidden="true"
+          >
+            Tải CSV
+          </a>
+        )}
         {/* Date Filters */}
         <Stack direction="row" spacing={2} mb={3}>
           <TextField

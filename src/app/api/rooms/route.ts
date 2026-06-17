@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/errors";
 import { roomCreateSchema, roomFilterSchema } from "@/modules/room/schemas/room.schema";
 import { createRoom, getRooms } from "@/modules/room/services/room.service";
 
@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const result = await getRooms(filter);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const room = await createRoom(data);
     return NextResponse.json(room, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

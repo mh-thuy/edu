@@ -1,14 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 "use client";
 
 import { Box, Card, CardContent, CircularProgress, Typography } from "@mui/material";
-import { DataGrid, GridColDef, GridPaginationModel } from "@mui/x-data-grid";
+import {
+  DataGrid,
+  type GridColDef,
+  type GridPaginationModel,
+  type GridValidRowModel,
+} from "@mui/x-data-grid";
 import type { ReactElement } from "react";
 
-export interface BaseTableProps {
-  columns: GridColDef[];
-  rows: any[];
+export interface BaseTableProps<T extends GridValidRowModel> {
+  columns: GridColDef<T>[];
+  rows: T[];
   totalRows: number;
   page: number;
   pageSize: number;
@@ -18,7 +21,7 @@ export interface BaseTableProps {
   error?: string | null;
 }
 
-export function BaseTable({
+export function BaseTable<T extends GridValidRowModel>({
   columns,
   rows,
   totalRows,
@@ -28,7 +31,7 @@ export function BaseTable({
   onPageChange,
   onPageSizeChange,
   error,
-}: BaseTableProps): ReactElement {
+}: BaseTableProps<T>): ReactElement {
   if (error) {
     return (
       <Card>

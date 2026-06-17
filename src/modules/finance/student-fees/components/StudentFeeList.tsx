@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -15,7 +14,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { GridActionsCellItem, GridColDef } from "@mui/x-data-grid";
+import { GridActionsCellItem, type GridColDef } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -178,7 +177,7 @@ export function StudentFeeList() {
     }
   }, [bulkData, refresh, snackbar]);
 
-  const columns: GridColDef[] = useMemo(
+  const columns: GridColDef<StudentFee>[] = useMemo(
     () => [
       { field: "id", headerName: "ID", width: 100 },
       {

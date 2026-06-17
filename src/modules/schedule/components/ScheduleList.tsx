@@ -422,13 +422,7 @@ export function ScheduleList(): ReactElement {
         open={openDialog}
         title={editingSchedule ? "Sửa lịch học" : "Thêm lịch học"}
         onClose={handleCloseDialog}
-        onSubmit={async () => {
-          const form = document.querySelector(
-            "#schedule-form",
-          ) as HTMLFormElement | null;
-
-          form?.requestSubmit();
-        }}
+        formId="schedule-form"
         isLoading={isSubmitting}
       >
         <ScheduleForm

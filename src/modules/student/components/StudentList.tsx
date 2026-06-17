@@ -380,12 +380,7 @@ export function StudentList(): ReactElement {
         open={openDialog}
         title={editingStudent ? "Sửa học sinh" : "Thêm học sinh"}
         onClose={handleCloseDialog}
-        onSubmit={async () => {
-          const form = document.querySelector(
-            "#student-form",
-          ) as HTMLFormElement | null;
-          form?.requestSubmit();
-        }}
+        formId="student-form"
         isLoading={isSubmitting}
       >
         <StudentForm

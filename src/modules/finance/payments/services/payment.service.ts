@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import type {
   PaymentCreate,
@@ -54,14 +53,16 @@ export class PaymentService {
     const { page, limit, studentFeeId, method, startDate, endDate } = filter;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
-    if (studentFeeId) where.studentFeeId = studentFeeId;
-    if (method) where.method = method;
-    if (startDate || endDate) {
-      where.paymentDate = {};
-      if (startDate) where.paymentDate.gte = new Date(startDate);
-      if (endDate) where.paymentDate.lte = new Date(endDate);
-    }
+    const where: Prisma.PaymentWhereInput = {
+      ...(studentFeeId && { studentFeeId }),
+      ...(method && { method }),
+      ...((startDate || endDate) && {
+        paymentDate: {
+          ...(startDate && { gte: new Date(startDate) }),
+          ...(endDate && { lte: new Date(endDate) }),
+        },
+      }),
+    };
 
     const [items, total] = await Promise.all([
       prisma.payment.findMany({
@@ -181,7 +182,7 @@ export class PaymentService {
     endDate: Date,
     classId?: string
   ) {
-    const where: any = {
+    const where: Prisma.PaymentWhereInput = {
       paymentDate: {
         gte: startDate,
         lte: endDate,
@@ -210,7 +211,7 @@ export class PaymentService {
     let totalRevenue = 0;
 
     for (const payment of payments) {
-      if (payment.method === 'cash' || payment.method === 'transfer' || payment.method === 'wallet') {
+      if (payment.method === "cash" || payment.method === "transfer" || payment.method === "wallet") {
         methodSummary[payment.method] += payment.amount;
       }
       totalRevenue += payment.amount;

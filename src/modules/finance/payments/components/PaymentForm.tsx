@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -38,6 +36,10 @@ interface StudentFeeInfo {
   status: string;
 }
 
+interface StudentFeeListResponse {
+  items: StudentFeeInfo[];
+}
+
 export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
   const snackbar = useSnackbar();
   const [submitting, setSubmitting] = useState(false);
@@ -70,8 +72,8 @@ export function PaymentForm({ onClose, onSuccess }: PaymentFormProps) {
           "/api/student-fees?status=unpaid,partial"
         );
         if (!response.ok) throw new Error("Failed to load fees");
-        const result = await response.json();
-        setFees(result.data || []);
+        const result: StudentFeeListResponse = await response.json();
+        setFees(result.items || []);
       } catch {
         snackbar.showError("Failed to load fees");
       } finally {

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { useState, useEffect, useCallback } from "react";
 
 export interface PaginatedData<T> {
@@ -52,7 +50,7 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
         const response = await fetch(`${endpoint}?${params}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const result = await response.json();
+        const result: PaginatedData<T> = await response.json();
         if (!cancelled) setData(result);
       } catch (err) {
         if (!cancelled) {

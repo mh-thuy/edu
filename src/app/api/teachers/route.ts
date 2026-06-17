@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/errors";
 import {
   teacherCreateSchema,
   teacherFilterSchema,
@@ -27,8 +27,8 @@ export async function GET(request: NextRequest) {
       limit: result.limit,
       pages: result.pages,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const teacher = await createTeacher(data);
     return NextResponse.json(teacher, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

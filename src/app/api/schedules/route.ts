@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/errors";
 import { classScheduleCreateSchema, scheduleFilterSchema } from "@/modules/schedule/schemas/schedule.schema";
 import { createClassSchedule, getSchedules } from "@/modules/schedule/services/schedule.service";
 
@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const result = await getSchedules(filter);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       { schedule, conflicts: conflicts.length > 0 ? conflicts : null },
       { status: 201 }
     );
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

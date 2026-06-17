@@ -19,11 +19,13 @@ import type { ReactElement } from "react";
 type TeacherFormData = z.infer<typeof teacherCreateSchema>;
 
 export interface TeacherFormProps {
+  formId?: string;
   onSubmit: (data: TeacherFormData) => void | Promise<void>;
   defaultValues?: Partial<TeacherFormData>;
 }
 
 export function TeacherForm({
+  formId,
   onSubmit,
   defaultValues,
 }: TeacherFormProps): ReactElement {
@@ -40,7 +42,7 @@ export function TeacherForm({
   });
 
   return (
-    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
+    <Box component="form" id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2.5}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <Controller

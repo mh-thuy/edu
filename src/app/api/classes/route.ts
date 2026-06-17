@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import { getErrorMessage } from "@/lib/errors";
 import { classCreateSchema, classFilterSchema } from "@/modules/class/schemas/class.schema";
 import { createClass, getClasses } from "@/modules/class/services/class.service";
 
@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     const result = await getClasses(filter);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
 
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
 
     const newClass = await createClass(data);
     return NextResponse.json(newClass, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

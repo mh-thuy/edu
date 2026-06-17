@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import type {
   StudentFeeUpdate,
   StudentFeeFilter,
@@ -117,7 +116,7 @@ export class StudentFeeService {
     const { page, limit, status, classId, studentId, month } = filter;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.StudentFeeWhereInput = {};
 
     // Handle both single status and array of statuses
     if (status) {
@@ -230,8 +229,10 @@ export class StudentFeeService {
    * Get debt summary for a student
    */
   static async getStudentDebtSummary(studentId: string, classId?: string) {
-    const where: any = { studentId };
-    if (classId) where.classId = classId;
+    const where: Prisma.StudentFeeWhereInput = {
+      studentId,
+      ...(classId && { classId }),
+    };
 
     const fees = await prisma.studentFee.findMany({
       where,

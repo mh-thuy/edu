@@ -1,18 +1,17 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useMemo, useState } from "react";
 import {
   Box,
+  Button,
   Card,
+  Chip,
+  type ChipProps,
   Stack,
   TextField,
   Typography,
-  Chip,
-  Button,
 } from "@mui/material";
-import { GridColDef } from "@mui/x-data-grid";
+import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
@@ -37,7 +36,7 @@ interface DebtSummary {
   overdueCount: number;
 }
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string): NonNullable<ChipProps["color"]> => {
   switch (status) {
     case "paid":
       return "success";
@@ -96,7 +95,7 @@ export function DebtTrackingList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const columns: GridColDef[] = useMemo(
+  const columns: GridColDef<StudentDebt>[] = useMemo(
     () => [
       { field: "id", headerName: "ID", width: 100 },
       {
@@ -118,32 +117,32 @@ export function DebtTrackingList() {
         field: "totalAmount",
         headerName: "Tổng tiền",
         width: 150,
-        valueGetter: (params: any) =>
-          `${(params.row?.totalAmount || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<StudentDebt, number>) =>
+          `${(row.totalAmount || 0).toLocaleString()} VND`,
       },
       {
         field: "totalPaid",
         headerName: "Đã thanh toán",
         width: 150,
-        valueGetter: (params: any) =>
-          `${(params.row?.totalPaid || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<StudentDebt, number>) =>
+          `${(row.totalPaid || 0).toLocaleString()} VND`,
       },
       {
         field: "outstanding",
         headerName: "Nợ còn lại",
         width: 150,
-        valueGetter: (params: any) =>
-          `${(params.row?.outstanding || 0).toLocaleString()} VND`,
+        renderCell: ({ row }: GridRenderCellParams<StudentDebt, number>) =>
+          `${(row.outstanding || 0).toLocaleString()} VND`,
       },
       {
         field: "status",
         headerName: "Trạng thái",
         width: 150,
-        renderCell: (params) => (
+        renderCell: ({ row }) => (
           <Chip
-            label={getStatusLabel(params.value)}
+            label={getStatusLabel(row.status)}
             size="small"
-            color={getStatusColor(params.value) as any}
+            color={getStatusColor(row.status)}
             variant="outlined"
           />
         ),
@@ -152,7 +151,8 @@ export function DebtTrackingList() {
         field: "dueDate",
         headerName: "Hạn thanh toán",
         width: 150,
-        valueGetter: (params) => new Date(params).toLocaleDateString("vi-VN"),
+        renderCell: ({ row }: GridRenderCellParams<StudentDebt, string>) =>
+          new Date(row.dueDate).toLocaleDateString("vi-VN"),
       },
     ],
     [],
