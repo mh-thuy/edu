@@ -31,10 +31,24 @@ export interface Class {
   id: string;
   code: string;
   name: string;
+  teacherId?: string | null;
+  roomId?: string | null;
   tuitionFee: number;
   totalSessions: number;
   maxStudents: number;
+  startDate?: string | null;
+  endDate?: string | null;
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
+  teacher?: {
+    code?: string;
+    user?: {
+      fullName?: string | null;
+    } | null;
+  } | null;
+  room?: {
+    code?: string;
+    name?: string | null;
+  } | null;
 }
 
 type ClassRow = Class & {
@@ -432,7 +446,15 @@ export function ClassList(): ReactElement {
                   tuitionFee: editingClass.tuitionFee ?? 0,
                   totalSessions: editingClass.totalSessions ?? 0,
                   maxStudents: editingClass.maxStudents ?? 0,
+                  teacherId: editingClass.teacherId ?? null,
+                  roomId: editingClass.roomId ?? null,
+                  startDate: editingClass.startDate ?? undefined,
+                  endDate: editingClass.endDate ?? undefined,
                   status: editingClass.status ?? "DRAFT",
+                  teacherCode: editingClass.teacher?.code ?? "",
+                  teacherName: editingClass.teacher?.user?.fullName ?? "",
+                  roomCode: editingClass.room?.code ?? "",
+                  roomName: editingClass.room?.name ?? "",
                 }
               : undefined
           }

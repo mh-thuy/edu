@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import React, { useEffect, useState } from "react";
 import {
   Container,
@@ -21,12 +19,36 @@ import AssignmentIcon from "@mui/icons-material/Assignment";
 
 
 interface DashboardStats {
+  totalFeeAmount: number;
   totalRevenue: number;
   totalDebt: number;
   totalCollected: number;
   totalPayroll: number;
   activeClasses: number;
 }
+
+type PaymentItem = {
+  amount: number;
+};
+
+type StudentFeeItem = {
+  amount: number;
+  payments?: Array<{
+    amount: number;
+  }>;
+};
+
+type TeacherPayrollItem = {
+  salaryAmount: number;
+};
+
+type ClassItem = {
+  status: string;
+};
+
+type PaginatedResponse<T> = {
+  items?: T[];
+};
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -99,50 +121,60 @@ export default function AdminPage() {
         setLoading(true);
         // Load revenue
         const paymentsRes = await fetch("/api/payments");
-        const payments = await paymentsRes.json();
+        const payments =
+          (await paymentsRes.json()) as PaginatedResponse<PaymentItem>;
 
         // Load fees for debt
         const feesRes = await fetch("/api/student-fees");
-        const fees = await feesRes.json();
+        const fees = (await feesRes.json()) as PaginatedResponse<StudentFeeItem>;
 
         // Load payroll
         const payrollRes = await fetch("/api/teacher-payroll");
-        const payrolls = await payrollRes.json();
+        const payrolls =
+          (await payrollRes.json()) as PaginatedResponse<TeacherPayrollItem>;
 
         // Load classes
         const classesRes = await fetch("/api/classes");
-        const classes = await classesRes.json();
+        const classes = (await classesRes.json()) as PaginatedResponse<ClassItem>;
+
+        const paymentItems = payments.items ?? [];
+        const feeItems = fees.items ?? [];
+        const payrollItems = payrolls.items ?? [];
+        const classItems = classes.items ?? [];
 
         // Calculate totals
         const totalRevenue =
-          payments.data?.reduce(
-            (sum: number, p: any) => sum + (p.amount || 0),
-            0
-          ) || 0;
+          paymentItems.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
-        const totalDebt =
-          fees.data?.reduce(
-            (sum: number, f: any) => sum + (f.outstanding || 0),
-            0
-          ) || 0;
+        const totalFeeAmount = feeItems.reduce(
+          (sum, fee) => sum + (fee.amount || 0),
+          0,
+        );
 
-        const totalCollected =
-          fees.data
-            ?.filter((f: any) => f.status === "paid")
-            .reduce(
-              (sum: number, f: any) => sum + (f.amount || 0),
-              0
-            ) || 0;
+        const totalCollected = feeItems.reduce((sum, fee) => {
+          const paid =
+            fee.payments?.reduce(
+              (paymentSum, payment) => paymentSum + (payment.amount || 0),
+              0,
+            ) ?? 0;
+
+          return sum + paid;
+        }, 0);
+
+        const totalDebt = Math.max(totalFeeAmount - totalCollected, 0);
 
         const totalPayroll =
-          payrolls.data?.reduce(
-            (sum: number, p: any) => sum + (p.salaryAmount || 0),
-            0
-          ) || 0;
+          payrollItems.reduce(
+            (sum, payroll) => sum + (payroll.salaryAmount || 0),
+            0,
+          );
 
-        const activeClasses = classes.data?.length || 0;
+        const activeClasses = classItems.filter(
+          (classItem) => classItem.status === "ACTIVE",
+        ).length;
 
         setStats({
+          totalFeeAmount,
           totalRevenue,
           totalDebt,
           totalCollected,
@@ -189,8 +221,8 @@ export default function AdminPage() {
           <StatCard
             icon={<TrendingUpIcon />}
             title="Tổng doanh thu"
-            value={stats?.totalRevenue ? `${(stats.totalRevenue / 1000000).toFixed(1)}M` : "0"}
-            subtitle="Tất cả thanh toán"
+            value={stats?.totalFeeAmount ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M` : "0"}
+            subtitle="Tổng học phí đã tạo"
             loading={loading}
             color="success"
           />
@@ -279,6 +311,5 @@ export default function AdminPage() {
     </Container>
   );
 }
-
 
 
