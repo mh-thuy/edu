@@ -29,7 +29,6 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import type { z } from "zod";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
-import { register } from "module";
 
 type PaymentCreateInput = z.infer<typeof paymentCreateSchema>;
 type PaymentUpdateInput = z.infer<typeof paymentUpdateSchema>;

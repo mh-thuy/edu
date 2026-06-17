@@ -239,7 +239,6 @@ export function PaymentList() {
         align: "center",
         headerAlign: "center",
         renderCell: ({ row }: GridRenderCellParams<Payment>) => {
-          const hasReceipt = (row.receipts?.length || 0) > 0;
           const receipt = row.receipts?.[0];
 
           return (
