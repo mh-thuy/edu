@@ -3,15 +3,27 @@ import type { Prisma } from "@prisma/client";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import type {
   PaymentCreate,
-  PaymentUpdate,
   PaymentFilter,
 } from "@/modules/finance/payments/schemas/payment.schema";
+
+export type PaymentWithRelations = Prisma.PaymentGetPayload<{
+  include: {
+    receipts: true;
+    studentFee: {
+      include: {
+        student: true;
+        class: true;
+        payments: true;
+      };
+    };
+  };
+}>;
 
 export class PaymentService {
   /**
    * Create a payment
    */
-  static async createPayment(data: PaymentCreate) {
+  static async createPayment(data: PaymentCreate): Promise<PaymentWithRelations> {
     const fee = await prisma.studentFee.findUnique({
       where: { id: data.studentFeeId },
       include: { payments: true },
@@ -38,6 +50,16 @@ export class PaymentService {
         paymentDate: new Date(data.paymentDate),
         notes: data.notes,
       },
+      include: {
+        receipts: true,
+        studentFee: {
+          include: {
+            student: true,
+            class: true,
+            payments: true,
+          },
+        },
+      },
     });
 
     // Update fee status
@@ -50,10 +72,68 @@ export class PaymentService {
    * Get payments with pagination and filtering
    */
   static async getPayments(filter: PaymentFilter) {
-    const { page, limit, studentFeeId, method, startDate, endDate } = filter;
+    const { page, limit, search, studentFeeId, method, startDate, endDate } = filter;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PaymentWhereInput = {
+      ...(search && {
+        OR: [
+          {
+            notes: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+          {
+            studentFee: {
+              month: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+          },
+          {
+            studentFee: {
+              student: {
+                code: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            studentFee: {
+              student: {
+                fullName: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            studentFee: {
+              class: {
+                code: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            studentFee: {
+              class: {
+                name: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+        ],
+      }),
       ...(studentFeeId && { studentFeeId }),
       ...(method && { method }),
       ...((startDate || endDate) && {
@@ -67,6 +147,16 @@ export class PaymentService {
     const [items, total] = await Promise.all([
       prisma.payment.findMany({
         where,
+        include: {
+          receipts: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
+          },
+        },
         skip,
         take: limit,
         orderBy: { paymentDate: "desc" },
@@ -89,15 +179,36 @@ export class PaymentService {
   static async getPaymentById(id: string) {
     return prisma.payment.findUnique({
       where: { id },
-      include: { receipts: true },
+      include: {
+        receipts: true,
+        studentFee: {
+          include: {
+            student: true,
+            class: true,
+            payments: true,
+          },
+        },
+      },
     });
   }
 
   /**
    * Update payment
    */
-  static async updatePayment(id: string, data: PaymentUpdate) {
-    const payment = await prisma.payment.findUnique({ where: { id } });
+  static async updatePayment(
+    id: string,
+    data: Prisma.PaymentUpdateInput,
+  ): Promise<PaymentWithRelations> {
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: {
+        studentFee: {
+          include: {
+            payments: true,
+          },
+        },
+      },
+    });
     if (!payment) throw new Error("Payment not found");
 
     // Check if receipt already issued (locked)
@@ -108,13 +219,39 @@ export class PaymentService {
       throw new Error("Cannot modify payment after receipt is issued");
     }
 
+    const nextAmount =
+      typeof data.amount === "number" ? data.amount : payment.amount;
+
+    const paidExcludingCurrent = payment.studentFee.payments.reduce(
+      (sum, item) => (item.id === id ? sum : sum + item.amount),
+      0,
+    );
+
+    if (paidExcludingCurrent + nextAmount > payment.studentFee.amount) {
+      throw new Error(
+        `Payment exceeds outstanding amount. Outstanding: ${
+          payment.studentFee.amount - paidExcludingCurrent
+        }, Payment: ${nextAmount}`,
+      );
+    }
+
     const updated = await prisma.payment.update({
       where: { id },
       data,
+      include: {
+        receipts: true,
+        studentFee: {
+          include: {
+            student: true,
+            class: true,
+            payments: true,
+          },
+        },
+      },
     });
 
     // Update fee status if amount changed
-    if (data.amount) {
+    if (typeof data.amount === "number") {
       await StudentFeeService.updateFeeStatus(payment.studentFeeId);
     }
 

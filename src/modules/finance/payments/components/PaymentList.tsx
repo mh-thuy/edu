@@ -2,10 +2,11 @@
 
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
-  Card,
   Chip,
+  Paper,
   Stack,
   TextField,
   Typography,
@@ -17,245 +18,416 @@ import {
 } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import ReceiptIcon from "@mui/icons-material/Receipt";
+import SearchIcon from "@mui/icons-material/Search";
 
 import { BaseTable } from "@/components/BaseTable";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import { PaymentForm } from "./PaymentForm";
 
+type PaymentMethod = "cash" | "transfer" | "wallet";
+
 interface Payment {
   id: string;
   studentFeeId: string;
   amount: number;
-  method: "cash" | "transfer" | "wallet";
+  method: PaymentMethod;
   paymentDate: string;
-  notes?: string;
+  notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  receipts?: Array<{
+    id: string;
+    receiptNumber: string;
+  }>;
+  studentFee?: {
+    id: string;
+    month: string;
+    amount: number;
+    student?: {
+      code: string;
+      fullName: string;
+    } | null;
+    class?: {
+      code: string;
+      name: string;
+    } | null;
+    payments?: Array<{
+      id: string;
+      amount: number;
+    }>;
+  } | null;
 }
 
-const getMethodLabel = (method: string) => {
-  const labels: Record<string, string> = {
+const formatCurrency = (value: number): string =>
+  `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
+
+const formatDate = (value: string): string =>
+  new Date(value).toLocaleDateString("vi-VN");
+
+const getMethodLabel = (method: PaymentMethod): string => {
+  const labels: Record<PaymentMethod, string> = {
     cash: "Tiền mặt",
     transfer: "Chuyển khoản",
     wallet: "Ví điện tử",
   };
-  return labels[method] || method;
+
+  return labels[method];
 };
 
 export function PaymentList() {
-  const snackbar = useSnackbar();
+  const { showError, showSuccess, Snackbar } = useSnackbar();
   const [showForm, setShowForm] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
+  const [search, setSearch] = useState("");
   const [filterMethod, setFilterMethod] = useState<string>("");
   const [filterDateStart, setFilterDateStart] = useState<string>("");
   const [filterDateEnd, setFilterDateEnd] = useState<string>("");
 
-  const queryParams = new URLSearchParams();
-  if (filterMethod) queryParams.append("method", filterMethod);
-  if (filterDateStart) queryParams.append("startDate", filterDateStart);
-  if (filterDateEnd) queryParams.append("endDate", filterDateEnd);
-
-  const { data: payments, isLoading, error, refresh, page, limit, setPageNumber, setPageSize } = useList<Payment>(
-    `/api/payments${queryParams.toString() ? "?" + queryParams.toString() : ""}`
-  );
+  const {
+    data: payments,
+    isLoading,
+    error,
+    refresh,
+    page,
+    limit,
+    setPageNumber,
+    setPageSize,
+  } = useList<Payment>("/api/payments", {
+    limit: 10,
+    search: search || undefined,
+    method: filterMethod || undefined,
+    startDate: filterDateStart || undefined,
+    endDate: filterDateEnd || undefined,
+  });
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
+      if (!confirm("Bạn có chắc chắn muốn xóa?")) {
+        return;
+      }
 
       try {
         const response = await fetch(`/api/payments/${id}`, {
           method: "DELETE",
         });
-        if (!response.ok) throw new Error("Failed to delete");
-        snackbar.showSuccess("Xóa thành công");
-        refresh();
-      } catch {
-        snackbar.showError("Xóa thất bại");
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Failed to delete");
+        }
+
+        showSuccess("Xóa thanh toán thành công");
+        await refresh();
+      } catch (error) {
+        showError(error instanceof Error ? error.message : "Xóa thanh toán thất bại");
       }
     },
-    [refresh, snackbar]
+    [refresh, showError, showSuccess],
   );
 
   const handleGenerateReceipt = useCallback(
     async (paymentId: string) => {
       try {
-        const response = await fetch(
-          `/api/payments/${paymentId}/receipt`,
-          { method: "POST" }
+        const response = await fetch(`/api/payments/${paymentId}/receipt`, {
+          method: "POST",
+        });
+        const result = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          receiptNumber?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to generate receipt");
+        }
+
+        showSuccess(`Tạo phiếu thu thành công: ${result.receiptNumber}`);
+        await refresh();
+      } catch (error) {
+        showError(
+          error instanceof Error ? error.message : "Tạo phiếu thu thất bại",
         );
-        if (!response.ok) throw new Error("Failed to generate receipt");
-        const result = await response.json();
-        snackbar.showSuccess(
-          `Phiếu thu được tạo: ${result.receiptNumber}`
-        );
-        refresh();
-      } catch {
-        snackbar.showError("Tạo phiếu thu thất bại");
       }
     },
-    [refresh, snackbar]
+    [refresh, showError, showSuccess],
   );
 
   const columns: GridColDef<Payment>[] = useMemo(
     () => [
-      { field: "id", headerName: "ID", width: 100 },
       {
-        field: "studentFeeId",
-        headerName: "Hóa đơn",
-        width: 150,
+        field: "student",
+        headerName: "Học viên",
+        minWidth: 220,
+        flex: 1,
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          row.studentFee?.student
+            ? `${row.studentFee.student.code} - ${row.studentFee.student.fullName}`
+            : row.studentFeeId,
+      },
+      {
+        field: "class",
+        headerName: "Lớp",
+        minWidth: 220,
+        flex: 1,
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          row.studentFee?.class
+            ? `${row.studentFee.class.code} - ${row.studentFee.class.name}`
+            : "-",
+      },
+      {
+        field: "month",
+        headerName: "Tháng học phí",
+        width: 120,
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          row.studentFee?.month || "-",
       },
       {
         field: "amount",
         headerName: "Số tiền",
         width: 150,
-        renderCell: ({ row }: GridRenderCellParams<Payment, number>) =>
-          `${(row.amount || 0).toLocaleString()} VND`,
+        align: "right",
+        headerAlign: "right",
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          formatCurrency(row.amount),
       },
       {
         field: "method",
         headerName: "Phương thức",
-        width: 130,
-        renderCell: (params) => (
-          <Chip
-            label={getMethodLabel(params.value)}
-            size="small"
-            variant="outlined"
-          />
+        width: 150,
+        align: "center",
+        headerAlign: "center",
+        renderCell: ({ row }: GridRenderCellParams<Payment>) => (
+          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+            <Chip label={getMethodLabel(row.method)} size="small" variant="outlined" />
+          </Box>
         ),
       },
       {
         field: "paymentDate",
         headerName: "Ngày thanh toán",
-        width: 150,
-        renderCell: ({ row }: GridRenderCellParams<Payment, string>) =>
-          new Date(row.paymentDate || Date.now()).toLocaleDateString("vi-VN"),
+        width: 140,
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          formatDate(row.paymentDate),
+      },
+      {
+        field: "receipt",
+        headerName: "Phiếu thu",
+        width: 170,
+        align: "center",
+        headerAlign: "center",
+        renderCell: ({ row }: GridRenderCellParams<Payment>) => (
+          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+            <Chip
+              label={
+                row.receipts?.[0]?.receiptNumber
+                  ? row.receipts[0].receiptNumber
+                  : "Chưa phát hành"
+              }
+              size="small"
+              color={row.receipts?.length ? "success" : "default"}
+              variant={row.receipts?.length ? "filled" : "outlined"}
+            />
+          </Box>
+        ),
       },
       {
         field: "notes",
         headerName: "Ghi chú",
-        width: 200,
+        minWidth: 180,
+        flex: 1,
+        renderCell: ({ row }: GridRenderCellParams<Payment>) => row.notes || "-",
       },
       {
         field: "actions",
         type: "actions",
-        width: 150,
-        getActions: (params) => [
-          <GridActionsCellItem
-            key="receipt"
-            icon={<ReceiptIcon />}
-            label="Phiếu thu"
-            onClick={() => handleGenerateReceipt((params.row as Payment).id)}
-          />,
-          <GridActionsCellItem
-            key="delete"
-            icon={<DeleteIcon />}
-            label="Xóa"
-            onClick={() => handleDelete((params.row as Payment).id)}
-          />,
-        ],
+        width: 140,
+        getActions: (params) => {
+          const row = params.row as Payment;
+          const hasReceipt = (row.receipts?.length || 0) > 0;
+
+          return [
+            <GridActionsCellItem
+              key="edit"
+              icon={<EditIcon />}
+              label="Sửa"
+              disabled={hasReceipt}
+              onClick={() => {
+                setEditingPayment(row);
+                setShowForm(true);
+              }}
+            />,
+            <GridActionsCellItem
+              key="receipt"
+              icon={<ReceiptIcon />}
+              label="Phiếu thu"
+              disabled={hasReceipt}
+              onClick={() => void handleGenerateReceipt(row.id)}
+            />,
+            <GridActionsCellItem
+              key="delete"
+              icon={<DeleteIcon />}
+              label="Xóa"
+              disabled={hasReceipt}
+              onClick={() => void handleDelete(row.id)}
+            />,
+          ];
+        },
       },
     ],
-    [handleDelete, handleGenerateReceipt]
+    [handleDelete, handleGenerateReceipt],
   );
 
+  const hasRows = (payments?.items.length || 0) > 0;
+
   return (
-    <Card>
-      <Box p={2}>
-        <Stack direction="row" spacing={2} mb={2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setShowForm(true)}
-          >
-            Ghi nhận thanh toán
-          </Button>
-        </Stack>
-
-        {/* Filters */}
-        <Stack direction="row" spacing={2} mb={2}>
-          <TextField
-            select
-            label="Phương thức"
-            value={filterMethod}
-            onChange={(e) => setFilterMethod(e.target.value)}
-            size="small"
-            sx={{ width: 150 }}
-            slotProps={{
-              select: {
-                native: true,
-              },
-            }}
-          >
-            <option value="">-- Tất cả --</option>
-            <option value="cash">Tiền mặt</option>
-            <option value="transfer">Chuyển khoản</option>
-            <option value="wallet">Ví điện tử</option>
-          </TextField>
-
-          <TextField
-            type="date"
-            label="Từ ngày"
-            value={filterDateStart}
-            onChange={(e) => setFilterDateStart(e.target.value)}
-            size="small"
-            sx={{ width: 150 }}
-            InputLabelProps={{ shrink: true }}
-          />
-
-          <TextField
-            type="date"
-            label="Đến ngày"
-            value={filterDateEnd}
-            onChange={(e) => setFilterDateEnd(e.target.value)}
-            size="small"
-            sx={{ width: 150 }}
-            InputLabelProps={{ shrink: true }}
-          />
-
-          {(filterMethod || filterDateStart || filterDateEnd) && (
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setFilterMethod("");
-                setFilterDateStart("");
-                setFilterDateEnd("");
-              }}
+    <>
+      <Stack spacing={2.5}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.5,
+            borderRadius: 3,
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
             >
-              Xóa bộ lọc
-            </Button>
+              <Typography variant="h6" fontWeight={700}>
+                Quản lý thanh toán
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditingPayment(null);
+                  setShowForm(true);
+                }}
+              >
+                Ghi nhận thanh toán
+              </Button>
+            </Stack>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Tìm kiếm"
+                placeholder="Mã/tên học viên, mã/tên lớp, tháng, ghi chú"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPageNumber(1);
+                }}
+                fullWidth
+                InputProps={{
+                  startAdornment: <SearchIcon fontSize="small" />,
+                }}
+              />
+
+              <TextField
+                select
+                label="Phương thức"
+                value={filterMethod}
+                onChange={(event) => {
+                  setFilterMethod(event.target.value);
+                  setPageNumber(1);
+                }}
+                sx={{ minWidth: 170 }}
+                slotProps={{
+                  select: {
+                    native: true,
+                  },
+                }}
+              >
+                <option value="">Tất cả</option>
+                <option value="cash">Tiền mặt</option>
+                <option value="transfer">Chuyển khoản</option>
+                <option value="wallet">Ví điện tử</option>
+              </TextField>
+
+              <TextField
+                type="date"
+                label="Từ ngày"
+                value={filterDateStart}
+                onChange={(event) => {
+                  setFilterDateStart(event.target.value);
+                  setPageNumber(1);
+                }}
+                sx={{ minWidth: 170 }}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                type="date"
+                label="Đến ngày"
+                value={filterDateEnd}
+                onChange={(event) => {
+                  setFilterDateEnd(event.target.value);
+                  setPageNumber(1);
+                }}
+                sx={{ minWidth: 170 }}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+          </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "hidden",
+          }}
+        >
+          {error ? (
+            <Box p={3}>
+              <Alert severity="error">{error}</Alert>
+            </Box>
+          ) : !isLoading && !hasRows ? (
+            <EmptyState
+              title="Chưa có thanh toán"
+              description="Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại."
+            />
+          ) : (
+            <BaseTable
+              rows={payments?.items || []}
+              columns={columns}
+              isLoading={isLoading}
+              totalRows={payments?.total || 0}
+              page={page}
+              pageSize={limit}
+              onPageChange={setPageNumber}
+              onPageSizeChange={setPageSize}
+            />
           )}
-        </Stack>
-
-        {error && (
-          <Typography color="error" mb={2}>
-            {error}
-          </Typography>
-        )}
-
-        <BaseTable
-          rows={payments?.items || []}
-          columns={columns}
-          isLoading={isLoading}
-          totalRows={payments?.total || 0}
-          page={page - 1}
-          pageSize={limit}
-          onPageChange={(newPage) => setPageNumber(newPage + 1)}
-          onPageSizeChange={setPageSize}
-        />
-      </Box>
+        </Paper>
+      </Stack>
 
       {showForm && (
         <PaymentForm
+          initialData={editingPayment || undefined}
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false);
-            refresh();
+            setEditingPayment(null);
+            void refresh();
           }}
         />
       )}
-    </Card>
+
+      {Snackbar}
+    </>
   );
 }

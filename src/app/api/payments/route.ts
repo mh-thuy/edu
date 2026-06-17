@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const filter = {
       page: searchParams.get("page") || "1",
       limit: searchParams.get("limit") || "10",
+      search: searchParams.get("search") || undefined,
       studentFeeId: searchParams.get("studentFeeId") || undefined,
       method: searchParams.get("method") || undefined,
       startDate: searchParams.get("startDate") || undefined,
