@@ -3,18 +3,47 @@ import { TeacherPayrollService } from "@/modules/finance/teacher-payroll/service
 
 type Params = Promise<{ id: string }>;
 
-export async function GET(request: NextRequest, { params }: { params: Params }) {
+function buildPayrollSuccessResponse<T>(items: T[], total: number) {
+  return {
+    success: true,
+    data: {
+      items,
+      total,
+    },
+  };
+}
+
+function buildPayrollErrorResponse(error: string) {
+  return {
+    success: false,
+    data: {
+      items: [],
+      total: 0,
+    },
+    error,
+  };
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Params },
+) {
   try {
     const { id } = await params;
     const payroll = await TeacherPayrollService.getPayrollById(id);
 
     if (!payroll) {
-      return NextResponse.json({ error: "Payroll not found" }, { status: 404 });
+      return NextResponse.json(buildPayrollErrorResponse("Payroll not found"), {
+        status: 404,
+      });
     }
 
-    return NextResponse.json(payroll);
+    return NextResponse.json(buildPayrollSuccessResponse([payroll], 1));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch payroll";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch payroll";
+    return NextResponse.json(buildPayrollErrorResponse(message), {
+      status: 400,
+    });
   }
 }

@@ -1,6 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TeacherPayrollService } from "@/modules/finance/teacher-payroll/services/teacher-payroll.service";
-import { teacherPayrollFilterSchema } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
+import {
+  teacherPayrollFilterSchema,
+  teacherPayrollCreateSchema,
+} from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
+import { getSessionFromCookie } from "@/lib/session";
+
+function buildPayrollSuccessResponse<T>(
+  items: T[],
+  total: number,
+  meta?: { page?: number; limit?: number; pages?: number },
+) {
+  return {
+    success: true,
+    data: {
+      items,
+      total,
+      ...meta,
+    },
+  };
+}
+
+function buildPayrollErrorResponse(error: string) {
+  return {
+    success: false,
+    data: {
+      items: [],
+      total: 0,
+    },
+    error,
+  };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,31 +46,48 @@ export async function GET(request: NextRequest) {
     const validated = teacherPayrollFilterSchema.parse(filter);
     const result = await TeacherPayrollService.getPayrolls(validated);
 
-    return NextResponse.json(result);
+    return NextResponse.json(
+      buildPayrollSuccessResponse(result.items, result.total, {
+        page: result.page,
+        limit: result.limit,
+        pages: result.pages,
+      }),
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch payrolls";
+    const message =
+      error instanceof Error ? error.message : "Failed to fetch payrolls";
     console.error("Teacher payroll API error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(buildPayrollErrorResponse(message), {
+      status: 400,
+    });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { teacherId, month } = body;
-
-    if (!teacherId || !month) {
-      return NextResponse.json(
-        { error: "teacherId and month are required" },
-        { status: 400 }
-      );
+    const session = await getSessionFromCookie();
+    if (!session?.user?.id) {
+      return NextResponse.json(buildPayrollErrorResponse("Unauthorized"), {
+        status: 401,
+      });
     }
 
-    const payroll = await TeacherPayrollService.calculateMonthlyPayroll(teacherId, month);
+    const body = await request.json();
+    const validated = teacherPayrollCreateSchema.parse(body);
 
-    return NextResponse.json(payroll, { status: 201 });
+    const payroll = await TeacherPayrollService.calculateMonthlyPayroll(
+      validated.teacherId,
+      validated.month,
+    );
+
+    return NextResponse.json(buildPayrollSuccessResponse([payroll], 1), {
+      status: 201,
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to calculate payroll";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const message =
+      error instanceof Error ? error.message : "Failed to calculate payroll";
+    return NextResponse.json(buildPayrollErrorResponse(message), {
+      status: 400,
+    });
   }
 }

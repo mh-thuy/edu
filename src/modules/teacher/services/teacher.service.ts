@@ -7,7 +7,9 @@ import type {
 } from "@/modules/teacher/schemas/teacher.schema";
 import type { TeacherWithUser } from "@/types/prisma";
 
-function buildTeacherCreateInput(data: TeacherCreate): Prisma.TeacherCreateInput {
+function buildTeacherCreateInput(
+  data: TeacherCreate,
+): Prisma.TeacherCreateInput {
   return {
     code: data.code,
     phone: data.phone || null,
@@ -18,7 +20,9 @@ function buildTeacherCreateInput(data: TeacherCreate): Prisma.TeacherCreateInput
   };
 }
 
-function buildTeacherUpdateInput(data: TeacherUpdate): Prisma.TeacherUpdateInput {
+function buildTeacherUpdateInput(
+  data: TeacherUpdate,
+): Prisma.TeacherUpdateInput {
   return {
     ...(data.code !== undefined && { code: data.code }),
     ...(data.phone !== undefined && { phone: data.phone || null }),
@@ -39,7 +43,9 @@ export async function createTeacher(data: TeacherCreate): Promise<Teacher> {
   });
 }
 
-export async function getTeacherById(id: string): Promise<TeacherWithUser | null> {
+export async function getTeacherById(
+  id: string,
+): Promise<TeacherWithUser | null> {
   return prisma.teacher.findUnique({
     where: { id },
     include: { user: true },
@@ -54,6 +60,7 @@ export async function getTeachers(filter: TeacherFilter) {
     ...(search && {
       OR: [
         { code: { contains: search, mode: "insensitive" } },
+        { user: { fullName: { contains: search, mode: "insensitive" } } },
         { phone: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
         { specialty: { contains: search, mode: "insensitive" } },
@@ -65,6 +72,13 @@ export async function getTeachers(filter: TeacherFilter) {
   const [teachers, total] = await Promise.all([
     prisma.teacher.findMany({
       where,
+      include: {
+        user: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
       skip,
       take: limit,
       orderBy: { createdAt: "desc" },

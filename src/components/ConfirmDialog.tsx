@@ -1,6 +1,14 @@
 "use client";
 
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography } from "@mui/material";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  type ButtonProps,
+} from "@mui/material";
 import type { ReactElement } from "react";
 
 export interface ConfirmDialogProps {
@@ -10,6 +18,9 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  confirmColor?: ButtonProps["color"];
 }
 
 export function ConfirmDialog({
@@ -19,6 +30,9 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   isLoading = false,
+  confirmLabel = "Delete",
+  cancelLabel = "Cancel",
+  confirmColor = "error",
 }: ConfirmDialogProps): ReactElement {
   return (
     <Dialog open={open} onClose={onCancel}>
@@ -28,10 +42,15 @@ export function ConfirmDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {cancelLabel}
         </Button>
-        <Button onClick={onConfirm} variant="contained" color="error" disabled={isLoading}>
-          Delete
+        <Button
+          onClick={onConfirm}
+          variant="contained"
+          color={confirmColor}
+          disabled={isLoading}
+        >
+          {confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>

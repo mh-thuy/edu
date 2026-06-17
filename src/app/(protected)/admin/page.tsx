@@ -17,7 +17,6 @@ import GroupIcon from "@mui/icons-material/Group";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 
-
 interface DashboardStats {
   totalFeeAmount: number;
   totalRevenue: number;
@@ -40,6 +39,15 @@ type StudentFeeItem = {
 
 type TeacherPayrollItem = {
   salaryAmount: number;
+};
+
+type PayrollApiResponse<T> = {
+  success: boolean;
+  data: {
+    items: T[];
+    total: number;
+  };
+  error?: string;
 };
 
 type ClassItem = {
@@ -93,9 +101,7 @@ function StatCard({
               <Skeleton width="80%" height={32} />
             ) : (
               <Typography variant="h6" fontWeight="bold">
-                {typeof value === "number"
-                  ? value.toLocaleString()
-                  : value}
+                {typeof value === "number" ? value.toLocaleString() : value}
               </Typography>
             )}
             {subtitle && (
@@ -126,25 +132,29 @@ export default function AdminPage() {
 
         // Load fees for debt
         const feesRes = await fetch("/api/student-fees");
-        const fees = (await feesRes.json()) as PaginatedResponse<StudentFeeItem>;
+        const fees =
+          (await feesRes.json()) as PaginatedResponse<StudentFeeItem>;
 
         // Load payroll
         const payrollRes = await fetch("/api/teacher-payroll");
         const payrolls =
-          (await payrollRes.json()) as PaginatedResponse<TeacherPayrollItem>;
+          (await payrollRes.json()) as PayrollApiResponse<TeacherPayrollItem>;
 
         // Load classes
         const classesRes = await fetch("/api/classes");
-        const classes = (await classesRes.json()) as PaginatedResponse<ClassItem>;
+        const classes =
+          (await classesRes.json()) as PaginatedResponse<ClassItem>;
 
         const paymentItems = payments.items ?? [];
         const feeItems = fees.items ?? [];
-        const payrollItems = payrolls.items ?? [];
+        const payrollItems = payrolls.data.items ?? [];
         const classItems = classes.items ?? [];
 
         // Calculate totals
-        const totalRevenue =
-          paymentItems.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+        const totalRevenue = paymentItems.reduce(
+          (sum, payment) => sum + (payment.amount || 0),
+          0,
+        );
 
         const totalFeeAmount = feeItems.reduce(
           (sum, fee) => sum + (fee.amount || 0),
@@ -163,11 +173,10 @@ export default function AdminPage() {
 
         const totalDebt = Math.max(totalFeeAmount - totalCollected, 0);
 
-        const totalPayroll =
-          payrollItems.reduce(
-            (sum, payroll) => sum + (payroll.salaryAmount || 0),
-            0,
-          );
+        const totalPayroll = payrollItems.reduce(
+          (sum, payroll) => sum + (payroll.salaryAmount || 0),
+          0,
+        );
 
         const activeClasses = classItems.filter(
           (classItem) => classItem.status === "ACTIVE",
@@ -221,7 +230,11 @@ export default function AdminPage() {
           <StatCard
             icon={<TrendingUpIcon />}
             title="Tổng doanh thu"
-            value={stats?.totalFeeAmount ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M` : "0"}
+            value={
+              stats?.totalFeeAmount
+                ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M`
+                : "0"
+            }
             subtitle="Tổng học phí đã tạo"
             loading={loading}
             color="success"
@@ -232,7 +245,11 @@ export default function AdminPage() {
           <StatCard
             icon={<PaymentIcon />}
             title="Nợ học phí"
-            value={stats?.totalDebt ? `${(stats.totalDebt / 1000000).toFixed(1)}M` : "0"}
+            value={
+              stats?.totalDebt
+                ? `${(stats.totalDebt / 1000000).toFixed(1)}M`
+                : "0"
+            }
             subtitle="Chưa thanh toán"
             loading={loading}
             color="error"
@@ -243,7 +260,11 @@ export default function AdminPage() {
           <StatCard
             icon={<ReceiptIcon />}
             title="Đã thu"
-            value={stats?.totalCollected ? `${(stats.totalCollected / 1000000).toFixed(1)}M` : "0"}
+            value={
+              stats?.totalCollected
+                ? `${(stats.totalCollected / 1000000).toFixed(1)}M`
+                : "0"
+            }
             subtitle="Hóa đơn thanh toán đủ"
             loading={loading}
             color="info"
@@ -254,7 +275,11 @@ export default function AdminPage() {
           <StatCard
             icon={<AssignmentIcon />}
             title="Lương giáo viên"
-            value={stats?.totalPayroll ? `${(stats.totalPayroll / 1000000).toFixed(1)}M` : "0"}
+            value={
+              stats?.totalPayroll
+                ? `${(stats.totalPayroll / 1000000).toFixed(1)}M`
+                : "0"
+            }
             subtitle="Tổng chi trả"
             loading={loading}
             color="warning"
@@ -279,13 +304,12 @@ export default function AdminPage() {
               <Typography variant="h6" gutterBottom>
                 Mục nhanh
               </Typography>
-              <Stack
-                direction="row"
-                spacing={1}
-                flexWrap="wrap"
-                useFlexGap
-              >
-                <Typography variant="caption" color="text.secondary" sx={{flex: '1 0 auto'}}>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ flex: "1 0 auto" }}
+                >
                   Quản lý:{" "}
                   <a href="/admin/student-fees" style={{ color: "#1976d2" }}>
                     Hóa đơn
@@ -311,5 +335,3 @@ export default function AdminPage() {
     </Container>
   );
 }
-
-

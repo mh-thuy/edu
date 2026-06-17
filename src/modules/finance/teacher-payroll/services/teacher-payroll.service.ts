@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
+import { PayrollStatus } from "@/modules/finance/teacher-payroll/payroll.types";
 
 export class TeacherPayrollService {
   /**
@@ -8,37 +9,103 @@ export class TeacherPayrollService {
    * Only calculates based on actual collected payments
    */
   static async calculateMonthlyPayroll(teacherId: string, month: string) {
-    // Get teacher's classes for this month (active classes)
+    const existingPayroll = await prisma.teacherPayroll.findUnique({
+      where: { teacherId_month: { teacherId, month } },
+    });
+
+    if (existingPayroll) {
+      throw new Error("Payroll already exists for this teacher and month");
+    }
+
+    // Get teacher's active classes.
     const classes = await prisma.class.findMany({
       where: {
         teacherId,
         status: "ACTIVE",
       },
-      include: {
-        classStudents: true,
-        classSchedules: true,
-        room: true,
+      select: {
+        id: true,
+        code: true,
+        _count: {
+          select: {
+            classStudents: true,
+          },
+        },
       },
     });
 
     if (classes.length === 0) {
-      // Create empty payroll
-      return await prisma.teacherPayroll.upsert({
-        where: { teacherId_month: { teacherId, month } },
-        create: {
+      return await prisma.teacherPayroll.create({
+        data: {
           teacherId,
           month,
           totalRevenue: 0,
           centerFee: 0,
           salaryAmount: 0,
-          status: "draft",
-        },
-        update: {
-          totalRevenue: 0,
-          centerFee: 0,
-          salaryAmount: 0,
+          status: PayrollStatus.DRAFT,
         },
       });
+    }
+
+    const [yearString, monthString] = month.split("-");
+    const year = Number(yearString);
+    const monthNumber = Number(monthString);
+
+    if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(monthNumber) ||
+      monthNumber < 1 ||
+      monthNumber > 12
+    ) {
+      throw new Error("Month must be in format YYYY-MM");
+    }
+
+    const monthStart = new Date(year, monthNumber - 1, 1);
+    const monthEnd = new Date(year, monthNumber, 1);
+
+    const classIds = classes.map((cls) => cls.id);
+
+    const [rules, payments] = await Promise.all([
+      prisma.classSalaryRule.findMany({
+        where: {
+          classId: { in: classIds },
+        },
+        select: {
+          classId: true,
+          commissionPercentage: true,
+        },
+      }),
+      prisma.payment.findMany({
+        where: {
+          paymentDate: {
+            gte: monthStart,
+            lt: monthEnd,
+          },
+          studentFee: {
+            classId: { in: classIds },
+          },
+        },
+        select: {
+          amount: true,
+          studentFee: {
+            select: {
+              classId: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const ruleByClassId = new Map<string, number>();
+    for (const rule of rules) {
+      ruleByClassId.set(rule.classId, rule.commissionPercentage);
+    }
+
+    const revenueByClassId = new Map<string, number>();
+    for (const payment of payments) {
+      const classId = payment.studentFee.classId;
+      const current = revenueByClassId.get(classId) ?? 0;
+      revenueByClassId.set(classId, current + payment.amount);
     }
 
     let totalRevenue = 0;
@@ -51,37 +118,12 @@ export class TeacherPayrollService {
       salary: number;
     }> = [];
 
-    // For each class, calculate revenue from actual collected payments
     for (const cls of classes) {
-      // Get all students in this class
-      const studentCount = cls.classStudents.length;
+      const studentCount = cls._count.classStudents;
 
       if (studentCount === 0) continue;
-
-      // Get class fee rule
-      const rule = await prisma.classSalaryRule.findUnique({
-        where: { classId: cls.id },
-      });
-
-      const commissionPercentage = rule?.commissionPercentage || 0;
-
-      // Get all payments for students in this class for this month
-      const startDate = new Date(`${month}-01`);
-      const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-
-      const payments = await prisma.payment.findMany({
-        where: {
-          paymentDate: {
-            gte: startDate,
-            lte: endDate,
-          },
-          studentFee: {
-            classId: cls.id,
-          },
-        },
-      });
-
-      const classRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+      const commissionPercentage = ruleByClassId.get(cls.id) ?? 0;
+      const classRevenue = revenueByClassId.get(cls.id) ?? 0;
       const centerFee = (classRevenue * commissionPercentage) / 100;
       const teacherSalary = classRevenue - centerFee;
 
@@ -99,49 +141,37 @@ export class TeacherPayrollService {
       totalRevenue += classRevenue;
     }
 
-    // Calculate total fees and salary
     const totalCenterFee = items.reduce((sum, item) => sum + item.fee, 0);
     const totalSalary = items.reduce((sum, item) => sum + item.salary, 0);
 
-    // Create or update payroll
-    const payroll = await prisma.teacherPayroll.upsert({
-      where: { teacherId_month: { teacherId, month } },
-      create: {
-        teacherId,
-        month,
-        totalRevenue,
-        centerFee: totalCenterFee,
-        salaryAmount: totalSalary,
-        status: "draft",
-      },
-      update: {
-        totalRevenue,
-        centerFee: totalCenterFee,
-        salaryAmount: totalSalary,
-      },
-    });
-
-    // Create or update payroll items
-    // First, delete existing items for recalculation
-    await prisma.teacherPayrollItem.deleteMany({
-      where: { payrollId: payroll.id },
-    });
-
-    for (const item of items) {
-      await prisma.teacherPayrollItem.create({
+    return prisma.$transaction(async (tx) => {
+      const payroll = await tx.teacherPayroll.create({
         data: {
-          payrollId: payroll.id,
-          classId: item.classId,
-          classCode: item.classCode,
-          studentCount: item.studentCount,
-          revenue: item.revenue,
-          fee: item.fee,
-          salary: item.salary,
+          teacherId,
+          month,
+          totalRevenue,
+          centerFee: totalCenterFee,
+          salaryAmount: totalSalary,
+          status: PayrollStatus.DRAFT,
         },
       });
-    }
 
-    return payroll;
+      if (items.length > 0) {
+        await tx.teacherPayrollItem.createMany({
+          data: items.map((item) => ({
+            payrollId: payroll.id,
+            classId: item.classId,
+            classCode: item.classCode,
+            studentCount: item.studentCount,
+            revenue: item.revenue,
+            fee: item.fee,
+            salary: item.salary,
+          })),
+        });
+      }
+
+      return payroll;
+    });
   }
 
   /**
@@ -162,6 +192,17 @@ export class TeacherPayrollService {
         where,
         include: {
           items: true,
+          teacher: {
+            select: {
+              id: true,
+              code: true,
+              user: {
+                select: {
+                  fullName: true,
+                },
+              },
+            },
+          },
         },
         skip,
         take: limit,
@@ -187,6 +228,17 @@ export class TeacherPayrollService {
       where: { id },
       include: {
         items: true,
+        teacher: {
+          select: {
+            id: true,
+            code: true,
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -194,16 +246,22 @@ export class TeacherPayrollService {
   /**
    * Approve payroll (lock it, prevent recalculation)
    */
-  static async approvePayroll(id: string) {
+  static async approvePayroll(id: string, approvedBy: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
-    if (payroll.status !== "draft") throw new Error("Only draft payroll can be approved");
+    if (payroll.status === PayrollStatus.APPROVED)
+      throw new Error("Payroll is already approved");
+    if (payroll.status === PayrollStatus.PAID)
+      throw new Error("Payroll is already paid");
+    if (payroll.status !== PayrollStatus.DRAFT)
+      throw new Error("Only draft payroll can be approved");
 
     return prisma.teacherPayroll.update({
       where: { id },
       data: {
-        status: "approved",
+        status: PayrollStatus.APPROVED,
         approvedAt: new Date(),
+        approvedBy,
       },
       include: { items: true },
     });
@@ -212,16 +270,20 @@ export class TeacherPayrollService {
   /**
    * Mark payroll as paid
    */
-  static async markPayrollAsPaid(id: string) {
+  static async markPayrollAsPaid(id: string, paidBy: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
-    if (payroll.status !== "approved") throw new Error("Only approved payroll can be marked as paid");
+    if (payroll.status === PayrollStatus.PAID)
+      throw new Error("Payroll is already paid");
+    if (payroll.status !== PayrollStatus.APPROVED)
+      throw new Error("Only approved payroll can be marked as paid");
 
     return prisma.teacherPayroll.update({
       where: { id },
       data: {
-        status: "paid",
+        status: PayrollStatus.PAID,
         paidAt: new Date(),
+        paidBy,
       },
       include: { items: true },
     });
@@ -242,10 +304,10 @@ export class TeacherPayrollService {
     let approvedCount = 0;
 
     for (const p of payrolls) {
-      if (p.status === "paid") {
+      if (p.status === PayrollStatus.PAID) {
         totalSalary += p.salaryAmount;
         paidCount++;
-      } else if (p.status === "approved") {
+      } else if (p.status === PayrollStatus.APPROVED) {
         approvedCount++;
       }
       totalRevenue += p.totalRevenue;

@@ -86,7 +86,12 @@ interface StudentFeesResponse {
 }
 
 interface TeacherPayrollsResponse {
-  items: TeacherPayrollSummaryItem[];
+  success: boolean;
+  data: {
+    items: TeacherPayrollSummaryItem[];
+    total: number;
+  };
+  error?: string;
 }
 
 export function ReportingDashboard() {
@@ -145,17 +150,14 @@ export function ReportingDashboard() {
       const debtData: DebtReportData = {
         totalDebt: result.items.reduce(
           (sum, fee) => sum + (fee.outstanding || 0),
-          0
+          0,
         ),
-        unpaidCount: result.items.filter(
-          (fee) => fee.status === "unpaid"
-        ).length,
-        partialCount: result.items.filter(
-          (fee) => fee.status === "partial"
-        ).length,
+        unpaidCount: result.items.filter((fee) => fee.status === "unpaid")
+          .length,
+        partialCount: result.items.filter((fee) => fee.status === "partial")
+          .length,
         overdueCount: result.items.filter(
-          (fee) =>
-            new Date(fee.dueDate) < new Date() && fee.status !== "paid"
+          (fee) => new Date(fee.dueDate) < new Date() && fee.status !== "paid",
         ).length,
         fees: result.items,
       };
@@ -175,7 +177,7 @@ export function ReportingDashboard() {
       const result: TeacherPayrollsResponse = await response.json();
       // Group by teacher
       const grouped = new Map<string, TeacherReportData>();
-      (result.items || []).forEach((payroll) => {
+      (result.data.items || []).forEach((payroll) => {
         const existing = grouped.get(payroll.teacherId) || {
           teacherId: payroll.teacherId,
           totalSalary: 0,
@@ -217,7 +219,7 @@ export function ReportingDashboard() {
       ...data.map((row) =>
         Object.values(row)
           .map((val) => `"${val}"`)
-          .join(",")
+          .join(","),
       ),
     ].join("\n");
 
@@ -304,7 +306,11 @@ export function ReportingDashboard() {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr" },
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "1fr 1fr",
+                  md: "1fr 1fr",
+                },
                 gap: 2,
                 mb: 3,
               }}
@@ -353,7 +359,7 @@ export function ReportingDashboard() {
                               {Number(amount).toLocaleString()}
                             </TableCell>
                           </TableRow>
-                        )
+                        ),
                       )}
                     </TableBody>
                   </Table>
@@ -364,10 +370,7 @@ export function ReportingDashboard() {
             <Button
               startIcon={<DownloadIcon />}
               onClick={() =>
-                exportToCSV(
-                  revenueReport.payments || [],
-                  "revenue-report.csv"
-                )
+                exportToCSV(revenueReport.payments || [], "revenue-report.csv")
               }
               sx={{ mt: 2 }}
             >
@@ -382,7 +385,11 @@ export function ReportingDashboard() {
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr" },
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "1fr 1fr",
+                  md: "1fr 1fr 1fr",
+                },
                 gap: 2,
                 mb: 3,
               }}
@@ -402,9 +409,7 @@ export function ReportingDashboard() {
                   <Typography color="text.secondary" variant="caption">
                     Chưa thanh toán
                   </Typography>
-                  <Typography variant="h6">
-                    {debtReport.unpaidCount}
-                  </Typography>
+                  <Typography variant="h6">{debtReport.unpaidCount}</Typography>
                 </Card>
               </Box>
               <Box>
@@ -422,10 +427,7 @@ export function ReportingDashboard() {
             <Button
               startIcon={<DownloadIcon />}
               onClick={() =>
-                exportToCSV(
-                  debtReport.fees || [],
-                  "debt-report.csv"
-                )
+                exportToCSV(debtReport.fees || [], "debt-report.csv")
               }
               sx={{ mt: 2 }}
             >
@@ -458,9 +460,7 @@ export function ReportingDashboard() {
                       <TableCell align="right">
                         {report.totalRevenue.toLocaleString()} VND
                       </TableCell>
-                      <TableCell align="right">
-                        {report.paidCount}
-                      </TableCell>
+                      <TableCell align="right">{report.paidCount}</TableCell>
                       <TableCell align="right">
                         {report.approvedCount}
                       </TableCell>
@@ -481,7 +481,7 @@ export function ReportingDashboard() {
                     "Đã thanh toán": r.paidCount,
                     "Chờ duyệt": r.approvedCount,
                   })),
-                  "teacher-report.csv"
+                  "teacher-report.csv",
                 )
               }
               sx={{ mt: 2 }}

@@ -10,6 +10,9 @@ import {
 export interface TeacherItem extends SelectableItem {
   id: string;
   code: string;
+  user?: {
+    fullName: string;
+  } | null;
   email?: string;
   phone?: string;
   specialty?: string;
@@ -18,12 +21,12 @@ export interface TeacherItem extends SelectableItem {
 
 /**
  * The value returned to the parent after selection.
- * `name` is populated from the teacher's email for display purposes.
+ * `name` is populated from teacher full name, then email, then code.
  */
 export interface TeacherSelectValue {
   id: string;
   code: string;
-  /** Teacher's email used as display name */
+  /** Teacher display name */
   name: string;
 }
 
@@ -40,6 +43,12 @@ export function TeacherSelectDialog({
 }: TeacherSelectDialogProps): ReactElement {
   const columns: GridColDef<TeacherItem>[] = [
     { field: "code", headerName: "Mã giáo viên", width: 130 },
+    {
+      field: "fullName",
+      headerName: "Họ tên",
+      width: 220,
+      valueGetter: (_value, row) => row.user?.fullName ?? "-",
+    },
     {
       field: "email",
       headerName: "Email",
@@ -77,7 +86,7 @@ export function TeacherSelectDialog({
     onSelect({
       id: item.id,
       code: item.code,
-      name: item.email ?? item.code,
+      name: item.user?.fullName ?? item.email ?? item.code,
     });
   };
 
@@ -89,7 +98,7 @@ export function TeacherSelectDialog({
       endpoint="/api/teachers"
       title="Chọn giáo viên"
       columns={columns}
-      searchPlaceholder="Nhập mã giáo viên hoặc email"
+      searchPlaceholder="Nhập mã, tên giáo viên hoặc email"
       maxWidth="lg"
     />
   );
