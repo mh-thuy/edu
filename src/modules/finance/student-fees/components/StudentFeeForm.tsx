@@ -29,6 +29,8 @@ import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
 import { useDisclosure } from "@/hooks/useDisclosure";
 
 import type { z } from "zod";
+import { DatePicker } from "@mui/x-date-pickers";
+import dayjs from "dayjs";
 
 type StudentFeeCreateInput = z.infer<typeof studentFeeCreateSchema>;
 type StudentFeeUpdateInput = z.infer<typeof studentFeeUpdateSchema>;
@@ -172,7 +174,9 @@ export function StudentFeeForm({
           onSubmit: handleSubmit(onSubmit),
         }}
       >
-        <DialogTitle>{isCreating ? "Thêm học phí" : "Cập nhật học phí"}</DialogTitle>
+        <DialogTitle>
+          {isCreating ? "Thêm học phí" : "Cập nhật học phí"}
+        </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           <Stack spacing={2}>
             {isCreating ? (
@@ -211,14 +215,27 @@ export function StudentFeeForm({
                   )}
                 />
 
-                <TextField
-                  label="Tháng (YYYY-MM)"
-                  type="month"
-                  {...register("month")}
-                  error={!!errors.month}
-                  helperText={errors.month?.message}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
+                <Controller
+                  name="month"
+                  control={control}
+                  render={({ field }) => (
+                    <DatePicker
+                      label="Kỳ học phí"
+                      views={["year", "month"]}
+                      format="MM/YYYY"
+                      value={field.value ? dayjs(field.value) : null}
+                      onChange={(value) => {
+                        field.onChange(value ? value.format("YYYY-MM") : "");
+                      }}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          error: !!errors.month,
+                          helperText: errors.month?.message,
+                        },
+                      }}
+                    />
+                  )}
                 />
               </>
             ) : (
@@ -255,24 +272,43 @@ export function StudentFeeForm({
               </>
             )}
 
-            <TextField
-              label="Số tiền"
-              type="number"
-              {...register("amount", { valueAsNumber: true })}
-              error={!!errors.amount}
-              helperText={errors.amount?.message}
-              fullWidth
-              inputProps={{ step: "1000", min: 0 }}
+            <Controller
+              name="amount"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  label="Số tiền"
+                  fullWidth
+                  value={
+                    field.value
+                      ? Number(field.value).toLocaleString("vi-VN")
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^\d]/g, "");
+                    field.onChange(raw ? Number(raw) : 0);
+                  }}
+                  error={!!errors.amount}
+                  helperText={errors.amount?.message}
+                  InputProps={{
+                    endAdornment: "VND",
+                  }}
+                />
+              )}
             />
 
-            <TextField
-              label="Hạn thanh toán"
-              type="date"
-              {...register("dueDate")}
-              error={!!errors.dueDate}
-              helperText={errors.dueDate?.message}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
+            <Controller
+              name="dueDate"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  label="Hạn thanh toán"
+                  value={field.value ? dayjs(field.value) : null}
+                  onChange={(value) => {
+                    field.onChange(value ? value.format("YYYY-MM-DD") : "");
+                  }}
+                />
+              )}
             />
 
             {!isCreating && (

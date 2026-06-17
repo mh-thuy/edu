@@ -11,6 +11,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -35,12 +37,17 @@ import {
   MasterSelectField,
   type MasterSelectValue,
 } from "@/components/shared/MasterSelectField";
-import { ClassSelectDialog, type ClassItem } from "@/components/shared/ClassSelectDialog";
+import {
+  ClassSelectDialog,
+  type ClassItem,
+} from "@/components/shared/ClassSelectDialog";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import { StudentFeeForm } from "./StudentFeeForm";
+import { DatePicker } from "@mui/x-date-pickers";
+import dayjs, { Dayjs } from "dayjs";
 
 type StudentFeeStatus = "unpaid" | "partial" | "paid";
 
@@ -141,7 +148,9 @@ export function StudentFeeList() {
   });
   const [bulkStudents, setBulkStudents] = useState<BulkStudentRow[]>([]);
   const [bulkStudentsLoading, setBulkStudentsLoading] = useState(false);
-  const [bulkStudentsError, setBulkStudentsError] = useState<string | null>(null);
+  const [bulkStudentsError, setBulkStudentsError] = useState<string | null>(
+    null,
+  );
   const [selectedBulkRows, setSelectedBulkRows] =
     useState<GridRowSelectionModel>(emptySelectionModel);
 
@@ -161,43 +170,40 @@ export function StudentFeeList() {
     month: monthFilter || undefined,
   });
 
-  const loadBulkStudents = useCallback(
-    async (classId: string) => {
-      try {
-        setBulkStudentsLoading(true);
-        setBulkStudentsError(null);
-        const response = await fetch(`/api/classes/${classId}/students`);
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(payload.error || "Không tải được danh sách học viên");
-        }
-
-        const result: BulkClassStudentApiItem[] = await response.json();
-        setBulkStudents(
-          result.map((item) => ({
-            id: item.student.id,
-            studentId: item.student.id,
-            studentCode: item.student.code,
-            studentName: item.student.fullName,
-          })),
-        );
-        setSelectedBulkRows(emptySelectionModel());
-      } catch (loadError) {
-        setBulkStudents([]);
-        setSelectedBulkRows(emptySelectionModel());
-        setBulkStudentsError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Không tải được danh sách học viên",
-        );
-      } finally {
-        setBulkStudentsLoading(false);
+  const loadBulkStudents = useCallback(async (classId: string) => {
+    try {
+      setBulkStudentsLoading(true);
+      setBulkStudentsError(null);
+      const response = await fetch(`/api/classes/${classId}/students`);
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        throw new Error(payload.error || "Không tải được danh sách học viên");
       }
-    },
-    [],
-  );
+
+      const result: BulkClassStudentApiItem[] = await response.json();
+      setBulkStudents(
+        result.map((item) => ({
+          id: item.student.id,
+          studentId: item.student.id,
+          studentCode: item.student.code,
+          studentName: item.student.fullName,
+        })),
+      );
+      setSelectedBulkRows(emptySelectionModel());
+    } catch (loadError) {
+      setBulkStudents([]);
+      setSelectedBulkRows(emptySelectionModel());
+      setBulkStudentsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Không tải được danh sách học viên",
+      );
+    } finally {
+      setBulkStudentsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!bulkData.classId) {
@@ -251,7 +257,9 @@ export function StudentFeeList() {
       !bulkData.dueDate ||
       selectedBulkRows.ids.size === 0
     ) {
-      snackbar.showError("Vui lòng điền đủ thông tin và chọn ít nhất một học viên");
+      snackbar.showError(
+        "Vui lòng điền đủ thông tin và chọn ít nhất một học viên",
+      );
       return;
     }
 
@@ -263,10 +271,16 @@ export function StudentFeeList() {
         body: JSON.stringify({
           ...bulkData,
           note: bulkData.note || undefined,
-          studentIds: Array.from(selectedBulkRows.ids, (value) => String(value)),
+          studentIds: Array.from(selectedBulkRows.ids, (value) =>
+            String(value),
+          ),
         }),
       });
-      const data = (await response.json()) as { error?: string; created: number; skipped: number };
+      const data = (await response.json()) as {
+        error?: string;
+        created: number;
+        skipped: number;
+      };
       if (!response.ok) {
         throw new Error(data.error || "Tạo hóa đơn hàng loạt thất bại");
       }
@@ -338,18 +352,16 @@ export function StudentFeeList() {
       {
         field: "status",
         headerName: "Trạng thái",
-        width: 160,
+        flex: 1,
         align: "center",
         headerAlign: "center",
         renderCell: (params) => (
-          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
-            <Chip
-              label={getStatusLabel(params.row.status)}
-              size="small"
-              color={getStatusColor(params.row.status)}
-              variant="outlined"
-            />
-          </Box>
+          <Chip
+            label={getStatusLabel(params.row.status)}
+            size="small"
+            color={getStatusColor(params.row.status)}
+            variant="outlined"
+          />
         ),
       },
       {
@@ -410,24 +422,30 @@ export function StudentFeeList() {
         <Paper
           elevation={0}
           sx={{
-            p: 2.5,
+            p: 3,
             borderRadius: 3,
             border: "1px solid",
             borderColor: "divider",
-            bgcolor: "background.paper",
           }}
         >
-          <Stack spacing={2}>
+          <Stack spacing={3}>
+            {/* Header */}
             <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={2}
-              alignItems={{ xs: "stretch", md: "center" }}
+              direction="row"
               justifyContent="space-between"
+              alignItems="center"
             >
-              <Typography variant="h6" fontWeight={700}>
-                Quản lý học phí
-              </Typography>
-              <Stack direction="row" spacing={1.5}>
+              <Box>
+                <Typography variant="h6" fontWeight={700}>
+                  Quản lý học phí
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  Quản lý hóa đơn và thanh toán học viên
+                </Typography>
+              </Box>
+
+              <Stack direction="row" spacing={1}>
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
@@ -435,17 +453,25 @@ export function StudentFeeList() {
                 >
                   Tạo hóa đơn
                 </Button>
+
                 <Button
-                  variant="outlined"
+                  variant="text"
                   startIcon={<ReceiptLongIcon />}
                   onClick={() => setShowBulkDialog(true)}
                 >
-                  Tạo hóa đơn hàng loạt
+                  Hàng loạt
                 </Button>
               </Stack>
             </Stack>
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            <Divider />
+
+            {/* Filters */}
+            <Stack
+              direction={{ xs: "column", lg: "row" }}
+              spacing={2}
+              alignItems="center"
+            >
               <TextField
                 label="Tìm kiếm"
                 placeholder="Mã/tên học viên, mã/tên lớp, tháng"
@@ -467,24 +493,23 @@ export function StudentFeeList() {
                   setStatusFilter(event.target.value);
                   setPageNumber(1);
                 }}
-                sx={{ minWidth: 180 }}
-                slotProps={{ select: { native: true } }}
+                sx={{ width: 500 }}
               >
-                <option value="">Tất cả</option>
-                <option value="unpaid">Chưa thanh toán</option>
-                <option value="partial">Thanh toán một phần</option>
-                <option value="paid">Đã thanh toán</option>
+                <MenuItem value="">Tất cả</MenuItem>
+                <MenuItem value="unpaid">Chưa thanh toán</MenuItem>
+                <MenuItem value="partial">Thanh toán một phần</MenuItem>
+                <MenuItem value="paid">Đã thanh toán</MenuItem>
               </TextField>
-              <TextField
-                label="Tháng"
-                type="month"
-                value={monthFilter}
-                onChange={(event) => {
-                  setMonthFilter(event.target.value);
+
+              <DatePicker
+                label="Kỳ học phí"
+                views={["year", "month"]}
+                format="YYYY-MM"
+                value={monthFilter ? dayjs(monthFilter) : null}
+                onChange={(value: Dayjs | null) => {
+                  setMonthFilter(value ? value.format("YYYY-MM") : "");
                   setPageNumber(1);
                 }}
-                sx={{ minWidth: 170 }}
-                InputLabelProps={{ shrink: true }}
               />
             </Stack>
           </Stack>
@@ -563,7 +588,10 @@ export function StudentFeeList() {
                 type="month"
                 value={bulkData.month}
                 onChange={(event) =>
-                    setBulkData((current) => ({ ...current, month: event.target.value }))
+                  setBulkData((current) => ({
+                    ...current,
+                    month: event.target.value,
+                  }))
                 }
                 fullWidth
                 InputLabelProps={{ shrink: true }}
@@ -588,7 +616,10 @@ export function StudentFeeList() {
                 type="date"
                 value={bulkData.dueDate}
                 onChange={(event) =>
-                  setBulkData((current) => ({ ...current, dueDate: event.target.value }))
+                  setBulkData((current) => ({
+                    ...current,
+                    dueDate: event.target.value,
+                  }))
                 }
                 fullWidth
                 InputLabelProps={{ shrink: true }}
@@ -611,7 +642,10 @@ export function StudentFeeList() {
               label="Ghi chú"
               value={bulkData.note}
               onChange={(event) =>
-                setBulkData((current) => ({ ...current, note: event.target.value }))
+                setBulkData((current) => ({
+                  ...current,
+                  note: event.target.value,
+                }))
               }
               multiline
               rows={2}
@@ -640,7 +674,9 @@ export function StudentFeeList() {
                   checkboxSelection
                   disableRowSelectionOnClick
                   rowSelectionModel={selectedBulkRows}
-                  onRowSelectionModelChange={(model) => setSelectedBulkRows(model)}
+                  onRowSelectionModelChange={(model) =>
+                    setSelectedBulkRows(model)
+                  }
                   pageSizeOptions={[5, 10, 20]}
                   initialState={{
                     pagination: {
@@ -656,7 +692,10 @@ export function StudentFeeList() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowBulkDialog(false)} disabled={bulkSubmitting}>
+          <Button
+            onClick={() => setShowBulkDialog(false)}
+            disabled={bulkSubmitting}
+          >
             Hủy
           </Button>
           <Button
@@ -668,7 +707,9 @@ export function StudentFeeList() {
               !bulkData.classId ||
               bulkStudentsLoading
             }
-            startIcon={bulkSubmitting ? <CircularProgress size={18} /> : undefined}
+            startIcon={
+              bulkSubmitting ? <CircularProgress size={18} /> : undefined
+            }
           >
             {bulkSubmitting ? "Đang tạo..." : "Tạo hóa đơn hàng loạt"}
           </Button>

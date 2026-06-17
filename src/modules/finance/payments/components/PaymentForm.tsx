@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -16,6 +16,8 @@ import {
   Stack,
   TextField,
   Typography,
+  MenuItem,
+  InputAdornment,
 } from "@mui/material";
 
 import {
@@ -25,6 +27,9 @@ import {
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import type { z } from "zod";
+import { DatePicker } from "@mui/x-date-pickers";
+import dayjs from "dayjs";
+import { register } from "module";
 
 type PaymentCreateInput = z.infer<typeof paymentCreateSchema>;
 type PaymentUpdateInput = z.infer<typeof paymentUpdateSchema>;
@@ -119,6 +124,12 @@ const getStatusLabel = (status: StudentFeeOption["status"]): string => {
   return labels[status];
 };
 
+const PAYMENT_METHODS = [
+  { value: "cash", label: "Tiền mặt" },
+  { value: "transfer", label: "Chuyển khoản" },
+  { value: "wallet", label: "Ví điện tử" },
+];
+
 export function PaymentForm({
   initialData,
   onClose,
@@ -154,9 +165,10 @@ export function PaymentForm({
   );
 
   const {
-    register,
     handleSubmit,
     watch,
+    control,
+    register,
     formState: { errors },
   } = useForm<PaymentFormData>({
     resolver,
@@ -164,12 +176,13 @@ export function PaymentForm({
   });
 
   const selectedFeeId = watch("studentFeeId");
-  const enteredAmount = watch("amount", 0);
 
   const loadFees = useCallback(async () => {
     try {
       setLoadingFees(true);
-      const response = await fetch("/api/student-fees?status=unpaid,partial&limit=100");
+      const response = await fetch(
+        "/api/student-fees?status=unpaid,partial&limit=100",
+      );
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as {
@@ -280,7 +293,9 @@ export function PaymentForm({
         };
         throw new Error(
           result.error ||
-            (isEditing ? "Failed to update payment" : "Failed to record payment"),
+            (isEditing
+              ? "Failed to update payment"
+              : "Failed to record payment"),
         );
       }
 
@@ -319,107 +334,158 @@ export function PaymentForm({
           {isEditing ? "Cập nhật thanh toán" : "Ghi nhận thanh toán"}
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
-          <Stack spacing={2}>
-            {!isEditing ? (
-              <TextField
-                select
-                label="Hóa đơn"
-                {...register("studentFeeId")}
-                error={!!errors.studentFeeId}
-                helperText={errors.studentFeeId?.message}
-                fullWidth
-                disabled={loadingFees}
-                slotProps={{
-                  select: {
-                    native: true,
-                  },
-                }}
-              >
-                <option value="">-- Chọn hóa đơn --</option>
-                {fees.map((fee) => (
-                  <option key={fee.id} value={fee.id}>
-                    {fee.student?.code || "N/A"} - {fee.student?.fullName || "Không rõ"} |{" "}
-                    {fee.class?.code || "N/A"} - {fee.class?.name || "Không rõ"} |{" "}
-                    {fee.month} | Nợ {formatCurrency(fee.outstanding)} VND
-                  </option>
-                ))}
-              </TextField>
-            ) : (
-              <TextField
-                label="Hóa đơn"
-                value={
-                  selectedFee
-                    ? `${selectedFee.student?.code || "N/A"} - ${
-                        selectedFee.student?.fullName || "Không rõ"
-                      } | ${selectedFee.class?.code || "N/A"} - ${
-                        selectedFee.class?.name || "Không rõ"
-                      } | ${selectedFee.month}`
-                    : ""
-                }
-                fullWidth
-                InputProps={{ readOnly: true }}
-              />
-            )}
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Controller
+              name="studentFeeId"
+              control={control}
+              render={({ field }) =>
+                !isEditing ? (
+                  <TextField
+                    select
+                    label="Hóa đơn"
+                    {...field}
+                    error={!!errors.studentFeeId}
+                    helperText={errors.studentFeeId?.message}
+                    fullWidth
+                    disabled={loadingFees}
+                  >
+                    <MenuItem value="">-- Chọn hóa đơn --</MenuItem>
+
+                    {fees.map((fee) => (
+                      <MenuItem key={fee.id} value={fee.id}>
+                        {fee.student?.code || "N/A"} -{" "}
+                        {fee.student?.fullName || "Không rõ"} |{" "}
+                        {fee.class?.code || "N/A"} -{" "}
+                        {fee.class?.name || "Không rõ"} | {fee.month} | Nợ{" "}
+                        {formatCurrency(fee.outstanding)} VND
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <TextField
+                    label="Hóa đơn"
+                    value={
+                      selectedFee
+                        ? `${selectedFee.student?.code || "N/A"} - ${
+                            selectedFee.student?.fullName || "Không rõ"
+                          } | ${selectedFee.class?.code || "N/A"} - ${
+                            selectedFee.class?.name || "Không rõ"
+                          } | ${selectedFee.month}`
+                        : ""
+                    }
+                    fullWidth
+                    InputProps={{ readOnly: true }}
+                  />
+                )
+              }
+            />
 
             {selectedFee ? (
               <>
                 <Divider />
-                <Typography variant="caption" color="text.secondary">
-                  Tổng tiền: {formatCurrency(selectedFee.amount)} VND
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Công nợ còn lại:{" "}
-                  {formatCurrency(
-                    isEditing
-                      ? selectedFee.outstanding + (initialData?.amount || 0)
-                      : selectedFee.outstanding,
-                  )}{" "}
-                  VND
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Trạng thái học phí: {getStatusLabel(selectedFee.status)}
-                </Typography>
+
+                <Stack
+                  spacing={0.75}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: "grey.50",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Tổng tiền: {formatCurrency(selectedFee.amount)} VND
+                  </Typography>
+
+                  <Typography variant="caption" color="text.secondary">
+                    Công nợ còn lại:{" "}
+                    {formatCurrency(
+                      isEditing
+                        ? selectedFee.outstanding + (initialData?.amount || 0)
+                        : selectedFee.outstanding,
+                    )}{" "}
+                    VND
+                  </Typography>
+
+                  <Typography variant="caption" color="text.secondary">
+                    Trạng thái học phí: {getStatusLabel(selectedFee.status)}
+                  </Typography>
+                </Stack>
               </>
             ) : loadingFees ? (
               <Alert severity="info">Đang tải danh sách học phí...</Alert>
             ) : null}
 
-            <TextField
-              type="number"
-              label="Số tiền thanh toán"
-              {...register("amount", { valueAsNumber: true })}
-              error={!!errors.amount}
-              helperText={errors.amount?.message}
-              fullWidth
-              inputProps={{ step: "1000", min: 1 }}
+            <Controller
+              name="amount"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  label="Số tiền thanh toán"
+                  fullWidth
+                  value={
+                    field.value
+                      ? Number(field.value).toLocaleString("vi-VN")
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const rawValue = event.target.value.replace(/[^\d]/g, "");
+                    field.onChange(rawValue ? Number(rawValue) : null);
+                  }}
+                  error={!!errors.amount}
+                  helperText={errors.amount?.message}
+                  inputMode="numeric"
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">VND</InputAdornment>
+                    ),
+                  }}
+                />
+              )}
             />
 
-            <TextField
-              select
-              label="Phương thức"
-              {...register("method")}
-              error={!!errors.method}
-              helperText={errors.method?.message}
-              fullWidth
-              slotProps={{
-                select: {
-                  native: true,
-                },
-              }}
-            >
-              <option value="cash">Tiền mặt</option>
-              <option value="transfer">Chuyển khoản</option>
-              <option value="wallet">Ví điện tử</option>
-            </TextField>
+            <Controller
+              name="method"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  select
+                  label="Phương thức"
+                  {...field}
+                  error={!!errors.method}
+                  helperText={errors.method?.message}
+                  fullWidth
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <MenuItem key={method.value} value={method.value}>
+                      {method.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+            />
 
-            <TextField
-              type="date"
-              label="Ngày thanh toán"
-              {...register("paymentDate")}
-              error={!!errors.paymentDate}
-              helperText={errors.paymentDate?.message}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
+            <Controller
+              name="paymentDate"
+              control={control}
+              render={({ field }) => (
+                <DatePicker
+                  label="Ngày thanh toán"
+                  format="DD/MM/YYYY"
+                  value={field.value ? dayjs(field.value) : null}
+                  onChange={(value) => {
+                    field.onChange(value ? value.format("YYYY-MM-DD") : "");
+                  }}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      error: !!errors.paymentDate,
+                      helperText: errors.paymentDate?.message,
+                    },
+                  }}
+                />
+              )}
             />
 
             <TextField

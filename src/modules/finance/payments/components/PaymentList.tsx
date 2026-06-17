@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   Chip,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -28,6 +29,8 @@ import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import { PaymentForm } from "./PaymentForm";
+import { DatePicker } from "@mui/x-date-pickers";
+import dayjs from "dayjs";
 
 type PaymentMethod = "cash" | "transfer" | "wallet";
 
@@ -126,7 +129,9 @@ export function PaymentList() {
         showSuccess("Xóa thanh toán thành công");
         await refresh();
       } catch (error) {
-        showError(error instanceof Error ? error.message : "Xóa thanh toán thất bại");
+        showError(
+          error instanceof Error ? error.message : "Xóa thanh toán thất bại",
+        );
       }
     },
     [refresh, showError, showSuccess],
@@ -203,8 +208,20 @@ export function PaymentList() {
         align: "center",
         headerAlign: "center",
         renderCell: ({ row }: GridRenderCellParams<Payment>) => (
-          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
-            <Chip label={getMethodLabel(row.method)} size="small" variant="outlined" />
+          <Box
+            sx={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Chip
+              label={getMethodLabel(row.method)}
+              size="small"
+              variant="outlined"
+            />
           </Box>
         ),
       },
@@ -221,27 +238,37 @@ export function PaymentList() {
         width: 170,
         align: "center",
         headerAlign: "center",
-        renderCell: ({ row }: GridRenderCellParams<Payment>) => (
-          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
-            <Chip
-              label={
-                row.receipts?.[0]?.receiptNumber
-                  ? row.receipts[0].receiptNumber
-                  : "Chưa phát hành"
-              }
-              size="small"
-              color={row.receipts?.length ? "success" : "default"}
-              variant={row.receipts?.length ? "filled" : "outlined"}
-            />
-          </Box>
-        ),
+        renderCell: ({ row }: GridRenderCellParams<Payment>) => {
+          const hasReceipt = (row.receipts?.length || 0) > 0;
+          const receipt = row.receipts?.[0];
+
+          return (
+            <Box
+              sx={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Chip
+                label={receipt?.receiptNumber ?? "Chưa phát hành"}
+                size="small"
+                color={receipt ? "success" : "default"}
+                variant={receipt ? "filled" : "outlined"}
+              />
+            </Box>
+          );
+        },
       },
       {
         field: "notes",
         headerName: "Ghi chú",
         minWidth: 180,
         flex: 1,
-        renderCell: ({ row }: GridRenderCellParams<Payment>) => row.notes || "-",
+        renderCell: ({ row }: GridRenderCellParams<Payment>) =>
+          row.notes || "-",
       },
       {
         field: "actions",
@@ -342,41 +369,33 @@ export function PaymentList() {
                   setFilterMethod(event.target.value);
                   setPageNumber(1);
                 }}
-                sx={{ minWidth: 170 }}
-                slotProps={{
-                  select: {
-                    native: true,
-                  },
-                }}
+                sx={{ width: 300 }}
               >
-                <option value="">Tất cả</option>
-                <option value="cash">Tiền mặt</option>
-                <option value="transfer">Chuyển khoản</option>
-                <option value="wallet">Ví điện tử</option>
+                <MenuItem value="">Tất cả</MenuItem>
+                <MenuItem value="cash">Tiền mặt</MenuItem>
+                <MenuItem value="transfer">Chuyển khoản</MenuItem>
+                <MenuItem value="wallet">Ví điện tử</MenuItem>
               </TextField>
 
-              <TextField
-                type="date"
+              <DatePicker
                 label="Từ ngày"
-                value={filterDateStart}
-                onChange={(event) => {
-                  setFilterDateStart(event.target.value);
+                format="DD/MM/YYYY"
+                value={filterDateStart ? dayjs(filterDateStart) : null}
+                onChange={(value) => {
+                  setFilterDateStart(value ? value.format("YYYY-MM-DD") : "");
                   setPageNumber(1);
                 }}
-                sx={{ minWidth: 170 }}
-                InputLabelProps={{ shrink: true }}
               />
 
-              <TextField
-                type="date"
+              <DatePicker
                 label="Đến ngày"
-                value={filterDateEnd}
-                onChange={(event) => {
-                  setFilterDateEnd(event.target.value);
+                format="DD/MM/YYYY"
+                value={filterDateEnd ? dayjs(filterDateEnd) : null}
+                onChange={(value) => {
+                  setFilterDateEnd(value ? value.format("YYYY-MM-DD") : "");
                   setPageNumber(1);
                 }}
-                sx={{ minWidth: 170 }}
-                InputLabelProps={{ shrink: true }}
+                minDate={filterDateStart ? dayjs(filterDateStart) : undefined}
               />
             </Stack>
           </Stack>
