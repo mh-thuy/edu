@@ -31,6 +31,7 @@ export interface Student {
   id: string;
   code: string;
   fullName: string;
+  birthday?: string | null;
   email?: string | null;
   phone?: string | null;
   status: "ACTIVE" | "INACTIVE";
@@ -396,6 +397,7 @@ export function StudentList(): ReactElement {
               ? {
                   code: editingStudent.code ?? "",
                   fullName: editingStudent.fullName ?? "",
+                  birthday: editingStudent.birthday ?? undefined,
                   email: editingStudent.email ?? "",
                   phone: editingStudent.phone ?? "",
                   status: editingStudent.status ?? "ACTIVE",

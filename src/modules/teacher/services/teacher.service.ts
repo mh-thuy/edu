@@ -77,21 +77,18 @@ export async function checkTeacherScheduleConflict(
   startTime: string,
   endTime: string,
 ): Promise<boolean> {
-  // Check for schedule conflicts
   const schedules = await prisma.classSchedule.findMany({
     where: {
+      teacherId,
       dayOfWeek,
+      startTime: {
+        lt: endTime,
+      },
+      endTime: {
+        gt: startTime,
+      },
     },
   });
 
-  const conflict = schedules.find((s: any) => {
-    if (s.teacherId !== teacherId) return false;
-    // Check time overlap
-    return (
-      (s.startTime <= startTime && s.endTime > startTime) ||
-      (s.startTime < endTime && s.endTime >= endTime)
-    );
-  });
-
-  return !!conflict;
+  return schedules.length > 0;
 }

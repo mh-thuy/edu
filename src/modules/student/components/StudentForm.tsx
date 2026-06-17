@@ -28,11 +28,16 @@ export function StudentForm({
   onSubmit,
   defaultValues,
 }: StudentFormProps): ReactElement {
+  const toInputDateValue = (value?: string) => value?.slice(0, 10) ?? "";
+  const toIsoDateTime = (value: string) =>
+    value ? new Date(`${value}T00:00:00.000Z`).toISOString() : undefined;
+
   const { control, handleSubmit } = useForm<StudentFormData>({
     resolver: zodResolver(studentCreateSchema),
     defaultValues: {
       code: defaultValues?.code ?? "",
       fullName: defaultValues?.fullName ?? "",
+      birthday: defaultValues?.birthday ?? undefined,
       phone: defaultValues?.phone ?? "",
       email: defaultValues?.email ?? "",
       address: defaultValues?.address ?? "",
@@ -84,6 +89,25 @@ export function StudentForm({
               error={!!error}
               helperText={error?.message}
               fullWidth
+            />
+          )}
+        />
+
+        <Controller
+          name="birthday"
+          control={control}
+          render={({ field, fieldState: { error } }) => (
+            <TextField
+              label="Ngày sinh"
+              type="date"
+              value={toInputDateValue(field.value)}
+              error={!!error}
+              helperText={error?.message}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              onChange={(event) => {
+                field.onChange(toIsoDateTime(event.target.value));
+              }}
             />
           )}
         />
