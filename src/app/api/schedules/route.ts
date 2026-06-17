@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getErrorMessage } from "@/lib/errors";
 import { classScheduleCreateSchema, scheduleFilterSchema } from "@/modules/schedule/schemas/schedule.schema";
-import { createClassSchedule, getSchedules } from "@/modules/schedule/services/schedule.service";
+import {
+  createClassSchedule,
+  getSchedules,
+  ScheduleConflictError,
+} from "@/modules/schedule/services/schedule.service";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,12 +29,22 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = classScheduleCreateSchema.parse(body);
 
-    const { schedule, conflicts } = await createClassSchedule(data);
+    const { schedule } = await createClassSchedule(data);
     return NextResponse.json(
-      { schedule, conflicts: conflicts.length > 0 ? conflicts : null },
+      { schedule, conflicts: null },
       { status: 201 }
     );
   } catch (error: unknown) {
+    if (error instanceof ScheduleConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          conflicts: error.conflicts,
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

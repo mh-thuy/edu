@@ -16,6 +16,16 @@ type ClassScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
 
 type ScheduleConflict = ClassScheduleWithRelations;
 
+export class ScheduleConflictError extends Error {
+  conflicts: ScheduleConflict[];
+
+  constructor(conflicts: ScheduleConflict[]) {
+    super("Phát hiện lịch học bị trùng");
+    this.name = "ScheduleConflictError";
+    this.conflicts = conflicts;
+  }
+}
+
 function timeToMinutes(time: string): number {
   const [hours = "0", minutes = "0"] = time.split(":");
   return Number(hours) * 60 + Number(minutes);
@@ -61,7 +71,7 @@ function toClassScheduleUpdateInput(
   };
 }
 
-async function findScheduleConflicts(
+export async function getScheduleConflicts(
   data: {
     roomId?: string | null;
     teacherId?: string | null;
@@ -109,7 +119,10 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
   schedule: ClassScheduleWithRelations;
   conflicts: ScheduleConflict[];
 }> {
-  const conflicts = await findScheduleConflicts(data);
+  const conflicts = await getScheduleConflicts(data);
+  if (conflicts.length > 0) {
+    throw new ScheduleConflictError(conflicts);
+  }
 
   const schedule = await prisma.classSchedule.create({
     data: toClassScheduleCreateInput(data),
@@ -198,7 +211,10 @@ export async function updateClassSchedule(
     endTime: data.endTime ?? current.endTime,
   };
 
-  const conflicts = await findScheduleConflicts(merged, id);
+  const conflicts = await getScheduleConflicts(merged, id);
+  if (conflicts.length > 0) {
+    throw new ScheduleConflictError(conflicts);
+  }
 
   const schedule = await prisma.classSchedule.update({
     where: { id },

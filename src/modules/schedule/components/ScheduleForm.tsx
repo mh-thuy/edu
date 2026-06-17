@@ -13,9 +13,11 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useEffect, useMemo, useState, type ReactElement } from "react";
-import type { z } from "zod";
 
-import { classScheduleFormSchema } from "@/modules/schedule/schemas/schedule.schema";
+import {
+  classScheduleFormSchema,
+  type ClassScheduleFormData,
+} from "@/modules/schedule/schemas/schedule.schema";
 import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
 import { RoomSelectDialog } from "@/components/shared/RoomSelectDialog";
 import {
@@ -23,8 +25,6 @@ import {
   type MasterSelectValue,
 } from "@/components/shared/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
-
-type ScheduleFormData = z.infer<typeof classScheduleFormSchema>;
 
 type MasterItem = {
   id: string;
@@ -49,7 +49,7 @@ type ScheduleSubmitData = {
 export interface ScheduleFormProps {
   formId?: string;
   onSubmit: (data: ScheduleSubmitData) => void | Promise<void>;
-  defaultValues?: Partial<ScheduleFormData>;
+  defaultValues?: Partial<ClassScheduleFormData>;
   onConflictCheck?: (result: ConflictResult) => void;
   scheduleId?: string;
 }
@@ -76,7 +76,7 @@ export function ScheduleForm({
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<ScheduleFormData>({
+  } = useForm<ClassScheduleFormData>({
     resolver: zodResolver(classScheduleFormSchema),
     defaultValues: {
       classId: defaultValues?.classId ?? "",
@@ -85,7 +85,7 @@ export function ScheduleForm({
       roomId: defaultValues?.roomId ?? "",
       roomCode: defaultValues?.roomCode ?? "",
       roomName: defaultValues?.roomName ?? "",
-      teacherId: defaultValues?.teacherId ?? "",
+      teacherId: defaultValues?.teacherId ?? undefined,
       dayOfWeek: defaultValues?.dayOfWeek ?? 0,
       startTime: defaultValues?.startTime ?? "08:00",
       endTime: defaultValues?.endTime ?? "10:00",
@@ -97,30 +97,15 @@ export function ScheduleForm({
 
   const [conflict, setConflict] = useState<ConflictResult | null>(null);
 
-  const [
-    classId,
-    classCode,
-    className,
-    roomId,
-    roomCode,
-    roomName,
-    dayOfWeek,
-    startTime,
-    endTime,
-  ] = useWatch({
-    control,
-    name: [
-      "classId",
-      "classCode",
-      "className",
-      "roomId",
-      "roomCode",
-      "roomName",
-      "dayOfWeek",
-      "startTime",
-      "endTime",
-    ],
-  });
+  const classId = useWatch({ control, name: "classId" });
+  const classCode = useWatch({ control, name: "classCode" });
+  const className = useWatch({ control, name: "className" });
+  const roomId = useWatch({ control, name: "roomId" });
+  const roomCode = useWatch({ control, name: "roomCode" });
+  const roomName = useWatch({ control, name: "roomName" });
+  const dayOfWeek = useWatch({ control, name: "dayOfWeek" });
+  const startTime = useWatch({ control, name: "startTime" });
+  const endTime = useWatch({ control, name: "endTime" });
 
   const selectedClass = useMemo<MasterSelectValue | null>(() => {
     if (!classId) return null;
@@ -176,11 +161,11 @@ export function ScheduleForm({
     roomDialog.onClose();
   };
 
-  const handleFormSubmit = async (data: ScheduleFormData) => {
+  const handleFormSubmit = async (data: ClassScheduleFormData) => {
     await onSubmit({
       classId: data.classId,
-      roomId: data.roomId || null,
-      teacherId: data.teacherId || null,
+      roomId: data.roomId,
+      teacherId: data.teacherId || undefined,
       dayOfWeek: data.dayOfWeek,
       startTime: data.startTime,
       endTime: data.endTime,
@@ -198,7 +183,7 @@ export function ScheduleForm({
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await fetch("/api/rooms/check-conflict", {
+        const response = await fetch("/api/schedules/check-conflict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -255,6 +240,7 @@ export function ScheduleForm({
           onOpen={roomDialog.onOpen}
           codeLabel="Mã phòng"
           nameLabel="Tên phòng"
+          required
           error={errors.roomId?.message}
         />
 

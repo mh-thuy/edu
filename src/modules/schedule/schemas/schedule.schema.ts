@@ -1,15 +1,15 @@
 import { z } from "zod";
 
-const baseClassScheduleSchema = z.object({
+const requiredClassScheduleSchema = z.object({
   classId: z.string().min(1, "Lớp học là bắt buộc"),
-  roomId: z.string().optional(),
+  roomId: z.string().min(1, "Phòng học là bắt buộc"),
   teacherId: z.string().optional(),
   dayOfWeek: z.number().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
 });
 
-export const classScheduleFormSchema = baseClassScheduleSchema.extend({
+export const classScheduleFormSchema = requiredClassScheduleSchema.extend({
   classCode: z.string().optional(),
   className: z.string().optional(),
   roomCode: z.string().optional(),
@@ -19,14 +19,14 @@ export const classScheduleFormSchema = baseClassScheduleSchema.extend({
   path: ["endTime"],
 });
 
-export const classScheduleCreateSchema = baseClassScheduleSchema.refine(
+export const classScheduleCreateSchema = requiredClassScheduleSchema.refine(
   (data) => data.startTime < data.endTime,
   {
   message: "Giờ kết thúc phải sau giờ bắt đầu",
   path: ["endTime"],
 });
 
-export const classScheduleUpdateSchema = baseClassScheduleSchema.partial().refine(
+export const classScheduleUpdateSchema = requiredClassScheduleSchema.partial().refine(
   (data) =>
     !data.startTime || !data.endTime || data.startTime < data.endTime,
   {
@@ -45,3 +45,4 @@ export const scheduleFilterSchema = z.object({
 export type ClassScheduleCreate = z.infer<typeof classScheduleCreateSchema>;
 export type ClassScheduleUpdate = z.infer<typeof classScheduleUpdateSchema>;
 export type ScheduleFilter = z.infer<typeof scheduleFilterSchema>;
+export type ClassScheduleFormData = z.infer<typeof classScheduleFormSchema>;

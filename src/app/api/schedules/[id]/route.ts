@@ -5,8 +5,8 @@ import {
   getClassScheduleById,
   updateClassSchedule,
   deleteClassSchedule,
+  ScheduleConflictError,
 } from "@/modules/schedule/services/schedule.service";
-import { prisma } from "@/lib/prisma";
 
 type Params = Promise<{
   id: string;
@@ -40,17 +40,24 @@ export async function PUT(
     const body = await request.json();
     const data = classScheduleUpdateSchema.parse(body);
 
-    await updateClassSchedule(id, data);
-    // Return with relations
-    const schedule = await prisma.classSchedule.findUnique({
-      where: { id },
-      include: { class: true, room: true },
-    });
-    return NextResponse.json(schedule);
+    const { schedule } = await updateClassSchedule(id, data);
+    return NextResponse.json({ schedule, conflicts: null });
   } catch (error: unknown) {
+    if (error instanceof ScheduleConflictError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          conflicts: error.conflicts,
+        },
+        { status: 409 },
+      );
+    }
+
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
+
+export const PATCH = PUT;
 
 export async function DELETE(
   request: NextRequest,
