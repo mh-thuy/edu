@@ -51,8 +51,15 @@ export function BaseTable<T extends GridValidRowModel>({
   }
 
   const handlePaginationModelChange = (model: GridPaginationModel) => {
-    onPageChange(model.page + 1);
-    onPageSizeChange(model.pageSize);
+    const nextPage = model.page + 1;
+
+    if (nextPage !== page) {
+      onPageChange(nextPage);
+    }
+
+    if (model.pageSize !== pageSize) {
+      onPageSizeChange(model.pageSize);
+    }
   };
 
   return (

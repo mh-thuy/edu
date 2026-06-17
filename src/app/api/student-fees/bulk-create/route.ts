@@ -16,14 +16,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Create bulk fees for all students in the class
-    const result = await StudentFeeService.createBulkFeesForClass(
-      validated.classId,
-      validated.month,
-      validated.amount,
-      validated.discount || 0,
+    const result = await StudentFeeService.createBulkFeesForClass({
+      classId: validated.classId,
+      studentIds: validated.studentIds,
+      month: validated.month,
+      amount: validated.amount,
+      discount: validated.discount || 0,
       dueDate,
-      validated.note,
-    );
+      note: validated.note,
+    });
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

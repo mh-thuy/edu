@@ -1,29 +1,48 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
-  Card,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { GridActionsCellItem, type GridColDef } from "@mui/x-data-grid";
+import {
+  DataGrid,
+  GridActionsCellItem,
+  type GridColDef,
+  type GridRowId,
+  type GridRowSelectionModel,
+} from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import SearchIcon from "@mui/icons-material/Search";
 
 import { BaseTable } from "@/components/BaseTable";
+import { EmptyState } from "@/components/shared/EmptyState";
+import {
+  MasterSelectField,
+  type MasterSelectValue,
+} from "@/components/shared/MasterSelectField";
+import { ClassSelectDialog, type ClassItem } from "@/components/shared/ClassSelectDialog";
+import { useDisclosure } from "@/hooks/useDisclosure";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 import { StudentFeeForm } from "./StudentFeeForm";
+
+type StudentFeeStatus = "unpaid" | "partial" | "paid";
 
 interface StudentFee {
   id: string;
@@ -32,17 +51,58 @@ interface StudentFee {
   month: string;
   amount: number;
   dueDate: string;
-  status: "unpaid" | "partial" | "paid";
+  status: StudentFeeStatus;
+  discount?: number;
+  note?: string | null;
   createdAt: string;
   updatedAt: string;
+  student?: {
+    id: string;
+    code: string;
+    fullName: string;
+  } | null;
+  class?: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
 }
 
-interface ClassInfo {
+interface BulkStudentRow {
   id: string;
-  name: string;
+  studentId: string;
+  studentCode: string;
+  studentName: string;
 }
 
-const getStatusColor = (status: string) => {
+interface BulkClassStudentApiItem {
+  classId: string;
+  studentId: string;
+  student: {
+    id: string;
+    code: string;
+    fullName: string;
+  };
+}
+
+const formatCurrency = (value: number): string =>
+  new Intl.NumberFormat("vi-VN").format(value);
+
+const formatDate = (value: string): string =>
+  new Date(value).toLocaleDateString("vi-VN");
+
+const getStatusLabel = (status: StudentFeeStatus): string => {
+  const labels: Record<StudentFeeStatus, string> = {
+    paid: "Đã thanh toán",
+    partial: "Thanh toán một phần",
+    unpaid: "Chưa thanh toán",
+  };
+  return labels[status];
+};
+
+const getStatusColor = (
+  status: StudentFeeStatus,
+): "success" | "warning" | "error" => {
   switch (status) {
     case "paid":
       return "success";
@@ -50,35 +110,40 @@ const getStatusColor = (status: string) => {
       return "warning";
     case "unpaid":
       return "error";
-    default:
-      return "default";
   }
 };
 
-const getStatusLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    paid: "Đã thanh toán",
-    partial: "Thanh toán một phần",
-    unpaid: "Chưa thanh toán",
-  };
-  return labels[status] || status;
-};
+const emptySelectionModel = (): GridRowSelectionModel => ({
+  type: "include",
+  ids: new Set<GridRowId>(),
+});
 
 export function StudentFeeList() {
   const snackbar = useSnackbar();
-  const { showError } = snackbar;
+  const classDialog = useDisclosure();
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [monthFilter, setMonthFilter] = useState<string>("");
   const [editingFee, setEditingFee] = useState<StudentFee | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [selectedBulkClass, setSelectedBulkClass] =
+    useState<MasterSelectValue | null>(null);
   const [bulkData, setBulkData] = useState({
     classId: "",
-    month: new Date().toISOString().slice(0, 7),
+    month: new Date().toISOString().slice(0, 7) || "",
     amount: 0,
-    dueDate: "",
+    dueDate: new Date().toISOString().slice(0, 10) || "",
+    discount: 0,
+    note: "",
   });
-  const [classes, setClasses] = useState<ClassInfo[]>([]);
-  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [bulkStudents, setBulkStudents] = useState<BulkStudentRow[]>([]);
+  const [bulkStudentsLoading, setBulkStudentsLoading] = useState(false);
+  const [bulkStudentsError, setBulkStudentsError] = useState<string | null>(null);
+  const [selectedBulkRows, setSelectedBulkRows] =
+    useState<GridRowSelectionModel>(emptySelectionModel);
 
   const {
     data: fees,
@@ -89,25 +154,61 @@ export function StudentFeeList() {
     limit,
     setPageNumber,
     setPageSize,
-  } = useList<StudentFee>("/api/student-fees");
+  } = useList<StudentFee>("/api/student-fees", {
+    limit: 10,
+    search: search || undefined,
+    status: statusFilter || undefined,
+    month: monthFilter || undefined,
+  });
 
-  // Load classes for bulk fee creation
-  React.useEffect(() => {
-    const loadClasses = async () => {
+  const loadBulkStudents = useCallback(
+    async (classId: string) => {
       try {
-        setLoadingClasses(true);
-        const response = await fetch("/api/classes");
-        if (!response.ok) throw new Error("Failed to load classes");
-        const result = await response.json();
-        setClasses(result.items || []);
-      } catch {
-        showError("Failed to load classes");
+        setBulkStudentsLoading(true);
+        setBulkStudentsError(null);
+        const response = await fetch(`/api/classes/${classId}/students`);
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          throw new Error(payload.error || "Không tải được danh sách học viên");
+        }
+
+        const result: BulkClassStudentApiItem[] = await response.json();
+        setBulkStudents(
+          result.map((item) => ({
+            id: item.student.id,
+            studentId: item.student.id,
+            studentCode: item.student.code,
+            studentName: item.student.fullName,
+          })),
+        );
+        setSelectedBulkRows(emptySelectionModel());
+      } catch (loadError) {
+        setBulkStudents([]);
+        setSelectedBulkRows(emptySelectionModel());
+        setBulkStudentsError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Không tải được danh sách học viên",
+        );
       } finally {
-        setLoadingClasses(false);
+        setBulkStudentsLoading(false);
       }
-    };
-    loadClasses();
-  }, [showError]);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!bulkData.classId) {
+      setBulkStudents([]);
+      setSelectedBulkRows(emptySelectionModel());
+      setBulkStudentsError(null);
+      return;
+    }
+
+    void loadBulkStudents(bulkData.classId);
+  }, [bulkData.classId, loadBulkStudents]);
 
   const handleCreate = useCallback(() => {
     setEditingFee(null);
@@ -127,11 +228,16 @@ export function StudentFeeList() {
         const response = await fetch(`/api/student-fees/${id}`, {
           method: "DELETE",
         });
-        if (!response.ok) throw new Error("Failed to delete");
-        snackbar.showSuccess("Xóa thành công");
-        refresh();
-      } catch {
-        snackbar.showError("Xóa thất bại");
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!response.ok) throw new Error(payload.error || "Failed to delete");
+        snackbar.showSuccess("Xóa học phí thành công");
+        await refresh();
+      } catch (deleteError) {
+        snackbar.showError(
+          deleteError instanceof Error ? deleteError.message : "Xóa thất bại",
+        );
       }
     },
     [refresh, snackbar],
@@ -142,9 +248,10 @@ export function StudentFeeList() {
       !bulkData.classId ||
       !bulkData.month ||
       bulkData.amount <= 0 ||
-      !bulkData.dueDate
+      !bulkData.dueDate ||
+      selectedBulkRows.ids.size === 0
     ) {
-      snackbar.showError("Vui lòng điền đầy đủ thông tin");
+      snackbar.showError("Vui lòng điền đủ thông tin và chọn ít nhất một học viên");
       return;
     }
 
@@ -153,245 +260,436 @@ export function StudentFeeList() {
       const response = await fetch("/api/student-fees/bulk-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bulkData),
+        body: JSON.stringify({
+          ...bulkData,
+          note: bulkData.note || undefined,
+          studentIds: Array.from(selectedBulkRows.ids, (value) => String(value)),
+        }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to create fees");
+      const data = (await response.json()) as { error?: string; created: number; skipped: number };
+      if (!response.ok) {
+        throw new Error(data.error || "Tạo hóa đơn hàng loạt thất bại");
+      }
+
       snackbar.showSuccess(
-        `Tạo hóa đơn thành công: ${data.created} mới, ${data.skipped} bỏ qua (đã tồn tại)`,
+        `Tạo hóa đơn hàng loạt thành công: ${data.created} mới, ${data.skipped} bỏ qua`,
       );
       setShowBulkDialog(false);
       setBulkData({
         classId: "",
-        month: new Date().toISOString().slice(0, 7),
+        month: new Date().toISOString().slice(0, 7) || "",
         amount: 0,
-        dueDate: "",
+        dueDate: new Date().toISOString().slice(0, 10) || "",
+        discount: 0,
+        note: "",
       });
-      refresh();
-    } catch (err) {
+      setSelectedBulkClass(null);
+      setBulkStudents([]);
+      setSelectedBulkRows(emptySelectionModel());
+      await refresh();
+    } catch (bulkError) {
       snackbar.showError(
-        err instanceof Error ? err.message : "Tạo hóa đơn thất bại",
+        bulkError instanceof Error
+          ? bulkError.message
+          : "Tạo hóa đơn hàng loạt thất bại",
       );
     } finally {
       setBulkSubmitting(false);
     }
-  }, [bulkData, refresh, snackbar]);
+  }, [bulkData, refresh, selectedBulkRows, snackbar]);
 
   const columns: GridColDef<StudentFee>[] = useMemo(
     () => [
-      { field: "id", headerName: "ID", width: 100 },
+      { field: "month", headerName: "Tháng", width: 110 },
       {
-        field: "studentId",
-        headerName: "Học sinh",
-        width: 150,
+        field: "student",
+        headerName: "Học viên",
+        minWidth: 220,
+        flex: 1,
+        renderCell: (params) =>
+          params.row.student
+            ? `${params.row.student.code} - ${params.row.student.fullName}`
+            : params.row.studentId,
       },
       {
-        field: "classId",
+        field: "class",
         headerName: "Lớp",
-        width: 150,
-      },
-      {
-        field: "month",
-        headerName: "Tháng",
-        width: 120,
+        minWidth: 220,
+        flex: 1,
+        renderCell: (params) =>
+          params.row.class
+            ? `${params.row.class.code} - ${params.row.class.name}`
+            : params.row.classId,
       },
       {
         field: "amount",
         headerName: "Số tiền",
-        width: 120,
-        valueGetter: (value: number) => `${(value || 0).toLocaleString()} VND`,
+        width: 150,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) => `${formatCurrency(params.row.amount)} VND`,
       },
       {
         field: "dueDate",
         headerName: "Hạn thanh toán",
-        width: 150,
-        valueGetter: (value: string) =>
-          value ? new Date(value).toLocaleDateString("vi-VN") : "",
+        width: 130,
+        renderCell: (params) => formatDate(params.row.dueDate),
       },
       {
         field: "status",
         headerName: "Trạng thái",
-        width: 150,
+        width: 160,
+        align: "center",
+        headerAlign: "center",
         renderCell: (params) => (
-          <Typography
-            variant="caption"
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: 1,
-              backgroundColor: `${getStatusColor(params.value)}.light`,
-              color: `${getStatusColor(params.value)}.dark`,
-            }}
-          >
-            {getStatusLabel(params.value)}
-          </Typography>
+          <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+            <Chip
+              label={getStatusLabel(params.row.status)}
+              size="small"
+              color={getStatusColor(params.row.status)}
+              variant="outlined"
+            />
+          </Box>
         ),
       },
       {
         field: "actions",
-        type: "actions",
-        width: 120,
-        getActions: (params) => [
-          <GridActionsCellItem
-            key="edit"
-            icon={<EditIcon />}
-            label="Sửa"
-            onClick={() => handleEdit(params.row as StudentFee)}
-          />,
-          <GridActionsCellItem
-            key="delete"
-            icon={<DeleteIcon />}
-            label="Xóa"
-            onClick={() => handleDelete((params.row as StudentFee).id)}
-          />,
-        ],
+        headerName: "Thao tác",
+        width: 140,
+        sortable: false,
+        filterable: false,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="center"
+            sx={{ width: "100%", height: "100%" }}
+          >
+            <GridActionsCellItem
+              icon={<EditIcon />}
+              label="Sửa"
+              onClick={() => handleEdit(params.row)}
+            />
+            <GridActionsCellItem
+              icon={<DeleteIcon />}
+              label="Xóa"
+              onClick={() => handleDelete(params.row.id)}
+            />
+          </Stack>
+        ),
       },
     ],
     [handleDelete, handleEdit],
   );
 
+  const bulkStudentColumns: GridColDef<BulkStudentRow>[] = useMemo(
+    () => [
+      {
+        field: "studentCode",
+        headerName: "Mã học viên",
+        width: 140,
+      },
+      {
+        field: "studentName",
+        headerName: "Học viên",
+        flex: 1,
+        minWidth: 220,
+      },
+    ],
+    [],
+  );
+
+  const hasRows = (fees?.items.length || 0) > 0;
+
   return (
-    <Card>
-      <Box p={2}>
-        <Stack direction="row" spacing={2} mb={2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreate}
-          >
-            Tạo hóa đơn
-          </Button>
-          <Button variant="outlined" onClick={() => setShowBulkDialog(true)}>
-            Tạo hóa đơn hàng loạt
-          </Button>
-        </Stack>
+    <>
+      <Stack spacing={2.5}>
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2.5,
+            borderRadius: 3,
+            border: "1px solid",
+            borderColor: "divider",
+            bgcolor: "background.paper",
+          }}
+        >
+          <Stack spacing={2}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={2}
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
+            >
+              <Typography variant="h6" fontWeight={700}>
+                Quản lý học phí
+              </Typography>
+              <Stack direction="row" spacing={1.5}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleCreate}
+                >
+                  Tạo hóa đơn
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ReceiptLongIcon />}
+                  onClick={() => setShowBulkDialog(true)}
+                >
+                  Tạo hóa đơn hàng loạt
+                </Button>
+              </Stack>
+            </Stack>
 
-        {error && (
-          <Typography color="error" mb={2}>
-            {error}
-          </Typography>
-        )}
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Tìm kiếm"
+                placeholder="Mã/tên học viên, mã/tên lớp, tháng"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPageNumber(1);
+                }}
+                fullWidth
+                InputProps={{
+                  startAdornment: <SearchIcon fontSize="small" />,
+                }}
+              />
+              <TextField
+                select
+                label="Trạng thái"
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPageNumber(1);
+                }}
+                sx={{ minWidth: 180 }}
+                slotProps={{ select: { native: true } }}
+              >
+                <option value="">Tất cả</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="partial">Thanh toán một phần</option>
+                <option value="paid">Đã thanh toán</option>
+              </TextField>
+              <TextField
+                label="Tháng"
+                type="month"
+                value={monthFilter}
+                onChange={(event) => {
+                  setMonthFilter(event.target.value);
+                  setPageNumber(1);
+                }}
+                sx={{ minWidth: 170 }}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+          </Stack>
+        </Paper>
 
-        <BaseTable
-          rows={fees?.items || []}
-          columns={columns}
-          isLoading={isLoading}
-          totalRows={fees?.total || 0}
-          page={page}
-          pageSize={limit}
-          onPageChange={(newPage) => setPageNumber(newPage)}
-          onPageSizeChange={setPageSize}
-        />
-      </Box>
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "hidden",
+            bgcolor: "background.paper",
+          }}
+        >
+          {error ? (
+            <Box p={3}>
+              <Alert severity="error">{error}</Alert>
+            </Box>
+          ) : !isLoading && !hasRows ? (
+            <EmptyState
+              title="Chưa có học phí"
+              description="Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại."
+            />
+          ) : (
+            <BaseTable
+              rows={fees?.items || []}
+              columns={columns}
+              isLoading={isLoading}
+              totalRows={fees?.total || 0}
+              page={page}
+              pageSize={limit}
+              onPageChange={setPageNumber}
+              onPageSizeChange={setPageSize}
+            />
+          )}
+        </Paper>
+      </Stack>
 
-      {/* Single Fee Form */}
       {showForm && (
         <StudentFeeForm
           initialData={editingFee || undefined}
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false);
-            refresh();
+            void refresh();
           }}
         />
       )}
 
-      {/* Bulk Create Dialog */}
       <Dialog
         open={showBulkDialog}
-        onClose={() => setShowBulkDialog(false)}
-        maxWidth="sm"
+        onClose={() => {
+          if (bulkSubmitting) return;
+          setShowBulkDialog(false);
+        }}
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>Tạo hóa đơn hàng loạt</DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
+        <DialogContent sx={{ mt: 1 }}>
           <Stack spacing={2}>
-            <TextField
-              select
+            <MasterSelectField
               label="Lớp"
-              value={bulkData.classId}
-              onChange={(e) =>
-                setBulkData({ ...bulkData, classId: e.target.value })
-              }
-              fullWidth
-              disabled={loadingClasses}
-              slotProps={{
-                select: {
-                  native: true,
-                },
-              }}
-            >
-              <option value="">-- Chọn lớp --</option>
-              {classes.map((cls) => (
-                <option key={cls.id} value={cls.id}>
-                  {cls.name}
-                </option>
-              ))}
-            </TextField>
-
-            <TextField
-              type="month"
-              label="Tháng"
-              value={bulkData.month}
-              onChange={(e) =>
-                setBulkData({ ...bulkData, month: e.target.value })
-              }
-              fullWidth
-              InputLabelProps={{ shrink: true }}
+              required
+              value={selectedBulkClass}
+              onOpen={classDialog.onOpen}
+              error={!bulkData.classId ? "Vui lòng chọn lớp" : undefined}
+              codeLabel="Mã lớp"
+              nameLabel="Tên lớp"
             />
 
-            <TextField
-              type="number"
-              label="Số tiền"
-              value={bulkData.amount}
-              onChange={(e) =>
-                setBulkData({
-                  ...bulkData,
-                  amount: parseFloat(e.target.value) || 0,
-                })
-              }
-              fullWidth
-              inputProps={{ step: "100" }}
-            />
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Tháng"
+                type="month"
+                value={bulkData.month}
+                onChange={(event) =>
+                    setBulkData((current) => ({ ...current, month: event.target.value }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Số tiền"
+                type="number"
+                value={bulkData.amount}
+                onChange={(event) =>
+                  setBulkData((current) => ({
+                    ...current,
+                    amount: Number(event.target.value),
+                  }))
+                }
+                fullWidth
+              />
+            </Stack>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Hạn thanh toán"
+                type="date"
+                value={bulkData.dueDate}
+                onChange={(event) =>
+                  setBulkData((current) => ({ ...current, dueDate: event.target.value }))
+                }
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Giảm giá"
+                type="number"
+                value={bulkData.discount}
+                onChange={(event) =>
+                  setBulkData((current) => ({
+                    ...current,
+                    discount: Number(event.target.value),
+                  }))
+                }
+                fullWidth
+              />
+            </Stack>
 
             <TextField
-              type="date"
-              label="Hạn thanh toán"
-              value={bulkData.dueDate}
-              onChange={(e) =>
-                setBulkData({ ...bulkData, dueDate: e.target.value })
+              label="Ghi chú"
+              value={bulkData.note}
+              onChange={(event) =>
+                setBulkData((current) => ({ ...current, note: event.target.value }))
               }
+              multiline
+              rows={2}
               fullWidth
-              InputLabelProps={{ shrink: true }}
             />
+
+            <Typography variant="subtitle2" fontWeight={700}>
+              Chọn học viên tạo hóa đơn
+            </Typography>
+
+            {bulkStudentsError ? (
+              <Alert severity="error">{bulkStudentsError}</Alert>
+            ) : bulkStudentsLoading ? (
+              <Box py={6} display="flex" justifyContent="center">
+                <CircularProgress />
+              </Box>
+            ) : bulkData.classId && bulkStudents.length === 0 ? (
+              <Alert severity="info">
+                Lớp hiện không có học viên nào để tạo học phí.
+              </Alert>
+            ) : (
+              <Box sx={{ height: 360 }}>
+                <DataGrid
+                  rows={bulkStudents}
+                  columns={bulkStudentColumns}
+                  checkboxSelection
+                  disableRowSelectionOnClick
+                  rowSelectionModel={selectedBulkRows}
+                  onRowSelectionModelChange={(model) => setSelectedBulkRows(model)}
+                  pageSizeOptions={[5, 10, 20]}
+                  initialState={{
+                    pagination: {
+                      paginationModel: {
+                        page: 0,
+                        pageSize: 5,
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setShowBulkDialog(false)}
-            disabled={bulkSubmitting}
-          >
+          <Button onClick={() => setShowBulkDialog(false)} disabled={bulkSubmitting}>
             Hủy
           </Button>
           <Button
-            onClick={handleBulkCreate}
             variant="contained"
+            onClick={() => void handleBulkCreate()}
             disabled={
+              bulkSubmitting ||
+              selectedBulkRows.ids.size === 0 ||
               !bulkData.classId ||
-              bulkData.amount <= 0 ||
-              !bulkData.dueDate ||
-              bulkSubmitting
+              bulkStudentsLoading
             }
-            startIcon={
-              bulkSubmitting ? <CircularProgress size={18} /> : undefined
-            }
+            startIcon={bulkSubmitting ? <CircularProgress size={18} /> : undefined}
           >
-            {bulkSubmitting ? "Đang tạo..." : "Tạo"}
+            {bulkSubmitting ? "Đang tạo..." : "Tạo hóa đơn hàng loạt"}
           </Button>
         </DialogActions>
       </Dialog>
 
+      <ClassSelectDialog
+        open={classDialog.open}
+        onClose={classDialog.onClose}
+        onSelect={(item: ClassItem) => {
+          setSelectedBulkClass({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+          });
+          setBulkData((current) => ({ ...current, classId: item.id }));
+          classDialog.onClose();
+        }}
+      />
+
       {snackbar.Snackbar}
-    </Card>
+    </>
   );
 }

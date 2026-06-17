@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const filter = {
       page: searchParams.get("page") || "1",
       limit: searchParams.get("limit") || "10",
+      search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
       classId: searchParams.get("classId") || undefined,
       studentId: searchParams.get("studentId") || undefined,
@@ -52,4 +53,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-

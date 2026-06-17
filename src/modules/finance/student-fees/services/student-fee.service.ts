@@ -1,9 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import type {
-  StudentFeeUpdate,
   StudentFeeFilter,
 } from "@/modules/finance/student-fees/schemas/student-fee.schema";
+
+export type StudentFeeWithRelations = Prisma.StudentFeeGetPayload<{
+  include: {
+    student: true;
+    class: true;
+    payments: true;
+  };
+}>;
 
 export class StudentFeeService {
   /**
@@ -16,7 +23,7 @@ export class StudentFeeService {
     amount: number;
     dueDate: Date;
     status?: string;
-  }) {
+  }): Promise<StudentFeeWithRelations> {
     // Check if fee already exists
     const existing = await prisma.studentFee.findUnique({
       where: {
@@ -42,6 +49,8 @@ export class StudentFeeService {
         status: data.status || "unpaid",
       },
       include: {
+        student: true,
+        class: true,
         payments: true,
       },
     });
@@ -51,16 +60,22 @@ export class StudentFeeService {
    * Create student fees for all students in a class for a specific month
    */
   static async createBulkFeesForClass(
-    classId: string,
-    month: string,
-    amount: number,
-    discount: number,
-    dueDate: Date,
-    note?: string,
+    data: {
+      classId: string;
+      studentIds: string[];
+      month: string;
+      amount: number;
+      discount: number;
+      dueDate: Date;
+      note?: string;
+    },
   ) {
     // Get all students in the class
     const classStudents = await prisma.classStudent.findMany({
-      where: { classId },
+      where: {
+        classId: data.classId,
+        studentId: { in: data.studentIds },
+      },
       include: { student: true },
     });
 
@@ -78,8 +93,8 @@ export class StudentFeeService {
           where: {
             studentId_classId_month: {
               studentId: cs.studentId,
-              classId,
-              month,
+              classId: data.classId,
+              month: data.month,
             },
           },
         });
@@ -88,13 +103,13 @@ export class StudentFeeService {
           await prisma.studentFee.create({
             data: {
               studentId: cs.studentId,
-              classId,
-              month,
-              amount,
-              discount,
-              dueDate,
+              classId: data.classId,
+              month: data.month,
+              amount: data.amount,
+              discount: data.discount,
+              dueDate: data.dueDate,
               status: "unpaid",
-              note,
+              note: data.note,
             },
           });
           created++;
@@ -113,10 +128,38 @@ export class StudentFeeService {
    * Get student fees with pagination and filtering
    */
   static async getStudentFees(filter: StudentFeeFilter) {
-    const { page, limit, status, classId, studentId, month } = filter;
+    const { page, limit, search, status, classId, studentId, month } = filter;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.StudentFeeWhereInput = {};
+    const where: Prisma.StudentFeeWhereInput = {
+      ...(search && {
+        OR: [
+          {
+            student: {
+              code: { contains: search, mode: "insensitive" },
+            },
+          },
+          {
+            student: {
+              fullName: { contains: search, mode: "insensitive" },
+            },
+          },
+          {
+            class: {
+              code: { contains: search, mode: "insensitive" },
+            },
+          },
+          {
+            class: {
+              name: { contains: search, mode: "insensitive" },
+            },
+          },
+          {
+            month: { contains: search, mode: "insensitive" },
+          },
+        ],
+      }),
+    };
 
     // Handle both single status and array of statuses
     if (status) {
@@ -135,6 +178,8 @@ export class StudentFeeService {
       prisma.studentFee.findMany({
         where,
         include: {
+          student: true,
+          class: true,
           payments: true,
         },
         skip,
@@ -160,6 +205,8 @@ export class StudentFeeService {
     return prisma.studentFee.findUnique({
       where: { id },
       include: {
+        student: true,
+        class: true,
         payments: true,
       },
     });
@@ -168,11 +215,14 @@ export class StudentFeeService {
   /**
    * Update student fee (e.g., change amount, due date)
    */
-  static async updateStudentFee(id: string, data: StudentFeeUpdate) {
+  static async updateStudentFee(
+    id: string,
+    data: Prisma.StudentFeeUpdateInput,
+  ) {
     return prisma.studentFee.update({
       where: { id },
       data,
-      include: { payments: true },
+      include: { student: true, class: true, payments: true },
     });
   }
 

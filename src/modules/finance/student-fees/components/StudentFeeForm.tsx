@@ -42,6 +42,14 @@ interface StudentFeeFormProps {
     amount: number;
     dueDate: string;
     status: "unpaid" | "partial" | "paid";
+    student?: {
+      code: string;
+      fullName: string;
+    } | null;
+    class?: {
+      code: string;
+      name: string;
+    } | null;
   };
   onClose: () => void;
   onSuccess: () => void;
@@ -58,9 +66,25 @@ export function StudentFeeForm({
 
   // Local display state for selected student/class (id stored in form)
   const [selectedStudent, setSelectedStudent] =
-    React.useState<MasterSelectValue | null>(null);
+    React.useState<MasterSelectValue | null>(
+      initialData?.student
+        ? {
+            id: initialData.studentId,
+            code: initialData.student.code,
+            name: initialData.student.fullName,
+          }
+        : null,
+    );
   const [selectedClass, setSelectedClass] =
-    React.useState<MasterSelectValue | null>(null);
+    React.useState<MasterSelectValue | null>(
+      initialData?.class
+        ? {
+            id: initialData.classId,
+            code: initialData.class.code,
+            name: initialData.class.name,
+          }
+        : null,
+    );
 
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
@@ -85,11 +109,11 @@ export function StudentFeeForm({
           classId: "",
           month: new Date().toISOString().slice(0, 7),
           amount: 0,
-          dueDate: new Date().toISOString().split("T")[0],
+          dueDate: new Date().toISOString().split("T")[0] || "",
         }
       : {
           amount: initialData?.amount,
-          dueDate: initialData?.dueDate,
+          dueDate: initialData?.dueDate?.slice(0, 10),
           status: initialData?.status,
         },
   });
@@ -148,7 +172,7 @@ export function StudentFeeForm({
           onSubmit: handleSubmit(onSubmit),
         }}
       >
-        <DialogTitle>{isCreating ? "Tạo hóa đơn" : "Sửa hóa đơn"}</DialogTitle>
+        <DialogTitle>{isCreating ? "Thêm học phí" : "Cập nhật học phí"}</DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           <Stack spacing={2}>
             {isCreating ? (
@@ -200,23 +224,31 @@ export function StudentFeeForm({
             ) : (
               <>
                 <TextField
-                  label="Học sinh (ID)"
-                  value={initialData?.studentId}
-                  disabled
+                  label="Học sinh"
+                  value={
+                    initialData?.student
+                      ? `${initialData.student.code} - ${initialData.student.fullName}`
+                      : ""
+                  }
+                  InputProps={{ readOnly: true }}
                   fullWidth
                   size="small"
                 />
                 <TextField
-                  label="Lớp (ID)"
-                  value={initialData?.classId}
-                  disabled
+                  label="Lớp"
+                  value={
+                    initialData?.class
+                      ? `${initialData.class.code} - ${initialData.class.name}`
+                      : ""
+                  }
+                  InputProps={{ readOnly: true }}
                   fullWidth
                   size="small"
                 />
                 <TextField
                   label="Tháng"
-                  value={initialData?.month}
-                  disabled
+                  value={initialData?.month ?? ""}
+                  InputProps={{ readOnly: true }}
                   fullWidth
                   size="small"
                 />

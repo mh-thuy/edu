@@ -26,7 +26,10 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     const body = await request.json();
 
     const validated = studentFeeUpdateSchema.parse(body);
-    const updated = await StudentFeeService.updateStudentFee(id, validated);
+    const updated = await StudentFeeService.updateStudentFee(id, {
+      ...validated,
+      dueDate: validated.dueDate ? new Date(validated.dueDate) : undefined,
+    });
 
     return NextResponse.json(updated);
   } catch (error) {

@@ -14,6 +14,7 @@ export const studentFeeUpdateSchema = studentFeeCreateSchema.partial().extend({
 
 export const bulkCreateStudentFeesSchema = z.object({
   classId: z.string().min(1, "Class is required"),
+  studentIds: z.array(z.string().min(1)).min(1, "At least one student is required"),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   amount: z.number().min(0, "Amount must be positive"),
   dueDate: z.string().min(1, "Due date is required"),
@@ -24,6 +25,7 @@ export const bulkCreateStudentFeesSchema = z.object({
 export const studentFeeFilterSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().default(10),
+  search: z.string().optional(),
   status: z
     .string()
     .optional()
