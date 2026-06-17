@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { AUTH_COOKIE_NAME } from "@/constants/auth";
 import {
+  API_ROLE_RULES,
   AUTH_ROUTES,
   PROTECTED_DEFAULT_REDIRECT,
   PUBLIC_PATH_PREFIXES,
@@ -26,6 +27,19 @@ function isPublicPath(pathname: string): boolean {
   }
 
   return /\.[^/]+$/.test(pathname);
+}
+
+function isApiPath(pathname: string): boolean {
+  return pathname.startsWith("/api/");
+}
+
+function unauthorizedApiResponse(status: 401 | 403, message: string): NextResponse {
+  return NextResponse.json(
+    {
+      error: message,
+    },
+    { status },
+  );
 }
 
 async function getUserFromRequest(request: NextRequest): Promise<SessionUser | null> {
@@ -67,6 +81,7 @@ async function getUserFromRequest(request: NextRequest): Promise<SessionUser | n
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
+  const apiPath = isApiPath(pathname);
 
   if (isPublicPath(pathname)) {
     return NextResponse.next();
@@ -76,6 +91,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const isAuthRoute = AUTH_ROUTES.has(pathname);
 
   if (!user && !isAuthRoute) {
+    if (apiPath) {
+      return unauthorizedApiResponse(401, "Authentication required");
+    }
+
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
@@ -85,6 +104,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!user) {
+    return NextResponse.next();
+  }
+
+  if (apiPath) {
+    for (const rule of API_ROLE_RULES) {
+      if (pathname.startsWith(rule.prefix) && !rule.roles.includes(user.role)) {
+        return unauthorizedApiResponse(403, "Insufficient permissions");
+      }
+    }
+
     return NextResponse.next();
   }
 
@@ -98,5 +127,5 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
