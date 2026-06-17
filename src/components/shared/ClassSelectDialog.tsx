@@ -8,8 +8,11 @@ export interface ClassItem {
   id: string;
   code: string;
   name: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teacher?: any;
+  teacher?: {
+    user?: {
+      fullName?: string | null;
+    } | null;
+  } | null;
   status?: string;
 }
 
@@ -31,8 +34,7 @@ export function ClassSelectDialog({
       field: "teacher",
       headerName: "Giáo viên",
       width: 200,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      renderCell: (params) => (params.row.teacher as any)?.user?.name ?? "-",
+      renderCell: (params) => params.row.teacher?.user?.fullName ?? "-",
     },
     {
       field: "status",

@@ -435,6 +435,7 @@ export function ScheduleList(): ReactElement {
           key={editingSchedule?.id ?? "create"}
           formId="schedule-form"
           onSubmit={handleSubmit}
+          scheduleId={editingSchedule?.id}
           defaultValues={
             editingSchedule
               ? {

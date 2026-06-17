@@ -15,7 +15,10 @@ function buildRoomCreateInput(data: RoomCreate): Prisma.RoomCreateInput {
     code: data.code,
     name: data.name,
     capacity: data.capacity,
+    floor: data.floor,
+    location: normalizeEmptyToNull(data.location),
     status: data.status,
+    note: normalizeEmptyToNull(data.note),
   };
 }
 
@@ -24,7 +27,14 @@ function buildRoomUpdateInput(data: RoomUpdate): Prisma.RoomUpdateInput {
     ...(data.code !== undefined && { code: data.code }),
     ...(data.name !== undefined && { name: data.name }),
     ...(data.capacity !== undefined && { capacity: data.capacity }),
+    ...(data.floor !== undefined && { floor: data.floor }),
+    ...(data.location !== undefined && {
+      location: normalizeEmptyToNull(data.location),
+    }),
     ...(data.status !== undefined && { status: data.status }),
+    ...(data.note !== undefined && {
+      note: normalizeEmptyToNull(data.note),
+    }),
   };
 }
 

@@ -51,6 +51,7 @@ export interface ScheduleFormProps {
   onSubmit: (data: ScheduleSubmitData) => void | Promise<void>;
   defaultValues?: Partial<ScheduleFormData>;
   onConflictCheck?: (result: ConflictResult) => void;
+  scheduleId?: string;
 }
 
 const DAY_OPTIONS = [
@@ -68,6 +69,7 @@ export function ScheduleForm({
   onSubmit,
   defaultValues,
   onConflictCheck,
+  scheduleId,
 }: ScheduleFormProps): ReactElement {
   const {
     control,
@@ -204,6 +206,7 @@ export function ScheduleForm({
             dayOfWeek,
             startTime,
             endTime,
+            excludeScheduleId: scheduleId,
           }),
           signal: controller.signal,
         });
@@ -231,7 +234,7 @@ export function ScheduleForm({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [roomId, dayOfWeek, startTime, endTime, onConflictCheck]);
+  }, [roomId, dayOfWeek, startTime, endTime, onConflictCheck, scheduleId]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(handleFormSubmit)}>
