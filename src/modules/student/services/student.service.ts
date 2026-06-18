@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ConflictError } from "@/lib/errors";
 import type { Prisma, Student } from "@prisma/client";
 import type {
   StudentCreate,
@@ -94,6 +95,43 @@ export async function updateStudent(
 }
 
 export async function deleteStudent(id: string): Promise<Student> {
+  const student = await prisma.student.findUnique({
+    where: { id },
+    select: {
+      _count: {
+        select: {
+          classStudents: true,
+          studentFees: true,
+        },
+      },
+      studentFees: {
+        select: {
+          payments: {
+            select: { id: true },
+            take: 1,
+          },
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!student) {
+    throw new Error("Student not found");
+  }
+
+  if (student._count.classStudents > 0) {
+    throw new ConflictError("Cannot delete student with class enrollments");
+  }
+
+  if (student._count.studentFees > 0) {
+    throw new ConflictError("Cannot delete student with student fees");
+  }
+
+  if (student.studentFees.some((fee) => fee.payments.length > 0)) {
+    throw new ConflictError("Cannot delete student with payments");
+  }
+
   return prisma.student.delete({
     where: { id },
   });

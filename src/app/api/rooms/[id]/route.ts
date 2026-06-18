@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getErrorMessage } from "@/lib/errors";
+import { ConflictError, getErrorMessage } from "@/lib/errors";
 import { roomUpdateSchema } from "@/modules/room/schemas/room.schema";
 import { getRoomById, updateRoom, deleteRoom } from "@/modules/room/services/room.service";
 
@@ -39,6 +39,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     const room = await deleteRoom(id);
     return NextResponse.json(room);
   } catch (error: unknown) {
+    if (error instanceof ConflictError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
+    }
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ConflictError } from "@/lib/errors";
 import type { Prisma, Teacher } from "@prisma/client";
 import type {
   TeacherCreate,
@@ -108,6 +109,30 @@ export async function updateTeacher(
 }
 
 export async function deleteTeacher(id: string): Promise<Teacher> {
+  const teacher = await prisma.teacher.findUnique({
+    where: { id },
+    select: {
+      _count: {
+        select: {
+          classes: true,
+          payrolls: true,
+        },
+      },
+    },
+  });
+
+  if (!teacher) {
+    throw new Error("Teacher not found");
+  }
+
+  if (teacher._count.classes > 0) {
+    throw new ConflictError("Cannot delete teacher with class assignments");
+  }
+
+  if (teacher._count.payrolls > 0) {
+    throw new ConflictError("Cannot delete teacher with payroll records");
+  }
+
   return prisma.teacher.delete({
     where: { id },
   });

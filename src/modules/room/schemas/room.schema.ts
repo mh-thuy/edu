@@ -6,7 +6,7 @@ export const roomCreateSchema = z.object({
   capacity: z.number().min(1, "Capacity must be at least 1").int(),
   floor: z.number().int().default(1),
   location: z.string().optional(),
-  status: z.enum(["AVAILABLE", "OCCUPIED", "MAINTENANCE"]).default("AVAILABLE"),
+  status: z.enum(["AVAILABLE", "MAINTENANCE", "UNAVAILABLE"]).default("AVAILABLE"),
   note: z.string().optional(),
 });
 
@@ -14,7 +14,7 @@ export const roomUpdateSchema = roomCreateSchema.partial();
 
 export const roomFilterSchema = z.object({
   search: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(["AVAILABLE", "MAINTENANCE", "UNAVAILABLE"]).optional(),
   page: z.number().min(1).default(1),
   limit: z.number().min(1).max(100).default(10),
 });

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ConflictError } from "@/lib/errors";
 import type { Prisma, Room } from "@prisma/client";
 import type {
   RoomCreate,
@@ -108,6 +109,30 @@ export async function updateRoom(id: string, data: RoomUpdate): Promise<Room> {
 }
 
 export async function deleteRoom(id: string): Promise<Room> {
+  const room = await prisma.room.findUnique({
+    where: { id },
+    select: {
+      _count: {
+        select: {
+          classes: true,
+          classSchedules: true,
+        },
+      },
+    },
+  });
+
+  if (!room) {
+    throw new Error("Room not found");
+  }
+
+  if (room._count.classes > 0) {
+    throw new ConflictError("Cannot delete room with assigned classes");
+  }
+
+  if (room._count.classSchedules > 0) {
+    throw new ConflictError("Cannot delete room with schedules");
+  }
+
   return prisma.room.delete({
     where: { id },
   });

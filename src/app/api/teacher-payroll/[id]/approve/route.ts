@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TeacherPayrollService } from "@/modules/finance/teacher-payroll/services/teacher-payroll.service";
+import { ForbiddenError } from "@/lib/errors";
 import { getSessionFromCookie } from "@/lib/session";
 
 type Params = Promise<{ id: string }>;
@@ -36,6 +37,9 @@ export async function POST(
         status: 401,
       });
     }
+    if (session.user.role !== "ADMIN") {
+      throw new ForbiddenError("Only ADMIN can approve payroll");
+    }
 
     const { id } = await params;
     const payroll = await TeacherPayrollService.approvePayroll(
@@ -45,6 +49,11 @@ export async function POST(
 
     return NextResponse.json(buildPayrollSuccessResponse([payroll], 1));
   } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json(buildPayrollErrorResponse(error.message), {
+        status: 403,
+      });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to approve payroll";
     return NextResponse.json(buildPayrollErrorResponse(message), {

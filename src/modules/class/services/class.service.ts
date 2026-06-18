@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ConflictError } from "@/lib/errors";
 import type { Class, Prisma } from "@prisma/client";
 import type {
   ClassCreate,
@@ -125,6 +126,42 @@ export async function updateClass(
 }
 
 export async function deleteClass(id: string): Promise<Class> {
+  const classData = await prisma.class.findUnique({
+    where: { id },
+    select: {
+      studentFees: {
+        where: {
+          payments: {
+            some: {},
+          },
+        },
+        select: {
+          id: true,
+          payments: {
+            select: {
+              receipts: {
+                select: { id: true },
+                take: 1,
+              },
+            },
+            take: 1,
+          },
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!classData) {
+    throw new Error("Class not found");
+  }
+
+  if (classData.studentFees.length > 0) {
+    throw new ConflictError(
+      "Cannot delete class with student fees that already have payments or receipts",
+    );
+  }
+
   return prisma.class.delete({
     where: { id },
   });
@@ -134,6 +171,35 @@ export async function assignStudentToClass(
   classId: string,
   studentId: string,
 ): Promise<ClassStudentWithRelations> {
+  const existing = await prisma.classStudent.findUnique({
+    where: { classId_studentId: { classId, studentId } },
+    include: { student: true, class: true },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const classData = await prisma.class.findUnique({
+    where: { id: classId },
+    select: {
+      maxStudents: true,
+      _count: {
+        select: {
+          classStudents: true,
+        },
+      },
+    },
+  });
+
+  if (!classData) {
+    throw new Error("Class not found");
+  }
+
+  if (classData._count.classStudents >= classData.maxStudents) {
+    throw new ConflictError("Cannot enroll student: class is full");
+  }
+
   return prisma.classStudent.upsert({
     where: { classId_studentId: { classId, studentId } },
     create: { classId, studentId },
@@ -145,7 +211,21 @@ export async function assignStudentToClass(
 export async function removeStudentFromClass(
   classId: string,
   studentId: string,
+  options?: { force?: boolean; isAdmin?: boolean },
 ): Promise<void> {
+  const hasStudentFees = await prisma.studentFee.count({
+    where: { classId, studentId },
+  });
+
+  if (
+    hasStudentFees > 0 &&
+    !(options?.force === true && options?.isAdmin === true)
+  ) {
+    throw new ConflictError(
+      "Cannot remove student from class with existing student fees",
+    );
+  }
+
   await prisma.classStudent.delete({
     where: { classId_studentId: { classId, studentId } },
   });

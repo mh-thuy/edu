@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getErrorMessage } from "@/lib/errors";
+import { ConflictError, getErrorMessage } from "@/lib/errors";
 import { classUpdateSchema } from "@/modules/class/schemas/class.schema";
 import { getClassById, updateClass, deleteClass } from "@/modules/class/services/class.service";
 
@@ -39,6 +39,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     const classData = await deleteClass(id);
     return NextResponse.json(classData);
   } catch (error: unknown) {
+    if (error instanceof ConflictError) {
+      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
+    }
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
   }
 }
