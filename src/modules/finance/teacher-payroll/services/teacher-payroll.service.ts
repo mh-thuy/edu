@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { decimalToNumber, sumDecimals, toDecimal } from "@/lib/decimal";
 import { PayrollStatus as PrismaPayrollStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
@@ -113,38 +114,38 @@ export class TeacherPayrollService {
       }),
     ]);
 
-    const ruleByClassId = new Map<string, number>();
+    const ruleByClassId = new Map<string, number | Prisma.Decimal>();
     for (const rule of rules) {
       ruleByClassId.set(rule.classId, rule.commissionPercentage);
     }
 
-    const revenueByClassId = new Map<string, number>();
+    const revenueByClassId = new Map<string, number | Prisma.Decimal>();
     for (const payment of payments) {
       const classId = payment.studentFee.classId;
       const current = revenueByClassId.get(classId) ?? 0;
-      revenueByClassId.set(classId, current + payment.amount);
+      revenueByClassId.set(classId, toDecimal(current).add(payment.amount));
     }
 
-    let totalRevenue = 0;
+    let totalRevenue = toDecimal(0);
     const items: Array<{
       classId: string;
       classCode: string;
       studentCount: number;
-      revenue: number;
-      fee: number;
-      salary: number;
+      revenue: number | Prisma.Decimal;
+      fee: number | Prisma.Decimal;
+      salary: number | Prisma.Decimal;
     }> = [];
 
     for (const cls of classes) {
       const studentCount = cls._count.classStudents;
 
       if (studentCount === 0) continue;
-      const commissionPercentage = ruleByClassId.get(cls.id) ?? 0;
-      const classRevenue = revenueByClassId.get(cls.id) ?? 0;
-      const centerFee = (classRevenue * commissionPercentage) / 100;
-      const teacherSalary = classRevenue - centerFee;
+      const commissionPercentage = toDecimal(ruleByClassId.get(cls.id) ?? 0);
+      const classRevenue = toDecimal(revenueByClassId.get(cls.id) ?? 0);
+      const centerFee = classRevenue.mul(commissionPercentage).div(100);
+      const teacherSalary = classRevenue.sub(centerFee);
 
-      if (classRevenue > 0) {
+      if (classRevenue.gt(0)) {
         items.push({
           classId: cls.id,
           classCode: cls.code,
@@ -155,20 +156,20 @@ export class TeacherPayrollService {
         });
       }
 
-      totalRevenue += classRevenue;
+      totalRevenue = totalRevenue.add(classRevenue);
     }
 
-    const totalCenterFee = items.reduce((sum, item) => sum + item.fee, 0);
-    const totalSalary = items.reduce((sum, item) => sum + item.salary, 0);
+    const totalCenterFee = sumDecimals(items.map((item) => item.fee));
+    const totalSalary = sumDecimals(items.map((item) => item.salary));
 
     return prisma.$transaction(async (tx) => {
       const payroll = await tx.teacherPayroll.create({
         data: {
           teacherId,
           month,
-          totalRevenue,
-          centerFee: totalCenterFee,
-          salaryAmount: totalSalary,
+          totalRevenue: decimalToNumber(totalRevenue),
+          centerFee: decimalToNumber(totalCenterFee),
+          salaryAmount: decimalToNumber(totalSalary),
           status: PrismaPayrollStatus.DRAFT,
         },
       });
@@ -180,9 +181,9 @@ export class TeacherPayrollService {
             classId: item.classId,
             classCode: item.classCode,
             studentCount: item.studentCount,
-            revenue: item.revenue,
-            fee: item.fee,
-            salary: item.salary,
+            revenue: decimalToNumber(item.revenue),
+            fee: decimalToNumber(item.fee),
+            salary: decimalToNumber(item.salary),
           })),
         });
       }
@@ -316,19 +317,19 @@ export class TeacherPayrollService {
       include: { items: true },
     });
 
-    let totalSalary = 0;
-    let totalRevenue = 0;
+    let totalSalary = toDecimal(0);
+    let totalRevenue = toDecimal(0);
     let paidCount = 0;
     let approvedCount = 0;
 
     for (const p of payrolls) {
       if (p.status === PrismaPayrollStatus.PAID) {
-        totalSalary += p.salaryAmount;
+        totalSalary = totalSalary.add(p.salaryAmount);
         paidCount++;
       } else if (p.status === PrismaPayrollStatus.APPROVED) {
         approvedCount++;
       }
-      totalRevenue += p.totalRevenue;
+      totalRevenue = totalRevenue.add(p.totalRevenue);
     }
 
     return {

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sumDecimals, toDecimal } from "@/lib/decimal";
 import { PaymentMethod } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
@@ -46,13 +47,13 @@ export class PaymentService {
 
       if (!fee) throw new Error("Student fee not found");
 
-      const alreadyPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-      const totalAfterPayment = alreadyPaid + data.amount;
-      const netAmount = fee.amount - fee.discount;
+      const alreadyPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const totalAfterPayment = alreadyPaid.add(data.amount);
+      const netAmount = toDecimal(fee.amount).sub(fee.discount);
 
-      if (totalAfterPayment > netAmount) {
+      if (totalAfterPayment.greaterThan(netAmount)) {
         throw new Error(
-          `Payment exceeds outstanding amount. Outstanding: ${netAmount - alreadyPaid}, Payment: ${data.amount}`
+          `Payment exceeds outstanding amount. Outstanding: ${netAmount.sub(alreadyPaid).toFixed(2)}, Payment: ${data.amount}`
         );
       }
 
@@ -234,18 +235,20 @@ export class PaymentService {
     }
 
     const nextAmount =
-      typeof data.amount === "number" ? data.amount : payment.amount;
+      data.amount !== undefined ? toDecimal(data.amount) : toDecimal(payment.amount);
 
     const paidExcludingCurrent = payment.studentFee.payments.reduce(
-      (sum, item) => (item.id === id ? sum : sum + item.amount),
-      0,
+      (sum, item) => (item.id === id ? sum : sum.add(item.amount)),
+      toDecimal(0),
     );
-    const netAmount = payment.studentFee.amount - payment.studentFee.discount;
+    const netAmount = toDecimal(payment.studentFee.amount).sub(
+      payment.studentFee.discount,
+    );
 
-    if (paidExcludingCurrent + nextAmount > netAmount) {
+    if (paidExcludingCurrent.add(nextAmount).greaterThan(netAmount)) {
       throw new Error(
         `Payment exceeds outstanding amount. Outstanding: ${
-          netAmount - paidExcludingCurrent
+          netAmount.sub(paidExcludingCurrent).toFixed(2)
         }, Payment: ${nextAmount}`,
       );
     }
@@ -339,22 +342,22 @@ export class PaymentService {
     });
 
     const methodSummary = {
-      cash: 0,
-      transfer: 0,
-      wallet: 0,
+      cash: toDecimal(0),
+      transfer: toDecimal(0),
+      wallet: toDecimal(0),
     };
 
-    let totalRevenue = 0;
+    let totalRevenue = toDecimal(0);
 
     for (const payment of payments) {
       if (payment.method === PaymentMethod.CASH) {
-        methodSummary.cash += payment.amount;
+        methodSummary.cash = methodSummary.cash.add(payment.amount);
       } else if (payment.method === PaymentMethod.TRANSFER) {
-        methodSummary.transfer += payment.amount;
+        methodSummary.transfer = methodSummary.transfer.add(payment.amount);
       } else if (payment.method === PaymentMethod.WALLET) {
-        methodSummary.wallet += payment.amount;
+        methodSummary.wallet = methodSummary.wallet.add(payment.amount);
       }
-      totalRevenue += payment.amount;
+      totalRevenue = totalRevenue.add(payment.amount);
     }
 
     return {

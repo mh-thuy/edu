@@ -38,6 +38,7 @@ interface StudentFeeOption {
   id: string;
   month: string;
   amount: number;
+  discount?: number;
   outstanding: number;
   status: "unpaid" | "partial" | "paid";
   student: {
@@ -54,6 +55,7 @@ interface StudentFeeApiItem {
   id: string;
   month: string;
   amount: number;
+  discount?: number;
   status: "unpaid" | "partial" | "paid";
   student?: {
     code: string;
@@ -93,6 +95,7 @@ interface PaymentFormProps {
       id: string;
       month: string;
       amount: number;
+      discount?: number;
       student?: {
         code: string;
         fullName: string;
@@ -192,12 +195,14 @@ export function PaymentForm({
       const mappedFees = result.items.map((fee) => {
         const paidAmount =
           fee.payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+        const netAmount = fee.amount - (fee.discount || 0);
 
         return {
           id: fee.id,
           month: fee.month,
-          amount: fee.amount,
-          outstanding: Math.max(fee.amount - paidAmount, 0),
+          amount: netAmount,
+          discount: fee.discount || 0,
+          outstanding: Math.max(netAmount - paidAmount, 0),
           status: fee.status,
           student: fee.student || null,
           class: fee.class || null,
@@ -219,7 +224,7 @@ export function PaymentForm({
   const selectedFee = useMemo(() => {
     if (initialData?.studentFee) {
       const outstanding =
-        initialData.studentFee.amount -
+        (initialData.studentFee.amount - (initialData.studentFee.discount || 0)) -
         (initialData.studentFee.payments?.reduce(
           (sum, payment) =>
             payment.id === initialData.id ? sum : sum + payment.amount,
@@ -229,7 +234,9 @@ export function PaymentForm({
       return {
         id: initialData.studentFee.id,
         month: initialData.studentFee.month,
-        amount: initialData.studentFee.amount,
+        amount:
+          initialData.studentFee.amount - (initialData.studentFee.discount || 0),
+        discount: initialData.studentFee.discount || 0,
         outstanding,
         status: "partial" as const,
         student: initialData.studentFee.student || null,

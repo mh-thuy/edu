@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sumDecimals, toDecimal } from "@/lib/decimal";
 import type { FeeStatus, Prisma } from "@prisma/client";
 import type {
   StudentFeeFilter,
@@ -143,12 +144,12 @@ export class StudentFeeService {
 
     if (!fee) throw new Error("Student fee not found");
 
-    const totalPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-    const netAmount = fee.amount - fee.discount;
-    const outstanding = netAmount - totalPaid;
+    const totalPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+    const netAmount = toDecimal(fee.amount).sub(fee.discount);
+    const outstanding = netAmount.sub(totalPaid);
 
     const status: FeeStatus =
-      outstanding <= 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
+      outstanding.lte(0) ? "PAID" : totalPaid.gt(0) ? "PARTIAL" : "UNPAID";
 
     return {
       totalAmount: netAmount,
@@ -312,23 +313,23 @@ export class StudentFeeService {
       include: { payments: true },
     });
 
-    let totalDebt = 0;
-    let totalPaid = 0;
+    let totalFeeAmount = toDecimal(0);
+    let totalPaid = toDecimal(0);
 
     for (const fee of fees) {
-      const paid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-      totalPaid += paid;
-      totalDebt += fee.amount;
+      const paid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      totalPaid = totalPaid.add(paid);
+      totalFeeAmount = totalFeeAmount.add(toDecimal(fee.amount).sub(fee.discount));
     }
 
     return {
-      totalFeeAmount: totalDebt,
+      totalFeeAmount,
       totalPaid,
-      totalDebt: totalDebt - totalPaid,
+      totalDebt: totalFeeAmount.sub(totalPaid),
       feeCount: fees.length,
       paidCount: fees.filter((f) => {
-        const paid = f.payments.reduce((s, p) => s + p.amount, 0);
-        return paid >= f.amount;
+        const paid = sumDecimals(f.payments.map((payment) => payment.amount));
+        return paid.greaterThanOrEqualTo(toDecimal(f.amount).sub(f.discount));
       }).length,
     };
   }

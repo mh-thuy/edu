@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess } from "@/lib/api";
+import { sumDecimals, toDecimal } from "@/lib/decimal";
 
 export async function GET() {
   try {
@@ -25,10 +26,10 @@ export async function GET() {
     });
 
     const totalDebt = fees.reduce((sum, fee) => {
-      const totalPaid = fee.payments.reduce((paidSum, payment) => paidSum + payment.amount, 0);
-      const outstanding = fee.amount - fee.discount - totalPaid;
-      return sum + outstanding;
-    }, 0);
+      const totalPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const outstanding = toDecimal(fee.amount).sub(fee.discount).sub(totalPaid);
+      return sum.add(outstanding);
+    }, toDecimal(0));
 
     // Get overdue count (past due date and not fully paid)
     const overdueCount = await prisma.studentFee.count({

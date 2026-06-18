@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { ConflictError, ForbiddenError } from "@/lib/errors";
+import { serializeDecimals } from "@/lib/decimal";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -29,7 +30,7 @@ export function apiSuccess<T>(data: T, init?: number | ResponseInit) {
   const responseInit =
     typeof init === "number" ? { status: init } : (init ?? undefined);
   return NextResponse.json<ApiSuccessResponse<T>>(
-    { success: true, data },
+    { success: true, data: serializeDecimals(data) },
     responseInit,
   );
 }

@@ -27,29 +27,6 @@ interface DashboardStats {
   activeClasses: number;
 }
 
-type PaymentItem = {
-  amount: number;
-};
-
-type StudentFeeItem = {
-  amount: number;
-  payments?: Array<{
-    amount: number;
-  }>;
-};
-
-type TeacherPayrollItem = {
-  salaryAmount: number;
-};
-
-type ClassItem = {
-  status: string;
-};
-
-type PaginatedResponse<T> = {
-  items?: T[];
-};
-
 interface StatCardProps {
   icon: React.ReactNode;
   title: string;
@@ -117,75 +94,9 @@ export default function AdminPage() {
     const loadStats = async () => {
       try {
         setLoading(true);
-        // Load revenue
-        const paymentsRes = await fetch("/api/payments");
-        const payments = await unwrapApiResponse<PaginatedResponse<PaymentItem>>(
-          paymentsRes,
-        );
-
-        // Load fees for debt
-        const feesRes = await fetch("/api/student-fees");
-        const fees = await unwrapApiResponse<PaginatedResponse<StudentFeeItem>>(
-          feesRes,
-        );
-
-        // Load payroll
-        const payrollRes = await fetch("/api/teacher-payroll");
-        const payrolls = await unwrapApiResponse<
-          PaginatedResponse<TeacherPayrollItem>
-        >(payrollRes);
-
-        // Load classes
-        const classesRes = await fetch("/api/classes");
-        const classes = await unwrapApiResponse<PaginatedResponse<ClassItem>>(
-          classesRes,
-        );
-
-        const paymentItems = payments.items ?? [];
-        const feeItems = fees.items ?? [];
-        const payrollItems = payrolls.items ?? [];
-        const classItems = classes.items ?? [];
-
-        // Calculate totals
-        const totalRevenue = paymentItems.reduce(
-          (sum, payment) => sum + (payment.amount || 0),
-          0,
-        );
-
-        const totalFeeAmount = feeItems.reduce(
-          (sum, fee) => sum + (fee.amount || 0),
-          0,
-        );
-
-        const totalCollected = feeItems.reduce((sum, fee) => {
-          const paid =
-            fee.payments?.reduce(
-              (paymentSum, payment) => paymentSum + (payment.amount || 0),
-              0,
-            ) ?? 0;
-
-          return sum + paid;
-        }, 0);
-
-        const totalDebt = Math.max(totalFeeAmount - totalCollected, 0);
-
-        const totalPayroll = payrollItems.reduce(
-          (sum, payroll) => sum + (payroll.salaryAmount || 0),
-          0,
-        );
-
-        const activeClasses = classItems.filter(
-          (classItem) => classItem.status === "ACTIVE",
-        ).length;
-
-        setStats({
-          totalFeeAmount,
-          totalRevenue,
-          totalDebt,
-          totalCollected,
-          totalPayroll,
-          activeClasses,
-        });
+        const statsRes = await fetch("/api/dashboard/stats");
+        const result = await unwrapApiResponse<DashboardStats>(statsRes);
+        setStats(result);
       } catch {
         setError("Lỗi khi tải dữ liệu");
       } finally {
@@ -227,11 +138,11 @@ export default function AdminPage() {
             icon={<TrendingUpIcon />}
             title="Tổng doanh thu"
             value={
-              stats?.totalFeeAmount
-                ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M`
+              stats?.totalRevenue
+                ? `${(stats.totalRevenue / 1000000).toFixed(1)}M`
                 : "0"
             }
-            subtitle="Tổng học phí đã tạo"
+            subtitle="Tổng thanh toán đã thu"
             loading={loading}
             color="success"
           />
@@ -257,11 +168,11 @@ export default function AdminPage() {
             icon={<ReceiptIcon />}
             title="Đã thu"
             value={
-              stats?.totalCollected
-                ? `${(stats.totalCollected / 1000000).toFixed(1)}M`
+              stats?.totalFeeAmount
+                ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M`
                 : "0"
             }
-            subtitle="Hóa đơn thanh toán đủ"
+            subtitle="Tổng học phí sau giảm giá"
             loading={loading}
             color="info"
           />

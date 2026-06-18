@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { FeeStatus, Prisma } from "@prisma/client";
 import { apiError, apiSuccess } from "@/lib/api";
+import { sumDecimals, toDecimal } from "@/lib/decimal";
 
 function normalizeFeeStatus(status?: string): FeeStatus | undefined {
   if (!status) return undefined;
@@ -47,15 +48,16 @@ export async function GET(request: NextRequest) {
 
     // Transform to debt tracking format
     const debts = fees.map((fee) => {
-      const totalPaid = fee.payments.reduce((sum, payment) => sum + payment.amount, 0);
-      const outstanding = fee.amount - fee.discount - totalPaid;
+      const totalPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const totalAmount = toDecimal(fee.amount).sub(fee.discount);
+      const outstanding = totalAmount.sub(totalPaid);
       
       return {
         id: fee.id,
         studentId: fee.student.id,
         studentName: fee.student.fullName,
         className: fee.class.name,
-        totalAmount: fee.amount - fee.discount,
+        totalAmount,
         totalPaid,
         outstanding,
         status: fee.status,
