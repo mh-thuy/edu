@@ -47,7 +47,7 @@ export async function createStudent(data: StudentCreate): Promise<Student> {
 export async function getStudentById(id: string): Promise<StudentWithClasses | null> {
   return prisma.student.findUnique({
     where: { id },
-    include: { classStudents: { include: { class: true } } },
+    include: { enrollments: { include: { class: true } } },
   });
 }
 
@@ -100,11 +100,11 @@ export async function deleteStudent(id: string): Promise<Student> {
     select: {
       _count: {
         select: {
-          classStudents: true,
-          studentFees: true,
+          enrollments: true,
+          fees: true,
         },
       },
-      studentFees: {
+      fees: {
         select: {
           payments: {
             select: { id: true },
@@ -120,15 +120,15 @@ export async function deleteStudent(id: string): Promise<Student> {
     throw new Error("Student not found");
   }
 
-  if (student._count.classStudents > 0) {
+  if (student._count.enrollments > 0) {
     throw new ConflictError("Cannot delete student with class enrollments");
   }
 
-  if (student._count.studentFees > 0) {
+  if (student._count.fees > 0) {
     throw new ConflictError("Cannot delete student with student fees");
   }
 
-  if (student.studentFees.some((fee) => fee.payments.length > 0)) {
+  if (student.fees.some((fee) => fee.payments.length > 0)) {
     throw new ConflictError("Cannot delete student with payments");
   }
 

@@ -22,16 +22,16 @@ import {
   Typography,
 } from "@mui/material";
 
-import type { Role } from "@prisma/client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactElement } from "react";
+import type { RoleCode } from "@/constants/roles";
 
 type SidebarItem = {
   label: string;
   href: string;
   icon: ReactElement;
-  roles: Role[];
+  roles: RoleCode[];
 };
 
 const items: SidebarItem[] = [
@@ -122,7 +122,7 @@ const items: SidebarItem[] = [
 ];
 
 type SidebarProps = {
-  role: Role;
+  role: RoleCode;
 };
 
 export function Sidebar({ role }: SidebarProps): ReactElement {

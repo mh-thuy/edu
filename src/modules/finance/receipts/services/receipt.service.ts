@@ -213,8 +213,9 @@ export class ReceiptService {
               throw new Error("Payment not found");
             }
 
-            const existing = await tx.receipt.findUnique({
+            const existing = await tx.receipt.findFirst({
               where: { paymentId },
+              orderBy: { version: "desc" },
               include: {
                 payment: {
                   include: {

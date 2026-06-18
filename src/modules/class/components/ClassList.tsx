@@ -14,7 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import ClassIcon from "@mui/icons-material/Class";
 import { GridColDef } from "@mui/x-data-grid";
-import type { Role } from "@prisma/client";
+import type { RoleCode } from "@/constants/roles";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
@@ -201,7 +201,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
 ];
 
 type ClassListProps = {
-  role: Role;
+  role: RoleCode;
 };
 
 export function ClassList({ role }: ClassListProps): ReactElement {

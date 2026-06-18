@@ -1,5 +1,5 @@
-import type { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
+import type { RoleCode } from "@/constants/roles";
 import type { SessionUser } from "@/types/auth";
 import { getSessionFromCookie } from "@/lib/session";
 
@@ -19,7 +19,7 @@ export async function requireAuth(): Promise<SessionUser> {
   return user;
 }
 
-export async function requireRole(roles: Role[]): Promise<SessionUser> {
+export async function requireRole(roles: RoleCode[]): Promise<SessionUser> {
   const user = await requireAuth();
 
   if (!roles.includes(user.role)) {

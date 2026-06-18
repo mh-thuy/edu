@@ -5,6 +5,23 @@ import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
 
 export class TeacherPayrollService {
+  private static parseBillingMonth(month: string): { billingYear: number; billingMonth: number } {
+    const [yearString, monthString] = month.split("-");
+    const billingYear = Number(yearString);
+    const billingMonth = Number(monthString);
+
+    if (
+      !Number.isInteger(billingYear) ||
+      !Number.isInteger(billingMonth) ||
+      billingMonth < 1 ||
+      billingMonth > 12
+    ) {
+      throw new Error("Month must be in format YYYY-MM");
+    }
+
+    return { billingYear, billingMonth };
+  }
+
   private static toPrismaPayrollStatus(
     status?: TeacherPayrollFilter["status"],
   ): PrismaPayrollStatus | undefined {
@@ -27,8 +44,10 @@ export class TeacherPayrollService {
    * Only calculates based on actual collected payments
    */
   static async calculateMonthlyPayroll(teacherId: string, month: string) {
-    const existingPayroll = await prisma.teacherPayroll.findUnique({
-      where: { teacherId_month: { teacherId, month } },
+    const { billingYear, billingMonth } = this.parseBillingMonth(month);
+
+    const existingPayroll = await prisma.teacherPayroll.findFirst({
+      where: { teacherId, billingYear, billingMonth },
     });
 
     if (existingPayroll) {
@@ -44,9 +63,10 @@ export class TeacherPayrollService {
       select: {
         id: true,
         code: true,
+        name: true,
         _count: {
           select: {
-            classStudents: true,
+            students: true,
           },
         },
       },
@@ -56,7 +76,8 @@ export class TeacherPayrollService {
       return await prisma.teacherPayroll.create({
         data: {
           teacherId,
-          month,
+          billingYear,
+          billingMonth,
           totalRevenue: 0,
           centerFee: 0,
           salaryAmount: 0,
@@ -65,21 +86,8 @@ export class TeacherPayrollService {
       });
     }
 
-    const [yearString, monthString] = month.split("-");
-    const year = Number(yearString);
-    const monthNumber = Number(monthString);
-
-    if (
-      !Number.isInteger(year) ||
-      !Number.isInteger(monthNumber) ||
-      monthNumber < 1 ||
-      monthNumber > 12
-    ) {
-      throw new Error("Month must be in format YYYY-MM");
-    }
-
-    const monthStart = new Date(year, monthNumber - 1, 1);
-    const monthEnd = new Date(year, monthNumber, 1);
+    const monthStart = new Date(billingYear, billingMonth - 1, 1);
+    const monthEnd = new Date(billingYear, billingMonth, 1);
 
     const classIds = classes.map((cls) => cls.id);
 
@@ -137,7 +145,7 @@ export class TeacherPayrollService {
     }> = [];
 
     for (const cls of classes) {
-      const studentCount = cls._count.classStudents;
+      const studentCount = cls._count.students;
 
       if (studentCount === 0) continue;
       const commissionPercentage = toDecimal(ruleByClassId.get(cls.id) ?? 0);
@@ -166,7 +174,8 @@ export class TeacherPayrollService {
       const payroll = await tx.teacherPayroll.create({
         data: {
           teacherId,
-          month,
+          billingYear,
+          billingMonth,
           totalRevenue: decimalToNumber(totalRevenue),
           centerFee: decimalToNumber(totalCenterFee),
           salaryAmount: decimalToNumber(totalSalary),
@@ -180,9 +189,13 @@ export class TeacherPayrollService {
             payrollId: payroll.id,
             classId: item.classId,
             classCode: item.classCode,
+            className: classes.find((cls) => cls.id === item.classId)?.name ?? item.classCode,
             studentCount: item.studentCount,
             revenue: decimalToNumber(item.revenue),
-            fee: decimalToNumber(item.fee),
+            centerFee: decimalToNumber(item.fee),
+            commissionRate: decimalToNumber(
+              toDecimal(ruleByClassId.get(item.classId) ?? 0),
+            ),
             salary: decimalToNumber(item.salary),
           })),
         });
@@ -199,10 +212,14 @@ export class TeacherPayrollService {
     const { page, pageSize, teacherId, month, status } = filter;
     const skip = (page - 1) * pageSize;
     const prismaStatus = this.toPrismaPayrollStatus(status);
+    const billing = month ? this.parseBillingMonth(month) : undefined;
 
     const where: Prisma.TeacherPayrollWhereInput = {
       ...(teacherId && { teacherId }),
-      ...(month && { month }),
+      ...(billing && {
+        billingYear: billing.billingYear,
+        billingMonth: billing.billingMonth,
+      }),
       ...(prismaStatus && { status: prismaStatus }),
     };
 
@@ -225,7 +242,7 @@ export class TeacherPayrollService {
         },
         skip,
         take: pageSize,
-        orderBy: { month: "desc" },
+        orderBy: [{ billingYear: "desc" }, { billingMonth: "desc" }],
       }),
       prisma.teacherPayroll.count({ where }),
     ]);
@@ -265,7 +282,7 @@ export class TeacherPayrollService {
   /**
    * Approve payroll (lock it, prevent recalculation)
    */
-  static async approvePayroll(id: string, approvedBy: string) {
+  static async approvePayroll(id: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
     if (payroll.status === PrismaPayrollStatus.APPROVED)
@@ -280,7 +297,6 @@ export class TeacherPayrollService {
       data: {
         status: PrismaPayrollStatus.APPROVED,
         approvedAt: new Date(),
-        approvedBy,
       },
       include: { items: true },
     });
@@ -289,7 +305,7 @@ export class TeacherPayrollService {
   /**
    * Mark payroll as paid
    */
-  static async markPayrollAsPaid(id: string, paidBy: string) {
+  static async markPayrollAsPaid(id: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
     if (payroll.status === PrismaPayrollStatus.PAID)
@@ -302,7 +318,6 @@ export class TeacherPayrollService {
       data: {
         status: PrismaPayrollStatus.PAID,
         paidAt: new Date(),
-        paidBy,
       },
       include: { items: true },
     });

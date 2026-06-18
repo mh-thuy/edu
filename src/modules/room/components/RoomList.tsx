@@ -32,7 +32,7 @@ export interface Room {
   code: string;
   name: string;
   capacity: number;
-  floor: number;
+  floor: string;
   location?: string;
   status: "AVAILABLE" | "MAINTENANCE" | "UNAVAILABLE";
   note?: string;

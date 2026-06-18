@@ -1,4 +1,4 @@
-import type { Role } from "@prisma/client";
+import type { RoleCode } from "@/constants/roles";
 
 export const AUTH_ROUTES = new Set(["/login"]);
 
@@ -6,13 +6,13 @@ export const PUBLIC_PATH_PREFIXES = ["/_next", "/favicon.ico"];
 
 export const PROTECTED_DEFAULT_REDIRECT = "/";
 
-export const ROLE_ROUTE_RULES: Array<{ prefix: string; roles: Role[] }> = [
+export const ROLE_ROUTE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
   { prefix: "/admin", roles: ["ADMIN", "STAFF"] },
   { prefix: "/staff", roles: ["ADMIN", "STAFF"] },
   { prefix: "/teacher", roles: ["TEACHER"] },
 ];
 
-export const API_ROLE_RULES: Array<{ prefix: string; roles: Role[] }> = [
+export const API_ROLE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
   { prefix: "/api/classes", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/payments", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/receipts", roles: ["ADMIN", "STAFF"] },

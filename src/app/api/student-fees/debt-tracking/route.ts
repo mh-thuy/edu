@@ -13,6 +13,10 @@ function normalizeFeeStatus(status?: string): FeeStatus | undefined {
   return undefined;
 }
 
+function formatBillingMonth(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -61,8 +65,8 @@ export async function GET(request: NextRequest) {
         totalPaid,
         outstanding,
         status: fee.status,
-        month: fee.month,
-        dueDate: fee.dueDate.toISOString(),
+        month: formatBillingMonth(fee.billingYear, fee.billingMonth),
+        dueDate: fee.dueDate,
       };
     });
 

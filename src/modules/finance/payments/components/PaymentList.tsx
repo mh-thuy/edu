@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
-import type { Role } from "@prisma/client";
+import type { RoleCode } from "@/constants/roles";
 import {
   Alert,
   Box,
@@ -85,7 +85,7 @@ const getMethodLabel = (method: PaymentMethod): string => {
 };
 
 type PaymentListProps = {
-  role: Role;
+  role: RoleCode;
 };
 
 export function PaymentList({ role }: PaymentListProps) {

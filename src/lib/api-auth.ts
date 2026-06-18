@@ -1,6 +1,6 @@
-import type { Role } from "@prisma/client";
 import { getSessionFromCookie } from "@/lib/session";
 import { apiError } from "@/lib/api";
+import type { RoleCode } from "@/constants/roles";
 import type { SessionUser } from "@/types/auth";
 
 export async function requireApiUser(): Promise<
@@ -16,7 +16,7 @@ export async function requireApiUser(): Promise<
 }
 
 export async function requireApiRole(
-  roles: Role[],
+  roles: RoleCode[],
 ): Promise<SessionUser | Response> {
   const user = await requireApiUser();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { Role } from "@prisma/client";
+import type { RoleCode } from "@/constants/roles";
 import {
   Alert,
   Box,
@@ -128,7 +128,7 @@ const emptySelectionModel = (): GridRowSelectionModel => ({
 });
 
 type StudentFeeListProps = {
-  role: Role;
+  role: RoleCode;
 };
 
 export function StudentFeeList({ role }: StudentFeeListProps) {

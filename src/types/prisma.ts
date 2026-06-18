@@ -16,12 +16,12 @@ export type ClassWithRelations = Prisma.ClassGetPayload<{
       };
     };
     room: true;
-    classStudents: {
+    students: {
       include: {
         student: true;
       };
     };
-    classSchedules: true;
+    schedules: true;
   };
 }>;
 
@@ -44,7 +44,7 @@ export type TeacherWithUser = Prisma.TeacherGetPayload<{
 
 export type StudentWithClasses = Prisma.StudentGetPayload<{
   include: {
-    classStudents: {
+    enrollments: {
       include: {
         class: true;
       };

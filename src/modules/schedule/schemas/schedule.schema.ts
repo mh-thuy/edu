@@ -3,7 +3,7 @@ import { z } from "zod";
 const requiredClassScheduleSchema = z.object({
   classId: z.string().min(1, "Lớp học là bắt buộc"),
   roomId: z.string().min(1, "Phòng học là bắt buộc"),
-  teacherId: z.string().optional(),
+  teacherId: z.string().min(1, "Giáo viên là bắt buộc"),
   dayOfWeek: z.number().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),

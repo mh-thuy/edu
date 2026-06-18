@@ -35,7 +35,7 @@ export function RoomForm({
       code: "",
       name: "",
       capacity: 30,
-      floor: 1,
+      floor: "1",
       location: "",
       status: "AVAILABLE",
       note: "",
@@ -107,7 +107,6 @@ export function RoomForm({
               <TextField
                 {...field}
                 label="Tầng"
-                type="number"
                 error={!!error}
                 helperText={error?.message}
                 fullWidth

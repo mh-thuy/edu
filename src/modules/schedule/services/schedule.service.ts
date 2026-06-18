@@ -31,6 +31,12 @@ function timeToMinutes(time: string): number {
   return Number(hours) * 60 + Number(minutes);
 }
 
+function minutesToTime(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
 function hasTimeConflict(
   startTime1: string,
   endTime1: string,
@@ -50,11 +56,11 @@ function toClassScheduleCreateInput(
 ): Prisma.ClassScheduleUncheckedCreateInput {
   return {
     classId: data.classId,
-    roomId: data.roomId || null,
-    teacherId: data.teacherId || null,
+    roomId: data.roomId,
+    teacherId: data.teacherId,
     dayOfWeek: data.dayOfWeek,
-    startTime: data.startTime,
-    endTime: data.endTime,
+    startMinute: timeToMinutes(data.startTime),
+    endMinute: timeToMinutes(data.endTime),
   };
 }
 
@@ -63,11 +69,15 @@ function toClassScheduleUpdateInput(
 ): Prisma.ClassScheduleUncheckedUpdateInput {
   return {
     ...(data.classId !== undefined && { classId: data.classId }),
-    ...(data.roomId !== undefined && { roomId: data.roomId || null }),
-    ...(data.teacherId !== undefined && { teacherId: data.teacherId || null }),
+    ...(data.roomId !== undefined && { roomId: data.roomId }),
+    ...(data.teacherId !== undefined && { teacherId: data.teacherId }),
     ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
-    ...(data.startTime !== undefined && { startTime: data.startTime }),
-    ...(data.endTime !== undefined && { endTime: data.endTime }),
+    ...(data.startTime !== undefined && {
+      startMinute: timeToMinutes(data.startTime),
+    }),
+    ...(data.endTime !== undefined && {
+      endMinute: timeToMinutes(data.endTime),
+    }),
   };
 }
 
@@ -109,8 +119,8 @@ export async function getScheduleConflicts(
     hasTimeConflict(
       data.startTime,
       data.endTime,
-      schedule.startTime,
-      schedule.endTime,
+      minutesToTime(schedule.startMinute),
+      minutesToTime(schedule.endMinute),
     ),
   );
 }
@@ -172,7 +182,7 @@ export async function getSchedules(filter: ScheduleFilter) {
         room: true,
         teacher: true,
       },
-      orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
     }),
     prisma.classSchedule.count({ where }),
   ]);
@@ -212,7 +222,7 @@ export async function getSchedulesByTeacherUserId(
         room: true,
         teacher: true,
       },
-      orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
     }),
     prisma.classSchedule.count({ where }),
   ]);
@@ -247,8 +257,8 @@ export async function updateClassSchedule(
     teacherId:
       data.teacherId !== undefined ? data.teacherId || null : current.teacherId,
     dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
-    startTime: data.startTime ?? current.startTime,
-    endTime: data.endTime ?? current.endTime,
+    startTime: data.startTime ?? minutesToTime(current.startMinute),
+    endTime: data.endTime ?? minutesToTime(current.endMinute),
   };
 
   const conflicts = await getScheduleConflicts(merged, id);
@@ -296,6 +306,6 @@ export async function getWeeklySchedule(
       room: true,
       teacher: true,
     },
-    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
   });
 }

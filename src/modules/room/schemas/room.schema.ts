@@ -4,7 +4,7 @@ export const roomCreateSchema = z.object({
   code: z.string().min(1, "Room code is required").max(50),
   name: z.string().min(1, "Room name is required").max(100),
   capacity: z.number().min(1, "Capacity must be at least 1").int(),
-  floor: z.number().int().default(1),
+  floor: z.string().default("1"),
   location: z.string().optional(),
   status: z.enum(["AVAILABLE", "MAINTENANCE", "UNAVAILABLE"]).default("AVAILABLE"),
   note: z.string().optional(),

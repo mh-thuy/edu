@@ -166,15 +166,20 @@ export async function checkTeacherScheduleConflict(
   startTime: string,
   endTime: string,
 ): Promise<boolean> {
+  const [startHour = "0", startMinute = "0"] = startTime.split(":");
+  const [endHour = "0", endMinute = "0"] = endTime.split(":");
+  const start = Number(startHour) * 60 + Number(startMinute);
+  const end = Number(endHour) * 60 + Number(endMinute);
+
   const schedules = await prisma.classSchedule.findMany({
     where: {
       teacherId,
       dayOfWeek,
-      startTime: {
-        lt: endTime,
+      startMinute: {
+        lt: end,
       },
-      endTime: {
-        gt: startTime,
+      endMinute: {
+        gt: start,
       },
     },
   });

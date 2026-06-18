@@ -115,7 +115,7 @@ export async function deleteRoom(id: string): Promise<Room> {
       _count: {
         select: {
           classes: true,
-          classSchedules: true,
+          schedules: true,
         },
       },
     },
@@ -129,7 +129,7 @@ export async function deleteRoom(id: string): Promise<Room> {
     throw new ConflictError("Cannot delete room with assigned classes");
   }
 
-  if (room._count.classSchedules > 0) {
+  if (room._count.schedules > 0) {
     throw new ConflictError("Cannot delete room with schedules");
   }
 
@@ -145,6 +145,11 @@ export async function checkRoomConflict(
   endTime: string,
   excludeScheduleId?: string,
 ): Promise<boolean> {
+  const [startHour = "0", startMinute = "0"] = startTime.split(":");
+  const [endHour = "0", endMinute = "0"] = endTime.split(":");
+  const start = Number(startHour) * 60 + Number(startMinute);
+  const end = Number(endHour) * 60 + Number(endMinute);
+
   const conflict = await prisma.classSchedule.findFirst({
     where: {
       roomId,
@@ -154,11 +159,11 @@ export async function checkRoomConflict(
           not: excludeScheduleId,
         },
       }),
-      startTime: {
-        lt: endTime,
+      startMinute: {
+        lt: end,
       },
-      endTime: {
-        gt: startTime,
+      endMinute: {
+        gt: start,
       },
     },
     select: {

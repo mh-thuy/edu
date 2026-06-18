@@ -21,8 +21,7 @@ export async function POST(
 
     const { id } = await params;
     const payroll = await TeacherPayrollService.approvePayroll(
-      id,
-      session.user.id,
+      id
     );
 
     return apiSuccess(payroll);

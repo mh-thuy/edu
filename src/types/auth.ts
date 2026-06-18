@@ -1,10 +1,10 @@
-import type { Role } from "@prisma/client";
+import type { RoleCode } from "@/constants/roles";
 
 export type SessionUser = {
   id: string;
   email: string;
   fullName: string;
-  role: Role;
+  role: RoleCode;
 };
 
 export type SessionPayload = {

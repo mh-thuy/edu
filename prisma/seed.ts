@@ -1,202 +1,730 @@
-import bcrypt from "bcrypt";
-import { PrismaClient, Role } from "@prisma/client";
-import { faker } from "@faker-js/faker";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-function pick<T>(arr: T[]) {
-  return arr[Math.floor(Math.random() * arr.length)];
+const now = new Date();
+
+function date(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
 }
 
-function clean(s: string | null | undefined) {
-  if (s == null) return null;
-  // remove null bytes and other control characters that break Postgres UTF8
-  return s.replace(/[\x00-\x1F\x7F]/g, "");
+function money(value: number): string {
+  return value.toFixed(2);
 }
 
-async function main(): Promise<void> {
-  console.log("Cleaning database (deleteMany)...");
-  // delete in order to avoid FK issues
+function timeToMinute(time: string): number {
+  const [hour = "0", minute = "0"] = time.split(":");
+  return Number(hour) * 60 + Number(minute);
+}
+
+async function cleanup() {
+  await prisma.auditLog.deleteMany();
   await prisma.teacherPayrollItem.deleteMany();
   await prisma.teacherPayroll.deleteMany();
+  await prisma.classSalaryRule.deleteMany();
+  await prisma.expense.deleteMany();
+  await prisma.paymentNotice.deleteMany();
   await prisma.receipt.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.paymentQrCode.deleteMany();
+  await prisma.paymentAccount.deleteMany();
   await prisma.studentFee.deleteMany();
-  await prisma.classStudent.deleteMany();
   await prisma.classSchedule.deleteMany();
-  await prisma.classSalaryRule.deleteMany();
+  await prisma.classStudent.deleteMany();
   await prisma.class.deleteMany();
+  await prisma.room.deleteMany();
   await prisma.student.deleteMany();
   await prisma.teacher.deleteMany();
+  await prisma.userRole.deleteMany();
+  await prisma.rolePermission.deleteMany();
+  await prisma.permission.deleteMany();
+  await prisma.role.deleteMany();
   await prisma.user.deleteMany();
-  await prisma.room.deleteMany();
+}
 
-  const passwordHash = await bcrypt.hash("password", 10);
+async function seedAuth() {
+  const permissions = await Promise.all(
+    [
+      ["dashboard.view", "Xem dashboard", "dashboard", "view"],
+      ["users.manage", "Quản lý người dùng", "users", "manage"],
+      ["roles.manage", "Quản lý vai trò", "roles", "manage"],
+      ["teachers.manage", "Quản lý giáo viên", "teachers", "manage"],
+      ["students.manage", "Quản lý học viên", "students", "manage"],
+      ["rooms.manage", "Quản lý phòng học", "rooms", "manage"],
+      ["classes.manage", "Quản lý lớp học", "classes", "manage"],
+      ["schedules.manage", "Quản lý lịch học", "schedules", "manage"],
+      ["student_fees.manage", "Quản lý học phí", "student_fees", "manage"],
+      ["payments.manage", "Quản lý thanh toán", "payments", "manage"],
+      ["receipts.manage", "Quản lý biên lai", "receipts", "manage"],
+      ["payrolls.manage", "Quản lý lương giáo viên", "payrolls", "manage"],
+      ["expenses.manage", "Quản lý chi phí", "expenses", "manage"],
+    ].map(([code, name, resource, action]) =>
+      prisma.permission.create({
+        data: {
+          code,
+          name,
+          resource,
+          action,
+          description: name,
+          isActive: true,
+        },
+      }),
+    ),
+  );
 
-  console.log("Creating admin and staff users...");
-  await prisma.user.create({
+  const adminRole = await prisma.role.create({
     data: {
-      email: "admin@example.test",
-      fullName: "Administrator",
-      passwordHash,
-      role: Role.ADMIN,
+      code: "ADMIN",
+      name: "Quản trị viên",
+      description: "Toàn quyền hệ thống",
+      isActive: true,
     },
   });
 
-  await prisma.user.create({
+  const staffRole = await prisma.role.create({
     data: {
-      email: "staff@example.test",
-      fullName: "Staff Member",
-      passwordHash,
-      role: Role.STAFF,
+      code: "STAFF",
+      name: "Nhân viên",
+      description: "Quản lý vận hành trung tâm",
+      isActive: true,
     },
   });
 
-  console.log("Creating rooms...");
-  const roomsData = Array.from({ length: 6 }).map((_, i) => ({
-    code: `R${100 + i}`,
-    name: clean(`${pick(["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"]) } Room ${i + 1}`)!,
-    capacity: pick([10, 15, 20, 25, 30]),
-    floor: pick([1, 2, 3]),
-    location: clean(faker.location.city()),
-  }));
-  // create rooms via Prisma with sanitized inputs
-  const rooms: any[] = [];
-  for (const r of roomsData) {
-    const result: any = await prisma.$queryRaw`
-      INSERT INTO rooms (id, code, name, capacity, floor, location, status, is_active, created_at, updated_at)
-      VALUES (gen_random_uuid(), ${r.code}, ${r.name}, ${r.capacity}, ${String(r.floor)}, ${r.location}, 'AVAILABLE', true, now(), now())
-      RETURNING *
-    `;
-    rooms.push(result[0] ?? result);
-  }
+  const teacherRole = await prisma.role.create({
+    data: {
+      code: "TEACHER",
+      name: "Giáo viên",
+      description: "Giáo viên giảng dạy",
+      isActive: true,
+    },
+  });
 
-  console.log("Creating teachers and users...");
-  const teacherPairs = await Promise.all(
-    Array.from({ length: 6 }).map(async (_, i) => {
-      const email = clean(faker.internet.email().toLowerCase())!;
-      const user = await prisma.user.create({
-        data: {
-          email,
-          fullName: clean(faker.person.fullName())!,
-          passwordHash,
-          role: Role.TEACHER,
-        },
-      });
+  await prisma.rolePermission.createMany({
+    data: permissions.map((permission) => ({
+      roleId: adminRole.id,
+      permissionId: permission.id,
+      isAllowed: true,
+    })),
+  });
 
-      const teacher = await prisma.teacher.create({
-        data: {
-          userId: user.id,
-          code: `T${100 + i}`,
-          phone: clean(faker.phone.number()),
-          email,
-          fullName: user.fullName,
-          specialty: pick(["Math", "English", "Music", "Science", "Art"]),
-        },
-      });
+  await prisma.rolePermission.createMany({
+    data: permissions
+      .filter((permission) =>
+        [
+          "dashboard",
+          "teachers",
+          "students",
+          "rooms",
+          "classes",
+          "schedules",
+          "student_fees",
+          "payments",
+          "receipts",
+          "expenses",
+        ].includes(permission.resource),
+      )
+      .map((permission) => ({
+        roleId: staffRole.id,
+        permissionId: permission.id,
+        isAllowed: true,
+      })),
+  });
 
-      return { user, teacher };
-    })
-  );
+  await prisma.rolePermission.createMany({
+    data: permissions
+      .filter((permission) =>
+        ["dashboard", "classes", "schedules"].includes(permission.resource),
+      )
+      .map((permission) => ({
+        roleId: teacherRole.id,
+        permissionId: permission.id,
+        isAllowed: true,
+      })),
+  });
 
-  console.log("Creating students...");
-  const students = await Promise.all(
-    Array.from({ length: 40 }).map(async (_, i) =>
-      prisma.student.create({
-        data: {
-          code: `S${(1000 + i).toString()}`,
-          fullName: clean(faker.person.fullName())!,
-          email: clean(faker.internet.email().toLowerCase()),
-          phone: clean(faker.phone.number()),
-          birthday: faker.date.birthdate({ min: 6, max: 18, mode: "age" }),
-          parentName: clean(faker.person.fullName()),
-          address: clean(faker.location.streetAddress()),
-        },
-      })
-    )
-  );
+  const adminUser = await prisma.user.create({
+    data: {
+      email: "admin@edu.local",
+      fullName: "Quản trị viên",
+      passwordHash: "$2b$10$seed.admin.password.hash",
+      status: "ACTIVE",
+    },
+  });
 
-  console.log("Creating classes...");
-  const classes = await Promise.all(
-    Array.from({ length: 8 }).map(async (_, i) => {
-      const teacher = pick(teacherPairs).teacher;
-      const room = pick(rooms);
-      const tuition = pick([50, 75, 100, 150]) * 1.0;
-      const start = faker.date.future({ years: 1 });
-      const end = new Date(start.getTime() + 1000 * 60 * 60 * 24 * 30 * pick([2, 3, 4]));
+  const staffUser = await prisma.user.create({
+    data: {
+      email: "staff@edu.local",
+      fullName: "Nhân viên trung tâm",
+      passwordHash: "$2b$10$seed.staff.password.hash",
+      status: "ACTIVE",
+    },
+  });
 
-      return prisma.class.create({
-        data: {
-          code: `C${200 + i}`,
-          name: clean(`${pick(["Beginner", "Intermediate", "Advanced"]) } ${pick(["Math", "English", "Piano", "Science"]) }`)!,
-          teacherId: teacher.id,
-          roomId: room.id,
-          tuitionFee: tuition,
-          totalSessions: pick([8, 12, 16, 20]),
-          maxStudents: pick([15, 20, 25, 30]),
-          startDate: start,
-          endDate: end,
-          status: pick(["DRAFT", "ACTIVE", "COMPLETED"]),
-        },
-      });
-    })
-  );
+  const teacherUser = await prisma.user.create({
+    data: {
+      email: "teacher@edu.local",
+      fullName: "Nguyễn Văn An",
+      passwordHash: "$2b$10$seed.teacher.password.hash",
+      status: "ACTIVE",
+    },
+  });
 
-  console.log("Creating schedules and enrolling students...");
-  for (const cls of classes) {
-    const schedulesToCreate = pick([1, 2, 3]);
-    for (let s = 0; s < schedulesToCreate; s++) {
-      const timeOptions = ["08:00", "09:15", "09:30", "11:00", "13:00", "14:30", "15:00", "16:30"];
-      const startIdx = Math.floor(Math.random() * (timeOptions.length - 1));
-      const endIdx = startIdx + 1 + Math.floor(Math.random() * (timeOptions.length - 1 - startIdx));
-      const scheduleData = {
-        classId: cls.id,
-        roomId: cls.roomId ?? pick(rooms).id,
-        teacherId: cls.teacherId ?? pick(teacherPairs).teacher.id,
-        dayOfWeek: pick([1, 2, 3, 4, 5, 6]),
-        startTime: timeOptions[startIdx],
-        endTime: timeOptions[endIdx],
-      };
-      try {
-        const res: any = await prisma.$queryRaw`
-          INSERT INTO class_schedules (id, class_id, room_id, teacher_id, day_of_week, start_time, end_time, created_at, updated_at)
-          VALUES (gen_random_uuid(), ${scheduleData.classId}::uuid, ${scheduleData.roomId}::uuid, ${scheduleData.teacherId}::uuid, ${scheduleData.dayOfWeek}::int, ${scheduleData.startTime}::time, ${scheduleData.endTime}::time, now(), now())
-          RETURNING *
-        `;
-      } catch (err) {
-        console.error('Failed creating schedule for class', cls.id, 'data', scheduleData, 'cls:', cls);
-        throw err;
-      }
-    }
+  await prisma.userRole.createMany({
+    data: [
+      { userId: adminUser.id, roleId: adminRole.id },
+      { userId: staffUser.id, roleId: staffRole.id },
+      { userId: teacherUser.id, roleId: teacherRole.id },
+    ],
+  });
 
-    const enrollCount = Math.min(cls.maxStudents, pick([8, 10, 12, 15, 18]));
-    const shuffled = faker.helpers.shuffle(students);
-    const enrolled = shuffled.slice(0, enrollCount);
+  return { adminUser, staffUser, teacherUser };
+}
 
-    for (const student of enrolled) {
-      await prisma.classStudent.create({ data: { classId: cls.id, studentId: student.id } });      
-    }
-  }
-
-  console.log("Creating class salary rules...");
-  for (const cls of classes) {
-    await prisma.classSalaryRule.create({
+async function seedMasters(teacherUserId: string) {
+  const rooms = await Promise.all([
+    prisma.room.create({
       data: {
-        classId: cls.id,
-        commissionPercentage: 12.0,
+        code: "R101",
+        name: "Phòng 101",
+        capacity: 20,
+        floor: "1",
+        location: "Cơ sở chính",
+        status: "AVAILABLE",
       },
-    });
-  }
+    }),
+    prisma.room.create({
+      data: {
+        code: "R102",
+        name: "Phòng 102",
+        capacity: 15,
+        floor: "1",
+        location: "Cơ sở chính",
+        status: "AVAILABLE",
+      },
+    }),
+    prisma.room.create({
+      data: {
+        code: "R201",
+        name: "Phòng 201",
+        capacity: 25,
+        floor: "2",
+        location: "Cơ sở chính",
+        status: "MAINTENANCE",
+        note: "Đang bảo trì máy lạnh",
+      },
+    }),
+  ]);
+
+  const teachers = await Promise.all([
+    prisma.teacher.create({
+      data: {
+        code: "GV001",
+        userId: teacherUserId,
+        fullName: "Nguyễn Văn An",
+        email: "teacher@edu.local",
+        phone: "0901000001",
+        bankAccount: "0123456789",
+        specialty: "Toán học",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.teacher.create({
+      data: {
+        code: "GV002",
+        fullName: "Trần Thị Bình",
+        email: "binh.teacher@edu.local",
+        phone: "0901000002",
+        bankAccount: "9876543210",
+        specialty: "Tiếng Anh",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.teacher.create({
+      data: {
+        code: "GV003",
+        fullName: "Lê Minh Cường",
+        email: "cuong.teacher@edu.local",
+        phone: "0901000003",
+        specialty: "Vật lý",
+        status: "ON_LEAVE",
+      },
+    }),
+  ]);
+
+  const students = await Promise.all([
+    prisma.student.create({
+      data: {
+        code: "HV001",
+        fullName: "Phạm Gia Hân",
+        email: "han.student@example.com",
+        phone: "0912000001",
+        birthday: date("2012-03-15"),
+        parentName: "Phạm Văn Hải",
+        address: "Quận 1, TP.HCM",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.student.create({
+      data: {
+        code: "HV002",
+        fullName: "Nguyễn Minh Khang",
+        email: "khang.student@example.com",
+        phone: "0912000002",
+        birthday: date("2011-07-20"),
+        parentName: "Nguyễn Thị Hoa",
+        address: "Quận 3, TP.HCM",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.student.create({
+      data: {
+        code: "HV003",
+        fullName: "Trần Bảo Ngọc",
+        email: "ngoc.student@example.com",
+        phone: "0912000003",
+        birthday: date("2013-11-08"),
+        parentName: "Trần Văn Nam",
+        address: "Bình Thạnh, TP.HCM",
+        status: "ACTIVE",
+      },
+    }),
+    prisma.student.create({
+      data: {
+        code: "HV004",
+        fullName: "Lê Hoàng Long",
+        email: "long.student@example.com",
+        phone: "0912000004",
+        birthday: date("2010-01-12"),
+        parentName: "Lê Thị Mai",
+        address: "Tân Bình, TP.HCM",
+        status: "INACTIVE",
+      },
+    }),
+  ]);
+
+  return { rooms, teachers, students };
+}
+
+async function seedClasses(
+  teachers: Awaited<ReturnType<typeof seedMasters>>["teachers"],
+  rooms: Awaited<ReturnType<typeof seedMasters>>["rooms"],
+  students: Awaited<ReturnType<typeof seedMasters>>["students"],
+) {
+  const mathClass = await prisma.class.create({
+    data: {
+      code: "CLS-MATH-001",
+      name: "Toán tư duy cơ bản",
+      teacherId: teachers[0].id,
+      roomId: rooms[0].id,
+      tuitionFee: money(500000),
+      totalSessions: 12,
+      maxStudents: 15,
+      startDate: date("2026-06-01"),
+      endDate: date("2026-08-31"),
+      status: "ACTIVE",
+      note: "Lớp tối thứ 2 và thứ 4",
+    },
+  });
+
+  const englishClass = await prisma.class.create({
+    data: {
+      code: "CLS-ENG-001",
+      name: "Tiếng Anh giao tiếp thiếu nhi",
+      teacherId: teachers[1].id,
+      roomId: rooms[1].id,
+      tuitionFee: money(650000),
+      totalSessions: 16,
+      maxStudents: 12,
+      startDate: date("2026-06-05"),
+      endDate: date("2026-09-30"),
+      status: "ACTIVE",
+      note: "Lớp cuối tuần",
+    },
+  });
+
+  const physicsClass = await prisma.class.create({
+    data: {
+      code: "CLS-PHY-001",
+      name: "Vật lý nâng cao",
+      teacherId: teachers[2].id,
+      roomId: rooms[0].id,
+      tuitionFee: money(700000),
+      totalSessions: 10,
+      maxStudents: 10,
+      startDate: date("2026-07-01"),
+      endDate: date("2026-09-15"),
+      status: "DRAFT",
+    },
+  });
+
+  await prisma.classStudent.createMany({
+    data: [
+      {
+        classId: mathClass.id,
+        studentId: students[0].id,
+        enrolledAt: date("2026-06-01"),
+        status: "ACTIVE",
+      },
+      {
+        classId: mathClass.id,
+        studentId: students[1].id,
+        enrolledAt: date("2026-06-01"),
+        status: "ACTIVE",
+      },
+      {
+        classId: mathClass.id,
+        studentId: students[2].id,
+        enrolledAt: date("2026-06-01"),
+        status: "ACTIVE",
+      },
+      {
+        classId: englishClass.id,
+        studentId: students[1].id,
+        enrolledAt: date("2026-06-05"),
+        status: "ACTIVE",
+      },
+      {
+        classId: englishClass.id,
+        studentId: students[2].id,
+        enrolledAt: date("2026-06-05"),
+        status: "ACTIVE",
+      },
+      {
+        classId: englishClass.id,
+        studentId: students[3].id,
+        enrolledAt: date("2026-06-05"),
+        leftAt: date("2026-06-20"),
+        status: "LEFT",
+        note: "Nghỉ do thay đổi lịch học",
+      },
+    ],
+  });
+
+  await prisma.classSchedule.createMany({
+    data: [
+      {
+        classId: mathClass.id,
+        roomId: rooms[0].id,
+        teacherId: teachers[0].id,
+        dayOfWeek: 2,
+        startMinute: timeToMinute("18:00"),
+        endMinute: timeToMinute("19:30"),
+      },
+      {
+        classId: mathClass.id,
+        roomId: rooms[0].id,
+        teacherId: teachers[0].id,
+        dayOfWeek: 4,
+        startMinute: timeToMinute("18:00"),
+        endMinute: timeToMinute("19:30"),
+      },
+      {
+        classId: englishClass.id,
+        roomId: rooms[1].id,
+        teacherId: teachers[1].id,
+        dayOfWeek: 7,
+        startMinute: timeToMinute("09:00"),
+        endMinute: timeToMinute("10:30"),
+      },
+      {
+        classId: englishClass.id,
+        roomId: rooms[1].id,
+        teacherId: teachers[1].id,
+        dayOfWeek: 1,
+        startMinute: timeToMinute("09:00"),
+        endMinute: timeToMinute("10:30"),
+      },
+    ],
+  });
+
+  await prisma.classSalaryRule.createMany({
+    data: [
+      {
+        classId: mathClass.id,
+        commissionPercentage: money(60),
+      },
+      {
+        classId: englishClass.id,
+        commissionPercentage: money(55),
+      },
+      {
+        classId: physicsClass.id,
+        commissionPercentage: money(50),
+      },
+    ],
+  });
+
+  return { mathClass, englishClass, physicsClass };
+}
+
+async function seedFeesAndPayments(
+  classes: Awaited<ReturnType<typeof seedClasses>>,
+  students: Awaited<ReturnType<typeof seedMasters>>["students"],
+) {
+  const paymentAccount = await prisma.paymentAccount.create({
+    data: {
+      code: "VCB-DEFAULT",
+      bankCode: "VCB",
+      bankName: "Vietcombank",
+      accountNumber: "1234567890",
+      accountName: "TRUNG TAM GIAO DUC DEMO",
+      isDefault: true,
+      isActive: true,
+      note: "Tài khoản nhận học phí mặc định",
+    },
+  });
+
+  const fee1 = await prisma.studentFee.create({
+    data: {
+      studentId: students[0].id,
+      classId: classes.mathClass.id,
+      billingYear: 2026,
+      billingMonth: 6,
+      amount: money(500000),
+      discount: money(0),
+      finalAmount: money(500000),
+      paidAmount: money(500000),
+      outstandingAmount: money(0),
+      dueDate: date("2026-06-05"),
+      status: "PAID",
+    },
+  });
+
+  const fee2 = await prisma.studentFee.create({
+    data: {
+      studentId: students[1].id,
+      classId: classes.mathClass.id,
+      billingYear: 2026,
+      billingMonth: 6,
+      amount: money(500000),
+      discount: money(50000),
+      finalAmount: money(450000),
+      paidAmount: money(200000),
+      outstandingAmount: money(250000),
+      dueDate: date("2026-06-05"),
+      status: "PARTIAL",
+      note: "Giảm học phí 10%",
+    },
+  });
+
+  const fee3 = await prisma.studentFee.create({
+    data: {
+      studentId: students[2].id,
+      classId: classes.englishClass.id,
+      billingYear: 2026,
+      billingMonth: 6,
+      amount: money(650000),
+      discount: money(0),
+      finalAmount: money(650000),
+      paidAmount: money(0),
+      outstandingAmount: money(650000),
+      dueDate: date("2026-06-10"),
+      status: "UNPAID",
+    },
+  });
+
+  const qr2 = await prisma.paymentQrCode.create({
+    data: {
+      studentFeeId: fee2.id,
+      paymentAccountId: paymentAccount.id,
+      paymentCode: "QR-202606-HV002-MATH",
+      amount: money(250000),
+      transferContent: "HV002 CLS-MATH-001 202606",
+      qrPayload: "vietqr://VCB/1234567890/250000/HV002 CLS-MATH-001 202606",
+      qrImageUrl: "https://example.com/qr/QR-202606-HV002-MATH.png",
+      expiredAt: new Date("2026-06-30T23:59:59.000Z"),
+      status: "ACTIVE",
+    },
+  });
+
+  const qr3 = await prisma.paymentQrCode.create({
+    data: {
+      studentFeeId: fee3.id,
+      paymentAccountId: paymentAccount.id,
+      paymentCode: "QR-202606-HV003-ENG",
+      amount: money(650000),
+      transferContent: "HV003 CLS-ENG-001 202606",
+      qrPayload: "vietqr://VCB/1234567890/650000/HV003 CLS-ENG-001 202606",
+      qrImageUrl: "https://example.com/qr/QR-202606-HV003-ENG.png",
+      expiredAt: new Date("2026-06-30T23:59:59.000Z"),
+      status: "ACTIVE",
+    },
+  });
+
+  await prisma.paymentNotice.createMany({
+    data: [
+      {
+        studentFeeId: fee1.id,
+        noticeNumber: "NOTICE-202606-001",
+        amount: money(500000),
+        dueDate: date("2026-06-05"),
+        version: 1,
+        isLatest: true,
+        printedAt: now,
+        sentAt: now,
+        sendMethod: "PRINT",
+        status: "SENT",
+      },
+      {
+        studentFeeId: fee2.id,
+        noticeNumber: "NOTICE-202606-002",
+        qrCodeId: qr2.id,
+        amount: money(250000),
+        dueDate: date("2026-06-05"),
+        version: 1,
+        isLatest: true,
+        status: "GENERATED",
+      },
+      {
+        studentFeeId: fee3.id,
+        noticeNumber: "NOTICE-202606-003",
+        qrCodeId: qr3.id,
+        amount: money(650000),
+        dueDate: date("2026-06-10"),
+        version: 1,
+        isLatest: true,
+        status: "DRAFT",
+      },
+    ],
+  });
+
+  const payment1 = await prisma.payment.create({
+    data: {
+      studentFeeId: fee1.id,
+      amount: money(500000),
+      method: "CASH",
+      paymentDate: date("2026-06-03"),
+      notes: "Thanh toán đủ bằng tiền mặt",
+    },
+  });
+
+  const payment2 = await prisma.payment.create({
+    data: {
+      studentFeeId: fee2.id,
+      paymentQrId: qr2.id,
+      amount: money(200000),
+      method: "TRANSFER",
+      paymentDate: date("2026-06-04"),
+      externalTransactionId: "VCB202606040001",
+      notes: "Thanh toán một phần",
+    },
+  });
+
+  await prisma.receipt.createMany({
+    data: [
+      {
+        paymentId: payment1.id,
+        receiptNumber: "RCPT-202606-001",
+        version: 1,
+        issueDate: date("2026-06-03"),
+        printedAt: now,
+        status: "ACTIVE",
+      },
+      {
+        paymentId: payment2.id,
+        receiptNumber: "RCPT-202606-002",
+        version: 1,
+        issueDate: date("2026-06-04"),
+        status: "ACTIVE",
+      },
+    ],
+  });
+
+  return { fee1, fee2, fee3 };
+}
+
+async function seedPayrollAndExpenses(
+  teachers: Awaited<ReturnType<typeof seedMasters>>["teachers"],
+  classes: Awaited<ReturnType<typeof seedClasses>>,
+) {
+  const payroll = await prisma.teacherPayroll.create({
+    data: {
+      teacherId: teachers[0].id,
+      billingYear: 2026,
+      billingMonth: 6,
+      totalRevenue: money(950000),
+      centerFee: money(380000),
+      salaryAmount: money(570000),
+      status: "APPROVED",
+      approvedAt: now,
+    },
+  });
+
+  await prisma.teacherPayrollItem.create({
+    data: {
+      payrollId: payroll.id,
+      classId: classes.mathClass.id,
+      classCode: classes.mathClass.code,
+      className: classes.mathClass.name,
+      studentCount: 2,
+      revenue: money(950000),
+      centerFee: money(380000),
+      commissionRate: money(60),
+      salary: money(570000),
+    },
+  });
+
+  await prisma.expense.createMany({
+    data: [
+      {
+        code: "EXP-202606-001",
+        title: "Văn phòng phẩm tháng 06",
+        category: "OFFICE",
+        amount: money(350000),
+        expenseDate: date("2026-06-02"),
+        status: "PAID",
+        note: "Mua giấy, bút, mực in",
+      },
+      {
+        code: "EXP-202606-002",
+        title: "Bảo trì máy lạnh phòng 201",
+        category: "MAINTENANCE",
+        amount: money(1200000),
+        expenseDate: date("2026-06-08"),
+        status: "APPROVED",
+      },
+    ],
+  });
+}
+
+async function seedAudit(adminUserId: string) {
+  await prisma.auditLog.create({
+    data: {
+      userId: adminUserId,
+      action: "SEED_DATABASE",
+      tableName: "system",
+      recordId: null,
+      oldData: undefined,
+      newData: {
+        message: "Seed dữ liệu mẫu cho hệ thống quản lý trung tâm",
+        seededAt: now.toISOString(),
+      },
+      ipAddress: "127.0.0.1",
+      userAgent: "prisma-seed",
+    },
+  });
+}
+
+async function main() {
+  console.log("Start seeding...");
+
+  await cleanup();
+
+  const { adminUser, teacherUser } = await seedAuth();
+  const { rooms, teachers, students } = await seedMasters(teacherUser.id);
+  const classes = await seedClasses(teachers, rooms, students);
+
+  await seedFeesAndPayments(classes, students);
+  await seedPayrollAndExpenses(teachers, classes);
+  await seedAudit(adminUser.id);
 
   console.log("Seed completed.");
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
+  .catch((error) => {
+    console.error("Seed failed:", error);
   })
-  .catch(async (error: unknown) => {
-    console.error("Seed failed", error);
+  .finally(async () => {
     await prisma.$disconnect();
-    process.exit(1);
   });

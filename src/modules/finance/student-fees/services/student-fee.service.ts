@@ -13,6 +13,23 @@ export type StudentFeeWithRelations = Prisma.StudentFeeGetPayload<{
   };
 }>;
 
+function parseBillingMonth(month: string): { billingYear: number; billingMonth: number } {
+  const [yearString, monthString] = month.split("-");
+  const billingYear = Number(yearString);
+  const billingMonth = Number(monthString);
+
+  if (
+    !Number.isInteger(billingYear) ||
+    !Number.isInteger(billingMonth) ||
+    billingMonth < 1 ||
+    billingMonth > 12
+  ) {
+    throw new Error("Month must be in YYYY-MM format");
+  }
+
+  return { billingYear, billingMonth };
+}
+
 export class StudentFeeService {
   private static getClient(
     tx?: Prisma.TransactionClient,
@@ -28,17 +45,19 @@ export class StudentFeeService {
     classId: string;
     month: string;
     amount: number;
+    discount?: number;
     dueDate: Date;
     status?: FeeStatus;
   }): Promise<StudentFeeWithRelations> {
+    const { billingYear, billingMonth } = parseBillingMonth(data.month);
+
     // Check if fee already exists
-    const existing = await prisma.studentFee.findUnique({
+    const existing = await prisma.studentFee.findFirst({
       where: {
-        studentId_classId_month: {
-          studentId: data.studentId,
-          classId: data.classId,
-          month: data.month,
-        },
+        studentId: data.studentId,
+        classId: data.classId,
+        billingYear,
+        billingMonth,
       },
     });
 
@@ -46,14 +65,22 @@ export class StudentFeeService {
       throw new Error("Student fee already exists for this month");
     }
 
+    const tuitionAmount = data.amount ? toDecimal(data.amount) : toDecimal(0);
+    const discountAmount = data.discount ? toDecimal(data.discount) : toDecimal(0);
+    const finalAmount = tuitionAmount.minus(discountAmount);
+
     return prisma.studentFee.create({
       data: {
         studentId: data.studentId,
         classId: data.classId,
-        month: data.month,
-        amount: data.amount,
+        billingYear,
+        billingMonth,
+        amount: tuitionAmount.toNumber(),
+        discount: discountAmount.toNumber(),
         dueDate: data.dueDate,
         status: data.status || "UNPAID",
+        finalAmount: finalAmount.toNumber(),
+        outstandingAmount: finalAmount.toNumber(),
       },
       include: {
         student: true,
@@ -72,11 +99,13 @@ export class StudentFeeService {
       studentIds: string[];
       month: string;
       amount: number;
-      discount: number;
+      discount?: number;
       dueDate: Date;
       note?: string;
     },
   ) {
+    const { billingYear, billingMonth } = parseBillingMonth(data.month);
+
     return prisma.$transaction(async (tx) => {
       const classStudents = await tx.classStudent.findMany({
         where: {
@@ -93,7 +122,8 @@ export class StudentFeeService {
       const existingFees = await tx.studentFee.findMany({
         where: {
           classId: data.classId,
-          month: data.month,
+          billingYear,
+          billingMonth,
           studentId: {
             in: classStudents.map((cs) => cs.studentId),
           },
@@ -111,9 +141,13 @@ export class StudentFeeService {
         .map((cs) => ({
           studentId: cs.studentId,
           classId: data.classId,
-          month: data.month,
+          billingYear,
+          billingMonth,
           amount: data.amount,
           discount: data.discount,
+          finalAmount: data.amount - (data.discount ?? 0),
+          paidAmount: 0,
+          outstandingAmount: data.amount - (data.discount ?? 0),
           dueDate: data.dueDate,
           status: "UNPAID" as FeeStatus,
           note: data.note,
@@ -187,6 +221,9 @@ export class StudentFeeService {
   static async getStudentFees(filter: StudentFeeFilter) {
     const { page, pageSize, search, status, classId, studentId, month } = filter;
     const skip = (page - 1) * pageSize;
+    const billing = month ? parseBillingMonth(month) : undefined;
+    const searchBilling =
+      search && /^\d{4}-\d{2}$/.test(search) ? parseBillingMonth(search) : undefined;
 
     const where: Prisma.StudentFeeWhereInput = {
       ...(search && {
@@ -211,9 +248,14 @@ export class StudentFeeService {
               name: { contains: search, mode: "insensitive" },
             },
           },
-          {
-            month: { contains: search, mode: "insensitive" },
-          },
+          ...(searchBilling
+            ? [
+                {
+                  billingYear: searchBilling.billingYear,
+                  billingMonth: searchBilling.billingMonth,
+                } satisfies Prisma.StudentFeeWhereInput,
+              ]
+            : []),
         ],
       }),
     };
@@ -229,7 +271,10 @@ export class StudentFeeService {
 
     if (classId) where.classId = classId;
     if (studentId) where.studentId = studentId;
-    if (month) where.month = month;
+    if (billing) {
+      where.billingYear = billing.billingYear;
+      where.billingMonth = billing.billingMonth;
+    }
 
     const [items, total] = await Promise.all([
       prisma.studentFee.findMany({

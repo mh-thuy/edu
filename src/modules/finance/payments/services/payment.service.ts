@@ -24,6 +24,17 @@ export type PaymentWithRelations = Prisma.PaymentGetPayload<{
 }>;
 
 export class PaymentService {
+  private static parseBillingMonth(month: string): { billingYear: number; billingMonth: number } | null {
+    const match = month.match(/^(\d{4})-(\d{2})$/);
+    if (!match) return null;
+
+    const billingYear = Number(match[1]);
+    const billingMonth = Number(match[2]);
+    if (billingMonth < 1 || billingMonth > 12) return null;
+
+    return { billingYear, billingMonth };
+  }
+
   private static toPaymentMethod(method: PaymentCreate["method"]): PaymentMethod {
     switch (method) {
       case "cash":
@@ -89,6 +100,7 @@ export class PaymentService {
   static async getPayments(filter: PaymentFilter) {
     const { page, pageSize, search, studentFeeId, method, startDate, endDate } = filter;
     const skip = (page - 1) * pageSize;
+    const searchBilling = search ? this.parseBillingMonth(search) : null;
 
     const where: Prisma.PaymentWhereInput = {
       ...(search && {
@@ -99,14 +111,16 @@ export class PaymentService {
               mode: "insensitive",
             },
           },
-          {
-            studentFee: {
-              month: {
-                contains: search,
-                mode: "insensitive",
-              },
-            },
-          },
+          ...(searchBilling
+            ? [
+                {
+                  studentFee: {
+                    billingYear: searchBilling.billingYear,
+                    billingMonth: searchBilling.billingMonth,
+                  },
+                } satisfies Prisma.PaymentWhereInput,
+              ]
+            : []),
           {
             studentFee: {
               student: {
@@ -227,7 +241,7 @@ export class PaymentService {
     if (!payment) throw new Error("Payment not found");
 
     // Check if receipt already issued (locked)
-    const receipt = await prisma.receipt.findUnique({
+    const receipt = await prisma.receipt.findFirst({
       where: { paymentId: id },
     });
     if (receipt) {
@@ -293,7 +307,7 @@ export class PaymentService {
     if (!payment) throw new Error("Payment not found");
 
     // Check if receipt already issued
-    const receipt = await prisma.receipt.findUnique({
+    const receipt = await prisma.receipt.findFirst({
       where: { paymentId: id },
     });
     if (receipt) {

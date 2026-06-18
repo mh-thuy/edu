@@ -72,8 +72,8 @@ export async function getClassById(id: string): Promise<ClassWithRelations | nul
     include: {
       teacher: { include: { user: true } },
       room: true,
-      classStudents: { include: { student: true } },
-      classSchedules: true,
+      students: { include: { student: true } },
+      schedules: true,
     },
   });
 }
@@ -172,7 +172,7 @@ export async function deleteClass(id: string): Promise<Class> {
   const classData = await prisma.class.findUnique({
     where: { id },
     select: {
-      studentFees: {
+      fees: {
         where: {
           payments: {
             some: {},
@@ -183,8 +183,9 @@ export async function deleteClass(id: string): Promise<Class> {
           payments: {
             select: {
               receipts: {
-                select: { id: true },
-                take: 1,
+                select: {
+                  id: true,
+                },
               },
             },
             take: 1,
@@ -199,7 +200,7 @@ export async function deleteClass(id: string): Promise<Class> {
     throw new Error("Class not found");
   }
 
-  if (classData.studentFees.length > 0) {
+  if (classData.fees.length > 0) {
     throw new ConflictError(
       "Cannot delete class with student fees that already have payments or receipts",
     );
@@ -229,7 +230,7 @@ export async function assignStudentToClass(
       maxStudents: true,
       _count: {
         select: {
-          classStudents: true,
+          students: true,
         },
       },
     },
@@ -239,7 +240,7 @@ export async function assignStudentToClass(
     throw new Error("Class not found");
   }
 
-  if (classData._count.classStudents >= classData.maxStudents) {
+  if (classData._count.students >= classData.maxStudents) {
     throw new ConflictError("Cannot enroll student: class is full");
   }
 
