@@ -174,47 +174,7 @@ async function main(): Promise<void> {
     const enrolled = shuffled.slice(0, enrollCount);
 
     for (const student of enrolled) {
-      await prisma.classStudent.create({ data: { classId: cls.id, studentId: student.id } });
-
-      // create student fee for current month
-      const month = new Date();
-      const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
-      const due = new Date(month.getFullYear(), month.getMonth() + 1, 5);
-
-      const fee = await prisma.studentFee.create({
-        data: {
-          studentId: student.id,
-          classId: cls.id,
-          month: monthKey,
-          amount: cls.tuitionFee,
-          discount: 0,
-          dueDate: due,
-          status: "UNPAID",
-        },
-      });
-
-      // randomly create payments for some fees
-      if (Math.random() < 0.35) {
-        const payment = await prisma.payment.create({
-          data: {
-            studentFeeId: fee.id,
-            amount: fee.amount,
-            method: pick(["CASH", "TRANSFER", "WALLET"]),
-            paymentDate: new Date(),
-            notes: null,
-          },
-        });
-
-        await prisma.receipt.create({
-          data: {
-            paymentId: payment.id,
-            receiptNumber: `RCPT-${faker.string.numeric(6)}`,
-            issueDate: new Date(),
-          },
-        });
-
-        await prisma.studentFee.update({ where: { id: fee.id }, data: { status: "PAID" } });
-      }
+      await prisma.classStudent.create({ data: { classId: cls.id, studentId: student.id } });      
     }
   }
 
