@@ -11,12 +11,62 @@ enum Role {
   ADMIN
   STAFF
   TEACHER
+  @@map("user_role")
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  @@map("teacher_status")
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  @@map("student_status")
+}
+
+enum RoomStatus {
+  AVAILABLE
+  MAINTENANCE
+  UNAVAILABLE
+  @@map("room_status")
+}
+
+enum ClassStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  @@map("class_status")
+}
+
+enum FeeStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  @@map("fee_status")
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  WALLET
+  @@map("payment_method")
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+  @@map("payroll_status")
 }
 
 model User {
   id           String    @id @default(uuid())
   email        String    @unique
-  fullName     String
+  fullName     String    @map("full_name")
   passwordHash String    @map("password_hash")
   role         Role
   isActive     Boolean   @default(true) @map("is_active")
@@ -34,7 +84,7 @@ model Room {
   capacity       Int
   floor          Int             @default(1)
   location       String?
-  status         String          @default("AVAILABLE")
+  status         RoomStatus      @default(AVAILABLE)
   note           String?
   isActive       Boolean         @default(true) @map("is_active")
   createdAt      DateTime        @default(now()) @map("created_at")
@@ -47,13 +97,15 @@ model Room {
 
 model Teacher {
   id             String             @id @default(uuid())
+  fullName       String             @map("full_name")
   userId         String?            @unique @map("user_id")
   code           String             @unique
   phone          String?
   email          String?            @unique
   bankAccount    String?            @map("bank_account")
   specialty      String?
-  status         String             @default("ACTIVE")
+  note           String?
+  status         TeacherStatus      @default(ACTIVE)
   createdAt      DateTime           @default(now()) @map("created_at")
   updatedAt      DateTime           @updatedAt @map("updated_at")
   user           User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -73,7 +125,7 @@ model Student {
   birthday      DateTime?
   parentName    String?        @map("parent_name")
   address       String?
-  status        String         @default("ACTIVE")
+  status        StudentStatus  @default(ACTIVE)
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   classStudents ClassStudent[]
@@ -93,7 +145,7 @@ model Class {
   maxStudents    Int             @default(30) @map("max_students")
   startDate      DateTime?       @map("start_date")
   endDate        DateTime?       @map("end_date")
-  status         String          @default("DRAFT")
+  status         ClassStatus     @default(DRAFT)
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   teacher        Teacher?        @relation(fields: [teacherId], references: [id], onDelete: SetNull)
@@ -141,7 +193,7 @@ model StudentFee {
   amount    Float
   discount  Float     @default(0)
   dueDate   DateTime  @map("due_date")
-  status    String    @default("unpaid") // unpaid, partial, paid
+  status    FeeStatus @default(UNPAID)
   note      String?
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
@@ -158,7 +210,7 @@ model Payment {
   id         String    @id @default(uuid())
   studentFeeId String  @map("student_fee_id")
   amount     Float
-  method     String    // cash, transfer, wallet
+  method     PaymentMethod
   paymentDate DateTime @map("payment_date")
   notes      String?
   createdAt  DateTime  @default(now()) @map("created_at")
@@ -199,7 +251,7 @@ model TeacherPayroll {
   totalRevenue    Float                 @default(0) @map("total_revenue")
   centerFee       Float                 @default(0) @map("center_fee")
   salaryAmount    Float                 @default(0) @map("salary_amount")
-  status          String                @default("draft") // draft, approved, paid
+  status          PayrollStatus         @default(DRAFT)
   approvedAt      DateTime?             @map("approved_at")
   approvedBy      String?               @map("approved_by")
   paidAt          DateTime?             @map("paid_at")
