@@ -1,9 +1,26 @@
 import { prisma } from "@/lib/prisma";
+import { PayrollStatus as PrismaPayrollStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
-import { PayrollStatus } from "@/modules/finance/teacher-payroll/payroll.types";
 
 export class TeacherPayrollService {
+  private static toPrismaPayrollStatus(
+    status?: TeacherPayrollFilter["status"],
+  ): PrismaPayrollStatus | undefined {
+    if (!status) return undefined;
+
+    switch (status) {
+      case "draft":
+        return PrismaPayrollStatus.DRAFT;
+      case "approved":
+        return PrismaPayrollStatus.APPROVED;
+      case "paid":
+        return PrismaPayrollStatus.PAID;
+      default:
+        return undefined;
+    }
+  }
+
   /**
    * Calculate and create payroll for a teacher for a specific month
    * Only calculates based on actual collected payments
@@ -42,7 +59,7 @@ export class TeacherPayrollService {
           totalRevenue: 0,
           centerFee: 0,
           salaryAmount: 0,
-          status: PayrollStatus.DRAFT,
+          status: PrismaPayrollStatus.DRAFT,
         },
       });
     }
@@ -152,7 +169,7 @@ export class TeacherPayrollService {
           totalRevenue,
           centerFee: totalCenterFee,
           salaryAmount: totalSalary,
-          status: PayrollStatus.DRAFT,
+          status: PrismaPayrollStatus.DRAFT,
         },
       });
 
@@ -178,13 +195,14 @@ export class TeacherPayrollService {
    * Get payrolls with pagination and filtering
    */
   static async getPayrolls(filter: TeacherPayrollFilter) {
-    const { page, limit, teacherId, month, status } = filter;
-    const skip = (page - 1) * limit;
+    const { page, pageSize, teacherId, month, status } = filter;
+    const skip = (page - 1) * pageSize;
+    const prismaStatus = this.toPrismaPayrollStatus(status);
 
     const where: Prisma.TeacherPayrollWhereInput = {
       ...(teacherId && { teacherId }),
       ...(month && { month }),
-      ...(status && { status }),
+      ...(prismaStatus && { status: prismaStatus }),
     };
 
     const [items, total] = await Promise.all([
@@ -205,7 +223,7 @@ export class TeacherPayrollService {
           },
         },
         skip,
-        take: limit,
+        take: pageSize,
         orderBy: { month: "desc" },
       }),
       prisma.teacherPayroll.count({ where }),
@@ -215,8 +233,8 @@ export class TeacherPayrollService {
       items,
       total,
       page,
-      limit,
-      pages: Math.ceil(total / limit),
+      pageSize,
+      pages: Math.ceil(total / pageSize),
     };
   }
 
@@ -249,17 +267,17 @@ export class TeacherPayrollService {
   static async approvePayroll(id: string, approvedBy: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
-    if (payroll.status === PayrollStatus.APPROVED)
+    if (payroll.status === PrismaPayrollStatus.APPROVED)
       throw new Error("Payroll is already approved");
-    if (payroll.status === PayrollStatus.PAID)
+    if (payroll.status === PrismaPayrollStatus.PAID)
       throw new Error("Payroll is already paid");
-    if (payroll.status !== PayrollStatus.DRAFT)
+    if (payroll.status !== PrismaPayrollStatus.DRAFT)
       throw new Error("Only draft payroll can be approved");
 
     return prisma.teacherPayroll.update({
       where: { id },
       data: {
-        status: PayrollStatus.APPROVED,
+        status: PrismaPayrollStatus.APPROVED,
         approvedAt: new Date(),
         approvedBy,
       },
@@ -273,15 +291,15 @@ export class TeacherPayrollService {
   static async markPayrollAsPaid(id: string, paidBy: string) {
     const payroll = await prisma.teacherPayroll.findUnique({ where: { id } });
     if (!payroll) throw new Error("Payroll not found");
-    if (payroll.status === PayrollStatus.PAID)
+    if (payroll.status === PrismaPayrollStatus.PAID)
       throw new Error("Payroll is already paid");
-    if (payroll.status !== PayrollStatus.APPROVED)
+    if (payroll.status !== PrismaPayrollStatus.APPROVED)
       throw new Error("Only approved payroll can be marked as paid");
 
     return prisma.teacherPayroll.update({
       where: { id },
       data: {
-        status: PayrollStatus.PAID,
+        status: PrismaPayrollStatus.PAID,
         paidAt: new Date(),
         paidBy,
       },
@@ -304,10 +322,10 @@ export class TeacherPayrollService {
     let approvedCount = 0;
 
     for (const p of payrolls) {
-      if (p.status === PayrollStatus.PAID) {
+      if (p.status === PrismaPayrollStatus.PAID) {
         totalSalary += p.salaryAmount;
         paidCount++;
-      } else if (p.status === PayrollStatus.APPROVED) {
+      } else if (p.status === PrismaPayrollStatus.APPROVED) {
         approvedCount++;
       }
       totalRevenue += p.totalRevenue;

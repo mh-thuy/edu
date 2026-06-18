@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 import {
   receiptCreateSchema,
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const filter = {
       page: searchParams.get("page") || "1",
-      limit: searchParams.get("limit") || "10",
+      pageSize: searchParams.get("pageSize") || "10",
       search: searchParams.get("search") || undefined,
       paymentId: searchParams.get("paymentId") || undefined,
       studentId: searchParams.get("studentId") || undefined,
@@ -23,11 +24,9 @@ export async function GET(request: NextRequest) {
     const validated = receiptFilterSchema.parse(filter);
     const result = await ReceiptService.getReceipts(validated);
 
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch receipts";
-    console.error("Receipts API error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to fetch receipts");
   }
 }
 
@@ -37,9 +36,8 @@ export async function POST(request: NextRequest) {
     const validated = receiptCreateSchema.parse(body);
     const receipt = await ReceiptService.generateReceipt(validated.paymentId);
 
-    return NextResponse.json(receipt, { status: 201 });
+    return apiSuccess(receipt, 201);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create receipt";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to create receipt");
   }
 }

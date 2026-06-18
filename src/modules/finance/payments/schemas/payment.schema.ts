@@ -28,7 +28,7 @@ export const paymentUpdateSchema = z.object({
 
 export const paymentFilterSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().default(10),
+  pageSize: z.coerce.number().int().positive().default(10),
   search: z.string().optional(),
   studentFeeId: z.string().optional(),
   method: z.enum(["cash", "transfer", "wallet"]).optional(),

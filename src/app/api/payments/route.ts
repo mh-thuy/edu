@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { PaymentService } from "@/modules/finance/payments/services/payment.service";
 import {
   paymentCreateSchema,
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const filter = {
       page: searchParams.get("page") || "1",
-      limit: searchParams.get("limit") || "10",
+      pageSize: searchParams.get("pageSize") || "10",
       search: searchParams.get("search") || undefined,
       studentFeeId: searchParams.get("studentFeeId") || undefined,
       method: searchParams.get("method") || undefined,
@@ -21,11 +22,9 @@ export async function GET(request: NextRequest) {
     const validated = paymentFilterSchema.parse(filter);
     const result = await PaymentService.getPayments(validated);
 
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch payments";
-    console.error("Payments API error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to fetch payments");
   }
 }
 
@@ -35,9 +34,8 @@ export async function POST(request: NextRequest) {
     const validated = paymentCreateSchema.parse(body);
     const payment = await PaymentService.createPayment(validated);
 
-    return NextResponse.json(payment, { status: 201 });
+    return apiSuccess(payment, 201);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create payment";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to create payment");
   }
 }

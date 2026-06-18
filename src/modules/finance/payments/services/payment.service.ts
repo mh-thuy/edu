@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { PaymentMethod } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import type {
   PaymentCreate,
@@ -85,8 +86,8 @@ export class PaymentService {
    * Get payments with pagination and filtering
    */
   static async getPayments(filter: PaymentFilter) {
-    const { page, limit, search, studentFeeId, method, startDate, endDate } = filter;
-    const skip = (page - 1) * limit;
+    const { page, pageSize, search, studentFeeId, method, startDate, endDate } = filter;
+    const skip = (page - 1) * pageSize;
 
     const where: Prisma.PaymentWhereInput = {
       ...(search && {
@@ -171,7 +172,7 @@ export class PaymentService {
           },
         },
         skip,
-        take: limit,
+        take: pageSize,
         orderBy: { paymentDate: "desc" },
       }),
       prisma.payment.count({ where }),
@@ -181,8 +182,8 @@ export class PaymentService {
       items,
       total,
       page,
-      limit,
-      pages: Math.ceil(total / limit),
+      pageSize,
+      pages: Math.ceil(total / pageSize),
     };
   }
 
@@ -306,32 +307,7 @@ export class PaymentService {
    * Generate receipt for payment
    */
   static async generateReceipt(paymentId: string) {
-    const payment = await prisma.payment.findUnique({
-      where: { id: paymentId },
-    });
-
-    if (!payment) throw new Error("Payment not found");
-
-    // Check if receipt already exists
-    const existing = await prisma.receipt.findUnique({
-      where: { paymentId },
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    // Generate receipt number (simple format: RCP-{timestamp-based})
-    const timestamp = Date.now();
-    const receiptNumber = `RCP-${timestamp}`;
-
-    return prisma.receipt.create({
-      data: {
-        paymentId,
-        receiptNumber,
-        issueDate: new Date(),
-      },
-    });
+    return ReceiptService.generateReceipt(paymentId);
   }
 
   /**

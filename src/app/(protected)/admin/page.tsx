@@ -16,6 +16,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import GroupIcon from "@mui/icons-material/Group";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import AssignmentIcon from "@mui/icons-material/Assignment";
+import { unwrapApiResponse } from "@/lib/api-client";
 
 interface DashboardStats {
   totalFeeAmount: number;
@@ -39,15 +40,6 @@ type StudentFeeItem = {
 
 type TeacherPayrollItem = {
   salaryAmount: number;
-};
-
-type PayrollApiResponse<T> = {
-  success: boolean;
-  data: {
-    items: T[];
-    total: number;
-  };
-  error?: string;
 };
 
 type ClassItem = {
@@ -127,27 +119,31 @@ export default function AdminPage() {
         setLoading(true);
         // Load revenue
         const paymentsRes = await fetch("/api/payments");
-        const payments =
-          (await paymentsRes.json()) as PaginatedResponse<PaymentItem>;
+        const payments = await unwrapApiResponse<PaginatedResponse<PaymentItem>>(
+          paymentsRes,
+        );
 
         // Load fees for debt
         const feesRes = await fetch("/api/student-fees");
-        const fees =
-          (await feesRes.json()) as PaginatedResponse<StudentFeeItem>;
+        const fees = await unwrapApiResponse<PaginatedResponse<StudentFeeItem>>(
+          feesRes,
+        );
 
         // Load payroll
         const payrollRes = await fetch("/api/teacher-payroll");
-        const payrolls =
-          (await payrollRes.json()) as PayrollApiResponse<TeacherPayrollItem>;
+        const payrolls = await unwrapApiResponse<
+          PaginatedResponse<TeacherPayrollItem>
+        >(payrollRes);
 
         // Load classes
         const classesRes = await fetch("/api/classes");
-        const classes =
-          (await classesRes.json()) as PaginatedResponse<ClassItem>;
+        const classes = await unwrapApiResponse<PaginatedResponse<ClassItem>>(
+          classesRes,
+        );
 
         const paymentItems = payments.items ?? [];
         const feeItems = fees.items ?? [];
-        const payrollItems = payrolls.data.items ?? [];
+        const payrollItems = payrolls.items ?? [];
         const classItems = classes.items ?? [];
 
         // Calculate totals

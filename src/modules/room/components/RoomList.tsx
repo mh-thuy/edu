@@ -34,7 +34,7 @@ export interface Room {
   capacity: number;
   floor: number;
   location?: string;
-  status: "AVAILABLE" | "OCCUPIED" | "MAINTENANCE";
+  status: "AVAILABLE" | "MAINTENANCE" | "UNAVAILABLE";
   note?: string;
 }
 
@@ -175,11 +175,11 @@ export function RoomList(): ReactElement {
     isLoading,
     error,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Room>("/api/rooms", { limit: 10, search });
+  } = useList<Room>("/api/rooms", { pageSize: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -233,7 +233,7 @@ export function RoomList(): ReactElement {
 
         if (editingId) {
           const response = await fetch(`/api/rooms/${editingId}`, {
-            method: "PUT",
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           });
@@ -365,7 +365,7 @@ export function RoomList(): ReactElement {
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}
-          pageSize={limit}
+          pageSize={pageSize}
           isLoading={isLoading}
           onPageChange={setPageNumber}
           onPageSizeChange={setPageSize}

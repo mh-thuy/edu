@@ -184,8 +184,8 @@ export class StudentFeeService {
    * Get student fees with pagination and filtering
    */
   static async getStudentFees(filter: StudentFeeFilter) {
-    const { page, limit, search, status, classId, studentId, month } = filter;
-    const skip = (page - 1) * limit;
+    const { page, pageSize, search, status, classId, studentId, month } = filter;
+    const skip = (page - 1) * pageSize;
 
     const where: Prisma.StudentFeeWhereInput = {
       ...(search && {
@@ -239,7 +239,7 @@ export class StudentFeeService {
           payments: true,
         },
         skip,
-        take: limit,
+        take: pageSize,
         orderBy: { createdAt: "desc" },
       }),
       prisma.studentFee.count({ where }),
@@ -249,8 +249,8 @@ export class StudentFeeService {
       items,
       total,
       page,
-      limit,
-      pages: Math.ceil(total / limit),
+      pageSize,
+      pages: Math.ceil(total / pageSize),
     };
   }
 

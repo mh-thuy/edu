@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-
-import { getErrorMessage } from "@/lib/errors";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { getScheduleConflicts } from "@/modules/schedule/services/schedule.service";
 
 const checkScheduleConflictSchema = z
@@ -34,14 +33,11 @@ export async function POST(request: NextRequest) {
       data.excludeScheduleId,
     );
 
-    return NextResponse.json({
+    return apiSuccess({
       hasConflict: conflicts.length > 0,
       conflicts,
     });
   } catch (error: unknown) {
-    return NextResponse.json(
-      { error: getErrorMessage(error, "Failed to check schedule conflict") },
-      { status: 400 },
-    );
+    return handleApiError(error, "Failed to check schedule conflict");
   }
 }

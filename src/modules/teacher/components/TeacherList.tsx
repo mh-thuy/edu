@@ -159,11 +159,11 @@ export function TeacherList(): ReactElement {
     isLoading,
     error,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Teacher>("/api/teachers", { limit: 10, search });
+  } = useList<Teacher>("/api/teachers", { pageSize: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -220,7 +220,7 @@ export function TeacherList(): ReactElement {
 
         if (editingId) {
           const response = await fetch(`/api/teachers/${editingId}`, {
-            method: "PUT",
+            method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           });
@@ -363,7 +363,7 @@ export function TeacherList(): ReactElement {
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}
-          pageSize={limit}
+          pageSize={pageSize}
           isLoading={isLoading}
           onPageChange={setPageNumber}
           onPageSizeChange={setPageSize}

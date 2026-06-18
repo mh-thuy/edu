@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { PaymentService } from "@/modules/finance/payments/services/payment.service";
 import { paymentUpdateSchema } from "@/modules/finance/payments/schemas/payment.schema";
 
@@ -10,17 +11,16 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     const payment = await PaymentService.getPaymentById(id);
 
     if (!payment) {
-      return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+      return apiError("NOT_FOUND", "Payment not found", 404);
     }
 
-    return NextResponse.json(payment);
+    return apiSuccess(payment);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch payment";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to fetch payment");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Params }) {
+export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
     const body = await request.json();
@@ -28,10 +28,9 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     const validated = paymentUpdateSchema.parse(body);
     const updated = await PaymentService.updatePayment(id, validated);
 
-    return NextResponse.json(updated);
+    return apiSuccess(updated);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update payment";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to update payment");
   }
 }
 
@@ -40,9 +39,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     const { id } = await params;
     await PaymentService.deletePayment(id);
 
-    return NextResponse.json({ success: true });
+    return apiSuccess({ deleted: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to delete payment";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to delete payment");
   }
 }

@@ -22,7 +22,7 @@ export const teacherPayrollUpdateSchema = z.object({
 
 export const teacherPayrollFilterSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().default(10),
+  pageSize: z.coerce.number().int().positive().default(10),
   teacherId: z.string().optional(),
   month: z
     .string()

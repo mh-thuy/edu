@@ -31,6 +31,7 @@ import { useDisclosure } from "@/hooks/useDisclosure";
 import type { z } from "zod";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
 type StudentFeeCreateInput = z.infer<typeof studentFeeCreateSchema>;
 type StudentFeeUpdateInput = z.infer<typeof studentFeeUpdateSchema>;
@@ -145,15 +146,14 @@ export function StudentFeeForm({
         });
       } else {
         response = await fetch(`/api/student-fees/${initialData?.id}`, {
-          method: "PUT",
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
       }
 
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to save");
+        throw new Error(await extractApiErrorMessage(response, "Failed to save"));
       }
       snackbar.showSuccess(
         isCreating ? "Tạo thành công" : "Cập nhật thành công",

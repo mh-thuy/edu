@@ -154,8 +154,8 @@ export async function getClassScheduleById(
 
 export async function getSchedules(filter: ScheduleFilter) {
   const page = Math.max(filter.page ?? 1, 1);
-  const limit = Math.max(filter.limit ?? 10, 1);
-  const skip = (page - 1) * limit;
+  const pageSize = Math.max(filter.pageSize ?? 10, 1);
+  const skip = (page - 1) * pageSize;
 
   const where: Prisma.ClassScheduleWhereInput = {
     ...(filter.classId && { classId: filter.classId }),
@@ -166,7 +166,7 @@ export async function getSchedules(filter: ScheduleFilter) {
     prisma.classSchedule.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       include: {
         class: true,
         room: true,
@@ -181,8 +181,8 @@ export async function getSchedules(filter: ScheduleFilter) {
     items: schedules,
     total,
     page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pageSize,
+    pages: Math.ceil(total / pageSize),
   };
 }
 

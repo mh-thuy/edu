@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 
 type Params = Promise<{ id: string }>;
@@ -8,9 +9,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const { id } = await params;
     const receipt = await ReceiptService.markAsPrinted(id);
 
-    return NextResponse.json(receipt);
+    return apiSuccess(receipt);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to mark receipt as printed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to mark receipt as printed");
   }
 }

@@ -20,6 +20,7 @@ import { FormDialog } from "@/components/FormDialog";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { ScheduleForm } from "./ScheduleForm";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
 type ScheduleSubmitData = {
   classId: string;
@@ -203,11 +204,11 @@ export function ScheduleList(): ReactElement {
     isLoading,
     error,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Schedule>("/api/schedules", { limit: 10 });
+  } = useList<Schedule>("/api/schedules", { pageSize: 10 });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
@@ -297,8 +298,7 @@ export function ScheduleList(): ReactElement {
             : "Thêm lịch học thất bại";
 
           try {
-            const errorData = (await response.json()) as { error?: string };
-            message = errorData.error || message;
+            message = await extractApiErrorMessage(response, message);
           } catch {
             // Ignore JSON parse error
           }
@@ -410,7 +410,7 @@ export function ScheduleList(): ReactElement {
           rows={tableData}
           totalRows={data?.total ?? 0}
           page={page}
-          pageSize={limit}
+          pageSize={pageSize}
           isLoading={isLoading}
           onPageChange={setPageNumber}
           onPageSizeChange={setPageSize}

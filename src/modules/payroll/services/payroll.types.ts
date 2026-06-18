@@ -17,7 +17,7 @@ export { PayrollStatus };
 
 export interface PayrollQuery {
   page: number;
-  limit: number;
+  pageSize: number;
   teacherId?: string;
   month?: string;
   status?: PayrollStatus;

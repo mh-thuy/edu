@@ -31,6 +31,7 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { PaymentForm } from "./PaymentForm";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type PaymentMethod = "cash" | "transfer" | "wallet";
 
@@ -97,11 +98,11 @@ export function PaymentList() {
     error,
     refresh,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
   } = useList<Payment>("/api/payments", {
-    limit: 10,
+    pageSize: 10,
     search: search || undefined,
     method: filterMethod || undefined,
     startDate: filterDateStart || undefined,
@@ -118,12 +119,9 @@ export function PaymentList() {
         const response = await fetch(`/api/payments/${id}`, {
           method: "DELETE",
         });
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
 
         if (!response.ok) {
-          throw new Error(payload.error || "Failed to delete");
+          throw new Error(await extractApiErrorMessage(response, "Failed to delete"));
         }
 
         showSuccess("Xóa thanh toán thành công");
@@ -143,14 +141,13 @@ export function PaymentList() {
         const response = await fetch(`/api/payments/${paymentId}/receipt`, {
           method: "POST",
         });
-        const result = (await response.json().catch(() => ({}))) as {
-          error?: string;
-          receiptNumber?: string;
-        };
 
         if (!response.ok) {
-          throw new Error(result.error || "Failed to generate receipt");
+          throw new Error(
+            await extractApiErrorMessage(response, "Failed to generate receipt"),
+          );
         }
+        const result = await unwrapApiResponse<{ receiptNumber?: string }>(response);
 
         showSuccess(`Tạo phiếu thu thành công: ${result.receiptNumber}`);
         await refresh();
@@ -425,7 +422,7 @@ export function PaymentList() {
               isLoading={isLoading}
               totalRows={payments?.total || 0}
               page={page}
-              pageSize={limit}
+              pageSize={pageSize}
               onPageChange={setPageNumber}
               onPageSizeChange={setPageSize}
             />

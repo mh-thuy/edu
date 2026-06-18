@@ -48,6 +48,7 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { StudentFeeForm } from "./StudentFeeForm";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs, { Dayjs } from "dayjs";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type StudentFeeStatus = "unpaid" | "partial" | "paid";
 
@@ -160,11 +161,11 @@ export function StudentFeeList() {
     error,
     refresh,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
   } = useList<StudentFee>("/api/student-fees", {
-    limit: 10,
+    pageSize: 10,
     search: search || undefined,
     status: statusFilter || undefined,
     month: monthFilter || undefined,
@@ -176,13 +177,15 @@ export function StudentFeeList() {
       setBulkStudentsError(null);
       const response = await fetch(`/api/classes/${classId}/students`);
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(payload.error || "Không tải được danh sách học viên");
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không tải được danh sách học viên",
+          ),
+        );
       }
 
-      const result: BulkClassStudentApiItem[] = await response.json();
+      const result = await unwrapApiResponse<BulkClassStudentApiItem[]>(response);
       setBulkStudents(
         result.map((item) => ({
           id: item.student.id,
@@ -234,10 +237,9 @@ export function StudentFeeList() {
         const response = await fetch(`/api/student-fees/${id}`, {
           method: "DELETE",
         });
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        if (!response.ok) throw new Error(payload.error || "Failed to delete");
+        if (!response.ok) {
+          throw new Error(await extractApiErrorMessage(response, "Failed to delete"));
+        }
         snackbar.showSuccess("Xóa học phí thành công");
         await refresh();
       } catch (deleteError) {
@@ -276,14 +278,14 @@ export function StudentFeeList() {
           ),
         }),
       });
-      const data = (await response.json()) as {
-        error?: string;
-        created: number;
-        skipped: number;
-      };
       if (!response.ok) {
-        throw new Error(data.error || "Tạo hóa đơn hàng loạt thất bại");
+        throw new Error(
+          await extractApiErrorMessage(response, "Tạo hóa đơn hàng loạt thất bại"),
+        );
       }
+      const data = await unwrapApiResponse<{ created: number; skipped: number }>(
+        response,
+      );
 
       snackbar.showSuccess(
         `Tạo hóa đơn hàng loạt thành công: ${data.created} mới, ${data.skipped} bỏ qua`,
@@ -541,7 +543,7 @@ export function StudentFeeList() {
               isLoading={isLoading}
               totalRows={fees?.total || 0}
               page={page}
-              pageSize={limit}
+              pageSize={pageSize}
               onPageChange={setPageNumber}
               onPageSizeChange={setPageSize}
             />

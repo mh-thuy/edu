@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { FeeStatus, Prisma } from "@prisma/client";
+import { apiError, apiSuccess } from "@/lib/api";
 
 function normalizeFeeStatus(status?: string): FeeStatus | undefined {
   if (!status) return undefined;
@@ -15,12 +16,12 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.max(1, parseInt(searchParams.get("limit") || "10", 10));
+    const pageSize = Math.max(1, parseInt(searchParams.get("pageSize") || "10", 10));
     const status = searchParams.get("status") || undefined;
     const studentId = searchParams.get("studentId") || undefined;
     const classId = searchParams.get("classId") || undefined;
 
-    const skip = (page - 1) * limit;
+    const skip = (page - 1) * pageSize;
 
     // Build where clause
     const where: Prisma.StudentFeeWhereInput = {};
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     const fees = await prisma.studentFee.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       include: {
         student: true,
         class: true,
@@ -63,18 +64,15 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
-      data: debts,
+    return apiSuccess({
+      items: debts,
       total,
       page,
-      limit,
-      pages: Math.ceil(total / limit),
+      pageSize,
+      pages: Math.ceil(total / pageSize),
     });
   } catch (error) {
     console.error("Error fetching debt tracking data:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch debt tracking data" },
-      { status: 500 }
-    );
+    return apiError("INTERNAL_ERROR", "Failed to fetch debt tracking data", 500);
   }
 }

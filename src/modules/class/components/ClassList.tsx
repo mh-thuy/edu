@@ -206,11 +206,11 @@ export function ClassList(): ReactElement {
     isLoading,
     error,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Class>("/api/classes", { limit: 10, search });
+  } = useList<Class>("/api/classes", { pageSize: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
@@ -414,7 +414,7 @@ export function ClassList(): ReactElement {
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}
-          pageSize={limit}
+          pageSize={pageSize}
           isLoading={isLoading}
           onPageChange={setPageNumber}
           onPageSizeChange={setPageSize}

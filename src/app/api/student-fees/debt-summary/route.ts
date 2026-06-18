@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { NextResponse } from "next/server";
+import { apiError, apiSuccess } from "@/lib/api";
 
 export async function GET() {
   try {
@@ -42,7 +42,7 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({
+    return apiSuccess({
       totalDebt,
       unpaidCount,
       partialCount,
@@ -50,9 +50,6 @@ export async function GET() {
     });
   } catch (error) {
     console.error("Error fetching debt summary:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch debt summary" },
-      { status: 500 }
-    );
+    return apiError("INTERNAL_ERROR", "Failed to fetch debt summary", 500);
   }
 }

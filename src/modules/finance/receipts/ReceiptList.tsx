@@ -122,7 +122,7 @@ export function ReceiptList() {
     error,
     refresh,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
   } = useList<Receipt>("/api/receipts", {
@@ -449,7 +449,7 @@ export function ReceiptList() {
                 isLoading={isLoading}
                 totalRows={receipts?.total || 0}
                 page={page}
-                pageSize={limit}
+                pageSize={pageSize}
                 onPageChange={setPageNumber}
                 onPageSizeChange={setPageSize}
               />

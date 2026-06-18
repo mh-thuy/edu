@@ -57,10 +57,18 @@ export function BaseSelectDialog<T extends SelectableItem>({
     undefined,
   );
 
-  const { data, isLoading, error, page, limit, setPageNumber, setPageSize } =
+  const {
+    data,
+    isLoading,
+    error,
+    page,
+    pageSize,
+    setPageNumber,
+    setPageSize,
+  } =
     useList<T>(endpoint, {
       search: committedSearch,
-      limit: 10,
+      pageSize: 10,
     });
 
   const handleSearch = useCallback(() => {
@@ -173,7 +181,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 rows={rows}
                 columns={columns}
                 pageSizeOptions={[5, 10, 25]}
-                paginationModel={{ page: page - 1, pageSize: limit }}
+                paginationModel={{ page: page - 1, pageSize }}
                 onPaginationModelChange={(model) => {
                   setPageNumber(model.page + 1);
                   setPageSize(model.pageSize);

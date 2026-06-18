@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getErrorMessage } from "@/lib/errors";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import {
   teacherCreateSchema,
   teacherFilterSchema,
@@ -16,19 +16,19 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
       page: parseInt(searchParams.get("page") || "1"),
-      limit: parseInt(searchParams.get("limit") || "10"),
+      pageSize: parseInt(searchParams.get("pageSize") || "10"),
     });
 
     const result = await getTeachers(filter);
-    return NextResponse.json({
+    return apiSuccess({
       items: result.teachers,
       total: result.total,
       page: result.page,
-      limit: result.limit,
+      pageSize: result.pageSize,
       pages: result.pages,
     });
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch teachers");
   }
 }
 
@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
     const data = teacherCreateSchema.parse(body);
 
     const teacher = await createTeacher(data);
-    return NextResponse.json(teacher, { status: 201 });
+    return apiSuccess(teacher, 201);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to create teacher");
   }
 }

@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ConflictError, getErrorMessage } from "@/lib/errors";
+import { NextRequest } from "next/server";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { roomUpdateSchema } from "@/modules/room/schemas/room.schema";
 import { getRoomById, updateRoom, deleteRoom } from "@/modules/room/services/room.service";
 
@@ -12,24 +12,24 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     const { id } = await params;
     const room = await getRoomById(id);
     if (!room) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      return apiError("NOT_FOUND", "Room not found", 404);
     }
-    return NextResponse.json(room);
+    return apiSuccess(room);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch room");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Params }) {
+export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
     const body = await request.json();
     const data = roomUpdateSchema.parse(body);
 
     const room = await updateRoom(id, data);
-    return NextResponse.json(room);
+    return apiSuccess(room);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to update room");
   }
 }
 
@@ -37,11 +37,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   try {
     const { id } = await params;
     const room = await deleteRoom(id);
-    return NextResponse.json(room);
+    return apiSuccess(room);
   } catch (error: unknown) {
-    if (error instanceof ConflictError) {
-      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
-    }
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to delete room");
   }
 }

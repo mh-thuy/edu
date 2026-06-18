@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import {
   studentFeeFilterSchema,
@@ -10,7 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const filter = {
       page: searchParams.get("page") || "1",
-      limit: searchParams.get("limit") || "10",
+      pageSize: searchParams.get("pageSize") || "10",
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
       classId: searchParams.get("classId") || undefined,
@@ -21,11 +22,9 @@ export async function GET(request: NextRequest) {
     const validated = studentFeeFilterSchema.parse(filter);
     const result = await StudentFeeService.getStudentFees(validated);
 
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch student fees";
-    console.error("Student fees API error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to fetch student fees");
   }
 }
 
@@ -46,10 +45,8 @@ export async function POST(request: NextRequest) {
       status: "UNPAID", // Default status for new fees
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return apiSuccess(result, 201);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to create student fee";
-    console.error("Student fee creation error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Failed to create student fee");
   }
 }

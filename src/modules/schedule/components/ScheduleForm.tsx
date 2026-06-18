@@ -25,6 +25,7 @@ import {
   type MasterSelectValue,
 } from "@/components/shared/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
+import { unwrapApiResponse } from "@/lib/api-client";
 
 type MasterItem = {
   id: string;
@@ -201,7 +202,7 @@ export function ScheduleForm({
           return;
         }
 
-        const result = (await response.json()) as ConflictResult;
+        const result = await unwrapApiResponse<ConflictResult>(response);
 
         setConflict(result.hasConflict ? result : null);
         onConflictCheck?.(result);

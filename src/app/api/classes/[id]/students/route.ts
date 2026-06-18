@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-import { ConflictError, getErrorMessage } from "@/lib/errors";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { getSessionFromCookie } from "@/lib/session";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents } from "@/modules/class/services/class.service";
 
@@ -17,9 +17,9 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
   try {
     const { id } = await params;
     const students = await getClassStudents(id);
-    return NextResponse.json(students);
+    return apiSuccess(students);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch class students");
   }
 }
 
@@ -30,12 +30,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const { studentId } = classStudentRequestSchema.parse(body);
 
     const result = await assignStudentToClass(id, studentId);
-    return NextResponse.json(result, { status: 201 });
+    return apiSuccess(result, 201);
   } catch (error: unknown) {
-    if (error instanceof ConflictError) {
-      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
-    }
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to assign student to class");
   }
 }
 
@@ -50,11 +47,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
       force,
       isAdmin: session?.user?.role === "ADMIN",
     });
-    return NextResponse.json({ success: true });
+    return apiSuccess({ deleted: true });
   } catch (error: unknown) {
-    if (error instanceof ConflictError) {
-      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
-    }
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to remove student from class");
   }
 }

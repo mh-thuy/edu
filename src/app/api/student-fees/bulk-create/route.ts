@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import { bulkCreateStudentFeesSchema } from "@/modules/finance/student-fees/schemas/student-fee.schema";
 
@@ -26,11 +27,8 @@ export async function POST(request: NextRequest) {
       note: validated.note,
     });
 
-    return NextResponse.json(result, { status: 201 });
+    return apiSuccess(result, 201);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Tạo hóa đơn hàng loạt thất bại";
-    console.error("Bulk create student fees error:", error);
-    return NextResponse.json({ error: message }, { status: 400 });
+    return handleApiError(error, "Tạo hóa đơn hàng loạt thất bại");
   }
 }

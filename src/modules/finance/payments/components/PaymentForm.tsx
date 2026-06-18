@@ -25,6 +25,7 @@ import {
   paymentUpdateSchema,
 } from "@/modules/finance/payments/schemas/payment.schema";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 import type { z } from "zod";
 import { DatePicker } from "@mui/x-date-pickers";
@@ -180,17 +181,14 @@ export function PaymentForm({
     try {
       setLoadingFees(true);
       const response = await fetch(
-        "/api/student-fees?status=unpaid,partial&limit=100",
+        "/api/student-fees?status=unpaid,partial&pageSize=100",
       );
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(payload.error || "Failed to load fees");
+        throw new Error(await extractApiErrorMessage(response, "Failed to load fees"));
       }
 
-      const result: StudentFeeListResponse = await response.json();
+      const result = await unwrapApiResponse<StudentFeeListResponse>(response);
       const mappedFees = result.items.map((fee) => {
         const paidAmount =
           fee.payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
@@ -280,21 +278,21 @@ export function PaymentForm({
       const response = await fetch(
         isEditing ? `/api/payments/${initialData?.id}` : "/api/payments",
         {
-          method: isEditing ? "PUT" : "POST",
+          method: isEditing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         },
       );
 
       if (!response.ok) {
-        const result = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
         throw new Error(
-          result.error ||
+          (await extractApiErrorMessage(
+            response,
             (isEditing
               ? "Failed to update payment"
               : "Failed to record payment"),
+          )) ||
+            "Failed to save payment",
         );
       }
 

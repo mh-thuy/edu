@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getErrorMessage } from "@/lib/errors";
+import { NextRequest } from "next/server";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { roomCreateSchema, roomFilterSchema } from "@/modules/room/schemas/room.schema";
 import { createRoom, getRooms } from "@/modules/room/services/room.service";
 
@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
       page: parseInt(searchParams.get("page") || "1"),
-      limit: parseInt(searchParams.get("limit") || "10"),
+      pageSize: parseInt(searchParams.get("pageSize") || "10"),
     });
 
     const result = await getRooms(filter);
-    return NextResponse.json(result);
+    return apiSuccess(result);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch rooms");
   }
 }
 
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     const data = roomCreateSchema.parse(body);
 
     const room = await createRoom(data);
-    return NextResponse.json(room, { status: 201 });
+    return apiSuccess(room, 201);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to create room");
   }
 }

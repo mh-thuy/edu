@@ -16,6 +16,7 @@ import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import { BaseTable } from "@/components/BaseTable";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { unwrapApiResponse } from "@/lib/api-client";
 
 interface StudentDebt {
   id: string;
@@ -84,7 +85,7 @@ export function DebtTrackingList() {
       try {
         const response = await fetch("/api/student-fees/debt-summary");
         if (!response.ok) throw new Error("Failed to load summary");
-        const result = await response.json();
+        const result = await unwrapApiResponse<DebtSummary>(response);
         setSummary(result);
       } catch (err) {
         console.error("Failed to load debt summary:", err);

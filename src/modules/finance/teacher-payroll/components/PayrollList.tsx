@@ -37,7 +37,7 @@ const emptyPayrollList: PayrollListData<TeacherPayrollDto> = {
   items: [],
   total: 0,
   page: DEFAULT_PAGE,
-  limit: DEFAULT_LIMIT,
+  pageSize: DEFAULT_LIMIT,
   pages: 0,
 };
 
@@ -59,19 +59,19 @@ export function PayrollList(): ReactElement {
   );
 
   const [page, setPage] = useState(DEFAULT_PAGE);
-  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [pageSize, setPageSize] = useState(DEFAULT_LIMIT);
   const [listData, setListData] =
     useState<PayrollListData<TeacherPayrollDto>>(emptyPayrollList);
 
   const query = useMemo(
     () => ({
       page,
-      limit,
+      pageSize,
       teacherId: filters.teacherId,
       month: filters.month,
       status: filters.status,
     }),
-    [filters.month, filters.status, filters.teacherId, limit, page],
+    [filters.month, filters.status, filters.teacherId, pageSize, page],
   );
 
   const loadPayrolls = useCallback(async () => {
@@ -208,10 +208,10 @@ export function PayrollList(): ReactElement {
               totalRows={listData.total}
               isLoading={isLoading}
               page={page}
-              pageSize={limit}
+              pageSize={pageSize}
               onPageChange={setPage}
-              onPageSizeChange={(nextLimit) => {
-                setLimit(nextLimit);
+              onPageSizeChange={(nextPageSize) => {
+                setPageSize(nextPageSize);
                 setPage(DEFAULT_PAGE);
               }}
               onView={setSelectedPayroll}

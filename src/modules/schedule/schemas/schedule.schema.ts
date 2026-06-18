@@ -39,7 +39,7 @@ export const scheduleFilterSchema = z.object({
   classId: z.string().optional(),
   dayOfWeek: z.number().optional(),
   page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
+  pageSize: z.number().min(1).max(100).default(20),
 });
 
 export type ClassScheduleCreate = z.infer<typeof classScheduleCreateSchema>;

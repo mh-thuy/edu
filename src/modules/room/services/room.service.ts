@@ -53,8 +53,8 @@ export async function getRoomById(id: string): Promise<Room | null> {
 
 export async function getRooms(filter: RoomFilter) {
   const page = Math.max(filter.page ?? 1, 1);
-  const limit = Math.max(filter.limit ?? 10, 1);
-  const skip = (page - 1) * limit;
+  const pageSize = Math.max(filter.pageSize ?? 10, 1);
+  const skip = (page - 1) * pageSize;
 
   const where: Prisma.RoomWhereInput = {
     ...(filter.search && {
@@ -82,7 +82,7 @@ export async function getRooms(filter: RoomFilter) {
     prisma.room.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       orderBy: {
         createdAt: "desc",
       },
@@ -96,8 +96,8 @@ export async function getRooms(filter: RoomFilter) {
     items: rooms,
     total,
     page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pageSize,
+    pages: Math.ceil(total / pageSize),
   };
 }
 

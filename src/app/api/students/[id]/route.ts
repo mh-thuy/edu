@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ConflictError, getErrorMessage } from "@/lib/errors";
+import { NextRequest } from "next/server";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { studentUpdateSchema } from "@/modules/student/schemas/student.schema";
 import { getStudentById, updateStudent, deleteStudent } from "@/modules/student/services/student.service";
 
@@ -12,24 +12,24 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     const { id } = await params;
     const student = await getStudentById(id);
     if (!student) {
-      return NextResponse.json({ error: "Student not found" }, { status: 404 });
+      return apiError("NOT_FOUND", "Student not found", 404);
     }
-    return NextResponse.json(student);
+    return apiSuccess(student);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch student");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Params }) {
+export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
     const body = await request.json();
     const data = studentUpdateSchema.parse(body);
 
     const student = await updateStudent(id, data);
-    return NextResponse.json(student);
+    return apiSuccess(student);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to update student");
   }
 }
 
@@ -37,11 +37,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   try {
     const { id } = await params;
     const student = await deleteStudent(id);
-    return NextResponse.json(student);
+    return apiSuccess(student);
   } catch (error: unknown) {
-    if (error instanceof ConflictError) {
-      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
-    }
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to delete student");
   }
 }

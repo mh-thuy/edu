@@ -161,11 +161,11 @@ export function StudentList(): ReactElement {
     isLoading,
     error,
     page,
-    limit,
+    pageSize,
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Student>("/api/students", { limit: 10, search });
+  } = useList<Student>("/api/students", { pageSize: 10, search });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -368,7 +368,7 @@ export function StudentList(): ReactElement {
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}
-          pageSize={limit}
+          pageSize={pageSize}
           isLoading={isLoading}
           onPageChange={setPageNumber}
           onPageSizeChange={setPageSize}

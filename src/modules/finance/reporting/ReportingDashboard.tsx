@@ -22,6 +22,7 @@ import {
 import DownloadIcon from "@mui/icons-material/Download";
 
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { unwrapApiResponse } from "@/lib/api-client";
 
 interface ReportData {
   totalRevenue: number;
@@ -86,12 +87,11 @@ interface StudentFeesResponse {
 }
 
 interface TeacherPayrollsResponse {
-  success: boolean;
-  data: {
-    items: TeacherPayrollSummaryItem[];
-    total: number;
-  };
-  error?: string;
+  items: TeacherPayrollSummaryItem[];
+  total: number;
+  page?: number;
+  pageSize?: number;
+  pages?: number;
 }
 
 export function ReportingDashboard() {
@@ -131,7 +131,7 @@ export function ReportingDashboard() {
       }).toString();
       const response = await fetch(`/api/payments?${query}`);
       if (!response.ok) throw new Error("Failed to load revenue report");
-      const result: ReportData = await response.json();
+      const result = await unwrapApiResponse<ReportData>(response);
       setRevenueReport(result);
     } catch {
       snackbar.showError("Tải báo cáo doanh thu thất bại");
@@ -145,7 +145,7 @@ export function ReportingDashboard() {
       setLoading(true);
       const response = await fetch("/api/student-fees?status=unpaid,partial");
       if (!response.ok) throw new Error("Failed to load debt report");
-      const result: StudentFeesResponse = await response.json();
+      const result = await unwrapApiResponse<StudentFeesResponse>(response);
       // Calculate summary
       const debtData: DebtReportData = {
         totalDebt: result.items.reduce(
@@ -174,10 +174,10 @@ export function ReportingDashboard() {
       setLoading(true);
       const response = await fetch("/api/teacher-payroll");
       if (!response.ok) throw new Error("Failed to load teacher report");
-      const result: TeacherPayrollsResponse = await response.json();
+      const result = await unwrapApiResponse<TeacherPayrollsResponse>(response);
       // Group by teacher
       const grouped = new Map<string, TeacherReportData>();
-      (result.data.items || []).forEach((payroll) => {
+      (result.items || []).forEach((payroll) => {
         const existing = grouped.get(payroll.teacherId) || {
           teacherId: payroll.teacherId,
           totalSalary: 0,

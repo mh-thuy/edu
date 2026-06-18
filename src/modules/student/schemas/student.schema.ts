@@ -17,7 +17,7 @@ export const studentFilterSchema = z.object({
   search: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
   page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(10),
+  pageSize: z.number().min(1).max(100).default(10),
 });
 
 export type StudentCreate = z.infer<typeof studentCreateSchema>;

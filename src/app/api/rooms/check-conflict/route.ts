@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
-
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { checkRoomConflict } from "@/modules/room/services/room.service";
 
 const checkRoomConflictSchema = z.object({
@@ -24,23 +24,16 @@ export async function POST(request: NextRequest) {
       data.excludeScheduleId,
     );
 
-    return NextResponse.json({ hasConflict });
+    return apiSuccess({ hasConflict });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        {
-          error: "Invalid request body",
-          details: error.flatten().fieldErrors,
-        },
-        { status: 400 },
+      return apiError(
+        "VALIDATION_ERROR",
+        "Validation failed",
+        422,
+        error.flatten(),
       );
     }
-
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    );
+    return handleApiError(error, "Failed to check room conflict");
   }
 }

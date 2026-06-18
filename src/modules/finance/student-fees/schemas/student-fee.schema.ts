@@ -26,7 +26,7 @@ export const bulkCreateStudentFeesSchema = z.object({
 
 export const studentFeeFilterSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().default(10),
+  pageSize: z.coerce.number().int().positive().default(10),
   search: z.string().optional(),
   status: z
     .string()

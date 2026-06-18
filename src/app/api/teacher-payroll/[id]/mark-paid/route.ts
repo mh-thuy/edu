@@ -1,29 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { TeacherPayrollService } from "@/modules/finance/teacher-payroll/services/teacher-payroll.service";
 import { getSessionFromCookie } from "@/lib/session";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 
 type Params = Promise<{ id: string }>;
-
-function buildPayrollSuccessResponse<T>(items: T[], total: number) {
-  return {
-    success: true,
-    data: {
-      items,
-      total,
-    },
-  };
-}
-
-function buildPayrollErrorResponse(error: string) {
-  return {
-    success: false,
-    data: {
-      items: [],
-      total: 0,
-    },
-    error,
-  };
-}
 
 export async function POST(
   _request: NextRequest,
@@ -32,9 +12,7 @@ export async function POST(
   try {
     const session = await getSessionFromCookie();
     if (!session?.user?.id) {
-      return NextResponse.json(buildPayrollErrorResponse("Unauthorized"), {
-        status: 401,
-      });
+      return apiError("UNAUTHORIZED", "Unauthorized", 401);
     }
 
     const { id } = await params;
@@ -43,12 +21,8 @@ export async function POST(
       session.user.id,
     );
 
-    return NextResponse.json(buildPayrollSuccessResponse([payroll], 1));
+    return apiSuccess(payroll);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to mark payroll as paid";
-    return NextResponse.json(buildPayrollErrorResponse(message), {
-      status: 400,
-    });
+    return handleApiError(error, "Failed to mark payroll as paid");
   }
 }

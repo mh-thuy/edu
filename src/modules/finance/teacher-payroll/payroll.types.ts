@@ -42,14 +42,17 @@ export interface PayrollListData<T> {
   items: T[];
   total: number;
   page?: number;
-  limit?: number;
+  pageSize?: number;
   pages?: number;
 }
 
 export interface PayrollApiResponse<T> {
   success: boolean;
-  data: PayrollListData<T>;
-  error?: string;
+  data: T;
+  error?: {
+    code: string;
+    message: string;
+  };
 }
 
 const currencyFormatter = new Intl.NumberFormat("vi-VN", {

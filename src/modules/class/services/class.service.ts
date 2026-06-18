@@ -79,8 +79,8 @@ export async function getClassById(id: string): Promise<ClassWithRelations | nul
 }
 
 export async function getClasses(filter: ClassFilter) {
-  const { search, status, page, limit } = filter;
-  const skip = (page - 1) * limit;
+  const { search, status, page, pageSize } = filter;
+  const skip = (page - 1) * pageSize;
 
   const where: Prisma.ClassWhereInput = {
     ...(search && {
@@ -96,7 +96,7 @@ export async function getClasses(filter: ClassFilter) {
     prisma.class.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       include: {
         teacher: { include: { user: true } },
         room: true,
@@ -110,8 +110,8 @@ export async function getClasses(filter: ClassFilter) {
     items: classes,
     total,
     page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pageSize,
+    pages: Math.ceil(total / pageSize),
   };
 }
 

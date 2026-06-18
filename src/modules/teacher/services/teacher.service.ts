@@ -56,8 +56,8 @@ export async function getTeacherById(
 }
 
 export async function getTeachers(filter: TeacherFilter) {
-  const { search, status, page, limit } = filter;
-  const skip = (page - 1) * limit;
+  const { search, status, page, pageSize } = filter;
+  const skip = (page - 1) * pageSize;
 
   const where: Prisma.TeacherWhereInput = {
     ...(search && {
@@ -83,7 +83,7 @@ export async function getTeachers(filter: TeacherFilter) {
         },
       },
       skip,
-      take: limit,
+      take: pageSize,
       orderBy: { createdAt: "desc" },
     }),
     prisma.teacher.count({ where }),
@@ -93,8 +93,8 @@ export async function getTeachers(filter: TeacherFilter) {
     teachers,
     total,
     page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pageSize,
+    pages: Math.ceil(total / pageSize),
   };
 }
 

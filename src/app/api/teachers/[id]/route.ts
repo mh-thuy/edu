@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { ConflictError, getErrorMessage } from "@/lib/errors";
+import { NextRequest } from "next/server";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { teacherUpdateSchema } from "@/modules/teacher/schemas/teacher.schema";
 import { getTeacherById, updateTeacher, deleteTeacher } from "@/modules/teacher/services/teacher.service";
 
@@ -12,24 +12,24 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     const { id } = await params;
     const teacher = await getTeacherById(id);
     if (!teacher) {
-      return NextResponse.json({ error: "Teacher not found" }, { status: 404 });
+      return apiError("NOT_FOUND", "Teacher not found", 404);
     }
-    return NextResponse.json(teacher);
+    return apiSuccess(teacher);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch teacher");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Params }) {
+export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
     const { id } = await params;
     const body = await request.json();
     const data = teacherUpdateSchema.parse(body);
 
     const teacher = await updateTeacher(id, data);
-    return NextResponse.json(teacher);
+    return apiSuccess(teacher);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to update teacher");
   }
 }
 
@@ -37,11 +37,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
   try {
     const { id } = await params;
     const teacher = await deleteTeacher(id);
-    return NextResponse.json(teacher);
+    return apiSuccess(teacher);
   } catch (error: unknown) {
-    if (error instanceof ConflictError) {
-      return NextResponse.json({ error: getErrorMessage(error) }, { status: 409 });
-    }
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to delete teacher");
   }
 }

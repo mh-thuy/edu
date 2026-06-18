@@ -52,8 +52,8 @@ export async function getStudentById(id: string): Promise<StudentWithClasses | n
 }
 
 export async function getStudents(filter: StudentFilter) {
-  const { search, status, page, limit } = filter;
-  const skip = (page - 1) * limit;
+  const { search, status, page, pageSize } = filter;
+  const skip = (page - 1) * pageSize;
 
   const where: Prisma.StudentWhereInput = {
     ...(search && {
@@ -69,7 +69,7 @@ export async function getStudents(filter: StudentFilter) {
     prisma.student.findMany({
       where,
       skip,
-      take: limit,
+      take: pageSize,
       orderBy: { createdAt: "desc" },
     }),
     prisma.student.count({ where }),
@@ -79,8 +79,8 @@ export async function getStudents(filter: StudentFilter) {
     items: students,
     total,
     page,
-    limit,
-    pages: Math.ceil(total / limit),
+    pageSize,
+    pages: Math.ceil(total / pageSize),
   };
 }
 

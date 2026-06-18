@@ -9,7 +9,7 @@ import {
 function buildQueryString(query: PayrollQuery): string {
   const params = new URLSearchParams();
   params.set("page", String(query.page));
-  params.set("limit", String(query.limit));
+  params.set("pageSize", String(query.pageSize));
 
   if (query.teacherId) {
     params.set("teacherId", query.teacherId);
@@ -41,7 +41,7 @@ async function request<T>(
   const result = (await response.json()) as PayrollApiResponse<T>;
 
   if (!response.ok || !result.success) {
-    throw new Error(result.error ?? "Payroll request failed");
+    throw new Error(result.error?.message ?? "Payroll request failed");
   }
 
   return result;
@@ -50,7 +50,7 @@ async function request<T>(
 export const payrollApi = {
   async list(query: PayrollQuery): Promise<PayrollListData<TeacherPayrollDto>> {
     const search = buildQueryString(query);
-    const result = await request<TeacherPayrollDto>(
+    const result = await request<PayrollListData<TeacherPayrollDto>>(
       `/api/teacher-payroll?${search}`,
     );
     return result.data;
@@ -65,12 +65,7 @@ export const payrollApi = {
       body: JSON.stringify(payload),
     });
 
-    const first = result.data.items[0];
-    if (!first) {
-      throw new Error("Calculated payroll not found in response");
-    }
-
-    return first;
+    return result.data;
   },
 
   async approve(id: string): Promise<TeacherPayrollDto> {
@@ -81,12 +76,7 @@ export const payrollApi = {
       },
     );
 
-    const first = result.data.items[0];
-    if (!first) {
-      throw new Error("Approved payroll not found in response");
-    }
-
-    return first;
+    return result.data;
   },
 
   async markPaid(id: string): Promise<TeacherPayrollDto> {
@@ -97,12 +87,7 @@ export const payrollApi = {
       },
     );
 
-    const first = result.data.items[0];
-    if (!first) {
-      throw new Error("Paid payroll not found in response");
-    }
-
-    return first;
+    return result.data;
   },
 
   statuses: PayrollStatus,

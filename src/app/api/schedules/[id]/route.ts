@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { classScheduleUpdateSchema } from "@/modules/schedule/schemas/schedule.schema";
-import { getErrorMessage } from "@/lib/errors";
+import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import {
   getClassScheduleById,
   updateClassSchedule,
@@ -20,18 +20,15 @@ export async function GET(
     const { id } = await params;
     const schedule = await getClassScheduleById(id);
     if (!schedule) {
-      return NextResponse.json(
-        { error: "Schedule not found" },
-        { status: 404 },
-      );
+      return apiError("NOT_FOUND", "Schedule not found", 404);
     }
-    return NextResponse.json(schedule);
+    return apiSuccess(schedule);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to fetch schedule");
   }
 }
 
-export async function PUT(
+export async function PATCH(
   request: NextRequest,
   { params }: { params: Params },
 ) {
@@ -41,23 +38,20 @@ export async function PUT(
     const data = classScheduleUpdateSchema.parse(body);
 
     const { schedule } = await updateClassSchedule(id, data);
-    return NextResponse.json({ schedule, conflicts: null });
+    return apiSuccess({ schedule, conflicts: null });
   } catch (error: unknown) {
     if (error instanceof ScheduleConflictError) {
-      return NextResponse.json(
-        {
-          error: error.message,
-          conflicts: error.conflicts,
-        },
-        { status: 409 },
+      return apiError(
+        "CONFLICT",
+        error.message,
+        409,
+        { conflicts: error.conflicts },
       );
     }
 
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to update schedule");
   }
 }
-
-export const PATCH = PUT;
 
 export async function DELETE(
   request: NextRequest,
@@ -66,8 +60,8 @@ export async function DELETE(
   try {
     const { id } = await params;
     const schedule = await deleteClassSchedule(id);
-    return NextResponse.json(schedule);
+    return apiSuccess(schedule);
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 400 });
+    return handleApiError(error, "Failed to delete schedule");
   }
 }
