@@ -35,7 +35,7 @@ import { EmptyState } from "@/components/shared/tables/EmptyState";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { useApiCall } from "@/hooks/useApiCall";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 type PaymentMethod = "cash" | "transfer" | "wallet";
 

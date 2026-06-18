@@ -15,8 +15,8 @@ import type { GridColDef } from "@mui/x-data-grid";
 import { useCallback, useState, type ReactElement } from "react";
 
 import { BaseTable } from "@/components/shared/tables/BaseTable";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { FormDialog } from "@/components/FormDialog";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { ScheduleForm } from "./ScheduleForm";

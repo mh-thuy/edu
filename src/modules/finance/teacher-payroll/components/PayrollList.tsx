@@ -21,7 +21,7 @@ import {
   type PayrollFilterValue,
 } from "@/modules/finance/teacher-payroll/components/PayrollFilter";
 import { PayrollTable } from "@/modules/finance/teacher-payroll/components/PayrollTable";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 interface ConfirmActionState {
   id: string;
