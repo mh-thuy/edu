@@ -115,6 +115,49 @@ export async function getClasses(filter: ClassFilter) {
   };
 }
 
+export async function getClassesByTeacherUserId(
+  userId: string,
+  filter: ClassFilter,
+) {
+  const { search, status, page, pageSize } = filter;
+  const skip = (page - 1) * pageSize;
+
+  const where: Prisma.ClassWhereInput = {
+    teacher: {
+      userId,
+    },
+    ...(search && {
+      OR: [
+        { code: { contains: search, mode: "insensitive" } },
+        { name: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+    ...(status && { status }),
+  };
+
+  const [classes, total]: [ClassListItem[], number] = await Promise.all([
+    prisma.class.findMany({
+      where,
+      skip,
+      take: pageSize,
+      include: {
+        teacher: { include: { user: true } },
+        room: true,
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.class.count({ where }),
+  ]);
+
+  return {
+    items: classes,
+    total,
+    page,
+    pageSize,
+    pages: Math.ceil(total / pageSize),
+  };
+}
+
 export async function updateClass(
   id: string,
   data: ClassUpdate,

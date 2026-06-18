@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { classUpdateSchema } from "@/modules/class/schemas/class.schema";
 import { getClassById, updateClass, deleteClass } from "@/modules/class/services/class.service";
 
@@ -35,6 +36,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const classData = await deleteClass(id);
     return apiSuccess(classData);

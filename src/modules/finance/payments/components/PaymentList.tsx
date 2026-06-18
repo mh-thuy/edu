@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
+import type { Role } from "@prisma/client";
 import {
   Alert,
   Box,
@@ -83,7 +84,12 @@ const getMethodLabel = (method: PaymentMethod): string => {
   return labels[method];
 };
 
-export function PaymentList() {
+type PaymentListProps = {
+  role: Role;
+};
+
+export function PaymentList({ role }: PaymentListProps) {
+  const canDelete = role === "ADMIN";
   const { showError, showSuccess, Snackbar } = useSnackbar();
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -296,14 +302,14 @@ export function PaymentList() {
               key="delete"
               icon={<DeleteIcon />}
               label="Xóa"
-              disabled={hasReceipt}
+              disabled={hasReceipt || !canDelete}
               onClick={() => void handleDelete(row.id)}
             />,
           ];
         },
       },
     ],
-    [handleDelete, handleGenerateReceipt],
+    [canDelete, handleDelete, handleGenerateReceipt],
   );
 
   const hasRows = (payments?.items.length || 0) > 0;

@@ -14,6 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import { GridColDef } from "@mui/x-data-grid";
+import type { Role } from "@prisma/client";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
 import { FormDialog } from "@/components/FormDialog";
@@ -38,7 +39,12 @@ export interface Teacher {
   status: TeacherFormData["status"];
 }
 
-const columns: GridColDef[] = [
+type TeacherRow = Teacher & {
+  _onEdit?: (teacher: Teacher) => void;
+  _onDelete?: (teacher: Teacher) => void;
+};
+
+const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
   {
     field: "code",
     headerName: "Mã giáo viên",
@@ -137,6 +143,7 @@ const columns: GridColDef[] = [
           variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          disabled={!canDelete}
           sx={{
             minWidth: 56,
             height: 30,
@@ -151,7 +158,12 @@ const columns: GridColDef[] = [
   },
 ];
 
-export function TeacherList(): ReactElement {
+type TeacherListProps = {
+  role: Role;
+};
+
+export function TeacherList({ role }: TeacherListProps): ReactElement {
+  const canDelete = role === "ADMIN";
   const [search, setSearch] = useState("");
 
   const {
@@ -359,7 +371,7 @@ export function TeacherList(): ReactElement {
         }}
       >
         <BaseTable
-          columns={columns}
+          columns={getColumns(canDelete)}
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}

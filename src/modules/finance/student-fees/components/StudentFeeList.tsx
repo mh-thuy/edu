@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { Role } from "@prisma/client";
 import {
   Alert,
   Box,
@@ -126,7 +127,12 @@ const emptySelectionModel = (): GridRowSelectionModel => ({
   ids: new Set<GridRowId>(),
 });
 
-export function StudentFeeList() {
+type StudentFeeListProps = {
+  role: Role;
+};
+
+export function StudentFeeList({ role }: StudentFeeListProps) {
+  const canDelete = role === "ADMIN";
   const snackbar = useSnackbar();
   const classDialog = useDisclosure();
 
@@ -390,13 +396,14 @@ export function StudentFeeList() {
             <GridActionsCellItem
               icon={<DeleteIcon />}
               label="Xóa"
+              disabled={!canDelete}
               onClick={() => handleDelete(params.row.id)}
             />
           </Stack>
         ),
       },
     ],
-    [handleDelete, handleEdit],
+    [canDelete, handleDelete, handleEdit],
   );
 
   const bulkStudentColumns: GridColDef<BulkStudentRow>[] = useMemo(

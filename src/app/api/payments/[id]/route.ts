@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { PaymentService } from "@/modules/finance/payments/services/payment.service";
 import { paymentUpdateSchema } from "@/modules/finance/payments/schemas/payment.schema";
 
@@ -36,6 +37,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     await PaymentService.deletePayment(id);
 

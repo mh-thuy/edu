@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 
 type Params = Promise<{ id: string }>;
@@ -21,6 +22,11 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     await ReceiptService.deleteReceipt(id);
 

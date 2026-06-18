@@ -14,6 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import ClassIcon from "@mui/icons-material/Class";
 import { GridColDef } from "@mui/x-data-grid";
+import type { Role } from "@prisma/client";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
 import { FormDialog } from "@/components/FormDialog";
@@ -59,7 +60,7 @@ type ClassRow = Class & {
 const formatCurrency = (value?: number | null): string =>
   new Intl.NumberFormat("vi-VN").format(value ?? 0);
 
-const columns: GridColDef<ClassRow>[] = [
+const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
   {
     field: "code",
     headerName: "Mã lớp",
@@ -184,6 +185,7 @@ const columns: GridColDef<ClassRow>[] = [
           variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          disabled={!canDelete}
           sx={{
             minWidth: 56,
             height: 30,
@@ -198,7 +200,12 @@ const columns: GridColDef<ClassRow>[] = [
   },
 ];
 
-export function ClassList(): ReactElement {
+type ClassListProps = {
+  role: Role;
+};
+
+export function ClassList({ role }: ClassListProps): ReactElement {
+  const canDelete = role === "ADMIN";
   const [search, setSearch] = useState("");
 
   const {
@@ -274,7 +281,7 @@ export function ClassList(): ReactElement {
         const response = await fetch(
           isEdit ? `/api/classes/${editingClass.id}` : "/api/classes",
           {
-            method: isEdit ? "PUT" : "POST",
+            method: isEdit ? "PATCH" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           },
@@ -410,7 +417,7 @@ export function ClassList(): ReactElement {
         }}
       >
         <BaseTable
-          columns={columns}
+          columns={getColumns(canDelete)}
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}

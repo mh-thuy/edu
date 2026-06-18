@@ -186,6 +186,46 @@ export async function getSchedules(filter: ScheduleFilter) {
   };
 }
 
+export async function getSchedulesByTeacherUserId(
+  userId: string,
+  filter: ScheduleFilter,
+) {
+  const page = Math.max(filter.page ?? 1, 1);
+  const pageSize = Math.max(filter.pageSize ?? 10, 1);
+  const skip = (page - 1) * pageSize;
+
+  const where: Prisma.ClassScheduleWhereInput = {
+    teacher: {
+      userId,
+    },
+    ...(filter.classId && { classId: filter.classId }),
+    ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
+  };
+
+  const [schedules, total] = await Promise.all([
+    prisma.classSchedule.findMany({
+      where,
+      skip,
+      take: pageSize,
+      include: {
+        class: true,
+        room: true,
+        teacher: true,
+      },
+      orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+    }),
+    prisma.classSchedule.count({ where }),
+  ]);
+
+  return {
+    items: schedules,
+    total,
+    page,
+    pageSize,
+    pages: Math.ceil(total / pageSize),
+  };
+}
+
 export async function updateClassSchedule(
   id: string,
   data: ClassScheduleUpdate,

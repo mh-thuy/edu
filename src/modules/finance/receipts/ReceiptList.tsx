@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useCallback, useState } from "react";
+import type { Role } from "@prisma/client";
 import {
   Alert,
   Box,
@@ -101,7 +102,12 @@ const getMethodLabel = (method: PaymentMethod) => {
   return labels[method] || method;
 };
 
-export function ReceiptList() {
+type ReceiptListProps = {
+  role: Role;
+};
+
+export function ReceiptList({ role }: ReceiptListProps) {
+  const canDelete = role === "ADMIN";
   const snackbar = useSnackbar();
   const { showSuccess, showError } = snackbar;
 
@@ -334,12 +340,12 @@ export function ReceiptList() {
             icon={<DeleteIcon />}
             label="Xóa"
             onClick={() => setDeleteId(params.row.id)}
-            disabled={!!(params.row as Receipt).printedAt}
+            disabled={!!(params.row as Receipt).printedAt || !canDelete || deleting}
           />,
         ],
       },
     ],
-    [handlePrint, marking],
+    [canDelete, deleting, handlePrint, marking],
   );
 
   return (

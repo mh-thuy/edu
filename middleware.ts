@@ -1,6 +1,7 @@
 import { jwtVerify } from "jose";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api";
 import { AUTH_COOKIE_NAME } from "@/constants/auth";
 import {
   API_ROLE_RULES,
@@ -34,11 +35,10 @@ function isApiPath(pathname: string): boolean {
 }
 
 function unauthorizedApiResponse(status: 401 | 403, message: string): NextResponse {
-  return NextResponse.json(
-    {
-      error: message,
-    },
-    { status },
+  return apiError(
+    status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+    message,
+    status,
   );
 }
 

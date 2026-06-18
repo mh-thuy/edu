@@ -14,6 +14,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolIcon from "@mui/icons-material/School";
 import { GridColDef } from "@mui/x-data-grid";
+import type { Role } from "@prisma/client";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/BaseTable";
 import { FormDialog } from "@/components/FormDialog";
@@ -42,7 +43,7 @@ type StudentRow = Student & {
   _onDelete?: (student: Student) => void;
 };
 
-const columns: GridColDef<StudentRow>[] = [
+const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
   {
     field: "code",
     headerName: "Mã học sinh",
@@ -139,6 +140,7 @@ const columns: GridColDef<StudentRow>[] = [
           variant="contained"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          disabled={!canDelete}
           sx={{
             minWidth: 56,
             height: 30,
@@ -153,7 +155,12 @@ const columns: GridColDef<StudentRow>[] = [
   },
 ];
 
-export function StudentList(): ReactElement {
+type StudentListProps = {
+  role: Role;
+};
+
+export function StudentList({ role }: StudentListProps): ReactElement {
+  const canDelete = role === "ADMIN";
   const [search, setSearch] = useState("");
 
   const {
@@ -229,7 +236,7 @@ export function StudentList(): ReactElement {
         const response = await fetch(
           isEdit ? `/api/students/${editingStudent.id}` : "/api/students",
           {
-            method: isEdit ? "PUT" : "POST",
+            method: isEdit ? "PATCH" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           },
@@ -364,7 +371,7 @@ export function StudentList(): ReactElement {
         }}
       >
         <BaseTable
-          columns={columns}
+          columns={getColumns(canDelete)}
           rows={tableData}
           totalRows={data?.total || 0}
           page={page}

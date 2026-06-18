@@ -102,6 +102,28 @@ export async function updateTeacher(
   id: string,
   data: TeacherUpdate,
 ): Promise<Teacher> {
+  const currentTeacher = await prisma.teacher.findUnique({
+    where: { id },
+    select: {
+      email: true,
+      userId: true,
+    },
+  });
+
+  if (!currentTeacher) {
+    throw new Error("Teacher not found");
+  }
+
+  if (
+    currentTeacher.userId &&
+    data.email !== undefined &&
+    data.email !== currentTeacher.email
+  ) {
+    throw new ConflictError(
+      "Cannot update teacher email separately when teacher is linked to a user",
+    );
+  }
+
   return prisma.teacher.update({
     where: { id },
     data: buildTeacherUpdateInput(data),

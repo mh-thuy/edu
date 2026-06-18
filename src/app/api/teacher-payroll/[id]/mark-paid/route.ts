@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { TeacherPayrollService } from "@/modules/finance/teacher-payroll/services/teacher-payroll.service";
-import { getSessionFromCookie } from "@/lib/session";
-import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
+import { apiSuccess, handleApiError } from "@/lib/api";
 
 type Params = Promise<{ id: string }>;
 
@@ -10,15 +10,15 @@ export async function POST(
   { params }: { params: Params },
 ) {
   try {
-    const session = await getSessionFromCookie();
-    if (!session?.user?.id) {
-      return apiError("UNAUTHORIZED", "Unauthorized", 401);
+    const user = await requireApiRole(["ADMIN"]);
+    if (user instanceof Response) {
+      return user;
     }
 
     const { id } = await params;
     const payroll = await TeacherPayrollService.markPayrollAsPaid(
       id,
-      session.user.id,
+      user.id,
     );
 
     return apiSuccess(payroll);
