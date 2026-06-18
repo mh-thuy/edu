@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { FeeStatus, Prisma } from "@prisma/client";
+
+function normalizeFeeStatus(status?: string): FeeStatus | undefined {
+  if (!status) return undefined;
+  const normalized = status.toUpperCase();
+  if (normalized === "UNPAID" || normalized === "PARTIAL" || normalized === "PAID") {
+    return normalized;
+  }
+  return undefined;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     // Build where clause
     const where: Prisma.StudentFeeWhereInput = {};
-    if (status) where.status = status;
+    if (status) where.status = normalizeFeeStatus(status);
     if (studentId) where.studentId = studentId;
     if (classId) where.classId = classId;
 
@@ -38,14 +47,14 @@ export async function GET(request: NextRequest) {
     // Transform to debt tracking format
     const debts = fees.map((fee) => {
       const totalPaid = fee.payments.reduce((sum, payment) => sum + payment.amount, 0);
-      const outstanding = fee.amount - totalPaid;
+      const outstanding = fee.amount - fee.discount - totalPaid;
       
       return {
         id: fee.id,
         studentId: fee.student.id,
         studentName: fee.student.fullName,
         className: fee.class.name,
-        totalAmount: fee.amount,
+        totalAmount: fee.amount - fee.discount,
         totalPaid,
         outstanding,
         status: fee.status,

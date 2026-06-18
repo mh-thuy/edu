@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       month: validated.month,
       amount: validated.amount,
       dueDate: new Date(validated.dueDate),
-      status: "unpaid", // Default status for new fees
+      status: "UNPAID", // Default status for new fees
     });
 
     return NextResponse.json(result, { status: 201 });

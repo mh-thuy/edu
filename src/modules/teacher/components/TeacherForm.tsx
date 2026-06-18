@@ -32,6 +32,7 @@ export function TeacherForm({
   const { control, handleSubmit } = useForm<TeacherFormData>({
     resolver: zodResolver(teacherCreateSchema),
     defaultValues: {
+      fullName: defaultValues?.fullName ?? "",
       code: defaultValues?.code ?? "",
       phone: defaultValues?.phone ?? "",
       email: defaultValues?.email ?? "",
@@ -45,6 +46,22 @@ export function TeacherForm({
     <Box component="form" id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2.5}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Controller
+            name="fullName"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <TextField
+                {...field}
+                label="Họ và tên"
+                placeholder="VD: Nguyễn Văn A"
+                error={!!error}
+                helperText={error?.message}
+                fullWidth
+                size="small"
+              />
+            )}
+          />
+
           <Controller
             name="code"
             control={control}

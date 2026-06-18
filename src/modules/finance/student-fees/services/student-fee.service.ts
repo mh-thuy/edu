@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import type { FeeStatus, Prisma } from "@prisma/client";
 import type {
   StudentFeeFilter,
 } from "@/modules/finance/student-fees/schemas/student-fee.schema";
@@ -22,7 +22,7 @@ export class StudentFeeService {
     month: string;
     amount: number;
     dueDate: Date;
-    status?: string;
+    status?: FeeStatus;
   }): Promise<StudentFeeWithRelations> {
     // Check if fee already exists
     const existing = await prisma.studentFee.findUnique({
@@ -46,7 +46,7 @@ export class StudentFeeService {
         month: data.month,
         amount: data.amount,
         dueDate: data.dueDate,
-        status: data.status || "unpaid",
+        status: data.status || "UNPAID",
       },
       include: {
         student: true,
@@ -108,7 +108,7 @@ export class StudentFeeService {
               amount: data.amount,
               discount: data.discount,
               dueDate: data.dueDate,
-              status: "unpaid",
+              status: "UNPAID",
               note: data.note,
             },
           });
@@ -164,9 +164,9 @@ export class StudentFeeService {
     // Handle both single status and array of statuses
     if (status) {
       if (Array.isArray(status)) {
-        where.status = { in: status };
+        where.status = { in: status as FeeStatus[] };
       } else {
-        where.status = status;
+        where.status = status as FeeStatus;
       }
     }
 
@@ -254,13 +254,17 @@ export class StudentFeeService {
     if (!fee) throw new Error("Student fee not found");
 
     const totalPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-    const outstanding = fee.amount - totalPaid;
+    const netAmount = fee.amount - fee.discount;
+    const outstanding = netAmount - totalPaid;
+
+    const status: FeeStatus =
+      outstanding <= 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
 
     return {
-      totalAmount: fee.amount,
+      totalAmount: netAmount,
       totalPaid,
       outstanding,
-      status: outstanding <= 0 ? "paid" : totalPaid > 0 ? "partial" : "unpaid",
+      status,
     };
   }
 

@@ -29,6 +29,7 @@ type TeacherFormData = z.infer<typeof teacherCreateSchema>;
 
 export interface Teacher {
   id: string;
+  fullName: string;
   code: string;
   phone?: string;
   email?: string;

@@ -5,18 +5,18 @@ export async function GET() {
   try {
     // Get debt statistics
     const unpaidCount = await prisma.studentFee.count({
-      where: { status: "unpaid" },
+      where: { status: "UNPAID" },
     });
 
     const partialCount = await prisma.studentFee.count({
-      where: { status: "partial" },
+      where: { status: "PARTIAL" },
     });
 
     // Get total outstanding amount - need to calculate from fees and payments
     const fees = await prisma.studentFee.findMany({
       where: {
         status: {
-          in: ["unpaid", "partial"],
+          in: ["UNPAID", "PARTIAL"],
         },
       },
       include: {
@@ -26,7 +26,7 @@ export async function GET() {
 
     const totalDebt = fees.reduce((sum, fee) => {
       const totalPaid = fee.payments.reduce((paidSum, payment) => paidSum + payment.amount, 0);
-      const outstanding = fee.amount - totalPaid;
+      const outstanding = fee.amount - fee.discount - totalPaid;
       return sum + outstanding;
     }, 0);
 
@@ -37,7 +37,7 @@ export async function GET() {
           lt: new Date(),
         },
         status: {
-          in: ["unpaid", "partial"],
+          in: ["UNPAID", "PARTIAL"],
         },
       },
     });

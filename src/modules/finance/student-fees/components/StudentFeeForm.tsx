@@ -43,7 +43,13 @@ interface StudentFeeFormProps {
     month: string;
     amount: number;
     dueDate: string;
-    status: "unpaid" | "partial" | "paid";
+    status:
+      | "unpaid"
+      | "partial"
+      | "paid"
+      | "UNPAID"
+      | "PARTIAL"
+      | "PAID";
     student?: {
       code: string;
       fullName: string;
@@ -116,7 +122,11 @@ export function StudentFeeForm({
       : {
           amount: initialData?.amount,
           dueDate: initialData?.dueDate?.slice(0, 10),
-          status: initialData?.status,
+          status: initialData?.status?.toUpperCase() as
+            | "UNPAID"
+            | "PARTIAL"
+            | "PAID"
+            | undefined,
         },
   });
 
@@ -321,9 +331,9 @@ export function StudentFeeForm({
                 fullWidth
                 slotProps={{ select: { native: true } }}
               >
-                <option value="unpaid">Chưa thanh toán</option>
-                <option value="partial">Thanh toán một phần</option>
-                <option value="paid">Đã thanh toán</option>
+                <option value="UNPAID">Chưa thanh toán</option>
+                <option value="PARTIAL">Thanh toán một phần</option>
+                <option value="PAID">Đã thanh toán</option>
               </TextField>
             )}
           </Stack>

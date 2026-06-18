@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { PaymentMethod } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import type {
   PaymentCreate,
   PaymentFilter,
+  PaymentUpdate,
 } from "@/modules/finance/payments/schemas/payment.schema";
 
 export type PaymentWithRelations = Prisma.PaymentGetPayload<{
@@ -20,6 +22,17 @@ export type PaymentWithRelations = Prisma.PaymentGetPayload<{
 }>;
 
 export class PaymentService {
+  private static toPaymentMethod(method: PaymentCreate["method"]): PaymentMethod {
+    switch (method) {
+      case "cash":
+        return PaymentMethod.CASH;
+      case "transfer":
+        return PaymentMethod.TRANSFER;
+      case "wallet":
+        return PaymentMethod.WALLET;
+    }
+  }
+
   /**
    * Create a payment
    */
@@ -34,11 +47,12 @@ export class PaymentService {
     // Calculate what's been paid already
     const alreadyPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
     const totalAfterPayment = alreadyPaid + data.amount;
+    const netAmount = fee.amount - fee.discount;
 
     // Don't allow overpayment (optional, adjust logic as needed)
-    if (totalAfterPayment > fee.amount) {
+    if (totalAfterPayment > netAmount) {
       throw new Error(
-        `Payment exceeds outstanding amount. Outstanding: ${fee.amount - alreadyPaid}, Payment: ${data.amount}`
+        `Payment exceeds outstanding amount. Outstanding: ${netAmount - alreadyPaid}, Payment: ${data.amount}`
       );
     }
 
@@ -46,7 +60,7 @@ export class PaymentService {
       data: {
         studentFeeId: data.studentFeeId,
         amount: data.amount,
-        method: data.method,
+        method: this.toPaymentMethod(data.method),
         paymentDate: new Date(data.paymentDate),
         notes: data.notes,
       },
@@ -135,7 +149,7 @@ export class PaymentService {
         ],
       }),
       ...(studentFeeId && { studentFeeId }),
-      ...(method && { method }),
+      ...(method && { method: this.toPaymentMethod(method) }),
       ...((startDate || endDate) && {
         paymentDate: {
           ...(startDate && { gte: new Date(startDate) }),
@@ -197,7 +211,7 @@ export class PaymentService {
    */
   static async updatePayment(
     id: string,
-    data: Prisma.PaymentUpdateInput,
+    data: PaymentUpdate,
   ): Promise<PaymentWithRelations> {
     const payment = await prisma.payment.findUnique({
       where: { id },
@@ -226,18 +240,28 @@ export class PaymentService {
       (sum, item) => (item.id === id ? sum : sum + item.amount),
       0,
     );
+    const netAmount = payment.studentFee.amount - payment.studentFee.discount;
 
-    if (paidExcludingCurrent + nextAmount > payment.studentFee.amount) {
+    if (paidExcludingCurrent + nextAmount > netAmount) {
       throw new Error(
         `Payment exceeds outstanding amount. Outstanding: ${
-          payment.studentFee.amount - paidExcludingCurrent
+          netAmount - paidExcludingCurrent
         }, Payment: ${nextAmount}`,
       );
     }
 
     const updated = await prisma.payment.update({
       where: { id },
-      data,
+      data: {
+        ...(data.amount !== undefined && { amount: data.amount }),
+        ...(data.method !== undefined && {
+          method: this.toPaymentMethod(data.method),
+        }),
+        ...(data.paymentDate !== undefined && {
+          paymentDate: new Date(data.paymentDate),
+        }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+      },
       include: {
         receipts: true,
         studentFee: {
@@ -348,8 +372,12 @@ export class PaymentService {
     let totalRevenue = 0;
 
     for (const payment of payments) {
-      if (payment.method === "cash" || payment.method === "transfer" || payment.method === "wallet") {
-        methodSummary[payment.method] += payment.amount;
+      if (payment.method === PaymentMethod.CASH) {
+        methodSummary.cash += payment.amount;
+      } else if (payment.method === PaymentMethod.TRANSFER) {
+        methodSummary.transfer += payment.amount;
+      } else if (payment.method === PaymentMethod.WALLET) {
+        methodSummary.wallet += payment.amount;
       }
       totalRevenue += payment.amount;
     }

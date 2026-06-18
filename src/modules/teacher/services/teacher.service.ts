@@ -11,6 +11,7 @@ function buildTeacherCreateInput(
   data: TeacherCreate,
 ): Prisma.TeacherCreateInput {
   return {
+    fullName: data.fullName,
     code: data.code,
     phone: data.phone || null,
     email: data.email || null,
@@ -24,6 +25,7 @@ function buildTeacherUpdateInput(
   data: TeacherUpdate,
 ): Prisma.TeacherUpdateInput {
   return {
+    ...(data.fullName !== undefined && { fullName: data.fullName }),
     ...(data.code !== undefined && { code: data.code }),
     ...(data.phone !== undefined && { phone: data.phone || null }),
     ...(data.email !== undefined && { email: data.email || null }),

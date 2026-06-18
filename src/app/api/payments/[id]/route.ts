@@ -26,12 +26,7 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     const body = await request.json();
 
     const validated = paymentUpdateSchema.parse(body);
-    const updated = await PaymentService.updatePayment(id, {
-      ...validated,
-      paymentDate: validated.paymentDate
-        ? new Date(validated.paymentDate)
-        : undefined,
-    });
+    const updated = await PaymentService.updatePayment(id, validated);
 
     return NextResponse.json(updated);
   } catch (error) {
