@@ -13,6 +13,12 @@ export type StudentFeeWithRelations = Prisma.StudentFeeGetPayload<{
 }>;
 
 export class StudentFeeService {
+  private static getClient(
+    tx?: Prisma.TransactionClient,
+  ): Prisma.TransactionClient | typeof prisma {
+    return tx ?? prisma;
+  }
+
   /**
    * Create a single student fee
    */
@@ -70,58 +76,108 @@ export class StudentFeeService {
       note?: string;
     },
   ) {
-    // Get all students in the class
-    const classStudents = await prisma.classStudent.findMany({
-      where: {
-        classId: data.classId,
-        studentId: { in: data.studentIds },
-      },
-      include: { student: true },
+    return prisma.$transaction(async (tx) => {
+      const classStudents = await tx.classStudent.findMany({
+        where: {
+          classId: data.classId,
+          studentId: { in: data.studentIds },
+        },
+        select: { studentId: true },
+      });
+
+      if (classStudents.length === 0) {
+        return { created: 0, skipped: 0 };
+      }
+
+      const existingFees = await tx.studentFee.findMany({
+        where: {
+          classId: data.classId,
+          month: data.month,
+          studentId: {
+            in: classStudents.map((cs) => cs.studentId),
+          },
+        },
+        select: {
+          studentId: true,
+        },
+      });
+
+      const existingStudentIds = new Set(
+        existingFees.map((fee) => fee.studentId),
+      );
+      const feesToCreate = classStudents
+        .filter((cs) => !existingStudentIds.has(cs.studentId))
+        .map((cs) => ({
+          studentId: cs.studentId,
+          classId: data.classId,
+          month: data.month,
+          amount: data.amount,
+          discount: data.discount,
+          dueDate: data.dueDate,
+          status: "UNPAID" as FeeStatus,
+          note: data.note,
+        }));
+
+      if (feesToCreate.length > 0) {
+        await tx.studentFee.createMany({
+          data: feesToCreate,
+        });
+      }
+
+      return {
+        created: feesToCreate.length,
+        skipped: classStudents.length - feesToCreate.length,
+      };
+    });
+  }
+
+  private static async calculateDebtWithClient(
+    studentFeeId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = this.getClient(tx);
+    const fee = await db.studentFee.findUnique({
+      where: { id: studentFeeId },
+      include: { payments: true },
     });
 
-    if (classStudents.length === 0) {
-      return { created: 0, skipped: 0 };
-    }
+    if (!fee) throw new Error("Student fee not found");
 
-    let created = 0;
-    let skipped = 0;
+    const totalPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
+    const netAmount = fee.amount - fee.discount;
+    const outstanding = netAmount - totalPaid;
 
-    for (const cs of classStudents) {
-      try {
-        // Check if fee already exists for this student/class/month
-        const existing = await prisma.studentFee.findUnique({
-          where: {
-            studentId_classId_month: {
-              studentId: cs.studentId,
-              classId: data.classId,
-              month: data.month,
-            },
-          },
-        });
+    const status: FeeStatus =
+      outstanding <= 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
 
-        if (!existing) {
-          await prisma.studentFee.create({
-            data: {
-              studentId: cs.studentId,
-              classId: data.classId,
-              month: data.month,
-              amount: data.amount,
-              discount: data.discount,
-              dueDate: data.dueDate,
-              status: "UNPAID",
-              note: data.note,
-            },
-          });
-          created++;
-        } else {
-          skipped++;
-        }
-      } catch {
-        skipped++;
-      }
-    }
+    return {
+      totalAmount: netAmount,
+      totalPaid,
+      outstanding,
+      status,
+    };
+  }
 
-    return { created, skipped };
+  /**
+   * Calculate total debt for a student/class/month
+   */
+  static async calculateDebt(studentFeeId: string) {
+    return this.calculateDebtWithClient(studentFeeId);
+  }
+
+  /**
+   * Update fee status based on payments
+   */
+  static async updateFeeStatus(
+    studentFeeId: string,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = this.getClient(tx);
+    const debt = await this.calculateDebtWithClient(studentFeeId, tx);
+    await db.studentFee.update({
+      where: { id: studentFeeId },
+      data: { status: debt.status },
+    });
   }
 
   /**
@@ -240,43 +296,6 @@ export class StudentFeeService {
       throw new Error("Cannot delete: payments already recorded");
 
     return prisma.studentFee.delete({ where: { id } });
-  }
-
-  /**
-   * Calculate total debt for a student/class/month
-   */
-  static async calculateDebt(studentFeeId: string) {
-    const fee = await prisma.studentFee.findUnique({
-      where: { id: studentFeeId },
-      include: { payments: true },
-    });
-
-    if (!fee) throw new Error("Student fee not found");
-
-    const totalPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-    const netAmount = fee.amount - fee.discount;
-    const outstanding = netAmount - totalPaid;
-
-    const status: FeeStatus =
-      outstanding <= 0 ? "PAID" : totalPaid > 0 ? "PARTIAL" : "UNPAID";
-
-    return {
-      totalAmount: netAmount,
-      totalPaid,
-      outstanding,
-      status,
-    };
-  }
-
-  /**
-   * Update fee status based on payments
-   */
-  static async updateFeeStatus(studentFeeId: string) {
-    const debt = await this.calculateDebt(studentFeeId);
-    await prisma.studentFee.update({
-      where: { id: studentFeeId },
-      data: { status: debt.status },
-    });
   }
 
   /**

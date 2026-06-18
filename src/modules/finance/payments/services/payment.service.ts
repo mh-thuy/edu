@@ -37,49 +37,48 @@ export class PaymentService {
    * Create a payment
    */
   static async createPayment(data: PaymentCreate): Promise<PaymentWithRelations> {
-    const fee = await prisma.studentFee.findUnique({
-      where: { id: data.studentFeeId },
-      include: { payments: true },
-    });
+    return prisma.$transaction(async (tx) => {
+      const fee = await tx.studentFee.findUnique({
+        where: { id: data.studentFeeId },
+        include: { payments: true },
+      });
 
-    if (!fee) throw new Error("Student fee not found");
+      if (!fee) throw new Error("Student fee not found");
 
-    // Calculate what's been paid already
-    const alreadyPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
-    const totalAfterPayment = alreadyPaid + data.amount;
-    const netAmount = fee.amount - fee.discount;
+      const alreadyPaid = fee.payments.reduce((sum, p) => sum + p.amount, 0);
+      const totalAfterPayment = alreadyPaid + data.amount;
+      const netAmount = fee.amount - fee.discount;
 
-    // Don't allow overpayment (optional, adjust logic as needed)
-    if (totalAfterPayment > netAmount) {
-      throw new Error(
-        `Payment exceeds outstanding amount. Outstanding: ${netAmount - alreadyPaid}, Payment: ${data.amount}`
-      );
-    }
+      if (totalAfterPayment > netAmount) {
+        throw new Error(
+          `Payment exceeds outstanding amount. Outstanding: ${netAmount - alreadyPaid}, Payment: ${data.amount}`
+        );
+      }
 
-    const payment = await prisma.payment.create({
-      data: {
-        studentFeeId: data.studentFeeId,
-        amount: data.amount,
-        method: this.toPaymentMethod(data.method),
-        paymentDate: new Date(data.paymentDate),
-        notes: data.notes,
-      },
-      include: {
-        receipts: true,
-        studentFee: {
-          include: {
-            student: true,
-            class: true,
-            payments: true,
+      const payment = await tx.payment.create({
+        data: {
+          studentFeeId: data.studentFeeId,
+          amount: data.amount,
+          method: this.toPaymentMethod(data.method),
+          paymentDate: new Date(data.paymentDate),
+          notes: data.notes,
+        },
+        include: {
+          receipts: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
           },
         },
-      },
+      });
+
+      await StudentFeeService.updateFeeStatus(data.studentFeeId, tx);
+
+      return payment;
     });
-
-    // Update fee status
-    await StudentFeeService.updateFeeStatus(data.studentFeeId);
-
-    return payment;
   }
 
   /**
