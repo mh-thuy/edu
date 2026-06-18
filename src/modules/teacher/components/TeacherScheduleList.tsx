@@ -10,7 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { GridColDef } from "@mui/x-data-grid";
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { useList } from "@/hooks/useList";
 
 type TeacherSchedule = {

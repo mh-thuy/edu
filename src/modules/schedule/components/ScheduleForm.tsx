@@ -18,12 +18,12 @@ import {
   classScheduleFormSchema,
   type ClassScheduleFormData,
 } from "@/modules/schedule/schemas/schedule.schema";
-import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
-import { RoomSelectDialog } from "@/components/shared/RoomSelectDialog";
+import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
+import { RoomSelectDialog } from "@/components/shared/dialogs/RoomSelectDialog";
 import {
   MasterSelectField,
   type MasterSelectValue,
-} from "@/components/shared/MasterSelectField";
+} from "@/components/shared/forms/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { unwrapApiResponse } from "@/lib/api-client";
 

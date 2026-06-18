@@ -23,15 +23,15 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import {
   MasterSelectField,
   type MasterSelectValue,
-} from "@/components/shared/MasterSelectField";
-import { StudentSelectDialog } from "@/components/shared/StudentSelectDialog";
-import { ClassSelectDialog } from "@/components/shared/ClassSelectDialog";
+} from "@/components/shared/forms/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 
 import type { z } from "zod";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { StudentSelectDialog } from "@/components/shared/dialogs/StudentSelectDialog";
+import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
 
 type StudentFeeCreateInput = z.infer<typeof studentFeeCreateSchema>;
 type StudentFeeUpdateInput = z.infer<typeof studentFeeUpdateSchema>;

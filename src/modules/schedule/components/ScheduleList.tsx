@@ -14,7 +14,7 @@ import EventNoteIcon from "@mui/icons-material/EventNote";
 import type { GridColDef } from "@mui/x-data-grid";
 import { useCallback, useState, type ReactElement } from "react";
 
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormDialog } from "@/components/FormDialog";
 import { useList } from "@/hooks/useList";

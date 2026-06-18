@@ -30,8 +30,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 
-import { BaseTable } from "@/components/BaseTable";
-import { EmptyState } from "@/components/shared/EmptyState";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
+import { EmptyState } from "@/components/shared/tables/EmptyState";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { useApiCall } from "@/hooks/useApiCall";

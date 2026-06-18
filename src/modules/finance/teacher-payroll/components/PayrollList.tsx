@@ -8,7 +8,6 @@ import {
   type ReactElement,
 } from "react";
 import { Box, Card, Typography } from "@mui/material";
-import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { payrollApi } from "@/modules/payroll/services/payroll.service";
 import {
@@ -22,6 +21,7 @@ import {
   type PayrollFilterValue,
 } from "@/modules/finance/teacher-payroll/components/PayrollFilter";
 import { PayrollTable } from "@/modules/finance/teacher-payroll/components/PayrollTable";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 interface ConfirmActionState {
   id: string;

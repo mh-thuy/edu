@@ -32,16 +32,16 @@ import EditIcon from "@mui/icons-material/Edit";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
 
-import { BaseTable } from "@/components/BaseTable";
-import { EmptyState } from "@/components/shared/EmptyState";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
+import { EmptyState } from "@/components/shared/tables/EmptyState";
 import {
   MasterSelectField,
   type MasterSelectValue,
-} from "@/components/shared/MasterSelectField";
+} from "@/components/shared/forms/MasterSelectField";
 import {
   ClassSelectDialog,
   type ClassItem,
-} from "@/components/shared/ClassSelectDialog";
+} from "@/components/shared/dialogs/ClassSelectDialog";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";

@@ -15,7 +15,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback } from "react";
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useList } from "@/hooks/useList";

@@ -5,7 +5,7 @@ import { type GridColDef } from "@mui/x-data-grid";
 import {
   BaseSelectDialog,
   type SelectableItem,
-} from "@/components/shared/BaseSelectDialog";
+} from "@/components/shared/dialogs/BaseSelectDialog";
 
 export interface TeacherItem extends SelectableItem {
   id: string;

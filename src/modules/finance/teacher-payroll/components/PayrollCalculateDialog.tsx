@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import {
   TeacherSelectDialog,
   type TeacherSelectValue,
-} from "@/components/shared/TeacherSelectDialog";
+} from "@/components/shared/dialogs/TeacherSelectDialog";
 
 interface PayrollCalculateDialogProps {
   open: boolean;

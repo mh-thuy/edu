@@ -8,7 +8,7 @@ import ClearIcon from "@mui/icons-material/Clear";
 import {
   TeacherSelectDialog,
   type TeacherSelectValue,
-} from "@/components/shared/TeacherSelectDialog";
+} from "@/components/shared/dialogs/TeacherSelectDialog";
 import { PayrollStatus } from "@/modules/payroll/services/payroll.types";
 
 export interface PayrollFilterValue {

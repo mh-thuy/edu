@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import { type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { unwrapApiResponse } from "@/lib/api-client";

@@ -15,12 +15,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
 import { useState, type ReactElement } from "react";
-import { TeacherSelectDialog } from "@/components/shared/TeacherSelectDialog";
-import { RoomSelectDialog } from "@/components/shared/RoomSelectDialog";
+import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
+import { RoomSelectDialog } from "@/components/shared/dialogs/RoomSelectDialog";
 import {
   MasterSelectField,
   type MasterSelectValue,
-} from "@/components/shared/MasterSelectField";
+} from "@/components/shared/forms/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;

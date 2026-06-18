@@ -10,7 +10,7 @@ import {
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import PaymentIcon from "@mui/icons-material/Payment";
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import {
   PayrollStatus,
   type TeacherPayrollDto,

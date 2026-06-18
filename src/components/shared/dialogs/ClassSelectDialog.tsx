@@ -2,7 +2,7 @@
 
 import type { ReactElement } from "react";
 import { type GridColDef } from "@mui/x-data-grid";
-import { BaseSelectDialog } from "@/components/shared/BaseSelectDialog";
+import { BaseSelectDialog } from "@/components/shared/dialogs/BaseSelectDialog";
 
 export interface ClassItem {
   id: string;

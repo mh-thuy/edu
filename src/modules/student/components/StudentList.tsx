@@ -16,7 +16,7 @@ import SchoolIcon from "@mui/icons-material/School";
 import { GridColDef } from "@mui/x-data-grid";
 import type { Role } from "@prisma/client";
 import { useState, useCallback } from "react";
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/FormDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useList } from "@/hooks/useList";

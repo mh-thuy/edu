@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import type { GridColDef } from "@mui/x-data-grid";
-import { BaseTable } from "@/components/BaseTable";
+import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { useList } from "@/hooks/useList";
 
 type TeacherClass = {
