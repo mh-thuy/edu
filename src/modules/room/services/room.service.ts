@@ -83,9 +83,10 @@ export async function getRooms(filter: RoomFilter) {
       where,
       skip,
       take: pageSize,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [
+        { code: "asc" },
+        { id: "asc" },
+      ]
     }),
     prisma.room.count({
       where,

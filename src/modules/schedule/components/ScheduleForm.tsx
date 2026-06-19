@@ -43,8 +43,8 @@ type ScheduleSubmitData = {
   roomId?: string | null;
   teacherId?: string | null;
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startMinute: number;
+  endMinute: number;
 };
 
 export interface ScheduleFormProps {
@@ -88,8 +88,8 @@ export function ScheduleForm({
       roomName: defaultValues?.roomName ?? "",
       teacherId: defaultValues?.teacherId ?? undefined,
       dayOfWeek: defaultValues?.dayOfWeek ?? 0,
-      startTime: defaultValues?.startTime ?? "08:00",
-      endTime: defaultValues?.endTime ?? "10:00",
+      startMinute: defaultValues?.startMinute ?? 480, // 08:00 in minutes
+      endMinute: defaultValues?.endMinute ?? 600, // 10:00 in minutes
     },
   });
 
@@ -105,8 +105,8 @@ export function ScheduleForm({
   const roomCode = useWatch({ control, name: "roomCode" });
   const roomName = useWatch({ control, name: "roomName" });
   const dayOfWeek = useWatch({ control, name: "dayOfWeek" });
-  const startTime = useWatch({ control, name: "startTime" });
-  const endTime = useWatch({ control, name: "endTime" });
+  const startMinute = useWatch({ control, name: "startMinute" });
+  const endMinute = useWatch({ control, name: "endMinute" });
 
   const selectedClass = useMemo<MasterSelectValue | null>(() => {
     if (!classId) return null;
@@ -168,13 +168,18 @@ export function ScheduleForm({
       roomId: data.roomId,
       teacherId: data.teacherId || undefined,
       dayOfWeek: data.dayOfWeek,
-      startTime: data.startTime,
-      endTime: data.endTime,
+      startMinute: data.startMinute,
+      endMinute: data.endMinute,
     });
   };
 
   useEffect(() => {
-    if (!roomId || dayOfWeek === undefined || !startTime || !endTime) {
+    if (
+      !roomId ||
+      dayOfWeek === undefined ||
+      startMinute === undefined ||
+      endMinute === undefined
+    ) {
       setConflict(null);
       onConflictCheck?.({ hasConflict: false });
       return;
@@ -190,8 +195,8 @@ export function ScheduleForm({
           body: JSON.stringify({
             roomId,
             dayOfWeek,
-            startTime,
-            endTime,
+            startMinute,
+            endMinute,
             excludeScheduleId: scheduleId,
           }),
           signal: controller.signal,
@@ -220,7 +225,7 @@ export function ScheduleForm({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [roomId, dayOfWeek, startTime, endTime, onConflictCheck, scheduleId]);
+  }, [roomId, dayOfWeek, startMinute, endMinute, onConflictCheck, scheduleId]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(handleFormSubmit)}>
@@ -271,7 +276,7 @@ export function ScheduleForm({
         />
 
         <Controller
-          name="startTime"
+          name="startMinute"
           control={control}
           render={({ field, fieldState }) => (
             <TextField
@@ -288,7 +293,7 @@ export function ScheduleForm({
         />
 
         <Controller
-          name="endTime"
+          name="endMinute"
           control={control}
           render={({ field, fieldState }) => (
             <TextField

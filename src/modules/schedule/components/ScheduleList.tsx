@@ -21,14 +21,15 @@ import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { ScheduleForm } from "./ScheduleForm";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { intToTime } from "@/utils/date";
 
 type ScheduleSubmitData = {
   classId: string;
   roomId?: string | null;
   teacherId?: string | null;
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startMinute: number;
+  endMinute: number;
 };
 
 type ConflictResult = {
@@ -39,8 +40,8 @@ type ConflictResult = {
 export interface Schedule {
   id: string;
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startMinute: number;
+  endMinute: number;
 
   classId: string;
   roomId?: string | null;
@@ -92,14 +93,16 @@ const columns: GridColDef<ScheduleRow>[] = [
     },
   },
   {
-    field: "startTime",
+    field: "startMinute",
     headerName: "Giờ bắt đầu",
     minWidth: 120,
+    renderCell: (params) => intToTime(params.value),
   },
   {
-    field: "endTime",
+    field: "endMinute",
     headerName: "Giờ kết thúc",
     minWidth: 120,
+    renderCell: (params) => intToTime(params.value),
   },
   {
     field: "classId",
@@ -125,25 +128,6 @@ const columns: GridColDef<ScheduleRow>[] = [
 
       return `${roomData.name} (${roomData.code})`;
     },
-  },
-  {
-    field: "timeRange",
-    headerName: "Thời lượng",
-    minWidth: 150,
-    sortable: false,
-    filterable: false,
-    disableColumnMenu: true,
-    renderCell: (params) => (
-      <Chip
-        label={`${params.row.startTime} - ${params.row.endTime}`}
-        size="small"
-        variant="outlined"
-        sx={{
-          fontWeight: 600,
-          borderRadius: 999,
-        }}
-      />
-    ),
   },
   {
     field: "actions",
@@ -286,15 +270,18 @@ export function ScheduleList(): ReactElement {
         const response = await fetch(
           isEdit ? `/api/schedules/${editingSchedule.id}` : "/api/schedules",
           {
-            method: isEdit ? "PUT" : "POST",
+            method: isEdit ? "PATCH" : "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           },
         );
 
+        const responseData = await response.json();
+        console.log("API response data:", responseData);
+
         if (!response.ok) {
           let message = isEdit
-            ? "Cập nhật lịch học thất bại"
+            ? "Cập nhật lịch học thất bại 1"
             : "Thêm lịch học thất bại";
 
           try {
@@ -444,8 +431,8 @@ export function ScheduleList(): ReactElement {
                   teacherId: editingSchedule.teacherId ?? "",
 
                   dayOfWeek: editingSchedule.dayOfWeek,
-                  startTime: editingSchedule.startTime ?? "",
-                  endTime: editingSchedule.endTime ?? "",
+                  startMinute: editingSchedule.startMinute ?? 0,
+                  endMinute: editingSchedule.endMinute ?? 0,
                 }
               : undefined
           }

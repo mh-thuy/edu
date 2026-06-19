@@ -214,7 +214,9 @@ export function RoomList(): ReactElement {
       const response = await fetch(`/api/rooms/${deleteId}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("Failed to delete room");
+      const responseData = await response.json();
+      if (!responseData.success)
+        throw new Error(responseData.error.message || "Failed to delete room");
 
       showSuccess("Xóa phòng thành công");
       setDeleteId(null);
@@ -237,7 +239,11 @@ export function RoomList(): ReactElement {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           });
-          if (!response.ok) throw new Error("Failed to update room");
+          const responseData = await response.json();
+          if (!responseData.success)
+            throw new Error(
+              responseData.error.message || "Failed to update room",
+            );
           showSuccess("Cập nhật phòng thành công");
         } else {
           const response = await fetch("/api/rooms", {
@@ -245,7 +251,11 @@ export function RoomList(): ReactElement {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(formData),
           });
-          if (!response.ok) throw new Error("Failed to create room");
+          const responseData = await response.json();
+          if (!responseData.success)
+            throw new Error(
+              responseData.error.message || "Failed to create room",
+            );
           showSuccess("Thêm phòng thành công");
         }
 

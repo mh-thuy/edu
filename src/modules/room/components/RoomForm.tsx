@@ -88,14 +88,20 @@ export function RoomForm({
             control={control}
             render={({ field, fieldState: { error } }) => (
               <TextField
-                {...field}
                 label="Sức chứa"
                 type="number"
+                value={field.value ?? ""}
                 error={!!error}
                 helperText={error?.message}
                 fullWidth
                 size="small"
-                onChange={(e) => field.onChange(Number(e.target.value))}
+                onChange={(e) =>
+                  field.onChange(
+                    e.target.value === ""
+                      ? undefined
+                      : Number(e.target.value)
+                  )
+                }
               />
             )}
           />
@@ -111,7 +117,13 @@ export function RoomForm({
                 helperText={error?.message}
                 fullWidth
                 size="small"
-                onChange={(e) => field.onChange(Number(e.target.value))}
+                onChange={(e) =>
+                  field.onChange(
+                    e.target.value === ""
+                      ? undefined
+                      : Number(e.target.value)
+                  )
+                }
               />
             )}
           />
@@ -163,6 +175,7 @@ export function RoomForm({
               {...field}
               label="Ghi chú"
               placeholder="Thông tin bổ sung..."
+              value={field.value ?? ""}
               error={!!error}
               helperText={error?.message}
               fullWidth

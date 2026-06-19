@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { roomCreateSchema, roomFilterSchema } from "@/modules/room/schemas/room.schema";
+import {
+  roomCreateSchema,
+  roomFilterSchema,
+} from "@/modules/room/schemas/room.schema";
 import { createRoom, getRooms } from "@/modules/room/services/room.service";
 
 export async function GET(request: NextRequest) {

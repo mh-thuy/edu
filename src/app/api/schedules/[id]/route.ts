@@ -41,12 +41,9 @@ export async function PATCH(
     return apiSuccess({ schedule, conflicts: null });
   } catch (error: unknown) {
     if (error instanceof ScheduleConflictError) {
-      return apiError(
-        "CONFLICT",
-        error.message,
-        409,
-        { conflicts: error.conflicts },
-      );
+      return apiError("CONFLICT", error.message, 409, {
+        conflicts: error.conflicts,
+      });
     }
 
     return handleApiError(error, "Failed to update schedule");

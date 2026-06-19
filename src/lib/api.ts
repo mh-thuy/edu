@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { ConflictError, ForbiddenError } from "@/lib/errors";
 import { serializeDecimals } from "@/lib/decimal";
+import { Prisma } from "@prisma/client";
 
 export type ApiErrorCode =
   | "VALIDATION_ERROR"
@@ -70,6 +71,23 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
 
   if (error instanceof ForbiddenError) {
     return apiError("FORBIDDEN", error.message, 403);
+  }
+
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    console.error("Prisma error:", error.code, error.meta);
+    switch (error.code) {
+      case "P2002": {
+        const fields = (error.meta?.target as string[]) || [];
+        return apiError(
+          "BAD_REQUEST",
+          `Đã tồn tại : ${fields.join(", ")}`,
+          400,
+        );
+      }
+
+      case "P2025":
+        return apiError("NOT_FOUND", "Không tìm thấy dữ liệu", 404);
+    }
   }
 
   const message = error instanceof Error ? error.message : fallback;

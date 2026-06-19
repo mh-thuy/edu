@@ -5,9 +5,9 @@ export const roomCreateSchema = z.object({
   name: z.string().min(1, "Room name is required").max(100),
   capacity: z.number().min(1, "Capacity must be at least 1").int(),
   floor: z.string().default("1"),
-  location: z.string().optional(),
+  location: z.string().nullable().optional(),
   status: z.enum(["AVAILABLE", "MAINTENANCE", "UNAVAILABLE"]).default("AVAILABLE"),
-  note: z.string().optional(),
+  note: z.string().nullable().optional(),
 });
 
 export const roomUpdateSchema = roomCreateSchema.partial();

@@ -8,18 +8,19 @@ const checkScheduleConflictSchema = z
     roomId: z.string().min(1, "roomId is required"),
     teacherId: z.string().optional(),
     dayOfWeek: z.number().int().min(0).max(6),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/, "startTime is invalid"),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/, "endTime is invalid"),
+    startMinute: z.string().regex(/^\d{2}:\d{2}$/, "startMinute is invalid"),
+    endMinute: z.string().regex(/^\d{2}:\d{2}$/, "endMinute is invalid"),
     excludeScheduleId: z.string().optional(),
   })
-  .refine((data) => data.startTime < data.endTime, {
-    message: "endTime must be greater than startTime",
-    path: ["endTime"],
+  .refine((data) => data.startMinute < data.endMinute, {
+    message: "endMinute must be greater than startMinute",
+    path: ["endMinute"],
   });
 
 export async function POST(request: NextRequest) {
   try {
     const body: unknown = await request.json();
+
     const data = checkScheduleConflictSchema.parse(body);
 
     const conflicts = await getScheduleConflicts(
@@ -27,8 +28,8 @@ export async function POST(request: NextRequest) {
         roomId: data.roomId,
         teacherId: data.teacherId,
         dayOfWeek: data.dayOfWeek,
-        startTime: data.startTime,
-        endTime: data.endTime,
+        startMinute: data.startMinute,
+        endMinute: data.endMinute,
       },
       data.excludeScheduleId,
     );

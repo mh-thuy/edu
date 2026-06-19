@@ -26,29 +26,13 @@ export class ScheduleConflictError extends Error {
   }
 }
 
-function timeToMinutes(time: string): number {
-  const [hours = "0", minutes = "0"] = time.split(":");
-  return Number(hours) * 60 + Number(minutes);
-}
-
-function minutesToTime(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
 function hasTimeConflict(
-  startTime1: string,
-  endTime1: string,
-  startTime2: string,
-  endTime2: string,
+  startMinute1: number,
+  endMinute1: number,
+  startMinute2: number,
+  endMinute2: number,
 ): boolean {
-  const start1 = timeToMinutes(startTime1);
-  const end1 = timeToMinutes(endTime1);
-  const start2 = timeToMinutes(startTime2);
-  const end2 = timeToMinutes(endTime2);
-
-  return start1 < end2 && start2 < end1;
+  return startMinute1 < endMinute2 && startMinute2 < endMinute1;
 }
 
 function toClassScheduleCreateInput(
@@ -59,8 +43,8 @@ function toClassScheduleCreateInput(
     roomId: data.roomId,
     teacherId: data.teacherId,
     dayOfWeek: data.dayOfWeek,
-    startMinute: timeToMinutes(data.startTime),
-    endMinute: timeToMinutes(data.endTime),
+    startMinute: data.startMinute,
+    endMinute: data.endMinute,
   };
 }
 
@@ -72,12 +56,8 @@ function toClassScheduleUpdateInput(
     ...(data.roomId !== undefined && { roomId: data.roomId }),
     ...(data.teacherId !== undefined && { teacherId: data.teacherId }),
     ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
-    ...(data.startTime !== undefined && {
-      startMinute: timeToMinutes(data.startTime),
-    }),
-    ...(data.endTime !== undefined && {
-      endMinute: timeToMinutes(data.endTime),
-    }),
+    ...(data.startMinute !== undefined && { startMinute: data.startMinute }),
+    ...(data.endMinute !== undefined && { endMinute: data.endMinute }),
   };
 }
 
@@ -86,28 +66,28 @@ export async function getScheduleConflicts(
     roomId?: string | null;
     teacherId?: string | null;
     dayOfWeek: number;
-    startTime: string;
-    endTime: string;
+    startMinute: number;
+    endMinute: number;
   },
   excludeId?: string,
 ): Promise<ScheduleConflict[]> {
-  const where: Prisma.ClassScheduleWhereInput = {
-    dayOfWeek: data.dayOfWeek,
-    ...(excludeId && {
-      id: {
-        not: excludeId,
-      },
-    }),
-    OR: [
-      ...(data.roomId ? [{ roomId: data.roomId }] : []),
-      ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
-    ],
-  };
+  const conflictTargets: Prisma.ClassScheduleWhereInput[] = [
+    ...(data.roomId ? [{ roomId: data.roomId }] : []),
+    ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
+  ];
 
-  if (!where.OR?.length) return [];
+  if (conflictTargets.length === 0) return [];
 
   const schedules = await prisma.classSchedule.findMany({
-    where,
+    where: {
+      dayOfWeek: data.dayOfWeek,
+      ...(excludeId && {
+        id: {
+          not: excludeId,
+        },
+      }),
+      OR: conflictTargets,
+    },
     include: {
       class: true,
       room: true,
@@ -117,10 +97,10 @@ export async function getScheduleConflicts(
 
   return schedules.filter((schedule) =>
     hasTimeConflict(
-      data.startTime,
-      data.endTime,
-      minutesToTime(schedule.startMinute),
-      minutesToTime(schedule.endMinute),
+      data.startMinute,
+      data.endMinute,
+      schedule.startMinute,
+      schedule.endMinute,
     ),
   );
 }
@@ -130,6 +110,7 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
   conflicts: ScheduleConflict[];
 }> {
   const conflicts = await getScheduleConflicts(data);
+
   if (conflicts.length > 0) {
     throw new ScheduleConflictError(conflicts);
   }
@@ -182,7 +163,7 @@ export async function getSchedules(filter: ScheduleFilter) {
         room: true,
         teacher: true,
       },
-      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
+      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
     }),
     prisma.classSchedule.count({ where }),
   ]);
@@ -222,7 +203,7 @@ export async function getSchedulesByTeacherUserId(
         room: true,
         teacher: true,
       },
-      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
+      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
     }),
     prisma.classSchedule.count({ where }),
   ]);
@@ -257,11 +238,12 @@ export async function updateClassSchedule(
     teacherId:
       data.teacherId !== undefined ? data.teacherId || null : current.teacherId,
     dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
-    startTime: data.startTime ?? minutesToTime(current.startMinute),
-    endTime: data.endTime ?? minutesToTime(current.endMinute),
+    startMinute: data.startMinute ?? current.startMinute,
+    endMinute: data.endMinute ?? current.endMinute,
   };
 
   const conflicts = await getScheduleConflicts(merged, id);
+
   if (conflicts.length > 0) {
     throw new ScheduleConflictError(conflicts);
   }
@@ -306,6 +288,6 @@ export async function getWeeklySchedule(
       room: true,
       teacher: true,
     },
-    orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }],
+    orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
   });
 }
