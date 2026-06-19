@@ -1,3 +1,4 @@
+import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -43,6 +44,8 @@ async function cleanup() {
 }
 
 async function seedAuth() {
+  const defaultPasswordHash = await bcrypt.hash("password", 10);
+
   const permissions = await Promise.all(
     [
       ["dashboard.view", "Xem dashboard", "dashboard", "view"],
@@ -146,7 +149,7 @@ async function seedAuth() {
     data: {
       email: "admin@edu.local",
       fullName: "Quản trị viên",
-      passwordHash: "$2b$10$seed.admin.password.hash",
+      passwordHash: defaultPasswordHash,
       status: "ACTIVE",
     },
   });
@@ -155,7 +158,7 @@ async function seedAuth() {
     data: {
       email: "staff@edu.local",
       fullName: "Nhân viên trung tâm",
-      passwordHash: "$2b$10$seed.staff.password.hash",
+      passwordHash: defaultPasswordHash,
       status: "ACTIVE",
     },
   });
@@ -164,7 +167,7 @@ async function seedAuth() {
     data: {
       email: "teacher@edu.local",
       fullName: "Nguyễn Văn An",
-      passwordHash: "$2b$10$seed.teacher.password.hash",
+      passwordHash: defaultPasswordHash,
       status: "ACTIVE",
     },
   });
@@ -457,6 +460,33 @@ async function seedClasses(
   return { mathClass, englishClass, physicsClass };
 }
 
+async function seedPaymentAccounts() {
+  await prisma.paymentAccount.createMany({
+    data: [
+      {
+        code: "VCB-DEFAULT",
+        bankCode: "VCB",
+        bankName: "Vietcombank",
+        accountNumber: "0191000346776",
+        accountName: "MA HONG LAN",
+        isDefault: true,
+        isActive: true,
+        note: "Tài khoản nhận học phí mặc định",
+      },
+      {
+        code: "ACB-BACKUP",
+        bankCode: "ACB",
+        bankName: "ACB",
+        accountNumber: "0987654321",
+        accountName: "TRUNG TAM GIAO DUC DEMO",
+        isDefault: false,
+        isActive: true,
+        note: "Tài khoản dự phòng",
+      },
+    ],
+  });
+}
+
 // async function seedFeesAndPayments(
 //   classes: Awaited<ReturnType<typeof seedClasses>>,
 //   students: Awaited<ReturnType<typeof seedMasters>>["students"],
@@ -713,6 +743,7 @@ async function main() {
   const { adminUser, teacherUser } = await seedAuth();
   const { rooms, teachers, students } = await seedMasters(teacherUser.id);
   const classes = await seedClasses(teachers, rooms, students);
+  await seedPaymentAccounts();
 
   // await seedFeesAndPayments(classes, students);
   // await seedPayrollAndExpenses(teachers, classes);

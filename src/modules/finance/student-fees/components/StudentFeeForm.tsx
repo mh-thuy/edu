@@ -43,6 +43,7 @@ interface StudentFeeFormProps {
     classId: string;
     month: string;
     amount: number;
+    discount?: number;
     dueDate: string;
     status:
       | "unpaid"
@@ -118,10 +119,12 @@ export function StudentFeeForm({
           classId: "",
           month: new Date().toISOString().slice(0, 7),
           amount: 0,
+          discount: 0,
           dueDate: new Date().toISOString().split("T")[0] || "",
         }
       : {
           amount: initialData?.amount,
+          discount: initialData?.discount ?? 0,
           dueDate: initialData?.dueDate?.slice(0, 10),
           status: initialData?.status?.toUpperCase() as
             | "UNPAID"
@@ -247,6 +250,16 @@ export function StudentFeeForm({
                     />
                   )}
                 />
+
+                <TextField
+                  label="Giảm giá"
+                  type="number"
+                  error={!!errors.discount}
+                  helperText={errors.discount?.message}
+                  fullWidth
+                  inputProps={{ min: 0 }}
+                  {...register("discount", { valueAsNumber: true })}
+                />
               </>
             ) : (
               <>
@@ -320,6 +333,18 @@ export function StudentFeeForm({
                 />
               )}
             />
+
+            {!isCreating && (
+              <TextField
+                label="Giảm giá"
+                type="number"
+                error={!!errors.discount}
+                helperText={errors.discount?.message}
+                fullWidth
+                inputProps={{ min: 0 }}
+                {...register("discount", { valueAsNumber: true })}
+              />
+            )}
 
             {!isCreating && (
               <TextField

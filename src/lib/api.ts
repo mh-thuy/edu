@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { ConflictError, ForbiddenError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import { serializeDecimals } from "@/lib/decimal";
 import { Prisma } from "@prisma/client";
 
@@ -69,6 +69,10 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
     return apiError("CONFLICT", error.message, 409);
   }
 
+  if (error instanceof NotFoundError) {
+    return apiError("NOT_FOUND", error.message, 404);
+  }
+
   if (error instanceof ForbiddenError) {
     return apiError("FORBIDDEN", error.message, 403);
   }
@@ -78,11 +82,7 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
     switch (error.code) {
       case "P2002": {
         const fields = (error.meta?.target as string[]) || [];
-        return apiError(
-          "BAD_REQUEST",
-          `Đã tồn tại : ${fields.join(", ")}`,
-          400,
-        );
+        return apiError("CONFLICT", `Đã tồn tại: ${fields.join(", ")}`, 409);
       }
 
       case "P2025":

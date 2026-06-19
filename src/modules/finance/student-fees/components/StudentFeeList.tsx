@@ -27,10 +27,15 @@ import {
   type GridRowSelectionModel,
 } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
+import SendIcon from "@mui/icons-material/Send";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { EmptyState } from "@/components/shared/tables/EmptyState";
@@ -51,14 +56,19 @@ import { DatePicker } from "@mui/x-date-pickers";
 import dayjs, { Dayjs } from "dayjs";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
-type StudentFeeStatus = "unpaid" | "partial" | "paid";
+type StudentFeeStatus = "UNPAID" | "PARTIAL" | "PAID";
 
 interface StudentFee {
   id: string;
   studentId: string;
   classId: string;
-  month: string;
+  month?: string;
+  billingYear: string;
+  billingMonth: string;
   amount: number;
+  finalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
   dueDate: string;
   status: StudentFeeStatus;
   discount?: number;
@@ -75,6 +85,23 @@ interface StudentFee {
     code: string;
     name: string;
   } | null;
+  activeQr?: {
+    id: string;
+    amount: number;
+    status: "ACTIVE" | "INACTIVE" | "EXPIRED" | "CANCELLED";
+    qrImageUrl?: string | null;
+  } | null;
+  latestNotice?: {
+    id: string;
+    status: "DRAFT" | "GENERATED" | "PRINTED" | "SENT" | "CANCELLED";
+    pdfUrl?: string | null;
+  } | null;
+  flowStatus?: {
+    tuitionFee: "GENERATED";
+    qr: "PENDING" | "GENERATED" | "FAILED";
+    temporaryInvoice: "PENDING" | "GENERATED" | "SENT" | "FAILED";
+    paymentNotice: "PENDING" | "GENERATED" | "SENT" | "FAILED";
+  };
 }
 
 interface BulkStudentRow {
@@ -102,9 +129,9 @@ const formatDate = (value: string): string =>
 
 const getStatusLabel = (status: StudentFeeStatus): string => {
   const labels: Record<StudentFeeStatus, string> = {
-    paid: "Đã thanh toán",
-    partial: "Thanh toán một phần",
-    unpaid: "Chưa thanh toán",
+    PAID: "Đã thanh toán",
+    PARTIAL: "Thanh toán một phần",
+    UNPAID: "Chưa thanh toán",
   };
   return labels[status];
 };
@@ -113,12 +140,42 @@ const getStatusColor = (
   status: StudentFeeStatus,
 ): "success" | "warning" | "error" => {
   switch (status) {
-    case "paid":
+    case "PAID":
       return "success";
-    case "partial":
+    case "PARTIAL":
       return "warning";
-    case "unpaid":
+    case "UNPAID":
       return "error";
+  }
+};
+
+type FlowStatus = "PENDING" | "GENERATED" | "SENT" | "FAILED";
+
+const getFlowStatusLabel = (status: FlowStatus): string => {
+  switch (status) {
+    case "GENERATED":
+      return "Generated";
+    case "SENT":
+      return "Sent";
+    case "FAILED":
+      return "Failed";
+    default:
+      return "Pending";
+  }
+};
+
+const getFlowStatusColor = (
+  status: FlowStatus,
+): "default" | "success" | "warning" | "error" => {
+  switch (status) {
+    case "GENERATED":
+      return "success";
+    case "SENT":
+      return "warning";
+    case "FAILED":
+      return "error";
+    default:
+      return "default";
   }
 };
 
@@ -191,7 +248,8 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         );
       }
 
-      const result = await unwrapApiResponse<BulkClassStudentApiItem[]>(response);
+      const result =
+        await unwrapApiResponse<BulkClassStudentApiItem[]>(response);
       setBulkStudents(
         result.map((item) => ({
           id: item.student.id,
@@ -231,7 +289,10 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   }, []);
 
   const handleEdit = useCallback((row: StudentFee) => {
-    setEditingFee(row);
+    setEditingFee({
+      ...row,
+      month: `${row.billingYear}-${String(row.billingMonth).padStart(2, "0")}`,
+    });
     setShowForm(true);
   }, []);
 
@@ -244,7 +305,9 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           method: "DELETE",
         });
         if (!response.ok) {
-          throw new Error(await extractApiErrorMessage(response, "Failed to delete"));
+          throw new Error(
+            await extractApiErrorMessage(response, "Failed to delete"),
+          );
         }
         snackbar.showSuccess("Xóa học phí thành công");
         await refresh();
@@ -286,12 +349,16 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
       });
       if (!response.ok) {
         throw new Error(
-          await extractApiErrorMessage(response, "Tạo hóa đơn hàng loạt thất bại"),
+          await extractApiErrorMessage(
+            response,
+            "Tạo hóa đơn hàng loạt thất bại",
+          ),
         );
       }
-      const data = await unwrapApiResponse<{ created: number; skipped: number }>(
-        response,
-      );
+      const data = await unwrapApiResponse<{
+        created: number;
+        skipped: number;
+      }>(response);
 
       snackbar.showSuccess(
         `Tạo hóa đơn hàng loạt thành công: ${data.created} mới, ${data.skipped} bỏ qua`,
@@ -320,9 +387,91 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
     }
   }, [bulkData, refresh, selectedBulkRows, snackbar]);
 
+  const handleFlowAction = useCallback(
+    async (
+      id: string,
+      action:
+        | "generate-qr"
+        | "generate-notice"
+        | "send-notice"
+        | "generate-all",
+      successMessage: string,
+    ) => {
+      try {
+        const response = await fetch(`/api/student-fees/${id}/${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body:
+            action === "send-notice"
+              ? JSON.stringify({ sendMethod: "MANUAL" })
+              : "{}",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            await extractApiErrorMessage(response, "Thao tác thất bại"),
+          );
+        }
+
+        snackbar.showSuccess(successMessage);
+        await refresh();
+      } catch (actionError) {
+        snackbar.showError(
+          actionError instanceof Error
+            ? actionError.message
+            : "Thao tác thất bại",
+        );
+      }
+    },
+    [refresh, snackbar],
+  );
+
+  const handleOpenQr = useCallback((url?: string | null) => {
+    if (!url) {
+      snackbar.showError("Chưa có ảnh QR để xem");
+      return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [snackbar]);
+
+  const handleExportPdf = useCallback(
+    async (id: string) => {
+      try {
+        const response = await fetch(`/api/student-fees/${id}/export-notice-pdf`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            await extractApiErrorMessage(response, "Xuất PDF thất bại"),
+          );
+        }
+
+        const result = await unwrapApiResponse<{ pdfUrl: string }>(response);
+        window.open(result.pdfUrl, "_blank", "noopener,noreferrer");
+        snackbar.showSuccess("Đã xuất PDF bill tạm");
+        await refresh();
+      } catch (exportError) {
+        snackbar.showError(
+          exportError instanceof Error
+            ? exportError.message
+            : "Xuất PDF thất bại",
+        );
+      }
+    },
+    [refresh, snackbar],
+  );
+
   const columns: GridColDef<StudentFee>[] = useMemo(
     () => [
-      { field: "month", headerName: "Tháng", width: 110 },
+      {
+        field: "billingMonth",
+        headerName: "Tháng",
+        width: 110,
+        renderCell: (params) =>
+          `${params.row.billingYear}-${params.row.billingMonth}`,
+      },
       {
         field: "student",
         headerName: "Học viên",
@@ -345,11 +494,28 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
       },
       {
         field: "amount",
-        headerName: "Số tiền",
+        headerName: "Học phí gốc",
         width: 150,
         align: "right",
         headerAlign: "right",
         renderCell: (params) => `${formatCurrency(params.row.amount)} VND`,
+      },
+      {
+        field: "finalAmount",
+        headerName: "Cần thu",
+        width: 150,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) => `${formatCurrency(params.row.finalAmount)} VND`,
+      },
+      {
+        field: "outstandingAmount",
+        headerName: "Còn nợ",
+        width: 150,
+        align: "right",
+        headerAlign: "right",
+        renderCell: (params) =>
+          `${formatCurrency(params.row.outstandingAmount)} VND`,
       },
       {
         field: "dueDate",
@@ -373,9 +539,56 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         ),
       },
       {
+        field: "qrStatus",
+        headerName: "QR",
+        width: 120,
+        renderCell: (params) => (
+          <Chip
+            label={getFlowStatusLabel(params.row.flowStatus?.qr ?? "PENDING")}
+            size="small"
+            color={getFlowStatusColor(params.row.flowStatus?.qr ?? "PENDING")}
+            variant="outlined"
+          />
+        ),
+      },
+      {
+        field: "temporaryInvoiceStatus",
+        headerName: "Bill tạm",
+        width: 130,
+        renderCell: (params) => (
+          <Chip
+            label={getFlowStatusLabel(
+              params.row.flowStatus?.temporaryInvoice ?? "PENDING",
+            )}
+            size="small"
+            color={getFlowStatusColor(
+              params.row.flowStatus?.temporaryInvoice ?? "PENDING",
+            )}
+            variant="outlined"
+          />
+        ),
+      },
+      {
+        field: "paymentNoticeStatus",
+        headerName: "Notice",
+        width: 120,
+        renderCell: (params) => (
+          <Chip
+            label={getFlowStatusLabel(
+              params.row.flowStatus?.paymentNotice ?? "PENDING",
+            )}
+            size="small"
+            color={getFlowStatusColor(
+              params.row.flowStatus?.paymentNotice ?? "PENDING",
+            )}
+            variant="outlined"
+          />
+        ),
+      },
+      {
         field: "actions",
         headerName: "Thao tác",
-        width: 140,
+        width: 420,
         sortable: false,
         filterable: false,
         align: "center",
@@ -388,6 +601,60 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
             justifyContent="center"
             sx={{ width: "100%", height: "100%" }}
           >
+            <GridActionsCellItem
+              icon={<QrCode2Icon />}
+              label="Generate QR"
+              onClick={() =>
+                void handleFlowAction(
+                  params.row.id,
+                  "generate-qr",
+                  "Đã tạo QR thanh toán",
+                )
+              }
+            />
+            <GridActionsCellItem
+              icon={<VisibilityIcon />}
+              label="View QR"
+              onClick={() => handleOpenQr(params.row.activeQr?.qrImageUrl)}
+            />
+            <GridActionsCellItem
+              icon={<ReceiptLongIcon />}
+              label="Generate Invoice"
+              onClick={() =>
+                void handleFlowAction(
+                  params.row.id,
+                  "generate-notice",
+                  "Đã tạo bill tạm",
+                )
+              }
+            />
+            <GridActionsCellItem
+              icon={<PictureAsPdfIcon />}
+              label="Export PDF"
+              onClick={() => void handleExportPdf(params.row.id)}
+            />
+            <GridActionsCellItem
+              icon={<SendIcon />}
+              label="Send Notice"
+              onClick={() =>
+                void handleFlowAction(
+                  params.row.id,
+                  "send-notice",
+                  "Đã gửi thông báo học phí",
+                )
+              }
+            />
+            <GridActionsCellItem
+              icon={<AutoAwesomeIcon />}
+              label="Generate All"
+              onClick={() =>
+                void handleFlowAction(
+                  params.row.id,
+                  "generate-all",
+                  "Đã hoàn tất full flow học phí",
+                )
+              }
+            />
             <GridActionsCellItem
               icon={<EditIcon />}
               label="Sửa"
@@ -403,7 +670,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         ),
       },
     ],
-    [canDelete, handleDelete, handleEdit],
+    [canDelete, handleDelete, handleEdit, handleExportPdf, handleFlowAction, handleOpenQr],
   );
 
   const bulkStudentColumns: GridColDef<BulkStudentRow>[] = useMemo(
@@ -560,7 +827,22 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
 
       {showForm && (
         <StudentFeeForm
-          initialData={editingFee || undefined}
+          initialData={
+            editingFee?.month
+              ? {
+                  id: editingFee.id,
+                  studentId: editingFee.studentId,
+                  classId: editingFee.classId,
+                  month: editingFee.month,
+                  amount: editingFee.amount,
+                  discount: editingFee.discount,
+                  dueDate: editingFee.dueDate,
+                  status: editingFee.status,
+                  student: editingFee.student,
+                  class: editingFee.class,
+                }
+              : undefined
+          }
           onClose={() => setShowForm(false)}
           onSuccess={() => {
             setShowForm(false);

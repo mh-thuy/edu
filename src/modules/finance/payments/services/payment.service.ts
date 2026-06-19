@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 import { PaymentMethod } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import type {
@@ -56,14 +57,14 @@ export class PaymentService {
         include: { payments: true },
       });
 
-      if (!fee) throw new Error("Student fee not found");
+      if (!fee) throw new NotFoundError("Không tìm thấy học phí");
 
       const alreadyPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
       const totalAfterPayment = alreadyPaid.add(data.amount);
       const netAmount = toDecimal(fee.amount).sub(fee.discount);
 
       if (totalAfterPayment.greaterThan(netAmount)) {
-        throw new Error(
+        throw new ConflictError(
           `Payment exceeds outstanding amount. Outstanding: ${netAmount.sub(alreadyPaid).toFixed(2)}, Payment: ${data.amount}`
         );
       }
@@ -88,7 +89,8 @@ export class PaymentService {
         },
       });
 
-      await StudentFeeService.updateFeeStatus(data.studentFeeId, tx);
+      await StudentFeeService.syncFeeFinancialState(data.studentFeeId, tx);
+      await StudentFeeService.invalidateFlowArtifacts(data.studentFeeId, tx);
 
       return payment;
     });
@@ -238,14 +240,14 @@ export class PaymentService {
         },
       },
     });
-    if (!payment) throw new Error("Payment not found");
+    if (!payment) throw new NotFoundError("Không tìm thấy thanh toán");
 
     // Check if receipt already issued (locked)
     const receipt = await prisma.receipt.findFirst({
       where: { paymentId: id },
     });
     if (receipt) {
-      throw new Error("Cannot modify payment after receipt is issued");
+      throw new ConflictError("Không thể sửa thanh toán đã phát hành biên lai");
     }
 
     const nextAmount =
@@ -260,43 +262,43 @@ export class PaymentService {
     );
 
     if (paidExcludingCurrent.add(nextAmount).greaterThan(netAmount)) {
-      throw new Error(
+      throw new ConflictError(
         `Payment exceeds outstanding amount. Outstanding: ${
           netAmount.sub(paidExcludingCurrent).toFixed(2)
         }, Payment: ${nextAmount}`,
       );
     }
 
-    const updated = await prisma.payment.update({
-      where: { id },
-      data: {
-        ...(data.amount !== undefined && { amount: data.amount }),
-        ...(data.method !== undefined && {
-          method: this.toPaymentMethod(data.method),
-        }),
-        ...(data.paymentDate !== undefined && {
-          paymentDate: new Date(data.paymentDate),
-        }),
-        ...(data.notes !== undefined && { notes: data.notes }),
-      },
-      include: {
-        receipts: true,
-        studentFee: {
-          include: {
-            student: true,
-            class: true,
-            payments: true,
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.payment.update({
+        where: { id },
+        data: {
+          ...(data.amount !== undefined && { amount: data.amount }),
+          ...(data.method !== undefined && {
+            method: this.toPaymentMethod(data.method),
+          }),
+          ...(data.paymentDate !== undefined && {
+            paymentDate: new Date(data.paymentDate),
+          }),
+          ...(data.notes !== undefined && { notes: data.notes }),
+        },
+        include: {
+          receipts: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
           },
         },
-      },
+      });
+
+      await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
+      await StudentFeeService.invalidateFlowArtifacts(payment.studentFeeId, tx);
+
+      return updated;
     });
-
-    // Update fee status if amount changed
-    if (typeof data.amount === "number") {
-      await StudentFeeService.updateFeeStatus(payment.studentFeeId);
-    }
-
-    return updated;
   }
 
   /**
@@ -304,20 +306,21 @@ export class PaymentService {
    */
   static async deletePayment(id: string) {
     const payment = await prisma.payment.findUnique({ where: { id } });
-    if (!payment) throw new Error("Payment not found");
+    if (!payment) throw new NotFoundError("Không tìm thấy thanh toán");
 
     // Check if receipt already issued
     const receipt = await prisma.receipt.findFirst({
       where: { paymentId: id },
     });
     if (receipt) {
-      throw new Error("Cannot delete payment: receipt already issued");
+      throw new ConflictError("Không thể xóa thanh toán đã phát hành biên lai");
     }
 
-    await prisma.payment.delete({ where: { id } });
-
-    // Update fee status
-    await StudentFeeService.updateFeeStatus(payment.studentFeeId);
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.delete({ where: { id } });
+      await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
+      await StudentFeeService.invalidateFlowArtifacts(payment.studentFeeId, tx);
+    });
   }
 
   /**

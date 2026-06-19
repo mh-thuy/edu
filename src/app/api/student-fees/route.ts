@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
       classId: validated.classId,
       month: validated.month,
       amount: validated.amount,
+      discount: validated.discount,
       dueDate: new Date(validated.dueDate),
+      note: validated.note,
       status: "UNPAID", // Default status for new fees
     });
 
