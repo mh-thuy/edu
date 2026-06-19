@@ -5,12 +5,16 @@ import { getScheduleConflicts } from "@/modules/schedule/services/schedule.servi
 
 const checkScheduleConflictSchema = z
   .object({
-    roomId: z.string().min(1, "roomId is required"),
-    teacherId: z.string().optional(),
+    roomId: z.string().min(1, "roomId is invalid").optional(),
+    teacherId: z.string().min(1, "teacherId is invalid").optional(),
     dayOfWeek: z.number().int().min(0).max(6),
-    startMinute: z.string().regex(/^\d{2}:\d{2}$/, "startMinute is invalid"),
-    endMinute: z.string().regex(/^\d{2}:\d{2}$/, "endMinute is invalid"),
+    startMinute: z.number().int().min(0).max(1439),
+    endMinute: z.number().int().min(0).max(1439),
     excludeScheduleId: z.string().optional(),
+  })
+  .refine((data) => Boolean(data.roomId || data.teacherId), {
+    message: "roomId hoặc teacherId là bắt buộc",
+    path: ["roomId"],
   })
   .refine((data) => data.startMinute < data.endMinute, {
     message: "endMinute must be greater than startMinute",

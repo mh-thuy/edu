@@ -142,15 +142,10 @@ export async function deleteRoom(id: string): Promise<Room> {
 export async function checkRoomConflict(
   roomId: string,
   dayOfWeek: number,
-  startTime: string,
-  endTime: string,
+  startMinute: number,
+  endMinute: number,
   excludeScheduleId?: string,
 ): Promise<boolean> {
-  const [startHour = "0", startMinute = "0"] = startTime.split(":");
-  const [endHour = "0", endMinute = "0"] = endTime.split(":");
-  const start = Number(startHour) * 60 + Number(startMinute);
-  const end = Number(endHour) * 60 + Number(endMinute);
-
   const conflict = await prisma.classSchedule.findFirst({
     where: {
       roomId,
@@ -161,10 +156,10 @@ export async function checkRoomConflict(
         },
       }),
       startMinute: {
-        lt: end,
+        lt: endMinute,
       },
       endMinute: {
-        gt: start,
+        gt: startMinute,
       },
     },
     select: {

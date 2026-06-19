@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const data = classScheduleCreateSchema.parse(body);
 
     const { schedule } = await createClassSchedule(data);
-    return apiSuccess({ schedule, conflicts: null }, 201);
+    return apiSuccess(schedule, 201);
   } catch (error: unknown) {
     if (error instanceof ScheduleConflictError) {
       return apiError(

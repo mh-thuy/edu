@@ -16,10 +16,7 @@ export async function POST(
     }
 
     const { id } = await params;
-    const payroll = await TeacherPayrollService.markPayrollAsPaid(
-      id,
-      user.id,
-    );
+    const payroll = await TeacherPayrollService.markPayrollAsPaid(id);
 
     return apiSuccess(payroll);
   } catch (error) {

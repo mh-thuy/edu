@@ -40,6 +40,8 @@ export type BaseSelectDialogProps<T extends SelectableItem> = {
   searchPlaceholder?: string;
   /** Dialog max width */
   maxWidth?: "xs" | "sm" | "md" | "lg" | "xl";
+  /** Additional query params */
+  query?: Record<string, string | number | undefined>;
 };
 
 export function BaseSelectDialog<T extends SelectableItem>({
@@ -51,6 +53,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
   columns,
   searchPlaceholder = "Tìm kiếm...",
   maxWidth = "md",
+  query,
 }: BaseSelectDialogProps<T>): ReactElement {
   const [searchInput, setSearchInput] = useState("");
   const [committedSearch, setCommittedSearch] = useState<string | undefined>(
@@ -69,6 +72,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
     useList<T>(endpoint, {
       search: committedSearch,
       pageSize: 10,
+      ...query,
     });
 
   const handleSearch = useCallback(() => {

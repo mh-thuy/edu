@@ -20,12 +20,14 @@ import {
 } from "@/modules/schedule/schemas/schedule.schema";
 import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
 import { RoomSelectDialog } from "@/components/shared/dialogs/RoomSelectDialog";
+import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
 import {
   MasterSelectField,
   type MasterSelectValue,
 } from "@/components/shared/forms/MasterSelectField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { unwrapApiResponse } from "@/lib/api-client";
+import { intToTime, timeToInt } from "@/utils/date";
 
 type MasterItem = {
   id: string;
@@ -33,15 +35,36 @@ type MasterItem = {
   name: string;
 };
 
-type ConflictResult = {
+type ScheduleConflictItem = {
+  id: string;
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+  room?: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+  teacher?: {
+    id: string;
+    code: string;
+    fullName: string;
+  } | null;
+  class?: {
+    code: string;
+    name: string;
+  } | null;
+};
+
+export type ConflictResult = {
   hasConflict: boolean;
-  conflicts?: unknown[];
+  conflicts?: ScheduleConflictItem[];
 };
 
 type ScheduleSubmitData = {
   classId: string;
-  roomId?: string | null;
-  teacherId?: string | null;
+  roomId: string;
+  teacherId: string;
   dayOfWeek: number;
   startMinute: number;
   endMinute: number;
@@ -50,19 +73,22 @@ type ScheduleSubmitData = {
 export interface ScheduleFormProps {
   formId?: string;
   onSubmit: (data: ScheduleSubmitData) => void | Promise<void>;
-  defaultValues?: Partial<ClassScheduleFormData>;
+  defaultValues?: Partial<ClassScheduleFormData> & {
+    startMinute?: number;
+    endMinute?: number;
+  };
   onConflictCheck?: (result: ConflictResult) => void;
   scheduleId?: string;
 }
 
 const DAY_OPTIONS = [
-  { value: 0, label: "Thứ 2" },
-  { value: 1, label: "Thứ 3" },
-  { value: 2, label: "Thứ 4" },
-  { value: 3, label: "Thứ 5" },
-  { value: 4, label: "Thứ 6" },
-  { value: 5, label: "Thứ 7" },
-  { value: 6, label: "Chủ nhật" },
+  { value: 0, label: "Chủ nhật" },
+  { value: 1, label: "Thứ 2" },
+  { value: 2, label: "Thứ 3" },
+  { value: 3, label: "Thứ 4" },
+  { value: 4, label: "Thứ 5" },
+  { value: 5, label: "Thứ 6" },
+  { value: 6, label: "Thứ 7" },
 ];
 
 export function ScheduleForm({
@@ -86,16 +112,18 @@ export function ScheduleForm({
       roomId: defaultValues?.roomId ?? "",
       roomCode: defaultValues?.roomCode ?? "",
       roomName: defaultValues?.roomName ?? "",
-      teacherId: defaultValues?.teacherId ?? undefined,
-      dayOfWeek: defaultValues?.dayOfWeek ?? 0,
-      startMinute: defaultValues?.startMinute ?? 480, // 08:00 in minutes
-      endMinute: defaultValues?.endMinute ?? 600, // 10:00 in minutes
+      teacherId: defaultValues?.teacherId ?? "",
+      teacherCode: defaultValues?.teacherCode ?? "",
+      teacherName: defaultValues?.teacherName ?? "",
+      dayOfWeek: defaultValues?.dayOfWeek ?? 1,
+      startTime: intToTime(defaultValues?.startMinute ?? 480),
+      endTime: intToTime(defaultValues?.endMinute ?? 540),
     },
   });
 
   const classDialog = useDisclosure();
   const roomDialog = useDisclosure();
-
+  const teacherDialog = useDisclosure();
   const [conflict, setConflict] = useState<ConflictResult | null>(null);
 
   const classId = useWatch({ control, name: "classId" });
@@ -104,9 +132,12 @@ export function ScheduleForm({
   const roomId = useWatch({ control, name: "roomId" });
   const roomCode = useWatch({ control, name: "roomCode" });
   const roomName = useWatch({ control, name: "roomName" });
+  const teacherId = useWatch({ control, name: "teacherId" });
+  const teacherCode = useWatch({ control, name: "teacherCode" });
+  const teacherName = useWatch({ control, name: "teacherName" });
   const dayOfWeek = useWatch({ control, name: "dayOfWeek" });
-  const startMinute = useWatch({ control, name: "startMinute" });
-  const endMinute = useWatch({ control, name: "endMinute" });
+  const startTime = useWatch({ control, name: "startTime" });
+  const endTime = useWatch({ control, name: "endTime" });
 
   const selectedClass = useMemo<MasterSelectValue | null>(() => {
     if (!classId) return null;
@@ -116,7 +147,7 @@ export function ScheduleForm({
       code: classCode ?? "",
       name: className ?? "",
     };
-  }, [classId, classCode, className]);
+  }, [classCode, classId, className]);
 
   const selectedRoom = useMemo<MasterSelectValue | null>(() => {
     if (!roomId) return null;
@@ -126,7 +157,17 @@ export function ScheduleForm({
       code: roomCode ?? "",
       name: roomName ?? "",
     };
-  }, [roomId, roomCode, roomName]);
+  }, [roomCode, roomId, roomName]);
+
+  const selectedTeacher = useMemo<MasterSelectValue | null>(() => {
+    if (!teacherId) return null;
+
+    return {
+      id: teacherId,
+      code: teacherCode ?? "",
+      name: teacherName ?? "",
+    };
+  }, [teacherCode, teacherId, teacherName]);
 
   const handleClassSelect = (item: MasterItem) => {
     setValue("classId", item.id, {
@@ -162,23 +203,41 @@ export function ScheduleForm({
     roomDialog.onClose();
   };
 
+  const handleTeacherSelect = (item: MasterItem) => {
+    setValue("teacherId", item.id, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("teacherCode", item.code, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    setValue("teacherName", item.name, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+
+    teacherDialog.onClose();
+  };
+
   const handleFormSubmit = async (data: ClassScheduleFormData) => {
     await onSubmit({
       classId: data.classId,
       roomId: data.roomId,
-      teacherId: data.teacherId || undefined,
+      teacherId: data.teacherId,
       dayOfWeek: data.dayOfWeek,
-      startMinute: data.startMinute,
-      endMinute: data.endMinute,
+      startMinute: timeToInt(data.startTime),
+      endMinute: timeToInt(data.endTime),
     });
   };
 
   useEffect(() => {
     if (
       !roomId ||
+      !teacherId ||
       dayOfWeek === undefined ||
-      startMinute === undefined ||
-      endMinute === undefined
+      !startTime ||
+      !endTime
     ) {
       setConflict(null);
       onConflictCheck?.({ hasConflict: false });
@@ -194,9 +253,10 @@ export function ScheduleForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             roomId,
+            teacherId,
             dayOfWeek,
-            startMinute,
-            endMinute,
+            startMinute: timeToInt(startTime),
+            endMinute: timeToInt(endTime),
             excludeScheduleId: scheduleId,
           }),
           signal: controller.signal,
@@ -208,7 +268,6 @@ export function ScheduleForm({
         }
 
         const result = await unwrapApiResponse<ConflictResult>(response);
-
         setConflict(result.hasConflict ? result : null);
         onConflictCheck?.(result);
       } catch (error) {
@@ -225,7 +284,33 @@ export function ScheduleForm({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [roomId, dayOfWeek, startMinute, endMinute, onConflictCheck, scheduleId]);
+  }, [
+    dayOfWeek,
+    endTime,
+    onConflictCheck,
+    roomId,
+    scheduleId,
+    startTime,
+    teacherId,
+  ]);
+
+  const conflictMessage = useMemo(() => {
+    if (!conflict?.conflicts?.length) {
+      return null;
+    }
+
+    const messages: string[] = [];
+
+    if (conflict.conflicts.some((item) => item.room?.id === roomId)) {
+      messages.push("Phòng học đã có lịch trùng trong khung giờ này.");
+    }
+
+    if (conflict.conflicts.some((item) => item.teacher?.id === teacherId)) {
+      messages.push("Giáo viên đã có lịch trùng trong khung giờ này.");
+    }
+
+    return messages.join(" ");
+  }, [conflict, roomId, teacherId]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(handleFormSubmit)}>
@@ -250,6 +335,16 @@ export function ScheduleForm({
           error={errors.roomId?.message}
         />
 
+        <MasterSelectField
+          label="Chọn giáo viên"
+          value={selectedTeacher}
+          onOpen={teacherDialog.onOpen}
+          codeLabel="Mã giáo viên"
+          nameLabel="Họ tên"
+          required
+          error={errors.teacherId?.message}
+        />
+
         <Controller
           name="dayOfWeek"
           control={control}
@@ -259,7 +354,7 @@ export function ScheduleForm({
 
               <Select
                 {...field}
-                value={field.value ?? 0}
+                value={field.value ?? 1}
                 label="Ngày trong tuần"
                 onChange={(event) => field.onChange(Number(event.target.value))}
               >
@@ -276,12 +371,11 @@ export function ScheduleForm({
         />
 
         <Controller
-          name="startMinute"
+          name="startTime"
           control={control}
           render={({ field, fieldState }) => (
             <TextField
               {...field}
-              value={field.value ?? ""}
               label="Giờ bắt đầu"
               type="time"
               error={!!fieldState.error}
@@ -293,12 +387,11 @@ export function ScheduleForm({
         />
 
         <Controller
-          name="endMinute"
+          name="endTime"
           control={control}
           render={({ field, fieldState }) => (
             <TextField
               {...field}
-              value={field.value ?? ""}
               label="Giờ kết thúc"
               type="time"
               error={!!fieldState.error}
@@ -309,9 +402,9 @@ export function ScheduleForm({
           )}
         />
 
-        {conflict && (
+        {conflictMessage && (
           <Alert severity="warning" sx={{ borderRadius: 2 }}>
-            Phòng học bị trùng lịch. Vui lòng chọn thời gian khác.
+            {conflictMessage}
           </Alert>
         )}
       </Stack>
@@ -326,6 +419,13 @@ export function ScheduleForm({
         open={roomDialog.open}
         onClose={roomDialog.onClose}
         onSelect={handleRoomSelect}
+        status="AVAILABLE"
+      />
+
+      <TeacherSelectDialog
+        open={teacherDialog.open}
+        onClose={teacherDialog.onClose}
+        onSelect={handleTeacherSelect}
       />
     </form>
   );

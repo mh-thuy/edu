@@ -6,8 +6,8 @@ import { checkRoomConflict } from "@/modules/room/services/room.service";
 const checkRoomConflictSchema = z.object({
   roomId: z.string().min(1, "roomId is required"),
   dayOfWeek: z.number().int().min(0).max(6),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "startTime is invalid"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "endTime is invalid"),
+  startMinute: z.number().int().min(0).max(1439),
+  endMinute: z.number().int().min(0).max(1439),
   excludeScheduleId: z.string().optional(),
 });
 
@@ -19,8 +19,8 @@ export async function POST(request: NextRequest) {
     const hasConflict = await checkRoomConflict(
       data.roomId,
       data.dayOfWeek,
-      data.startTime,
-      data.endTime,
+      data.startMinute,
+      data.endMinute,
       data.excludeScheduleId,
     );
 

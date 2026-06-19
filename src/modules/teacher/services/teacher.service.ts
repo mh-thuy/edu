@@ -163,23 +163,18 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
 export async function checkTeacherScheduleConflict(
   teacherId: string,
   dayOfWeek: number,
-  startTime: string,
-  endTime: string,
+  startMinute: number,
+  endMinute: number,
 ): Promise<boolean> {
-  const [startHour = "0", startMinute = "0"] = startTime.split(":");
-  const [endHour = "0", endMinute = "0"] = endTime.split(":");
-  const start = Number(startHour) * 60 + Number(startMinute);
-  const end = Number(endHour) * 60 + Number(endMinute);
-
   const schedules = await prisma.classSchedule.findMany({
     where: {
       teacherId,
       dayOfWeek,
       startMinute: {
-        lt: end,
+        lt: endMinute,
       },
       endMinute: {
-        gt: start,
+        gt: startMinute,
       },
     },
   });

@@ -12,12 +12,13 @@ import {
 import type { GridColDef } from "@mui/x-data-grid";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { useList } from "@/hooks/useList";
+import { intToTime } from "@/utils/date";
 
 type TeacherSchedule = {
   id: string;
   dayOfWeek: number;
-  startTime: string;
-  endTime: string;
+  startMinute: number;
+  endMinute: number;
   class?: {
     code: string;
     name: string;
@@ -65,7 +66,8 @@ export function TeacherScheduleList(): ReactElement {
         field: "time",
         headerName: "Khung giờ",
         minWidth: 160,
-        valueGetter: (_value, row) => `${row.startTime} - ${row.endTime}`,
+        valueGetter: (_value, row) =>
+          `${intToTime(row.startMinute)} - ${intToTime(row.endMinute)}`,
       },
       {
         field: "class",

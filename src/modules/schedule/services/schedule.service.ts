@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { ClassSchedule, Prisma } from "@prisma/client";
+import { ConflictError } from "@/lib/errors";
 import type {
   ClassScheduleCreate,
   ClassScheduleUpdate,
@@ -23,6 +24,45 @@ export class ScheduleConflictError extends Error {
     super("Phát hiện lịch học bị trùng");
     this.name = "ScheduleConflictError";
     this.conflicts = conflicts;
+  }
+}
+
+async function assertScheduleRelations(
+  data: {
+    classId: string;
+    roomId: string;
+    teacherId: string;
+  },
+): Promise<void> {
+  const [classData, room, teacher] = await Promise.all([
+    prisma.class.findUnique({
+      where: { id: data.classId },
+      select: { id: true },
+    }),
+    prisma.room.findUnique({
+      where: { id: data.roomId },
+      select: { id: true, status: true },
+    }),
+    prisma.teacher.findUnique({
+      where: { id: data.teacherId },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!classData) {
+    throw new Error("Không tìm thấy lớp học");
+  }
+
+  if (!room) {
+    throw new Error("Không tìm thấy phòng học");
+  }
+
+  if (room.status === "MAINTENANCE" || room.status === "UNAVAILABLE") {
+    throw new ConflictError("Không thể tạo lịch với phòng đang bảo trì hoặc không sử dụng");
+  }
+
+  if (!teacher) {
+    throw new Error("Không tìm thấy giáo viên");
   }
 }
 
@@ -109,6 +149,7 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
   schedule: ClassScheduleWithRelations;
   conflicts: ScheduleConflict[];
 }> {
+  await assertScheduleRelations(data);
   const conflicts = await getScheduleConflicts(data);
 
   if (conflicts.length > 0) {
@@ -234,14 +275,14 @@ export async function updateClassSchedule(
 
   const merged = {
     classId: data.classId ?? current.classId,
-    roomId: data.roomId !== undefined ? data.roomId || null : current.roomId,
-    teacherId:
-      data.teacherId !== undefined ? data.teacherId || null : current.teacherId,
+    roomId: data.roomId ?? current.roomId,
+    teacherId: data.teacherId ?? current.teacherId,
     dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
     startMinute: data.startMinute ?? current.startMinute,
     endMinute: data.endMinute ?? current.endMinute,
   };
 
+  await assertScheduleRelations(merged);
   const conflicts = await getScheduleConflicts(merged, id);
 
   if (conflicts.length > 0) {

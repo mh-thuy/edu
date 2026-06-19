@@ -18,12 +18,14 @@ export interface RoomSelectDialogProps {
   open: boolean;
   onClose: () => void;
   onSelect: (roomItem: RoomItem) => void;
+  status?: "AVAILABLE" | "MAINTENANCE" | "UNAVAILABLE";
 }
 
 export function RoomSelectDialog({
   open,
   onClose,
   onSelect,
+  status,
 }: RoomSelectDialogProps): ReactElement {
   const columns: GridColDef<RoomItem>[] = [
     { field: "code", headerName: "Mã phòng", width: 120 },
@@ -71,6 +73,7 @@ export function RoomSelectDialog({
       columns={columns}
       searchPlaceholder="Nhập mã phòng hoặc tên phòng"
       maxWidth="lg"
+      query={{ status }}
     />
   );
 }

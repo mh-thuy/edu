@@ -34,11 +34,16 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const existingSchedule = await getClassScheduleById(id);
+    if (!existingSchedule) {
+      return apiError("NOT_FOUND", "Không tìm thấy lịch học", 404);
+    }
+
     const body = await request.json();
     const data = classScheduleUpdateSchema.parse(body);
 
     const { schedule } = await updateClassSchedule(id, data);
-    return apiSuccess({ schedule, conflicts: null });
+    return apiSuccess(schedule);
   } catch (error: unknown) {
     if (error instanceof ScheduleConflictError) {
       return apiError("CONFLICT", error.message, 409, {
