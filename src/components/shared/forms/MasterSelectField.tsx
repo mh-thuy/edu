@@ -7,6 +7,8 @@ import {
   Paper,
   Stack,
   Typography,
+  SxProps,
+  Theme,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -19,29 +21,18 @@ export type MasterSelectValue = {
 };
 
 export type MasterSelectFieldProps = {
-  /** Field label shown above the display area */
   label: string;
-  /** Currently selected item, or null/undefined if nothing selected */
   value?: MasterSelectValue | null;
-  /** Callback to open the picker dialog */
   onOpen: () => void;
-  /** Disable the select button */
   disabled?: boolean;
-  /** Validation error message */
   error?: string;
-  /** Mark field as required */
   required?: boolean;
-  /** Label for the code field (default: "Mã") */
   codeLabel?: string;
-  /** Label for the name field (default: "Tên") */
   nameLabel?: string;
+  size?: "small" | "medium"; // Thêm prop size
+  sx?: SxProps<Theme>; // Thêm prop sx để Grid bên ngoài can thiệp
 };
 
-/**
- * ERP-style lookup field.
- * Displays a readonly code/name pair and a button to open the picker dialog.
- * Stores only the selected id — code and name are display-only.
- */
 export function MasterSelectField({
   label,
   value,
@@ -51,51 +42,66 @@ export function MasterSelectField({
   required = false,
   codeLabel = "Mã",
   nameLabel = "Tên",
+  size = "medium", // Mặc định nếu không truyền
+  sx,
 }: MasterSelectFieldProps): ReactElement {
   const hasValue = Boolean(value?.id);
+  const isSmall = size === "small";
 
   return (
-    <Box>
-      {/* Field label */}
+    <Box sx={{ ...sx, position: "relative" }}>
+      {/* 1. Nếu dùng size="small" để lọc, ta biến Label thành một thẻ nhỏ tinh tế chặn ở góc viền giống chuẩn MUI */}
       <Typography
         component="label"
-        variant="body2"
+        variant="caption"
         fontWeight={500}
-        color={error ? "error" : "text.primary"}
-        sx={{ display: "block", mb: 0.5 }}
+        color={error ? "error" : "text.secondary"}
+        sx={{
+          position: "absolute",
+          left: 12,
+          top: -9,
+          bgcolor: "background.paper",
+          px: 0.5,
+          zIndex: 1,
+          lineHeight: 1,
+        }}
       >
         {label}
-        {required && (
-          <Typography component="span" color="error" sx={{ ml: 0.25 }}>
-            *
-          </Typography>
-        )}
+        {required && <span style={{ color: "red", marginLeft: 2 }}>*</span>}
       </Typography>
 
+      {/* 2. Khung hiển thị dữ liệu */}
       <Paper
         variant="outlined"
         sx={{
-          px: 2,
-          py: 1.5,
+          px: 1.5,
+          // Tính toán padding động: nếu small thì dùng 0.5 (cao chuẩn 40px), medium dùng 1.5
+          py: isSmall ? 0.5 : 1.5,
+          minHeight: isSmall ? 40 : 56, // Ép cứng chiều cao chuẩn xác từng pixel
+          boxSizing: "border-box",
+          display: "flex",
+          alignItems: "center",
           borderColor: error ? "error.main" : "divider",
           borderRadius: 1,
           transition: "border-color 0.2s",
+          bgcolor: disabled ? "action.disabledBackground" : "background.paper",
           "&:hover": {
             borderColor: disabled ? undefined : "primary.main",
           },
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={2}>
-          {/* Display area */}
+        <Stack direction="row" alignItems="center" spacing={1.5} width="100%">
+          {/* Nội dung hiển thị */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {hasValue ? (
               <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={{ xs: 0.5, sm: 3 }}
+                direction="row"
+                spacing={isSmall ? 1.5 : 3} // Giảm khoảng cách nếu ở chế độ nhỏ
+                alignItems="center"
               >
                 <Stack
                   direction="row"
-                  spacing={0.75}
+                  spacing={0.5}
                   alignItems="center"
                   sx={{ minWidth: 0 }}
                 >
@@ -106,23 +112,16 @@ export function MasterSelectField({
                   >
                     {codeLabel}:
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={600}
-                    sx={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <Typography variant="body2" fontWeight={600} noWrap>
                     {value!.code}
                   </Typography>
                 </Stack>
+
                 <Stack
                   direction="row"
-                  spacing={0.75}
+                  spacing={0.5}
                   alignItems="center"
-                  sx={{ minWidth: 0 }}
+                  sx={{ minWidth: 0, flex: 1 }}
                 >
                   <Typography
                     variant="caption"
@@ -131,14 +130,7 @@ export function MasterSelectField({
                   >
                     {nameLabel}:
                   </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
+                  <Typography variant="body2" noWrap>
                     {value!.name}
                   </Typography>
                 </Stack>
@@ -149,26 +141,31 @@ export function MasterSelectField({
                 color="text.disabled"
                 fontStyle="italic"
               >
-                Chưa chọn
+                Chưa chọn...
               </Typography>
             )}
           </Box>
 
-          {/* Select / Change button */}
+          {/* Nút bấm Chọn / Đổi */}
           <Button
             size="small"
-            variant={hasValue ? "outlined" : "contained"}
+            variant={hasValue ? "text" : "contained"} // Đổi sang text trên bản small nhìn thanh thoát hơn
             startIcon={hasValue ? <SwapHorizIcon /> : <SearchIcon />}
             onClick={onOpen}
             disabled={disabled}
-            sx={{ flexShrink: 0 }}
+            sx={{
+              flexShrink: 0,
+              height: 28, // Nút nhỏ nằm gọn gàng bên trong khung 40px
+              boxShadow: "none",
+              "&:hover": { boxShadow: "none" },
+            }}
           >
             {hasValue ? "Đổi" : "Chọn"}
           </Button>
         </Stack>
       </Paper>
 
-      {/* Error message */}
+      {/* Thông báo lỗi */}
       {error && (
         <FormHelperText error sx={{ mx: "14px", mt: 0.5 }}>
           {error}

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
-import { FeeStatus, Prisma } from "@prisma/client";
+import { FeeStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { apiError, apiSuccess } from "@/lib/api";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 
@@ -52,7 +52,11 @@ export async function GET(request: NextRequest) {
 
     // Transform to debt tracking format
     const debts = fees.map((fee) => {
-      const totalPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const totalPaid = sumDecimals(
+        fee.payments
+          .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+          .map((payment) => payment.amount),
+      );
       const totalAmount = toDecimal(fee.amount).sub(fee.discount);
       const outstanding = totalAmount.sub(totalPaid);
       

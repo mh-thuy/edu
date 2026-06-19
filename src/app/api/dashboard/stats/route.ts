@@ -1,12 +1,22 @@
 import { apiError, apiSuccess } from "@/lib/api";
+import { requireApiUser } from "@/lib/api-auth";
 import { toDecimal } from "@/lib/decimal";
+import { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) {
+      return user;
+    }
+
     const [paymentAggregate, studentFeeAggregate, payrollAggregate, activeClasses] =
       await Promise.all([
         prisma.payment.aggregate({
+          where: {
+            status: PaymentStatus.CONFIRMED,
+          },
           _sum: {
             amount: true,
           },

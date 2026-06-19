@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess } from "@/lib/api";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
+import { PaymentStatus } from "@prisma/client";
 
 export async function GET() {
   try {
@@ -26,7 +27,11 @@ export async function GET() {
     });
 
     const totalDebt = fees.reduce((sum, fee) => {
-      const totalPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const totalPaid = sumDecimals(
+        fee.payments
+          .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+          .map((payment) => payment.amount),
+      );
       const outstanding = toDecimal(fee.amount).sub(fee.discount).sub(totalPaid);
       return sum.add(outstanding);
     }, toDecimal(0));

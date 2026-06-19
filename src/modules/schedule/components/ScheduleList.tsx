@@ -397,41 +397,50 @@ export function ScheduleList(): ReactElement {
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
+          p: { xs: 2, sm: 3 }, // Linh hoạt không gian: 16px cho mobile, 24px cho desktop
           borderRadius: 3,
           border: "1px solid",
           borderColor: "divider",
           bgcolor: "background.paper",
         }}
       >
-        <Stack spacing={2}>
+        <Stack spacing={3}>
+          {" "}
+          {/* Tăng nhẹ spacing lên 3 để tách biệt Header và Filter rõ ràng hơn */}
+          {/* Header Section */}
           <Stack
-            direction={{ xs: "column", md: "row" }}
+            direction={{ xs: "column", sm: "row" }} // Chuyển đổi từ màn 'sm' sẽ mượt mà hơn 'md' đối với cụm header ngắn
             spacing={2}
-            alignItems={{ xs: "stretch", md: "center" }}
+            alignItems={{ xs: "stretch", sm: "center" }}
             justifyContent="space-between"
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
               <Box
                 sx={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 2,
+                  width: 46,
+                  height: 46,
+                  borderRadius: 2.5, // Bo góc mềm mại hơn một chút phù hợp với Paper
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  bgcolor: "primary.main",
-                  color: "primary.contrastText",
+                  bgcolor: "primary.lighter", // Nếu theme hỗ trợ, dùng tone nhạt + icon đậm sẽ sang hơn
+                  color: "primary.main", // Thay đổi cặp màu: Nền nhạt - Chữ/Icon đậm
+                  // Nếu không dùng primary.lighter, bạn giữ nguyên:
+                  // bgcolor: "primary.main", color: "primary.contrastText"
                 }}
               >
-                <EventNoteIcon />
+                <EventNoteIcon fontSize="medium" />
               </Box>
 
               <Box>
-                <Typography variant="h6" fontWeight={700}>
+                <Typography variant="h6" fontWeight={700} lineHeight={1.3}>
                   Quản lý lịch học
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
                   Danh sách lịch học, phòng học và tự động kiểm tra trùng lịch
                 </Typography>
               </Box>
@@ -443,20 +452,23 @@ export function ScheduleList(): ReactElement {
               onClick={handleCreate}
               sx={{
                 borderRadius: 2,
-                px: 2.5,
+                px: 3,
                 height: 40,
                 whiteSpace: "nowrap",
+                boxShadow: "none", // Loại bỏ shadow quá đậm của mặc địnhcontained mang lại cảm giác flat-modern
+                "&:hover": { boxShadow: "none" },
               }}
             >
               Thêm lịch học
             </Button>
           </Stack>
-
+          {/* Filters Section */}
           <Stack
             direction={{ xs: "column", md: "row" }}
             spacing={2}
-            alignItems={{ xs: "stretch", md: "flex-end" }}
+            alignItems={{ xs: "stretch", md: "center" }} // Đổi từ flex-end sang center để các thành phần 40px thẳng hàng tăm tắp
           >
+            {/* Ô lọc theo lớp */}
             <Box sx={{ flex: 1 }}>
               <MasterSelectField
                 label="Lọc theo lớp"
@@ -467,6 +479,7 @@ export function ScheduleList(): ReactElement {
               />
             </Box>
 
+            {/* Ô lọc theo ngày */}
             <TextField
               select
               label="Lọc theo ngày"
@@ -475,10 +488,15 @@ export function ScheduleList(): ReactElement {
                 setDayOfWeekFilter(event.target.value);
                 setPageNumber(1);
               }}
-              size="small"
-              sx={{ width: { xs: "100%", md: 220 } }}
+              sx={{
+                width: { xs: "100%", md: 220 },
+                "& .MuiInputLabel-root": {
+                  bgcolor: "background.paper",
+                  px: 0.5,
+                }, // Tránh lỗi label đè viền khi thu nhỏ
+              }}
             >
-              <MenuItem value="">Tất cả</MenuItem>
+              <MenuItem value="">Tất cả ngày</MenuItem>
               {dayNames.map((label, index) => (
                 <MenuItem key={label} value={String(index)}>
                   {label}
@@ -486,14 +504,18 @@ export function ScheduleList(): ReactElement {
               ))}
             </TextField>
 
+            {/* Nút Xóa lọc */}
             <Button
               variant="outlined"
-              color="inherit"
+              color="secondary" // Thay 'inherit' bằng 'secondary' hoặc màu xám để nút rõ ràng, không bị chìm
               startIcon={<ClearIcon />}
               onClick={handleResetFilters}
               sx={{
-                height: 40, // bằng TextField size small
-                minWidth: 120,
+                height: 40, // Chuẩn 40px bằng với 2 ô input trên
+                minWidth: { xs: "100%", md: 120 },
+                borderRadius: 1.5,
+                borderColor: "divider",
+                textTransform: "none", // Giữ chữ thường tự nhiên thay vì UPPERCASE mặc định nếu cấu hình theme chưa tắt
               }}
             >
               Xóa lọc

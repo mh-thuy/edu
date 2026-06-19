@@ -180,12 +180,12 @@ export async function deleteClass(id: string): Promise<Class> {
         },
         select: {
           id: true,
-          payments: {
-            select: {
-              receipts: {
-                select: {
-                  id: true,
-                },
+            payments: {
+              select: {
+                receipt: {
+                  select: {
+                    id: true,
+                  },
               },
             },
             take: 1,

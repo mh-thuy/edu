@@ -29,14 +29,21 @@ export async function seedPayments(
       const payment = await prisma.payment.create({
         data: {
           studentFeeId: flow.fee.id,
-          paymentQrId: flow.qr.id,
+          paymentRequestId: flow.request.id,
           amount: partialAmount,
           method: pick(["CASH", "TRANSFER", "WALLET"]),
           paymentDate: new Date(),
-          externalTransactionId: faker.string.uuid(),
           notes: "Seed partial payment",
-          createdBy: input.userId,
-          updatedBy: input.userId,
+          status: "CONFIRMED",
+        },
+      });
+
+      await prisma.receipt.create({
+        data: {
+          paymentId: payment.id,
+          receiptNumber: `RCPT-${faker.string.numeric(8)}`,
+          issueDate: new Date(),
+          status: "ACTIVE",
         },
       });
 
@@ -60,14 +67,12 @@ export async function seedPayments(
     const payment = await prisma.payment.create({
       data: {
         studentFeeId: flow.fee.id,
-        paymentQrId: flow.qr.id,
+        paymentRequestId: flow.request.id,
         amount: fullAmount,
         method: pick(["CASH", "TRANSFER", "WALLET"]),
         paymentDate: new Date(),
-        externalTransactionId: faker.string.uuid(),
         notes: "Seed full payment",
-        createdBy: input.userId,
-        updatedBy: input.userId,
+        status: "CONFIRMED",
       },
     });
 

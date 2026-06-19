@@ -6,21 +6,30 @@ import type {
   FeeStatus,
   PaymentNoticeStatus,
   PaymentQrStatus,
+  PaymentRequestStatus,
   Prisma,
 } from "@prisma/client";
+import { PaymentStatus } from "@prisma/client";
 import type { StudentFeeFilter } from "@/modules/finance/student-fees/schemas/student-fee.schema";
+
+const paymentRequestDetailInclude = {
+  paymentAccount: true,
+  qrCode: true,
+  notices: {
+    orderBy: [{ version: "desc" }, { createdAt: "desc" }],
+  },
+  payments: true,
+} satisfies Prisma.PaymentRequestInclude;
 
 const studentFeeDetailInclude = {
   student: true,
   class: true,
   payments: true,
-  qrCodes: {
+  paymentRequests: {
     orderBy: {
       createdAt: "desc",
     },
-  },
-  notices: {
-    orderBy: [{ version: "desc" }, { createdAt: "desc" }],
+    include: paymentRequestDetailInclude,
   },
 } satisfies Prisma.StudentFeeInclude;
 
@@ -191,27 +200,113 @@ export class StudentFeeService {
     return fee;
   }
 
-  private static async invalidateDependentArtifacts(
+  private static async getDefaultPaymentRequestAccount(
+    tx: Prisma.TransactionClient,
+  ) {
+    const account = await tx.paymentAccount.findFirst({
+      where: {
+        isActive: true,
+      },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    });
+
+    if (!account) {
+      throw new ConflictError("Chưa cấu hình tài khoản nhận học phí");
+    }
+
+    return account;
+  }
+
+  private static async getActivePaymentRequest(
     studentFeeId: string,
     tx: Prisma.TransactionClient,
   ) {
-    await tx.paymentQrCode.updateMany({
+    return tx.paymentRequest.findFirst({
       where: {
         studentFeeId,
         status: "ACTIVE",
       },
+      include: paymentRequestDetailInclude,
+      orderBy: [{ createdAt: "desc" }],
+    });
+  }
+
+  private static async createPaymentRequestForFee(
+    fee: {
+      id: string;
+      billingYear: number;
+      billingMonth: number;
+      student: { code: string };
+      class: { code: string };
+      finalAmount: Prisma.Decimal | number;
+      dueDate: Date | null;
+    },
+    tx: Prisma.TransactionClient,
+  ) {
+    const paymentAccount = await this.getDefaultPaymentRequestAccount(tx);
+    const requestedAmount = toDecimal(fee.finalAmount);
+    const transferContent = `HP-${fee.billingYear}${String(fee.billingMonth).padStart(2, "0")}-${fee.student.code}-${fee.class.code}`;
+
+    return tx.paymentRequest.create({
       data: {
-        status: "INACTIVE",
+        studentFeeId: fee.id,
+        paymentAccountId: paymentAccount.id,
+        paymentCode: this.buildPaymentCode(fee),
+        requestedAmount: requestedAmount.toNumber(),
+        transferContent,
+        expiredAt: fee.dueDate,
+        status: "ACTIVE",
+      },
+      include: paymentRequestDetailInclude,
+    });
+  }
+
+  private static async invalidateDependentArtifacts(
+    studentFeeId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const activeRequests = await tx.paymentRequest.findMany({
+      where: {
+        studentFeeId,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const requestIds = activeRequests.map((request) => request.id);
+
+    if (requestIds.length === 0) {
+      return;
+    }
+
+    await tx.paymentQrCode.updateMany({
+      where: {
+        paymentRequestId: { in: requestIds },
+        status: "ACTIVE",
+      },
+      data: {
+        status: "EXPIRED",
       },
     });
 
     await tx.paymentNotice.updateMany({
       where: {
-        studentFeeId,
+        paymentRequestId: { in: requestIds },
         isLatest: true,
       },
       data: {
         isLatest: false,
+      },
+    });
+
+    await tx.paymentRequest.updateMany({
+      where: {
+        id: { in: requestIds },
+      },
+      data: {
+        status: "EXPIRED",
       },
     });
   }
@@ -231,14 +326,28 @@ export class StudentFeeService {
   }
 
   private static resolveQrStepStatus(
-    qrCodes: Array<{ status: PaymentQrStatus }>,
+    paymentRequests: Array<{
+      status: PaymentRequestStatus;
+      qrCode?: { status: PaymentQrStatus } | null;
+    }>,
   ): "PENDING" | "GENERATED" | "FAILED" {
-    if (qrCodes.some((qr) => qr.status === "ACTIVE")) {
+    if (
+      paymentRequests.some(
+        (request) =>
+          request.status === "ACTIVE" && request.qrCode?.status === "ACTIVE",
+      )
+    ) {
       return "GENERATED";
     }
 
     if (
-      qrCodes.some((qr) => qr.status === "EXPIRED" || qr.status === "CANCELLED")
+      paymentRequests.some(
+        (request) =>
+          request.status === "EXPIRED" ||
+          request.status === "CANCELLED" ||
+          request.qrCode?.status === "EXPIRED" ||
+          request.qrCode?.status === "CANCELLED",
+      )
     ) {
       return "FAILED";
     }
@@ -270,19 +379,43 @@ export class StudentFeeService {
     return "PENDING";
   }
 
-  private static mapFeeFlowState(fee: StudentFeeWithRelations) {
-    const activeQr = fee.qrCodes.find((qr) => qr.status === "ACTIVE") ?? null;
-    const latestNotice = fee.notices.find((notice) => notice.isLatest) ?? null;
+  private static async mapFeeFlowState(fee: StudentFeeWithRelations) {
+    const activeRequest =
+      fee.paymentRequests.find((request) => request.status === "ACTIVE") ??
+      fee.paymentRequests[0] ??
+      null;
+    const activeQr = activeRequest?.qrCode
+      ? {
+          id: activeRequest.qrCode.id,
+          paymentRequestId: activeRequest.qrCode.paymentRequestId,
+          amount: Number(activeRequest.requestedAmount),
+          transferContent: activeRequest.transferContent,
+          qrPayload: activeRequest.qrCode.qrPayload,
+          qrImageUrl: await StudentFeeAssetService.generateQrDataUrl(
+            activeRequest.qrCode.qrPayload,
+          ),
+          status: activeRequest.qrCode.status,
+        }
+      : null;
+    const latestNotice =
+      fee.paymentRequests
+        .flatMap((request) => request.notices)
+        .find((notice) => notice.isLatest) ?? null;
 
     return {
       ...fee,
+      month: `${fee.billingYear}-${String(fee.billingMonth).padStart(2, "0")}`,
       activeQr,
       latestNotice,
       flowStatus: {
         tuitionFee: "GENERATED" as const,
-        qr: this.resolveQrStepStatus(fee.qrCodes),
-        temporaryInvoice: this.resolveNoticeStepStatus(fee.notices),
-        paymentNotice: this.resolveNoticeStepStatus(fee.notices),
+        qr: this.resolveQrStepStatus(fee.paymentRequests),
+        temporaryInvoice: this.resolveNoticeStepStatus(
+          fee.paymentRequests.flatMap((request) => request.notices),
+        ),
+        paymentNotice: this.resolveNoticeStepStatus(
+          fee.paymentRequests.flatMap((request) => request.notices),
+        ),
       },
     };
   }
@@ -316,7 +449,7 @@ export class StudentFeeService {
         );
       }
 
-      return tx.studentFee.create({
+      const fee = await tx.studentFee.create({
         data: {
           studentId: data.studentId,
           classId: data.classId,
@@ -331,8 +464,30 @@ export class StudentFeeService {
           status: data.status ?? "UNPAID",
           note: data.note,
         },
+      });
+
+      const createdFee = await tx.studentFee.findUnique({
+        where: { id: fee.id },
+        include: {
+          student: true,
+          class: true,
+        },
+      });
+
+      if (createdFee) {
+        await this.createPaymentRequestForFee(createdFee, tx);
+      }
+
+      const created = await tx.studentFee.findUnique({
+        where: { id: fee.id },
         include: studentFeeDetailInclude,
       });
+
+      if (!created) {
+        throw new NotFoundError("Không tìm thấy học phí");
+      }
+
+      return created;
     });
   }
 
@@ -349,12 +504,31 @@ export class StudentFeeService {
     const amounts = this.validateAmounts(data.amount, data.discount);
 
     return prisma.$transaction(async (tx) => {
+      const classData = await tx.class.findUnique({
+        where: { id: data.classId },
+        select: {
+          id: true,
+          code: true,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundError("Không tìm thấy lớp học");
+      }
+
       const classStudents = await tx.classStudent.findMany({
         where: {
           classId: data.classId,
           studentId: { in: data.studentIds },
         },
-        select: { studentId: true },
+        select: {
+          studentId: true,
+          student: {
+            select: {
+              code: true,
+            },
+          },
+        },
       });
 
       if (classStudents.length === 0) {
@@ -398,6 +572,43 @@ export class StudentFeeService {
         data: feesToCreate,
       });
 
+      const createdFees = await tx.studentFee.findMany({
+        where: {
+          classId: data.classId,
+          billingYear,
+          billingMonth,
+          studentId: { in: classStudents.map((cs) => cs.studentId) },
+        },
+        include: {
+          student: true,
+          class: true,
+        },
+      });
+
+      const paymentAccount = await this.getDefaultPaymentRequestAccount(tx);
+      await tx.paymentRequest.createMany({
+        data: createdFees.map((fee) => {
+          const studentCode =
+            classStudents.find((cs) => cs.studentId === fee.studentId)?.student
+              .code ?? fee.studentId;
+
+          return {
+            studentFeeId: fee.id,
+            paymentAccountId: paymentAccount.id,
+            paymentCode: this.buildPaymentCode({
+              billingYear: fee.billingYear,
+              billingMonth: fee.billingMonth,
+              student: { code: studentCode },
+              class: { code: classData.code },
+            }),
+            requestedAmount: toDecimal(fee.finalAmount).toNumber(),
+            transferContent: `HP-${fee.billingYear}${String(fee.billingMonth).padStart(2, "0")}-${studentCode}-${classData.code}`,
+            expiredAt: data.dueDate,
+            status: "ACTIVE" as const,
+          };
+        }),
+      });
+
       return {
         created: feesToCreate.length,
         skipped: 0,
@@ -420,7 +631,9 @@ export class StudentFeeService {
     }
 
     const totalPaid = sumDecimals(
-      fee.payments.map((payment) => payment.amount),
+      fee.payments
+        .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+        .map((payment) => payment.amount),
     );
     const netAmount = toDecimal(fee.finalAmount);
     const outstanding = netAmount.sub(totalPaid);
@@ -532,7 +745,7 @@ export class StudentFeeService {
     ]);
 
     return {
-      items: items.map((item) => this.mapFeeFlowState(item)),
+      items: await Promise.all(items.map((item) => this.mapFeeFlowState(item))),
       total,
       page,
       pageSize,
@@ -629,38 +842,64 @@ export class StudentFeeService {
         throw new ConflictError("Học phí đã thanh toán đủ, không cần tạo QR");
       }
 
-      const activeQr = fee.qrCodes.find((qr) => qr.status === "ACTIVE");
-      if (activeQr && toDecimal(activeQr.amount).eq(outstanding)) {
+      let paymentRequest = await this.getActivePaymentRequest(studentFeeId, tx);
+
+      if (
+        paymentRequest?.qrCode?.status === "ACTIVE" &&
+        toDecimal(paymentRequest.requestedAmount).eq(outstanding)
+      ) {
         throw new ConflictError("QR thanh toán hiện tại vẫn còn hiệu lực");
       }
 
-      if (activeQr) {
+      if (
+        paymentRequest &&
+        toDecimal(paymentRequest.requestedAmount).eq(outstanding) === false
+      ) {
+        const expiredRequest = paymentRequest;
+        await tx.paymentRequest.update({
+          where: { id: expiredRequest.id },
+          data: { status: "EXPIRED" },
+        });
+        paymentRequest = null;
+        if (expiredRequest.qrCode) {
+          await tx.paymentQrCode.update({
+            where: { paymentRequestId: expiredRequest.id },
+            data: { status: "EXPIRED" },
+          });
+        }
+      } else if (paymentRequest?.qrCode) {
         await tx.paymentQrCode.update({
-          where: { id: activeQr.id },
-          data: { status: "INACTIVE" },
+          where: { paymentRequestId: paymentRequest.id },
+          data: { status: "EXPIRED" },
         });
       }
 
-      const paymentAccount = await this.getDefaultPaymentAccount(tx);
-      const transferContent = `HP-${fee.billingYear}${String(fee.billingMonth).padStart(2, "0")}-${fee.student.code}-${fee.class.code}`;
+      if (!paymentRequest) {
+        paymentRequest = await this.createPaymentRequestForFee(
+          {
+            id: fee.id,
+            billingYear: fee.billingYear,
+            billingMonth: fee.billingMonth,
+            student: { code: fee.student.code },
+            class: { code: fee.class.code },
+            finalAmount: fee.finalAmount,
+            dueDate: fee.dueDate,
+          },
+          tx,
+        );
+      }
+
       const qrPayload = this.buildVietQrPayload({
-        bankCode: paymentAccount.bankCode,
-        accountNumber: paymentAccount.accountNumber,
+        bankCode: paymentRequest.paymentAccount.bankCode,
+        accountNumber: paymentRequest.paymentAccount.accountNumber,
         amount: outstanding.toFixed(0),
-        transferContent,
+        transferContent: paymentRequest.transferContent,
       });
-      const qrImageUrl =
-        await StudentFeeAssetService.generateQrDataUrl(qrPayload);
 
       return tx.paymentQrCode.create({
         data: {
-          studentFeeId: fee.id,
-          paymentAccountId: paymentAccount.id,
-          paymentCode: this.buildPaymentCode(fee),
-          amount: outstanding.toNumber(),
-          transferContent,
+          paymentRequestId: paymentRequest.id,
           qrPayload,
-          qrImageUrl,
           status: "ACTIVE",
         },
       });
@@ -669,45 +908,24 @@ export class StudentFeeService {
 
   static async generatePaymentNotice(studentFeeId: string) {
     return prisma.$transaction(async (tx) => {
-      const fee = await tx.studentFee.findUnique({
-        where: { id: studentFeeId },
-        include: {
-          student: true,
-          class: true,
-          payments: true,
-          notices: {
-            orderBy: [{ version: "desc" }, { createdAt: "desc" }],
-          },
-          qrCodes: {
-            where: {
-              status: "ACTIVE",
-            },
-            include: {
-              paymentAccount: true,
-            },
-            orderBy: {
-              createdAt: "desc",
-            },
-          },
-        },
-      });
+      const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
+      const paymentRequests = fee.paymentRequests;
+      const activeRequest =
+        paymentRequests.find((request) => request.status === "ACTIVE") ??
+        paymentRequests[0] ??
+        null;
 
-      if (!fee) {
-        throw new NotFoundError("Không tìm thấy học phí");
-      }
-
-      const activeQr = fee.qrCodes[0];
-
-      if (!activeQr) {
+      if (!activeRequest?.qrCode) {
         throw new ConflictError("Cần tạo QR thanh toán trước khi tạo bill tạm");
       }
 
-      const latestNotice = fee.notices.find((notice) => notice.isLatest);
+      const notices = paymentRequests.flatMap((request) => request.notices);
+      const latestNotice = notices.find((notice) => notice.isLatest);
       const currentAmount = toDecimal(fee.outstandingAmount);
 
       if (
         latestNotice &&
-        latestNotice.qrCodeId === activeQr.id &&
+        latestNotice.paymentRequestId === activeRequest.id &&
         latestNotice.status !== "CANCELLED" &&
         toDecimal(latestNotice.amount).eq(currentAmount) &&
         String(latestNotice.dueDate ?? "") === String(fee.dueDate ?? "")
@@ -717,7 +935,9 @@ export class StudentFeeService {
 
       await tx.paymentNotice.updateMany({
         where: {
-          studentFeeId,
+          paymentRequestId: {
+            in: paymentRequests.map((request) => request.id),
+          },
           isLatest: true,
         },
         data: {
@@ -725,12 +945,11 @@ export class StudentFeeService {
         },
       });
 
-      const latestVersion = fee.notices[0]?.version ?? 0;
+      const latestVersion = notices[0]?.version ?? 0;
       const createdNotice = await tx.paymentNotice.create({
         data: {
-          studentFeeId,
+          paymentRequestId: activeRequest.id,
           noticeNumber: this.buildNoticeNumber(fee),
-          qrCodeId: activeQr.id,
           amount: currentAmount.toNumber(),
           dueDate: fee.dueDate,
           version: latestVersion + 1,
@@ -739,47 +958,39 @@ export class StudentFeeService {
         },
       });
 
-      const { pdfUrl, qrDataUrl } =
-        await StudentFeeAssetService.generateNoticePdfAsset({
-          notice: {
-            noticeNumber: createdNotice.noticeNumber,
-            dueDate: createdNotice.dueDate,
-            amount: Number(createdNotice.amount),
-            createdAt: createdNotice.createdAt,
+      const { pdfUrl } = await StudentFeeAssetService.generateNoticePdfAsset({
+        notice: {
+          noticeNumber: createdNotice.noticeNumber,
+          dueDate: createdNotice.dueDate,
+          amount: Number(createdNotice.amount),
+          createdAt: createdNotice.createdAt,
+        },
+        fee: {
+          billingYear: fee.billingYear,
+          billingMonth: fee.billingMonth,
+          amount: Number(fee.amount),
+          discount: Number(fee.discount),
+          finalAmount: Number(fee.finalAmount),
+          student: {
+            code: fee.student.code,
+            fullName: fee.student.fullName,
+            parentName: fee.student.parentName,
+            phone: fee.student.phone,
           },
-          fee: {
-            billingYear: fee.billingYear,
-            billingMonth: fee.billingMonth,
-            amount: Number(fee.amount),
-            discount: Number(fee.discount),
-            finalAmount: Number(fee.finalAmount),
-            student: {
-              code: fee.student.code,
-              fullName: fee.student.fullName,
-              parentName: fee.student.parentName,
-              phone: fee.student.phone,
-            },
-            class: {
-              code: fee.class.code,
-              name: fee.class.name,
-            },
+          class: {
+            code: fee.class.code,
+            name: fee.class.name,
           },
-          qrCode: {
-            qrPayload: activeQr.qrPayload,
-            transferContent: activeQr.transferContent,
-            paymentAccount: {
-              bankName: activeQr.paymentAccount.bankName,
-              bankCode: activeQr.paymentAccount.bankCode,
-              accountNumber: activeQr.paymentAccount.accountNumber,
-              accountName: activeQr.paymentAccount.accountName,
-            },
+        },
+        qrCode: {
+          qrPayload: activeRequest.qrCode.qrPayload,
+          transferContent: activeRequest.transferContent,
+          paymentAccount: {
+            bankName: activeRequest.paymentAccount.bankName,
+            bankCode: activeRequest.paymentAccount.bankCode,
+            accountNumber: activeRequest.paymentAccount.accountNumber,
+            accountName: activeRequest.paymentAccount.accountName,
           },
-        });
-
-      await tx.paymentQrCode.update({
-        where: { id: activeQr.id },
-        data: {
-          qrImageUrl: qrDataUrl,
         },
       });
 
@@ -794,78 +1005,56 @@ export class StudentFeeService {
 
   static async exportPaymentNoticePdf(studentFeeId: string) {
     return prisma.$transaction(async (tx) => {
-      const fee = await tx.studentFee.findUnique({
-        where: { id: studentFeeId },
-        include: {
-          student: true,
-          class: true,
-          notices: {
-            where: { isLatest: true },
-            orderBy: [{ version: "desc" }, { createdAt: "desc" }],
-          },
-          qrCodes: {
-            where: { status: "ACTIVE" },
-            include: { paymentAccount: true },
-            orderBy: { createdAt: "desc" },
-          },
-        },
-      });
-
-      if (!fee) {
-        throw new NotFoundError("Không tìm thấy học phí");
-      }
-
-      const latestNotice = fee.notices[0];
+      const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
+      const paymentRequests = fee.paymentRequests;
+      const notices = paymentRequests.flatMap((request) => request.notices);
+      const latestNotice = notices.find((notice) => notice.isLatest);
       if (!latestNotice) {
         throw new ConflictError("Cần tạo bill tạm trước khi xuất PDF");
       }
 
-      const activeQr = fee.qrCodes[0];
-      if (!activeQr) {
+      const activeRequest =
+        paymentRequests.find((request) => request.status === "ACTIVE") ??
+        paymentRequests[0] ??
+        null;
+
+      if (!activeRequest?.qrCode) {
         throw new ConflictError("Cần tạo QR thanh toán trước khi xuất PDF");
       }
 
-      const { pdfUrl, qrDataUrl } =
-        await StudentFeeAssetService.generateNoticePdfAsset({
-          notice: {
-            noticeNumber: latestNotice.noticeNumber,
-            dueDate: latestNotice.dueDate,
-            amount: Number(latestNotice.amount),
-            createdAt: latestNotice.createdAt,
+      const { pdfUrl } = await StudentFeeAssetService.generateNoticePdfAsset({
+        notice: {
+          noticeNumber: latestNotice.noticeNumber,
+          dueDate: latestNotice.dueDate,
+          amount: Number(latestNotice.amount),
+          createdAt: latestNotice.createdAt,
+        },
+        fee: {
+          billingYear: fee.billingYear,
+          billingMonth: fee.billingMonth,
+          amount: Number(fee.amount),
+          discount: Number(fee.discount),
+          finalAmount: Number(fee.finalAmount),
+          student: {
+            code: fee.student.code,
+            fullName: fee.student.fullName,
+            parentName: fee.student.parentName,
+            phone: fee.student.phone,
           },
-          fee: {
-            billingYear: fee.billingYear,
-            billingMonth: fee.billingMonth,
-            amount: Number(fee.amount),
-            discount: Number(fee.discount),
-            finalAmount: Number(fee.finalAmount),
-            student: {
-              code: fee.student.code,
-              fullName: fee.student.fullName,
-              parentName: fee.student.parentName,
-              phone: fee.student.phone,
-            },
-            class: {
-              code: fee.class.code,
-              name: fee.class.name,
-            },
+          class: {
+            code: fee.class.code,
+            name: fee.class.name,
           },
-          qrCode: {
-            qrPayload: activeQr.qrPayload,
-            transferContent: activeQr.transferContent,
-            paymentAccount: {
-              bankName: activeQr.paymentAccount.bankName,
-              bankCode: activeQr.paymentAccount.bankCode,
-              accountNumber: activeQr.paymentAccount.accountNumber,
-              accountName: activeQr.paymentAccount.accountName,
-            },
+        },
+        qrCode: {
+          qrPayload: activeRequest.qrCode.qrPayload,
+          transferContent: activeRequest.transferContent,
+          paymentAccount: {
+            bankName: activeRequest.paymentAccount.bankName,
+            bankCode: activeRequest.paymentAccount.bankCode,
+            accountNumber: activeRequest.paymentAccount.accountNumber,
+            accountName: activeRequest.paymentAccount.accountName,
           },
-        });
-
-      await tx.paymentQrCode.update({
-        where: { id: activeQr.id },
-        data: {
-          qrImageUrl: qrDataUrl,
         },
       });
 
@@ -892,7 +1081,9 @@ export class StudentFeeService {
   static async sendPaymentNotice(studentFeeId: string, sendMethod = "MANUAL") {
     return prisma.$transaction(async (tx) => {
       const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
-      const latestNotice = fee.notices.find((notice) => notice.isLatest);
+      const latestNotice = fee.paymentRequests
+        .flatMap((request) => request.notices)
+        .find((notice) => notice.isLatest);
 
       if (!latestNotice) {
         throw new ConflictError("Cần tạo bill tạm trước khi gửi thông báo");
@@ -975,7 +1166,11 @@ export class StudentFeeService {
     let totalPaid = toDecimal(0);
 
     for (const fee of fees) {
-      const paid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const paid = sumDecimals(
+        fee.payments
+          .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+          .map((payment) => payment.amount),
+      );
       totalPaid = totalPaid.add(paid);
       totalFeeAmount = totalFeeAmount.add(toDecimal(fee.finalAmount));
     }
@@ -986,7 +1181,11 @@ export class StudentFeeService {
       totalDebt: totalFeeAmount.sub(totalPaid),
       feeCount: fees.length,
       paidCount: fees.filter((fee) => {
-        const paid = sumDecimals(fee.payments.map((payment) => payment.amount));
+        const paid = sumDecimals(
+          fee.payments
+            .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+            .map((payment) => payment.amount),
+        );
         return paid.greaterThanOrEqualTo(toDecimal(fee.finalAmount));
       }).length,
     };

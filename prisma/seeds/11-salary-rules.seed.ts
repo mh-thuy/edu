@@ -11,9 +11,7 @@ export async function seedSalaryRules(
     await prisma.classSalaryRule.create({
       data: {
         classId: cls.id,
-        commissionPercentage: 12,
-        createdBy: input.userId,
-        updatedBy: input.userId,
+        teacherSharePercentage: 12,
       },
     });
   }

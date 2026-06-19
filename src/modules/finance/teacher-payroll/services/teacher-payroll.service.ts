@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { decimalToNumber, sumDecimals, toDecimal } from "@/lib/decimal";
-import { PayrollStatus as PrismaPayrollStatus } from "@prisma/client";
+import {
+  PaymentStatus,
+  PayrollStatus as PrismaPayrollStatus,
+} from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
 
@@ -98,11 +101,12 @@ export class TeacherPayrollService {
         },
         select: {
           classId: true,
-          commissionPercentage: true,
+          teacherSharePercentage: true,
         },
       }),
       prisma.payment.findMany({
         where: {
+          status: PaymentStatus.CONFIRMED,
           paymentDate: {
             gte: monthStart,
             lt: monthEnd,
@@ -124,7 +128,7 @@ export class TeacherPayrollService {
 
     const ruleByClassId = new Map<string, number | Prisma.Decimal>();
     for (const rule of rules) {
-      ruleByClassId.set(rule.classId, rule.commissionPercentage);
+      ruleByClassId.set(rule.classId, rule.teacherSharePercentage);
     }
 
     const revenueByClassId = new Map<string, number | Prisma.Decimal>();
@@ -148,9 +152,9 @@ export class TeacherPayrollService {
       const studentCount = cls._count.students;
 
       if (studentCount === 0) continue;
-      const commissionPercentage = toDecimal(ruleByClassId.get(cls.id) ?? 0);
+      const teacherSharePercentage = toDecimal(ruleByClassId.get(cls.id) ?? 0);
       const classRevenue = toDecimal(revenueByClassId.get(cls.id) ?? 0);
-      const centerFee = classRevenue.mul(commissionPercentage).div(100);
+      const centerFee = classRevenue.mul(teacherSharePercentage).div(100);
       const teacherSalary = classRevenue.sub(centerFee);
 
       if (classRevenue.gt(0)) {
@@ -193,7 +197,7 @@ export class TeacherPayrollService {
             studentCount: item.studentCount,
             revenue: decimalToNumber(item.revenue),
             centerFee: decimalToNumber(item.fee),
-            commissionRate: decimalToNumber(
+            teacherSharePercentage: decimalToNumber(
               toDecimal(ruleByClassId.get(item.classId) ?? 0),
             ),
             salary: decimalToNumber(item.salary),

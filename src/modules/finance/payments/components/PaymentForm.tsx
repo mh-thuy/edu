@@ -33,6 +33,7 @@ import dayjs from "dayjs";
 
 type PaymentCreateInput = z.infer<typeof paymentCreateSchema>;
 type PaymentUpdateInput = z.infer<typeof paymentUpdateSchema>;
+type FeeStatus = "unpaid" | "partial" | "paid";
 
 interface StudentFeeOption {
   id: string;
@@ -40,7 +41,7 @@ interface StudentFeeOption {
   amount: number;
   discount?: number;
   outstanding: number;
-  status: "unpaid" | "partial" | "paid";
+  status: FeeStatus;
   student: {
     code: string;
     fullName: string;
@@ -56,7 +57,7 @@ interface StudentFeeApiItem {
   month: string;
   amount: number;
   discount?: number;
-  status: "unpaid" | "partial" | "paid";
+  status: FeeStatus;
   student?: {
     code: string;
     fullName: string;
@@ -133,6 +134,15 @@ const PAYMENT_METHODS = [
   { value: "wallet", label: "Ví điện tử" },
 ];
 
+const normalizeFeeStatus = (status: string): FeeStatus => {
+  const normalized = status.toLowerCase();
+  if (normalized === "paid" || normalized === "partial") {
+    return normalized;
+  }
+
+  return "unpaid";
+};
+
 export function PaymentForm({
   initialData,
   onClose,
@@ -142,6 +152,8 @@ export function PaymentForm({
   const [submitting, setSubmitting] = useState(false);
   const [fees, setFees] = useState<StudentFeeOption[]>([]);
   const [loadingFees, setLoadingFees] = useState(false);
+  const [feeSearch, setFeeSearch] = useState("");
+  const [selectedFeeOption, setSelectedFeeOption] = useState<StudentFeeOption | null>(null);
 
   const isEditing = Boolean(initialData);
 
@@ -180,12 +192,19 @@ export function PaymentForm({
 
   const selectedFeeId = watch("studentFeeId");
 
-  const loadFees = useCallback(async () => {
+  const loadFees = useCallback(async (searchValue = "") => {
     try {
       setLoadingFees(true);
-      const response = await fetch(
-        "/api/student-fees?status=unpaid,partial&pageSize=100",
-      );
+      const params = new URLSearchParams({
+        status: "unpaid,partial",
+        pageSize: "20",
+      });
+
+      if (searchValue.trim()) {
+        params.set("search", searchValue.trim());
+      }
+
+      const response = await fetch(`/api/student-fees?${params.toString()}`);
 
       if (!response.ok) {
         throw new Error(await extractApiErrorMessage(response, "Failed to load fees"));
@@ -203,7 +222,7 @@ export function PaymentForm({
           amount: netAmount,
           discount: fee.discount || 0,
           outstanding: Math.max(netAmount - paidAmount, 0),
-          status: fee.status,
+          status: normalizeFeeStatus(fee.status),
           student: fee.student || null,
           class: fee.class || null,
         };
@@ -218,8 +237,18 @@ export function PaymentForm({
   }, [showError]);
 
   useEffect(() => {
-    void loadFees();
-  }, [loadFees]);
+    if (isEditing) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadFees(feeSearch);
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [feeSearch, isEditing, loadFees]);
 
   const selectedFee = useMemo(() => {
     if (initialData?.studentFee) {
@@ -244,8 +273,8 @@ export function PaymentForm({
       };
     }
 
-    return fees.find((fee) => fee.id === selectedFeeId) || null;
-  }, [fees, initialData, selectedFeeId]);
+    return fees.find((fee) => fee.id === selectedFeeId) || selectedFeeOption || null;
+  }, [fees, initialData, selectedFeeId, selectedFeeOption]);
 
   const onSubmit = async (data: PaymentFormData) => {
     if (!selectedFee) {
@@ -344,27 +373,42 @@ export function PaymentForm({
               control={control}
               render={({ field }) =>
                 !isEditing ? (
-                  <TextField
-                    select
-                    label="Hóa đơn"
-                    {...field}
-                    error={!!errors.studentFeeId}
-                    helperText={errors.studentFeeId?.message}
-                    fullWidth
-                    disabled={loadingFees}
-                  >
-                    <MenuItem value="">-- Chọn hóa đơn --</MenuItem>
+                  <Stack spacing={1.25}>
+                    <TextField
+                      label="Tìm hóa đơn"
+                      placeholder="Mã học viên, tên học viên, mã lớp, tên lớp, tháng"
+                      value={feeSearch}
+                      onChange={(event) => setFeeSearch(event.target.value)}
+                      fullWidth
+                    />
+                    <TextField
+                      select
+                      label="Hóa đơn"
+                      {...field}
+                      onChange={(event) => {
+                        field.onChange(event);
+                        setSelectedFeeOption(
+                          fees.find((fee) => fee.id === event.target.value) || null,
+                        );
+                      }}
+                      error={!!errors.studentFeeId}
+                      helperText={errors.studentFeeId?.message}
+                      fullWidth
+                      disabled={loadingFees}
+                    >
+                      <MenuItem value="">-- Chọn hóa đơn --</MenuItem>
 
-                    {fees.map((fee) => (
-                      <MenuItem key={fee.id} value={fee.id}>
-                        {fee.student?.code || "N/A"} -{" "}
-                        {fee.student?.fullName || "Không rõ"} |{" "}
-                        {fee.class?.code || "N/A"} -{" "}
-                        {fee.class?.name || "Không rõ"} | {fee.month} | Nợ{" "}
-                        {formatCurrency(fee.outstanding)} VND
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                      {fees.map((fee) => (
+                        <MenuItem key={fee.id} value={fee.id}>
+                          {fee.student?.code || "N/A"} -{" "}
+                          {fee.student?.fullName || "Không rõ"} |{" "}
+                          {fee.class?.code || "N/A"} -{" "}
+                          {fee.class?.name || "Không rõ"} | {fee.month} | Nợ{" "}
+                          {formatCurrency(fee.outstanding)} VND
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Stack>
                 ) : (
                   <TextField
                     label="Hóa đơn"
@@ -509,9 +553,6 @@ export function PaymentForm({
             type="submit"
             variant="contained"
             disabled={submitting || (!isEditing && !selectedFee)}
-            onClick={() => {
-              void handleSubmit(onSubmit)();
-            }}
             startIcon={submitting ? <CircularProgress size={20} /> : undefined}
           >
             {submitting ? "Đang xử lý..." : "Lưu"}

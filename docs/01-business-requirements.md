@@ -1,31 +1,36 @@
 # Tài liệu nghiệp vụ hệ thống quản lý trung tâm đào tạo
 
-Version: 2.0
+Version: 3.0
 Status: Draft
-Updated: 2026-06-18
+Updated: 2026-06-19
 
 ---
 
 # 1. Tổng quan hệ thống
 
-Hệ thống dùng để quản lý vận hành trung tâm đào tạo.
+Hệ thống phục vụ quản lý vận hành trung tâm đào tạo.
 
-Các chức năng chính:
+Các module chính:
 
-* Quản lý tài khoản người dùng
-* Quản lý giáo viên
-* Quản lý học viên
-* Quản lý phòng học
-* Quản lý lớp học
-* Đăng ký học viên vào lớp
-* Quản lý lịch học
-* Quản lý học phí
-* Sinh QR Code thanh toán
-* In bill tạm thông báo học phí
-* Quản lý thanh toán
-* Quản lý biên lai
-* Quản lý chia lương giáo viên
-* Quản lý bảng lương giáo viên
+- Quản lý người dùng
+- Quản lý giáo viên
+- Quản lý học viên
+- Quản lý phòng học
+- Quản lý lớp học
+- Đăng ký học viên
+- Quản lý lịch học
+- Điểm danh học viên
+- Quản lý học phí
+- Tạo yêu cầu thanh toán
+- Sinh VietQR thanh toán
+- Sinh phiếu báo học phí
+- Import sao kê ngân hàng
+- Đối soát giao dịch
+- Quản lý thanh toán
+- Quản lý biên lai
+- Quản lý chia lương giáo viên
+- Quản lý bảng lương
+- Audit log hệ thống
 
 Luồng tổng quát:
 
@@ -36,15 +41,23 @@ Enroll Class
     ↓
 Generate Tuition Fee
     ↓
-Generate Payment QR
+Create Payment Request
     ↓
-Generate Temporary Invoice
+Generate VietQR
     ↓
-Send Payment Notice
+Generate Payment Notice
     ↓
-Payment
+Send Parent Notice
     ↓
-Receipt
+Parent Payment
+    ↓
+Import Bank Statement
+    ↓
+Auto Reconciliation
+    ↓
+Create Payment
+    ↓
+Generate Receipt
     ↓
 Teacher Payroll
 ```
@@ -110,7 +123,8 @@ users
 Thiết kế:
 
 ```text
-Teacher có thể có hoặc không có tài khoản login
+Teacher có thể có hoặc không có account login
+
 teachers.user_id nullable
 ```
 
@@ -282,13 +296,23 @@ Field:
 class_id
 student_id
 enrolled_at
+status
+```
+
+Status:
+
+```text
+ACTIVE
+DROPPED
+COMPLETED
 ```
 
 Rule:
 
 ```text
-1 student chỉ đăng ký 1 lần trong cùng lớp
-Kiểm tra số lượng tối đa
+(class_id,student_id) unique
+
+Không vượt max_students
 ```
 
 ---
@@ -304,6 +328,7 @@ class_schedules
 Field:
 
 ```text
+id
 class_id
 teacher_id
 room_id
@@ -319,18 +344,50 @@ day_of_week = 1..7
 
 start_time < end_time
 
-Không được trùng phòng
+Không trùng phòng
 
-Không được trùng giáo viên
+Không trùng giáo viên
 ```
 
 ---
 
-# 9. Quản lý học phí
+# 9. Điểm danh học viên
 
-Mục đích:
+Bảng:
 
-Quản lý khoản tiền học viên phải đóng.
+```text
+attendances
+```
+
+Field:
+
+```text
+id
+class_id
+student_id
+schedule_id
+attendance_date
+status
+note
+```
+
+Status:
+
+```text
+PRESENT
+ABSENT
+MAKEUP
+```
+
+Rule:
+
+```text
+1 student chỉ có 1 attendance cho mỗi buổi học
+```
+
+---
+
+# 10. Quản lý học phí
 
 Bảng:
 
@@ -347,9 +404,14 @@ class_id
 month
 amount
 discount
+final_amount
+paid_amount
+remaining_amount
 due_date
 status
 note
+created_at
+updated_at
 ```
 
 Status:
@@ -358,6 +420,7 @@ Status:
 UNPAID
 PARTIAL
 PAID
+CANCELLED
 ```
 
 Rule:
@@ -365,16 +428,57 @@ Rule:
 ```text
 (student_id,class_id,month) unique
 
-actual_amount = amount - discount
+final_amount = amount - discount
+
+remaining_amount = final_amount - paid_amount
+
+Không cho overpayment
 ```
 
 ---
 
-# 10. Sinh QR Code thanh toán
+# 11. Tạo yêu cầu thanh toán
 
-Mục đích:
+Mỗi lần gửi phụ huynh sẽ tạo payment request riêng.
 
-Sinh QR code chuyển khoản khi tạo học phí.
+Bảng:
+
+```text
+payment_requests
+```
+
+Field:
+
+```text
+id
+student_fee_id
+payment_code
+requested_amount
+expired_at
+status
+created_at
+```
+
+Status:
+
+```text
+ACTIVE
+EXPIRED
+PAID
+CANCELLED
+```
+
+Rule:
+
+```text
+payment_code unique
+
+1 student_fee có thể có nhiều payment request
+```
+
+---
+
+# 12. Sinh VietQR thanh toán
 
 Bảng:
 
@@ -386,12 +490,8 @@ Field:
 
 ```text
 id
-student_fee_id
-payment_code
+payment_request_id
 qr_payload
-qr_image_url
-expired_at
-status
 created_at
 ```
 
@@ -407,22 +507,14 @@ CONTENT:HP202606001
 Rule:
 
 ```text
-payment_code unique
+Không lưu qr image
 
-Mỗi student_fee có QR riêng
-
-Nếu amount thay đổi phải tạo QR mới
+Frontend hoặc backend generate QR từ payload
 ```
 
 ---
 
-# 11. Bill tạm / Phiếu báo học phí
-
-Mục đích:
-
-Thông báo cho phụ huynh trước khi thanh toán.
-
-Không phải biên lai.
+# 13. Phiếu báo học phí
 
 Bảng:
 
@@ -434,8 +526,9 @@ Field:
 
 ```text
 id
-student_fee_id
+payment_request_id
 notice_number
+version
 pdf_url
 sent_at
 printed_at
@@ -443,41 +536,98 @@ status
 created_at
 ```
 
-Bill hiển thị:
+Status:
 
 ```text
-Tên học viên
-
-Tên lớp
-
-Tháng học phí
-
-Số tiền cần đóng
-
-Ngày hết hạn
-
-QR Code thanh toán
-
-Thông tin chuyển khoản
+DRAFT
+SENT
+PRINTED
+CANCELLED
 ```
 
 Rule:
 
 ```text
-Có thể in nhiều lần
+Có thể generate nhiều version
 
-Có thể gửi email hoặc zalo
+Ví dụ:
 
-Không phải biên lai chính thức
+HP001-v1
+
+HP001-v2
 ```
 
 ---
 
-# 12. Thanh toán
+# 14. Import sao kê ngân hàng
 
-Mục đích:
+Bảng:
 
-Ghi nhận việc trung tâm đã nhận tiền.
+```text
+bank_transactions
+```
+
+Field:
+
+```text
+id
+bank_code
+transaction_id
+amount
+transaction_date
+description
+reference_code
+raw_data
+matched
+matched_at
+created_at
+```
+
+Rule:
+
+```text
+transaction_id unique
+
+Parse payment_code từ description
+```
+
+Ví dụ:
+
+```text
+Noi dung CK:
+
+HP202606001
+```
+
+---
+
+# 15. Đối soát giao dịch
+
+Luồng:
+
+```text
+Import bank transaction
+      ↓
+Parse payment_code
+      ↓
+Find payment_request
+      ↓
+Auto match
+      ↓
+Create payment
+```
+
+Rule:
+
+```text
+Nếu match thành công:
+
+matched=true
+```
+
+---
+
+# 16. Thanh toán
 
 Bảng:
 
@@ -490,10 +640,13 @@ Field:
 ```text
 id
 student_fee_id
+bank_transaction_id nullable
 amount
 method
 payment_date
+status
 notes
+created_at
 ```
 
 Method:
@@ -504,25 +657,29 @@ transfer
 wallet
 ```
 
+Status:
+
+```text
+PENDING
+CONFIRMED
+FAILED
+CANCELLED
+REFUNDED
+```
+
 Rule:
 
 ```text
-1 student_fee có thể thanh toán nhiều lần
+1 student_fee có thể có nhiều payment
 
 Không cho overpayment
 
-Sau payment phải update status học phí
+Chỉ payment CONFIRMED mới cập nhật student_fee
 ```
 
 ---
 
-# 13. Biên lai chính thức
-
-Mục đích:
-
-Xác nhận đã nhận tiền.
-
-Chỉ sinh sau payment.
+# 17. Biên lai chính thức
 
 Bảng:
 
@@ -538,6 +695,7 @@ payment_id
 receipt_number
 issue_date
 printed_at
+created_at
 ```
 
 Rule:
@@ -546,19 +704,13 @@ Rule:
 1 payment = 1 receipt
 
 receipt_number unique
-```
 
-Phân biệt:
-
-```text
-Bill tạm → thông báo thanh toán
-
-Receipt → xác nhận đã thu tiền
+Chỉ sinh receipt khi payment = CONFIRMED
 ```
 
 ---
 
-# 14. Quy tắc chia lương giáo viên
+# 18. Quy tắc chia lương giáo viên
 
 Bảng:
 
@@ -571,40 +723,44 @@ Field:
 ```text
 id
 class_id
-commission_percentage
+teacher_share_percentage
+created_at
 ```
 
 Ví dụ:
 
 ```text
-commission = 15%
-revenue = 10000000
+Revenue = 10,000,000
 
-center_fee = 1500000
+teacher_share = 70%
 
-salary = 8500000
+Teacher salary = 7,000,000
+
+Center revenue = 3,000,000
 ```
 
 Rule:
 
 ```text
-1 class chỉ có 1 salary rule
+1 class có 1 salary rule
 ```
 
 ---
 
-# 15. Bảng lương giáo viên
+# 19. Bảng lương giáo viên
 
 Bảng:
 
 ```text
 teacher_payrolls
+
 teacher_payroll_items
 ```
 
-Field:
+teacher_payrolls:
 
 ```text
+id
 teacher_id
 month
 total_revenue
@@ -613,6 +769,16 @@ salary_amount
 status
 approved_at
 paid_at
+```
+
+teacher_payroll_items:
+
+```text
+id
+payroll_id
+class_id
+revenue
+salary
 ```
 
 Status:
@@ -626,55 +792,120 @@ PAID
 Rule:
 
 ```text
-1 teacher + 1 month unique
+(teacher_id,month) unique
+
+Revenue chỉ tính payment CONFIRMED
 ```
 
 ---
 
-# 16. Luồng tạo học phí
+# 20. Audit log
+
+Bảng:
+
+```text
+audit_logs
+```
+
+Field:
+
+```text
+id
+entity_type
+entity_id
+action
+old_data
+new_data
+created_by
+created_at
+```
+
+Ví dụ:
+
+```text
+PAYMENT_CREATED
+
+PAYMENT_CONFIRMED
+
+RECEIPT_PRINTED
+
+FEE_CANCELLED
+```
+
+---
+
+# 21. Luồng tạo học phí
 
 ```text
 1. Chọn tháng
 
 2. Lấy học viên đang học
 
-3. Sinh student_fee
+3. Generate student_fee
 
-4. Sinh payment_code
+4. Create payment_request
 
-5. Sinh QR Code
+5. Generate VietQR
 
-6. Sinh bill tạm
+6. Generate payment notice
 
-7. Xuất PDF bill
+7. Export PDF
 
-8. Gửi phụ huynh
+8. Send parent
 ```
 
 ---
 
-# 17. Luồng thanh toán
+# 22. Luồng thanh toán
 
 ```text
-Phụ huynh chuyển khoản qua QR
+Parent chuyển khoản QR
 
 hoặc
 
-Thanh toán tiền mặt
+Staff thu tiền mặt
 ```
 
 ---
 
-# 18. Luồng xác nhận thanh toán
+# 23. Luồng xác nhận thanh toán
 
 ```text
-1. Staff kiểm tra giao dịch
+1. Import bank statement
 
-2. Tạo payment
+2. Parse payment_code
 
-3. Update trạng thái student_fee
+3. Match payment_request
 
-4. Sinh receipt
+4. Create payment (PENDING)
 
-5. In biên lai chính thức
+5. Staff confirm payment
+
+6. Payment = CONFIRMED
+
+7. Update student_fee
+
+8. Generate receipt
+
+9. Print receipt
 ```
+
+---
+
+# 24. Luồng tính lương giáo viên
+
+```text
+1. Tổng hợp payment CONFIRMED theo lớp
+
+2. Group theo teacher
+
+3. Áp dụng salary rule
+
+4. Generate payroll
+
+5. Approve payroll
+
+6. Mark paid
+```
+
+---

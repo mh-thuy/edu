@@ -9,8 +9,11 @@ export async function seedPayrolls(
     classes: Class[];
     userId: string;
   },
-): Promise<void> {
+  ): Promise<void> {
   const month = currentMonthKey();
+  const [yearString, monthString] = month.split("-");
+  const billingYear = Number(yearString);
+  const billingMonth = Number(monthString);
 
   for (const teacher of input.teachers.slice(0, 3)) {
     const teacherClasses = input.classes.filter((cls) => cls.teacherId === teacher.id);
@@ -24,15 +27,13 @@ export async function seedPayrolls(
     const payroll = await prisma.teacherPayroll.create({
       data: {
         teacherId: teacher.id,
-        month,
+        billingYear,
+        billingMonth,
         totalRevenue: revenue,
         centerFee,
         salaryAmount,
         status: "APPROVED",
         approvedAt: new Date(),
-        approvedBy: input.userId,
-        createdBy: input.userId,
-        updatedBy: input.userId,
       },
     });
 
@@ -45,9 +46,11 @@ export async function seedPayrolls(
           payrollId: payroll.id,
           classId: cls.id,
           classCode: cls.code,
+          className: cls.name,
           studentCount: 10,
           revenue: itemRevenue,
-          fee: itemFee,
+          teacherSharePercentage: 12,
+          centerFee: itemFee,
           salary: itemRevenue.minus(itemFee),
         },
       });

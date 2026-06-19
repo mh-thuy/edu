@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
-import { PaymentMethod } from "@prisma/client";
+import { PaymentMethod, PaymentStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
@@ -13,7 +13,7 @@ import type {
 
 export type PaymentWithRelations = Prisma.PaymentGetPayload<{
   include: {
-    receipts: true;
+    receipt: true;
     studentFee: {
       include: {
         student: true;
@@ -23,6 +23,27 @@ export type PaymentWithRelations = Prisma.PaymentGetPayload<{
     };
   };
 }>;
+
+type PaymentApiResponse = PaymentWithRelations & {
+  receipts: NonNullable<PaymentWithRelations["receipt"]>[];
+};
+
+function withReceiptAlias(payment: PaymentWithRelations): PaymentApiResponse {
+  return {
+    ...payment,
+    receipts: payment.receipt ? [payment.receipt] : [],
+  };
+}
+
+function sumConfirmedPayments(
+  payments: Array<{ amount: Prisma.Decimal; status: PaymentStatus }>,
+) {
+  return sumDecimals(
+    payments
+      .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+      .map((payment) => payment.amount),
+  );
+}
 
 export class PaymentService {
   private static parseBillingMonth(month: string): { billingYear: number; billingMonth: number } | null {
@@ -50,7 +71,7 @@ export class PaymentService {
   /**
    * Create a payment
    */
-  static async createPayment(data: PaymentCreate): Promise<PaymentWithRelations> {
+  static async createPayment(data: PaymentCreate): Promise<PaymentApiResponse> {
     return prisma.$transaction(async (tx) => {
       const fee = await tx.studentFee.findUnique({
         where: { id: data.studentFeeId },
@@ -59,7 +80,7 @@ export class PaymentService {
 
       if (!fee) throw new NotFoundError("Không tìm thấy học phí");
 
-      const alreadyPaid = sumDecimals(fee.payments.map((payment) => payment.amount));
+      const alreadyPaid = sumConfirmedPayments(fee.payments);
       const totalAfterPayment = alreadyPaid.add(data.amount);
       const netAmount = toDecimal(fee.amount).sub(fee.discount);
 
@@ -76,9 +97,10 @@ export class PaymentService {
           method: this.toPaymentMethod(data.method),
           paymentDate: new Date(data.paymentDate),
           notes: data.notes,
+          status: PaymentStatus.PENDING,
         },
         include: {
-          receipts: true,
+          receipt: true,
           studentFee: {
             include: {
               student: true,
@@ -89,10 +111,7 @@ export class PaymentService {
         },
       });
 
-      await StudentFeeService.syncFeeFinancialState(data.studentFeeId, tx);
-      await StudentFeeService.invalidateFlowArtifacts(data.studentFeeId, tx);
-
-      return payment;
+      return withReceiptAlias(payment);
     });
   }
 
@@ -179,7 +198,7 @@ export class PaymentService {
       prisma.payment.findMany({
         where,
         include: {
-          receipts: true,
+          receipt: true,
           studentFee: {
             include: {
               student: true,
@@ -196,7 +215,7 @@ export class PaymentService {
     ]);
 
     return {
-      items,
+      items: items.map((payment) => withReceiptAlias(payment)),
       total,
       page,
       pageSize,
@@ -208,10 +227,10 @@ export class PaymentService {
    * Get single payment
    */
   static async getPaymentById(id: string) {
-    return prisma.payment.findUnique({
+    const payment = await prisma.payment.findUnique({
       where: { id },
       include: {
-        receipts: true,
+        receipt: true,
         studentFee: {
           include: {
             student: true,
@@ -221,6 +240,8 @@ export class PaymentService {
         },
       },
     });
+
+    return payment ? withReceiptAlias(payment) : null;
   }
 
   /**
@@ -229,7 +250,7 @@ export class PaymentService {
   static async updatePayment(
     id: string,
     data: PaymentUpdate,
-  ): Promise<PaymentWithRelations> {
+  ): Promise<PaymentApiResponse> {
     const payment = await prisma.payment.findUnique({
       where: { id },
       include: {
@@ -253,9 +274,8 @@ export class PaymentService {
     const nextAmount =
       data.amount !== undefined ? toDecimal(data.amount) : toDecimal(payment.amount);
 
-    const paidExcludingCurrent = payment.studentFee.payments.reduce(
-      (sum, item) => (item.id === id ? sum : sum.add(item.amount)),
-      toDecimal(0),
+    const paidExcludingCurrent = sumConfirmedPayments(
+      payment.studentFee.payments.filter((item) => item.id !== id),
     );
     const netAmount = toDecimal(payment.studentFee.amount).sub(
       payment.studentFee.discount,
@@ -283,7 +303,7 @@ export class PaymentService {
           ...(data.notes !== undefined && { notes: data.notes }),
         },
         include: {
-          receipts: true,
+          receipt: true,
           studentFee: {
             include: {
               student: true,
@@ -294,10 +314,7 @@ export class PaymentService {
         },
       });
 
-      await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
-      await StudentFeeService.invalidateFlowArtifacts(payment.studentFeeId, tx);
-
-      return updated;
+      return withReceiptAlias(updated);
     });
   }
 
@@ -318,8 +335,68 @@ export class PaymentService {
 
     await prisma.$transaction(async (tx) => {
       await tx.payment.delete({ where: { id } });
+    });
+  }
+
+  static async confirmPayment(id: string): Promise<PaymentApiResponse> {
+    return prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({
+        where: { id },
+        include: {
+          receipt: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
+          },
+        },
+      });
+
+      if (!payment) {
+        throw new NotFoundError("Không tìm thấy thanh toán");
+      }
+
+      if (payment.status === PaymentStatus.CONFIRMED) {
+        return withReceiptAlias(payment);
+      }
+
+      if (payment.status !== PaymentStatus.PENDING) {
+        throw new ConflictError("Chỉ thanh toán PENDING mới được xác nhận");
+      }
+
+      await tx.payment.update({
+        where: { id },
+        data: {
+          status: PaymentStatus.CONFIRMED,
+          confirmedAt: new Date(),
+        },
+      });
+
       await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
       await StudentFeeService.invalidateFlowArtifacts(payment.studentFeeId, tx);
+      await ReceiptService.ensureReceiptForPayment(tx, id);
+
+      const confirmed = await tx.payment.findUnique({
+        where: { id },
+        include: {
+          receipt: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
+          },
+        },
+      });
+
+      if (!confirmed) {
+        throw new NotFoundError("Không tìm thấy thanh toán");
+      }
+
+      return withReceiptAlias(confirmed);
     });
   }
 
@@ -343,6 +420,7 @@ export class PaymentService {
         gte: startDate,
         lte: endDate,
       },
+      status: PaymentStatus.CONFIRMED,
     };
 
     if (classId) {

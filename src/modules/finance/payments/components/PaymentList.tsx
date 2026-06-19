@@ -21,6 +21,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import SearchIcon from "@mui/icons-material/Search";
 
@@ -35,12 +36,14 @@ import dayjs from "dayjs";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type PaymentMethod = "cash" | "transfer" | "wallet";
+type PaymentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "FAILED" | "REFUNDED";
 
 interface Payment {
   id: string;
   studentFeeId: string;
   amount: number;
   method: PaymentMethod;
+  status: PaymentStatus;
   paymentDate: string;
   notes?: string | null;
   createdAt: string;
@@ -166,6 +169,35 @@ export function PaymentList({ role }: PaymentListProps) {
     [refresh, showError, showSuccess],
   );
 
+  const handleConfirmPayment = useCallback(
+    async (paymentId: string) => {
+      try {
+        const response = await fetch(`/api/payments/${paymentId}/confirm`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            await extractApiErrorMessage(response, "Failed to confirm payment"),
+          );
+        }
+
+        const result = await unwrapApiResponse<Payment>(response);
+        showSuccess(
+          result.receipts?.[0]?.receiptNumber
+            ? `Xác nhận thanh toán và tạo phiếu thu ${result.receipts[0].receiptNumber}`
+            : "Xác nhận thanh toán thành công",
+        );
+        await refresh();
+      } catch (error) {
+        showError(
+          error instanceof Error ? error.message : "Xác nhận thanh toán thất bại",
+        );
+      }
+    },
+    [refresh, showError, showSuccess],
+  );
+
   const columns: GridColDef<Payment>[] = useMemo(
     () => [
       {
@@ -279,8 +311,16 @@ export function PaymentList({ role }: PaymentListProps) {
         getActions: (params) => {
           const row = params.row as Payment;
           const hasReceipt = (row.receipts?.length || 0) > 0;
+          const isPending = row.status === "PENDING";
 
           return [
+            <GridActionsCellItem
+              key="confirm"
+              icon={<CheckCircleIcon />}
+              label="Xác nhận"
+              disabled={!isPending}
+              onClick={() => void handleConfirmPayment(row.id)}
+            />,
             <GridActionsCellItem
               key="edit"
               icon={<EditIcon />}
@@ -309,7 +349,7 @@ export function PaymentList({ role }: PaymentListProps) {
         },
       },
     ],
-    [canDelete, handleDelete, handleGenerateReceipt],
+    [canDelete, handleConfirmPayment, handleDelete, handleGenerateReceipt],
   );
 
   const hasRows = (payments?.items.length || 0) > 0;

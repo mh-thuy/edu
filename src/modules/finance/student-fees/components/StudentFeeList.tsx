@@ -13,15 +13,19 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import {
   DataGrid,
-  GridActionsCellItem,
   type GridColDef,
   type GridRowId,
   type GridRowSelectionModel,
@@ -193,6 +197,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   const snackbar = useSnackbar();
   const classDialog = useDisclosure();
 
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [monthFilter, setMonthFilter] = useState<string>("");
@@ -218,6 +223,12 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   const [selectedBulkRows, setSelectedBulkRows] =
     useState<GridRowSelectionModel>(emptySelectionModel);
 
+  // Flow menu anchor: tracks which row's menu is open + the anchor element.
+  const [flowMenuAnchor, setFlowMenuAnchor] = useState<HTMLElement | null>(
+    null,
+  );
+  const [flowMenuRow, setFlowMenuRow] = useState<StudentFee | null>(null);
+
   const {
     data: fees,
     isLoading,
@@ -233,6 +244,20 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
     status: statusFilter || undefined,
     month: monthFilter || undefined,
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [searchInput]);
+
+  useEffect(() => {
+    setPageNumber(1);
+  }, [search, setPageNumber]);
 
   const loadBulkStudents = useCallback(async (classId: string) => {
     try {
@@ -426,21 +451,25 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
     [refresh, snackbar],
   );
 
-  const handleOpenQr = useCallback((url?: string | null) => {
-    if (!url) {
-      snackbar.showError("Chưa có ảnh QR để xem");
-      return;
-    }
+  const handleOpenQr = useCallback(
+    (url?: string | null) => {
+      if (!url) {
+        snackbar.showError("Chưa có ảnh QR để xem");
+        return;
+      }
 
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [snackbar]);
+      window.open(url, "_blank", "noopener,noreferrer");
+    },
+    [snackbar],
+  );
 
   const handleExportPdf = useCallback(
     async (id: string) => {
       try {
-        const response = await fetch(`/api/student-fees/${id}/export-notice-pdf`, {
-          method: "POST",
-        });
+        const response = await fetch(
+          `/api/student-fees/${id}/export-notice-pdf`,
+          { method: "POST" },
+        );
 
         if (!response.ok) {
           throw new Error(
@@ -461,6 +490,30 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
       }
     },
     [refresh, snackbar],
+  );
+
+  // ---- Flow menu open/close ----
+  const handleOpenFlowMenu = useCallback(
+    (event: React.MouseEvent<HTMLElement>, row: StudentFee) => {
+      setFlowMenuAnchor(event.currentTarget);
+      setFlowMenuRow(row);
+    },
+    [],
+  );
+
+  const handleCloseFlowMenu = useCallback(() => {
+    setFlowMenuAnchor(null);
+    setFlowMenuRow(null);
+  }, []);
+
+  // Wraps a flow action so the menu closes before the request fires —
+  // avoids the menu staying open while the row data refreshes underneath it.
+  const runFlowMenuAction = useCallback(
+    (action: () => void | Promise<void>) => {
+      handleCloseFlowMenu();
+      void action();
+    },
+    [handleCloseFlowMenu],
   );
 
   const columns: GridColDef<StudentFee>[] = useMemo(
@@ -588,7 +641,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
       {
         field: "actions",
         headerName: "Thao tác",
-        width: 420,
+        width: 160,
         sortable: false,
         filterable: false,
         align: "center",
@@ -596,81 +649,42 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         renderCell: (params) => (
           <Stack
             direction="row"
-            spacing={1}
+            spacing={0.5}
             alignItems="center"
             justifyContent="center"
             sx={{ width: "100%", height: "100%" }}
           >
-            <GridActionsCellItem
-              icon={<QrCode2Icon />}
-              label="Generate QR"
-              onClick={() =>
-                void handleFlowAction(
-                  params.row.id,
-                  "generate-qr",
-                  "Đã tạo QR thanh toán",
-                )
-              }
-            />
-            <GridActionsCellItem
-              icon={<VisibilityIcon />}
-              label="View QR"
-              onClick={() => handleOpenQr(params.row.activeQr?.qrImageUrl)}
-            />
-            <GridActionsCellItem
-              icon={<ReceiptLongIcon />}
-              label="Generate Invoice"
-              onClick={() =>
-                void handleFlowAction(
-                  params.row.id,
-                  "generate-notice",
-                  "Đã tạo bill tạm",
-                )
-              }
-            />
-            <GridActionsCellItem
-              icon={<PictureAsPdfIcon />}
-              label="Export PDF"
-              onClick={() => void handleExportPdf(params.row.id)}
-            />
-            <GridActionsCellItem
-              icon={<SendIcon />}
-              label="Send Notice"
-              onClick={() =>
-                void handleFlowAction(
-                  params.row.id,
-                  "send-notice",
-                  "Đã gửi thông báo học phí",
-                )
-              }
-            />
-            <GridActionsCellItem
-              icon={<AutoAwesomeIcon />}
-              label="Generate All"
-              onClick={() =>
-                void handleFlowAction(
-                  params.row.id,
-                  "generate-all",
-                  "Đã hoàn tất full flow học phí",
-                )
-              }
-            />
-            <GridActionsCellItem
-              icon={<EditIcon />}
-              label="Sửa"
-              onClick={() => handleEdit(params.row)}
-            />
-            <GridActionsCellItem
-              icon={<DeleteIcon />}
-              label="Xóa"
-              disabled={!canDelete}
-              onClick={() => handleDelete(params.row.id)}
-            />
+            <Tooltip title="Quy trình QR / Bill / Notice">
+              <IconButton
+                size="small"
+                onClick={(event) => handleOpenFlowMenu(event, params.row)}
+              >
+                <AutoAwesomeIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Sửa">
+              <IconButton size="small" onClick={() => handleEdit(params.row)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Tooltip title={canDelete ? "Xóa" : "Bạn không có quyền xóa"}>
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={!canDelete}
+                  onClick={() => handleDelete(params.row.id)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Stack>
         ),
       },
     ],
-    [canDelete, handleDelete, handleEdit, handleExportPdf, handleFlowAction, handleOpenQr],
+    [canDelete, handleDelete, handleEdit, handleOpenFlowMenu],
   );
 
   const bulkStudentColumns: GridColDef<BulkStudentRow>[] = useMemo(
@@ -691,6 +705,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   );
 
   const hasRows = (fees?.items.length || 0) > 0;
+  const hasActiveQr = Boolean(flowMenuRow?.activeQr?.qrImageUrl);
 
   return (
     <>
@@ -698,42 +713,58 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         <Paper
           elevation={0}
           sx={{
-            p: 3,
+            p: { xs: 2, sm: 3 }, // Thu nhỏ padding trên mobile để tăng diện tích hiển thị
             borderRadius: 3,
             border: "1px solid",
             borderColor: "divider",
+            bgcolor: "background.paper",
           }}
         >
           <Stack spacing={3}>
-            {/* Header */}
+            {/* Header Section */}
             <Stack
-              direction="row"
+              direction={{ xs: "column", sm: "row" }} // Mobile xếp dọc, Desktop xếp ngang
               justifyContent="space-between"
-              alignItems="center"
+              alignItems={{ xs: "flex-start", sm: "center" }} // Căn lề trái trên mobile
+              spacing={2}
             >
               <Box>
-                <Typography variant="h6" fontWeight={700}>
+                <Typography
+                  variant="h6"
+                  fontWeight={700}
+                  color="text.primary"
+                  gutterBottom
+                >
                   Quản lý học phí
                 </Typography>
-
                 <Typography variant="body2" color="text.secondary">
                   Quản lý hóa đơn và thanh toán học viên
                 </Typography>
               </Box>
 
-              <Stack direction="row" spacing={1}>
+              {/* Button Group */}
+              <Stack
+                direction="row"
+                spacing={1.5}
+                width={{ xs: "100%", sm: "auto" }} // Mobile chiếm hết chiều rộng
+              >
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
                   onClick={handleCreate}
+                  fullWidth={{ xs: true, sm: false }} // Mobile giãn full width
+                  sx={{ py: 1, px: 2 }} // Tăng độ dày nút bấm một chút cho dễ tương tác
                 >
                   Tạo hóa đơn
                 </Button>
 
                 <Button
-                  variant="text"
+                  variant="outlined" // Đổi từ 'text' sang 'outlined' để nút "Hàng loạt" có ranh giới rõ ràng hơn
+                  color="secondary"
                   startIcon={<ReceiptLongIcon />}
                   onClick={() => setShowBulkDialog(true)}
+                  fullWidth={{ xs: true, sm: false }}
+                  sx={{ py: 1, px: 2 }}
                 >
                   Hàng loạt
                 </Button>
@@ -742,25 +773,33 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
 
             <Divider />
 
-            {/* Filters */}
+            {/* Filters Section */}
             <Stack
-              direction={{ xs: "column", lg: "row" }}
+              direction={{ xs: "column", md: "row" }} // Chuyển sang hàng ngang từ màn hình md thay vì lg để tránh bị chật
               spacing={2}
               alignItems="center"
+              width="100%"
             >
+              {/* Ô tìm kiếm */}
               <TextField
                 label="Tìm kiếm"
-                placeholder="Mã/tên học viên, mã/tên lớp, tháng"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPageNumber(1);
-                }}
+                placeholder="Mã/tên học viên, mã/tên lớp..."
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 fullWidth
-                InputProps={{
-                  startAdornment: <SearchIcon fontSize="small" />,
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <SearchIcon
+                        fontSize="small"
+                        sx={{ mr: 1, color: "text.secondary" }} // Thêm khoảng cách và màu nhẹ cho icon
+                      />
+                    ),
+                  },
                 }}
               />
+
+              {/* Ô trạng thái */}
               <TextField
                 select
                 label="Trạng thái"
@@ -769,14 +808,19 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                   setStatusFilter(event.target.value);
                   setPageNumber(1);
                 }}
-                sx={{ width: 500 }}
+                fullWidth
+                sx={{
+                  minWidth: { xs: "100%", md: 200 },
+                  maxWidth: { xs: "100%", md: 300 }, // Thay vì gán cứng 500px gây vỡ layout mobile
+                }}
               >
-                <MenuItem value="">Tất cả</MenuItem>
+                <MenuItem value="">Tất cả trạng thái</MenuItem>
                 <MenuItem value="unpaid">Chưa thanh toán</MenuItem>
                 <MenuItem value="partial">Thanh toán một phần</MenuItem>
                 <MenuItem value="paid">Đã thanh toán</MenuItem>
               </TextField>
 
+              {/* Ô Kỳ học phí */}
               <DatePicker
                 label="Kỳ học phí"
                 views={["year", "month"]}
@@ -785,6 +829,15 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                 onChange={(value: Dayjs | null) => {
                   setMonthFilter(value ? value.format("YYYY-MM") : "");
                   setPageNumber(1);
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    sx: {
+                      minWidth: { xs: "100%", md: 180 },
+                      maxWidth: { xs: "100%", md: 240 },
+                    },
+                  },
                 }}
               />
             </Stack>
@@ -824,6 +877,149 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           )}
         </Paper>
       </Stack>
+
+      {/* Flow actions menu — grouped QR / Invoice / Notice steps for one row */}
+      <Menu
+        anchorEl={flowMenuAnchor}
+        open={Boolean(flowMenuAnchor)}
+        onClose={handleCloseFlowMenu}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <MenuItem
+          disabled={!flowMenuRow}
+          onClick={() =>
+            flowMenuRow &&
+            runFlowMenuAction(() =>
+              handleFlowAction(
+                flowMenuRow.id,
+                "generate-qr",
+                "Đã tạo QR thanh toán",
+              ),
+            )
+          }
+        >
+          <ListItemIcon>
+            <QrCode2Icon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Tạo QR thanh toán"
+            secondary={
+              flowMenuRow
+                ? getFlowStatusLabel(flowMenuRow.flowStatus?.qr ?? "PENDING")
+                : undefined
+            }
+          />
+        </MenuItem>
+
+        <MenuItem
+          disabled={!hasActiveQr}
+          onClick={() =>
+            runFlowMenuAction(() =>
+              handleOpenQr(flowMenuRow?.activeQr?.qrImageUrl),
+            )
+          }
+        >
+          <ListItemIcon>
+            <VisibilityIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Xem QR" />
+        </MenuItem>
+
+        <Divider />
+
+        <MenuItem
+          disabled={!flowMenuRow}
+          onClick={() =>
+            flowMenuRow &&
+            runFlowMenuAction(() =>
+              handleFlowAction(
+                flowMenuRow.id,
+                "generate-notice",
+                "Đã tạo bill tạm",
+              ),
+            )
+          }
+        >
+          <ListItemIcon>
+            <ReceiptLongIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Tạo bill tạm"
+            secondary={
+              flowMenuRow
+                ? getFlowStatusLabel(
+                    flowMenuRow.flowStatus?.temporaryInvoice ?? "PENDING",
+                  )
+                : undefined
+            }
+          />
+        </MenuItem>
+
+        <MenuItem
+          disabled={!flowMenuRow}
+          onClick={() =>
+            flowMenuRow &&
+            runFlowMenuAction(() => handleExportPdf(flowMenuRow.id))
+          }
+        >
+          <ListItemIcon>
+            <PictureAsPdfIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Xuất PDF bill tạm" />
+        </MenuItem>
+
+        <Divider />
+
+        <MenuItem
+          disabled={!flowMenuRow}
+          onClick={() =>
+            flowMenuRow &&
+            runFlowMenuAction(() =>
+              handleFlowAction(
+                flowMenuRow.id,
+                "send-notice",
+                "Đã gửi thông báo học phí",
+              ),
+            )
+          }
+        >
+          <ListItemIcon>
+            <SendIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Gửi thông báo học phí"
+            secondary={
+              flowMenuRow
+                ? getFlowStatusLabel(
+                    flowMenuRow.flowStatus?.paymentNotice ?? "PENDING",
+                  )
+                : undefined
+            }
+          />
+        </MenuItem>
+
+        <Divider />
+
+        <MenuItem
+          disabled={!flowMenuRow}
+          onClick={() =>
+            flowMenuRow &&
+            runFlowMenuAction(() =>
+              handleFlowAction(
+                flowMenuRow.id,
+                "generate-all",
+                "Đã hoàn tất full flow học phí",
+              ),
+            )
+          }
+        >
+          <ListItemIcon>
+            <AutoAwesomeIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primary="Chạy toàn bộ quy trình" />
+        </MenuItem>
+      </Menu>
 
       {showForm && (
         <StudentFeeForm

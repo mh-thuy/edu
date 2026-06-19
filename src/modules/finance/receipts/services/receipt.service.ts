@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma } from "@prisma/client";
 import type { ReceiptFilter } from "@/modules/finance/receipts/schemas/receipt.schema";
 
 export type ReceiptWithRelations = Prisma.ReceiptGetPayload<{
@@ -35,9 +35,6 @@ export class ReceiptService {
           startsWith: prefix,
         },
       },
-      orderBy: {
-        receiptNumber: "desc",
-      },
       select: {
         receiptNumber: true,
       },
@@ -49,6 +46,69 @@ export class ReceiptService {
     const nextSequence = lastSequence + 1;
 
     return `${prefix}${String(nextSequence).padStart(4, "0")}`;
+  }
+
+  static async ensureReceiptForPayment(
+    tx: Prisma.TransactionClient,
+    paymentId: string,
+  ): Promise<ReceiptWithRelations> {
+    const payment = await tx.payment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      throw new Error("Payment not found");
+    }
+
+    if (payment.status !== PaymentStatus.CONFIRMED) {
+      throw new Error("Only confirmed payment can generate receipt");
+    }
+
+    const existing = await tx.receipt.findFirst({
+      where: { paymentId },
+      include: {
+        payment: {
+          include: {
+            studentFee: {
+              include: {
+                student: true,
+                class: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const issueDate = new Date();
+    const receiptNumber = await this.generateSequentialReceiptNumber(
+      tx,
+      issueDate,
+    );
+
+    return tx.receipt.create({
+      data: {
+        paymentId,
+        receiptNumber,
+        issueDate,
+      },
+      include: {
+        payment: {
+          include: {
+            studentFee: {
+              include: {
+                student: true,
+                class: true,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   /**
@@ -204,62 +264,7 @@ export class ReceiptService {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         return await prisma.$transaction(
-          async (tx) => {
-            const payment = await tx.payment.findUnique({
-              where: { id: paymentId },
-            });
-
-            if (!payment) {
-              throw new Error("Payment not found");
-            }
-
-            const existing = await tx.receipt.findFirst({
-              where: { paymentId },
-              orderBy: { version: "desc" },
-              include: {
-                payment: {
-                  include: {
-                    studentFee: {
-                      include: {
-                        student: true,
-                        class: true,
-                      },
-                    },
-                  },
-                },
-              },
-            });
-
-            if (existing) {
-              return existing;
-            }
-
-            const issueDate = new Date();
-            const receiptNumber = await this.generateSequentialReceiptNumber(
-              tx,
-              issueDate,
-            );
-
-            return tx.receipt.create({
-              data: {
-                paymentId,
-                receiptNumber,
-                issueDate,
-              },
-              include: {
-                payment: {
-                  include: {
-                    studentFee: {
-                      include: {
-                        student: true,
-                        class: true,
-                      },
-                    },
-                  },
-                },
-              },
-            });
-          },
+          async (tx) => this.ensureReceiptForPayment(tx, paymentId),
           {
             isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
           },

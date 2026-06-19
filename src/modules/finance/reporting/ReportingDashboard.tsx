@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -64,6 +64,9 @@ interface TeacherReportData {
   }>;
 }
 
+type FeeStatus = "unpaid" | "partial" | "paid";
+type PayrollStatus = "draft" | "approved" | "paid";
+
 interface StudentFeeDebtItem {
   id: string;
   studentId: string;
@@ -99,7 +102,9 @@ export function ReportingDashboard() {
   const [activeTab, setActiveTab] = useState(0);
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [debtLoading, setDebtLoading] = useState(false);
+  const [teacherLoading, setTeacherLoading] = useState(false);
   const [revenueReport, setRevenueReport] = useState<ReportData | null>(null);
   const [debtReport, setDebtReport] = useState<DebtReportData | null>(null);
   const [teacherReports, setTeacherReports] = useState<TeacherReportData[]>([]);
@@ -117,32 +122,62 @@ export function ReportingDashboard() {
     setDateEnd(lastDay.toISOString().split("T")[0] || "");
   }, []);
 
-  const loadRevenueReport = async () => {
+  const normalizeFeeStatus = (status: string): FeeStatus => {
+    const normalized = status.toLowerCase();
+    if (normalized === "paid" || normalized === "partial") {
+      return normalized;
+    }
+    return "unpaid";
+  };
+
+const normalizePayrollStatus = (status: string): PayrollStatus => {
+  const normalized = status.toLowerCase();
+  if (normalized === "draft" || normalized === "approved" || normalized === "paid") {
+    return normalized;
+  }
+  return "draft";
+};
+
+const getPaymentMethodLabel = (method: string): string => {
+  const normalized = method.toLowerCase();
+  if (normalized === "cash") return "Tiền mặt";
+  if (normalized === "transfer") return "Chuyển khoản";
+  if (normalized === "wallet") return "Ví điện tử";
+  return method;
+};
+
+  const loadRevenueReport = useCallback(async () => {
     if (!dateStart || !dateEnd) {
       snackbar.showError("Vui lòng chọn khoảng thời gian");
       return;
     }
 
     try {
-      setLoading(true);
+      setRevenueLoading(true);
       const query = new URLSearchParams({
         startDate: dateStart,
         endDate: dateEnd,
       }).toString();
-      const response = await fetch(`/api/payments?${query}`);
+      const response = await fetch(`/api/reports/revenue?${query}`);
       if (!response.ok) throw new Error("Failed to load revenue report");
       const result = await unwrapApiResponse<ReportData>(response);
       setRevenueReport(result);
     } catch {
       snackbar.showError("Tải báo cáo doanh thu thất bại");
     } finally {
-      setLoading(false);
+      setRevenueLoading(false);
     }
-  };
+  }, [dateEnd, dateStart, snackbar]);
 
-  const loadDebtReport = async () => {
+  useEffect(() => {
+    if (activeTab === 0 && dateStart && dateEnd) {
+      void loadRevenueReport();
+    }
+  }, [activeTab, dateEnd, dateStart, loadRevenueReport]);
+
+  const loadDebtReport = useCallback(async () => {
     try {
-      setLoading(true);
+      setDebtLoading(true);
       const response = await fetch("/api/student-fees?status=unpaid,partial");
       if (!response.ok) throw new Error("Failed to load debt report");
       const result = await unwrapApiResponse<StudentFeesResponse>(response);
@@ -152,12 +187,12 @@ export function ReportingDashboard() {
           (sum, fee) => sum + (fee.outstanding || 0),
           0,
         ),
-        unpaidCount: result.items.filter((fee) => fee.status === "unpaid")
+        unpaidCount: result.items.filter((fee) => normalizeFeeStatus(fee.status) === "unpaid")
           .length,
-        partialCount: result.items.filter((fee) => fee.status === "partial")
+        partialCount: result.items.filter((fee) => normalizeFeeStatus(fee.status) === "partial")
           .length,
         overdueCount: result.items.filter(
-          (fee) => new Date(fee.dueDate) < new Date() && fee.status !== "paid",
+          (fee) => new Date(fee.dueDate) < new Date() && normalizeFeeStatus(fee.status) !== "paid",
         ).length,
         fees: result.items,
       };
@@ -165,13 +200,13 @@ export function ReportingDashboard() {
     } catch {
       snackbar.showError("Tải báo cáo nợ thất bại");
     } finally {
-      setLoading(false);
+      setDebtLoading(false);
     }
-  };
+  }, [snackbar]);
 
-  const loadTeacherReport = async () => {
+  const loadTeacherReport = useCallback(async () => {
     try {
-      setLoading(true);
+      setTeacherLoading(true);
       const response = await fetch("/api/teacher-payroll");
       if (!response.ok) throw new Error("Failed to load teacher report");
       const result = await unwrapApiResponse<TeacherPayrollsResponse>(response);
@@ -188,8 +223,9 @@ export function ReportingDashboard() {
         };
         existing.totalSalary += payroll.salaryAmount;
         existing.totalRevenue += payroll.totalRevenue;
-        if (payroll.status === "paid") existing.paidCount++;
-        if (payroll.status === "approved") existing.approvedCount++;
+        const normalizedStatus = normalizePayrollStatus(payroll.status);
+        if (normalizedStatus === "paid") existing.paidCount++;
+        if (normalizedStatus === "approved") existing.approvedCount++;
         existing.payrolls?.push(payroll);
         grouped.set(payroll.teacherId, existing);
       });
@@ -197,9 +233,9 @@ export function ReportingDashboard() {
     } catch {
       snackbar.showError("Tải báo cáo giáo viên thất bại");
     } finally {
-      setLoading(false);
+      setTeacherLoading(false);
     }
-  };
+  }, [snackbar]);
 
   const exportToCSV = (
     data: ReadonlyArray<Record<string, string | number>>,
@@ -288,20 +324,24 @@ export function ReportingDashboard() {
             value={activeTab}
             onChange={(e, newValue) => setActiveTab(newValue)}
           >
-            <Tab label="Doanh thu" onClick={loadRevenueReport} />
-            <Tab label="Nợ học phí" onClick={loadDebtReport} />
-            <Tab label="Lương giáo viên" onClick={loadTeacherReport} />
+            <Tab label="Doanh thu" onClick={() => void loadRevenueReport()} />
+            <Tab label="Nợ học phí" onClick={() => void loadDebtReport()} />
+            <Tab label="Lương giáo viên" onClick={() => void loadTeacherReport()} />
           </Tabs>
         </Box>
 
-        {loading && (
+        {(activeTab === 0
+          ? revenueLoading
+          : activeTab === 1
+            ? debtLoading
+            : teacherLoading) && (
           <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
             <CircularProgress />
           </Box>
         )}
 
         {/* Revenue Report Tab */}
-        {activeTab === 0 && revenueReport && (
+        {activeTab === 0 && revenueReport && !revenueLoading && (
           <Box>
             <Box
               sx={{
@@ -354,7 +394,7 @@ export function ReportingDashboard() {
                       {Object.entries(revenueReport.methodSummary).map(
                         ([method, amount]) => (
                           <TableRow key={method}>
-                            <TableCell>{method}</TableCell>
+                            <TableCell>{getPaymentMethodLabel(method)}</TableCell>
                             <TableCell align="right">
                               {Number(amount).toLocaleString()}
                             </TableCell>
@@ -380,7 +420,7 @@ export function ReportingDashboard() {
         )}
 
         {/* Debt Report Tab */}
-        {activeTab === 1 && debtReport && (
+        {activeTab === 1 && debtReport && !debtLoading && (
           <Box>
             <Box
               sx={{
@@ -437,7 +477,7 @@ export function ReportingDashboard() {
         )}
 
         {/* Teacher Report Tab */}
-        {activeTab === 2 && (
+        {activeTab === 2 && !teacherLoading && (
           <Box>
             <TableContainer component={Paper}>
               <Table size="small">

@@ -20,22 +20,28 @@ CREATE TYPE "enrollment_status" AS ENUM ('ACTIVE', 'LEFT', 'COMPLETED', 'SUSPEND
 CREATE TYPE "fee_status" AS ENUM ('UNPAID', 'PARTIAL', 'PAID', 'CANCELLED');
 
 -- CreateEnum
+CREATE TYPE "payment_request_status" AS ENUM ('ACTIVE', 'EXPIRED', 'PAID', 'CANCELLED');
+
+-- CreateEnum
+CREATE TYPE "payment_qr_status" AS ENUM ('ACTIVE', 'EXPIRED', 'CANCELLED');
+
+-- CreateEnum
 CREATE TYPE "payment_method" AS ENUM ('CASH', 'TRANSFER', 'WALLET');
 
 -- CreateEnum
-CREATE TYPE "receipt_status" AS ENUM ('ACTIVE', 'CANCELLED');
-
--- CreateEnum
-CREATE TYPE "payroll_status" AS ENUM ('DRAFT', 'APPROVED', 'PAID', 'CANCELLED');
+CREATE TYPE "payment_status" AS ENUM ('PENDING', 'CONFIRMED', 'CANCELLED', 'REFUNDED', 'FAILED');
 
 -- CreateEnum
 CREATE TYPE "payment_notice_status" AS ENUM ('DRAFT', 'GENERATED', 'PRINTED', 'SENT', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "payment_qr_status" AS ENUM ('ACTIVE', 'INACTIVE', 'EXPIRED', 'CANCELLED');
+CREATE TYPE "receipt_status" AS ENUM ('ACTIVE', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "makeup_status" AS ENUM ('REQUESTED', 'APPROVED', 'COMPLETED', 'CANCELLED');
+CREATE TYPE "attendance_status" AS ENUM ('PRESENT', 'ABSENT', 'MAKEUP');
+
+-- CreateEnum
+CREATE TYPE "payroll_status" AS ENUM ('DRAFT', 'APPROVED', 'PAID', 'CANCELLED');
 
 -- CreateEnum
 CREATE TYPE "expense_status" AS ENUM ('DRAFT', 'APPROVED', 'PAID', 'CANCELLED');
@@ -48,7 +54,7 @@ CREATE TABLE "users" (
     "password_hash" TEXT NOT NULL,
     "status" "user_status" NOT NULL DEFAULT 'ACTIVE',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
@@ -110,7 +116,7 @@ CREATE TABLE "teachers" (
     "status" "teacher_status" NOT NULL DEFAULT 'ACTIVE',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "teachers_pkey" PRIMARY KEY ("id")
@@ -129,7 +135,7 @@ CREATE TABLE "students" (
     "status" "student_status" NOT NULL DEFAULT 'ACTIVE',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "students_pkey" PRIMARY KEY ("id")
@@ -146,7 +152,7 @@ CREATE TABLE "rooms" (
     "status" "room_status" NOT NULL DEFAULT 'AVAILABLE',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "rooms_pkey" PRIMARY KEY ("id")
@@ -167,7 +173,7 @@ CREATE TABLE "classes" (
     "status" "class_status" NOT NULL DEFAULT 'DRAFT',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "classes_pkey" PRIMARY KEY ("id")
@@ -183,7 +189,7 @@ CREATE TABLE "class_students" (
     "status" "enrollment_status" NOT NULL DEFAULT 'ACTIVE',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "class_students_pkey" PRIMARY KEY ("id")
@@ -200,10 +206,25 @@ CREATE TABLE "class_schedules" (
     "end_minute" INTEGER NOT NULL,
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "class_schedules_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "attendances" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "class_id" UUID NOT NULL,
+    "student_id" UUID NOT NULL,
+    "schedule_id" UUID,
+    "attendance_date" DATE NOT NULL,
+    "status" "attendance_status" NOT NULL DEFAULT 'PRESENT',
+    "note" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "attendances_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -222,45 +243,10 @@ CREATE TABLE "student_fees" (
     "status" "fee_status" NOT NULL DEFAULT 'UNPAID',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "student_fees_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "payments" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "student_fee_id" UUID NOT NULL,
-    "payment_qr_id" UUID,
-    "amount" DECIMAL(12,2) NOT NULL,
-    "method" "payment_method" NOT NULL,
-    "payment_date" DATE NOT NULL DEFAULT CURRENT_DATE,
-    "external_transaction_id" VARCHAR(255),
-    "notes" TEXT,
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "cancelled_at" TIMESTAMPTZ(6),
-    "cancel_reason" TEXT,
-
-    CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "receipts" (
-    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "payment_id" UUID NOT NULL,
-    "receipt_number" VARCHAR(100) NOT NULL,
-    "version" INTEGER NOT NULL DEFAULT 1,
-    "issue_date" DATE NOT NULL DEFAULT CURRENT_DATE,
-    "printed_at" TIMESTAMPTZ(6),
-    "status" "receipt_status" NOT NULL DEFAULT 'ACTIVE',
-    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "cancelled_at" TIMESTAMPTZ(6),
-    "cancel_reason" TEXT,
-
-    CONSTRAINT "receipts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -275,26 +261,37 @@ CREATE TABLE "payment_accounts" (
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "deleted_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "payment_accounts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
-CREATE TABLE "payment_qr_codes" (
+CREATE TABLE "payment_requests" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "student_fee_id" UUID NOT NULL,
     "payment_account_id" UUID NOT NULL,
     "payment_code" VARCHAR(100) NOT NULL,
-    "amount" DECIMAL(12,2) NOT NULL,
+    "requested_amount" DECIMAL(12,2) NOT NULL,
     "transfer_content" VARCHAR(255) NOT NULL,
-    "qr_payload" TEXT NOT NULL,
-    "qr_image_url" TEXT,
     "expired_at" TIMESTAMPTZ(6),
+    "status" "payment_request_status" NOT NULL DEFAULT 'ACTIVE',
+    "note" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "payment_requests_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_qr_codes" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "payment_request_id" UUID NOT NULL,
+    "qr_payload" TEXT NOT NULL,
     "status" "payment_qr_status" NOT NULL DEFAULT 'ACTIVE',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "payment_qr_codes_pkey" PRIMARY KEY ("id")
 );
@@ -302,9 +299,8 @@ CREATE TABLE "payment_qr_codes" (
 -- CreateTable
 CREATE TABLE "payment_notices" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "student_fee_id" UUID NOT NULL,
+    "payment_request_id" UUID NOT NULL,
     "notice_number" VARCHAR(100) NOT NULL,
-    "qr_code_id" UUID,
     "amount" DECIMAL(12,2) NOT NULL,
     "due_date" DATE,
     "pdf_url" TEXT,
@@ -315,9 +311,62 @@ CREATE TABLE "payment_notices" (
     "send_method" VARCHAR(50),
     "status" "payment_notice_status" NOT NULL DEFAULT 'DRAFT',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "payment_notices_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "bank_transactions" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "bank_code" VARCHAR(50) NOT NULL,
+    "transaction_id" VARCHAR(255) NOT NULL,
+    "amount" DECIMAL(12,2) NOT NULL,
+    "transaction_date" TIMESTAMPTZ(6) NOT NULL,
+    "description" TEXT,
+    "reference_code" VARCHAR(100),
+    "raw_data" JSONB,
+    "matched" BOOLEAN NOT NULL DEFAULT false,
+    "matched_at" TIMESTAMPTZ(6),
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "bank_transactions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payments" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "student_fee_id" UUID NOT NULL,
+    "payment_request_id" UUID,
+    "bank_transaction_id" UUID,
+    "amount" DECIMAL(12,2) NOT NULL,
+    "method" "payment_method" NOT NULL,
+    "payment_date" DATE NOT NULL DEFAULT CURRENT_DATE,
+    "status" "payment_status" NOT NULL DEFAULT 'PENDING',
+    "notes" TEXT,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+    "confirmed_at" TIMESTAMPTZ(6),
+    "cancelled_at" TIMESTAMPTZ(6),
+    "cancel_reason" TEXT,
+
+    CONSTRAINT "payments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "receipts" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "payment_id" UUID NOT NULL,
+    "receipt_number" VARCHAR(100) NOT NULL,
+    "issue_date" DATE NOT NULL DEFAULT CURRENT_DATE,
+    "printed_at" TIMESTAMPTZ(6),
+    "status" "receipt_status" NOT NULL DEFAULT 'ACTIVE',
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+    "cancelled_at" TIMESTAMPTZ(6),
+    "cancel_reason" TEXT,
+
+    CONSTRAINT "receipts_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -331,7 +380,7 @@ CREATE TABLE "expenses" (
     "status" "expense_status" NOT NULL DEFAULT 'DRAFT',
     "note" TEXT,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "expenses_pkey" PRIMARY KEY ("id")
 );
@@ -340,9 +389,9 @@ CREATE TABLE "expenses" (
 CREATE TABLE "class_salary_rules" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "class_id" UUID NOT NULL,
-    "commission_percentage" DECIMAL(5,2) NOT NULL DEFAULT 0,
+    "teacher_share_percentage" DECIMAL(5,2) NOT NULL DEFAULT 0,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "class_salary_rules_pkey" PRIMARY KEY ("id")
 );
@@ -360,7 +409,7 @@ CREATE TABLE "teacher_payrolls" (
     "approved_at" TIMESTAMPTZ(6),
     "paid_at" TIMESTAMPTZ(6),
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "teacher_payrolls_pkey" PRIMARY KEY ("id")
 );
@@ -374,11 +423,11 @@ CREATE TABLE "teacher_payroll_items" (
     "class_name" VARCHAR(255) NOT NULL,
     "student_count" INTEGER NOT NULL DEFAULT 0,
     "revenue" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "center_fee" DECIMAL(12,2) NOT NULL DEFAULT 0,
-    "commission_rate" DECIMAL(5,2) NOT NULL DEFAULT 0,
+    "teacher_share_percentage" DECIMAL(5,2) NOT NULL DEFAULT 0,
     "salary" DECIMAL(12,2) NOT NULL DEFAULT 0,
+    "center_fee" DECIMAL(12,2) NOT NULL DEFAULT 0,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "teacher_payroll_items_pkey" PRIMARY KEY ("id")
 );
@@ -466,6 +515,15 @@ CREATE INDEX "idx_class_schedules_room_day" ON "class_schedules"("room_id", "day
 CREATE INDEX "idx_class_schedules_teacher_day" ON "class_schedules"("teacher_id", "day_of_week");
 
 -- CreateIndex
+CREATE INDEX "idx_attendances_class_date" ON "attendances"("class_id", "attendance_date");
+
+-- CreateIndex
+CREATE INDEX "idx_attendances_student_id" ON "attendances"("student_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uq_attendances_class_student_date" ON "attendances"("class_id", "student_id", "attendance_date");
+
+-- CreateIndex
 CREATE INDEX "idx_student_fees_student_id" ON "student_fees"("student_id");
 
 -- CreateIndex
@@ -481,30 +539,6 @@ CREATE INDEX "idx_student_fees_status" ON "student_fees"("status");
 CREATE UNIQUE INDEX "uq_student_fees_student_class_month" ON "student_fees"("student_id", "class_id", "billing_year", "billing_month");
 
 -- CreateIndex
-CREATE INDEX "idx_payments_student_fee_id" ON "payments"("student_fee_id");
-
--- CreateIndex
-CREATE INDEX "idx_payments_payment_date" ON "payments"("payment_date");
-
--- CreateIndex
-CREATE INDEX "idx_payments_method" ON "payments"("method");
-
--- CreateIndex
-CREATE INDEX "idx_payments_external_transaction_id" ON "payments"("external_transaction_id");
-
--- CreateIndex
-CREATE UNIQUE INDEX "uq_receipts_receipt_number" ON "receipts"("receipt_number");
-
--- CreateIndex
-CREATE INDEX "idx_receipts_issue_date" ON "receipts"("issue_date");
-
--- CreateIndex
-CREATE INDEX "idx_receipts_status" ON "receipts"("status");
-
--- CreateIndex
-CREATE UNIQUE INDEX "uq_receipts_payment_version" ON "receipts"("payment_id", "version");
-
--- CreateIndex
 CREATE UNIQUE INDEX "uq_payment_accounts_code" ON "payment_accounts"("code");
 
 -- CreateIndex
@@ -514,13 +548,19 @@ CREATE INDEX "idx_payment_accounts_active" ON "payment_accounts"("is_active");
 CREATE UNIQUE INDEX "uq_payment_accounts_bank_account" ON "payment_accounts"("bank_code", "account_number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "uq_payment_qr_codes_payment_code" ON "payment_qr_codes"("payment_code");
+CREATE UNIQUE INDEX "uq_payment_requests_payment_code" ON "payment_requests"("payment_code");
 
 -- CreateIndex
-CREATE INDEX "idx_payment_qr_codes_student_fee_id" ON "payment_qr_codes"("student_fee_id");
+CREATE INDEX "idx_payment_requests_student_fee_id" ON "payment_requests"("student_fee_id");
 
 -- CreateIndex
-CREATE INDEX "idx_payment_qr_codes_payment_account_id" ON "payment_qr_codes"("payment_account_id");
+CREATE INDEX "idx_payment_requests_payment_account_id" ON "payment_requests"("payment_account_id");
+
+-- CreateIndex
+CREATE INDEX "idx_payment_requests_status" ON "payment_requests"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uq_payment_qr_codes_payment_request_id" ON "payment_qr_codes"("payment_request_id");
 
 -- CreateIndex
 CREATE INDEX "idx_payment_qr_codes_status" ON "payment_qr_codes"("status");
@@ -529,16 +569,58 @@ CREATE INDEX "idx_payment_qr_codes_status" ON "payment_qr_codes"("status");
 CREATE UNIQUE INDEX "uq_payment_notices_notice_number" ON "payment_notices"("notice_number");
 
 -- CreateIndex
-CREATE INDEX "idx_payment_notices_student_fee_id" ON "payment_notices"("student_fee_id");
-
--- CreateIndex
-CREATE INDEX "idx_payment_notices_qr_code_id" ON "payment_notices"("qr_code_id");
+CREATE INDEX "idx_payment_notices_payment_request_id" ON "payment_notices"("payment_request_id");
 
 -- CreateIndex
 CREATE INDEX "idx_payment_notices_status" ON "payment_notices"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "uq_payment_notices_fee_version" ON "payment_notices"("student_fee_id", "version");
+CREATE UNIQUE INDEX "uq_payment_notices_request_version" ON "payment_notices"("payment_request_id", "version");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uq_bank_transactions_transaction_id" ON "bank_transactions"("transaction_id");
+
+-- CreateIndex
+CREATE INDEX "idx_bank_transactions_bank_code" ON "bank_transactions"("bank_code");
+
+-- CreateIndex
+CREATE INDEX "idx_bank_transactions_reference_code" ON "bank_transactions"("reference_code");
+
+-- CreateIndex
+CREATE INDEX "idx_bank_transactions_transaction_date" ON "bank_transactions"("transaction_date");
+
+-- CreateIndex
+CREATE INDEX "idx_bank_transactions_matched" ON "bank_transactions"("matched");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_student_fee_id" ON "payments"("student_fee_id");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_payment_request_id" ON "payments"("payment_request_id");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_bank_transaction_id" ON "payments"("bank_transaction_id");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_payment_date" ON "payments"("payment_date");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_method" ON "payments"("method");
+
+-- CreateIndex
+CREATE INDEX "idx_payments_status" ON "payments"("status");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uq_receipts_payment_id" ON "receipts"("payment_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "uq_receipts_receipt_number" ON "receipts"("receipt_number");
+
+-- CreateIndex
+CREATE INDEX "idx_receipts_issue_date" ON "receipts"("issue_date");
+
+-- CreateIndex
+CREATE INDEX "idx_receipts_status" ON "receipts"("status");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "uq_expenses_code" ON "expenses"("code");
@@ -619,31 +701,43 @@ ALTER TABLE "class_schedules" ADD CONSTRAINT "fk_class_schedules_room" FOREIGN K
 ALTER TABLE "class_schedules" ADD CONSTRAINT "fk_class_schedules_teacher" FOREIGN KEY ("teacher_id") REFERENCES "teachers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "attendances" ADD CONSTRAINT "fk_attendances_class" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendances" ADD CONSTRAINT "fk_attendances_student" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "attendances" ADD CONSTRAINT "fk_attendances_schedule" FOREIGN KEY ("schedule_id") REFERENCES "class_schedules"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "student_fees" ADD CONSTRAINT "fk_student_fees_student" FOREIGN KEY ("student_id") REFERENCES "students"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "student_fees" ADD CONSTRAINT "fk_student_fees_class" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "payment_requests" ADD CONSTRAINT "fk_payment_requests_student_fee" FOREIGN KEY ("student_fee_id") REFERENCES "student_fees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_requests" ADD CONSTRAINT "fk_payment_requests_payment_account" FOREIGN KEY ("payment_account_id") REFERENCES "payment_accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_qr_codes" ADD CONSTRAINT "fk_payment_qr_codes_payment_request" FOREIGN KEY ("payment_request_id") REFERENCES "payment_requests"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payment_notices" ADD CONSTRAINT "fk_payment_notices_payment_request" FOREIGN KEY ("payment_request_id") REFERENCES "payment_requests"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "payments" ADD CONSTRAINT "fk_payments_student_fee" FOREIGN KEY ("student_fee_id") REFERENCES "student_fees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "payments" ADD CONSTRAINT "fk_payments_payment_qr" FOREIGN KEY ("payment_qr_id") REFERENCES "payment_qr_codes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "payments" ADD CONSTRAINT "fk_payments_payment_request" FOREIGN KEY ("payment_request_id") REFERENCES "payment_requests"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "fk_payments_bank_transaction" FOREIGN KEY ("bank_transaction_id") REFERENCES "bank_transactions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "receipts" ADD CONSTRAINT "fk_receipts_payment" FOREIGN KEY ("payment_id") REFERENCES "payments"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "payment_qr_codes" ADD CONSTRAINT "fk_payment_qr_codes_student_fee" FOREIGN KEY ("student_fee_id") REFERENCES "student_fees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "payment_qr_codes" ADD CONSTRAINT "fk_payment_qr_codes_payment_account" FOREIGN KEY ("payment_account_id") REFERENCES "payment_accounts"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "payment_notices" ADD CONSTRAINT "fk_payment_notices_student_fee" FOREIGN KEY ("student_fee_id") REFERENCES "student_fees"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "payment_notices" ADD CONSTRAINT "fk_payment_notices_qr_code" FOREIGN KEY ("qr_code_id") REFERENCES "payment_qr_codes"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "class_salary_rules" ADD CONSTRAINT "fk_class_salary_rules_class" FOREIGN KEY ("class_id") REFERENCES "classes"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

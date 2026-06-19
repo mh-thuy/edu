@@ -4,6 +4,7 @@ import type {
   Student,
   Class,
   StudentFee,
+  PaymentRequest,
   PaymentQrCode,
   PaymentNotice,
 } from "@prisma/client";
@@ -11,6 +12,7 @@ import { currentMonthKey, nextMonthDueDate } from "./random";
 
 export interface StudentFeeFlow {
   fee: StudentFee;
+  request: PaymentRequest;
   qr: PaymentQrCode;
   notice: PaymentNotice;
   student: Student;
@@ -29,32 +31,38 @@ export async function createStudentFeeFlow(
   const month = currentMonthKey();
   const dueDate = nextMonthDueDate(5);
   const finalAmount = input.class.tuitionFee;
+  const paymentCode = `PR-${month}-${input.student.code}-${input.class.code}`;
+  const transferContent = `HP-${month}-${input.student.code}-${input.class.code}`;
 
   const fee = await prisma.studentFee.create({
     data: {
       studentId: input.student.id,
       classId: input.class.id,
-      month,
+      billingYear: Number(month.slice(0, 4)),
+      billingMonth: Number(month.slice(5, 7)),
       amount: input.class.tuitionFee,
       discount: 0,
       finalAmount,
       dueDate,
       status: "UNPAID",
-      createdBy: input.userId,
-      updatedBy: input.userId,
     },
   });
 
-  const transferContent = `HP-${month}-${input.student.code}-${input.class.code}`;
-  const paymentCode = `QR-${month}-${input.student.code}-${input.class.code}`;
-
-  const qr = await prisma.paymentQrCode.create({
+  const paymentRequest = await prisma.paymentRequest.create({
     data: {
       studentFeeId: fee.id,
       paymentAccountId: input.paymentAccount.id,
       paymentCode,
-      amount: finalAmount,
+      requestedAmount: finalAmount,
       transferContent,
+      expiredAt: dueDate,
+      status: "ACTIVE",
+    },
+  });
+
+  const qr = await prisma.paymentQrCode.create({
+    data: {
+      paymentRequestId: paymentRequest.id,
       qrPayload: JSON.stringify({
         bankCode: input.paymentAccount.bankCode,
         bankName: input.paymentAccount.bankName,
@@ -63,30 +71,25 @@ export async function createStudentFeeFlow(
         amount: finalAmount.toString(),
         content: transferContent,
       }),
-      qrImageUrl: null,
       status: "ACTIVE",
-      createdBy: input.userId,
-      updatedBy: input.userId,
     },
   });
 
   const notice = await prisma.paymentNotice.create({
     data: {
-      studentFeeId: fee.id,
-      qrCodeId: qr.id,
+      paymentRequestId: paymentRequest.id,
       noticeNumber: `PN-${month}-${input.student.code}-${input.class.code}`,
       amount: finalAmount,
       dueDate,
       version: 1,
       isLatest: true,
       status: "GENERATED",
-      createdBy: input.userId,
-      updatedBy: input.userId,
     },
   });
 
   return {
     fee,
+    request: paymentRequest,
     qr,
     notice,
     student: input.student,
