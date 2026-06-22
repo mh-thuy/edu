@@ -38,8 +38,6 @@ import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
-import SendIcon from "@mui/icons-material/Send";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { EmptyState } from "@/components/shared/tables/EmptyState";
@@ -59,6 +57,7 @@ import { StudentFeeForm } from "./StudentFeeForm";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs, { Dayjs } from "dayjs";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 
 type StudentFeeStatus = "UNPAID" | "PARTIAL" | "PAID";
 
@@ -214,7 +213,11 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
     dueDate: new Date().toISOString().slice(0, 10) || "",
     discount: 0,
     note: "",
+    paidAmount: 0,
+    finalAmount: 0,
+    outstandingAmount: 0,
   });
+
   const [bulkStudents, setBulkStudents] = useState<BulkStudentRow[]>([]);
   const [bulkStudentsLoading, setBulkStudentsLoading] = useState(false);
   const [bulkStudentsError, setBulkStudentsError] = useState<string | null>(
@@ -258,6 +261,20 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   useEffect(() => {
     setPageNumber(1);
   }, [search, setPageNumber]);
+
+  const recalculateBulkAmounts = (
+    amount: number,
+    discount: number,
+    paidAmount: number,
+  ) => {
+    const finalAmount = Math.max(0, amount - discount);
+    const outstandingAmount = Math.max(0, finalAmount - paidAmount);
+
+    return {
+      finalAmount,
+      outstandingAmount,
+    };
+  };
 
   const loadBulkStudents = useCallback(async (classId: string) => {
     try {
@@ -396,6 +413,9 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         dueDate: new Date().toISOString().slice(0, 10) || "",
         discount: 0,
         note: "",
+        paidAmount: 0,
+        finalAmount: 0,
+        outstandingAmount: 0,
       });
       setSelectedBulkClass(null);
       setBulkStudents([]);
@@ -526,6 +546,21 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           `${params.row.billingYear}-${params.row.billingMonth}`,
       },
       {
+        field: "status",
+        headerName: "Trạng thái",
+        flex: 1,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params) => (
+          <Chip
+            label={getStatusLabel(params.row.status)}
+            size="small"
+            color={getStatusColor(params.row.status)}
+            variant="outlined"
+          />
+        ),
+      },
+      {
         field: "student",
         headerName: "Học viên",
         minWidth: 220,
@@ -576,68 +611,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         width: 130,
         renderCell: (params) => formatDate(params.row.dueDate),
       },
-      {
-        field: "status",
-        headerName: "Trạng thái",
-        flex: 1,
-        align: "center",
-        headerAlign: "center",
-        renderCell: (params) => (
-          <Chip
-            label={getStatusLabel(params.row.status)}
-            size="small"
-            color={getStatusColor(params.row.status)}
-            variant="outlined"
-          />
-        ),
-      },
-      {
-        field: "qrStatus",
-        headerName: "QR",
-        width: 120,
-        renderCell: (params) => (
-          <Chip
-            label={getFlowStatusLabel(params.row.flowStatus?.qr ?? "PENDING")}
-            size="small"
-            color={getFlowStatusColor(params.row.flowStatus?.qr ?? "PENDING")}
-            variant="outlined"
-          />
-        ),
-      },
-      {
-        field: "temporaryInvoiceStatus",
-        headerName: "Bill tạm",
-        width: 130,
-        renderCell: (params) => (
-          <Chip
-            label={getFlowStatusLabel(
-              params.row.flowStatus?.temporaryInvoice ?? "PENDING",
-            )}
-            size="small"
-            color={getFlowStatusColor(
-              params.row.flowStatus?.temporaryInvoice ?? "PENDING",
-            )}
-            variant="outlined"
-          />
-        ),
-      },
-      {
-        field: "paymentNoticeStatus",
-        headerName: "Notice",
-        width: 120,
-        renderCell: (params) => (
-          <Chip
-            label={getFlowStatusLabel(
-              params.row.flowStatus?.paymentNotice ?? "PENDING",
-            )}
-            size="small"
-            color={getFlowStatusColor(
-              params.row.flowStatus?.paymentNotice ?? "PENDING",
-            )}
-            variant="outlined"
-          />
-        ),
-      },
+
       {
         field: "actions",
         headerName: "Thao tác",
@@ -705,7 +679,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   );
 
   const hasRows = (fees?.items.length || 0) > 0;
-  const hasActiveQr = Boolean(flowMenuRow?.activeQr?.qrImageUrl);
 
   return (
     <>
@@ -752,7 +725,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                   variant="contained"
                   startIcon={<AddIcon />}
                   onClick={handleCreate}
-                  fullWidth={{ xs: true, sm: false }} // Mobile giãn full width
                   sx={{ py: 1, px: 2 }} // Tăng độ dày nút bấm một chút cho dễ tương tác
                 >
                   Tạo hóa đơn
@@ -763,7 +735,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                   color="secondary"
                   startIcon={<ReceiptLongIcon />}
                   onClick={() => setShowBulkDialog(true)}
-                  fullWidth={{ xs: true, sm: false }}
                   sx={{ py: 1, px: 2 }}
                 >
                   Hàng loạt
@@ -912,20 +883,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           />
         </MenuItem>
 
-        <MenuItem
-          disabled={!hasActiveQr}
-          onClick={() =>
-            runFlowMenuAction(() =>
-              handleOpenQr(flowMenuRow?.activeQr?.qrImageUrl),
-            )
-          }
-        >
-          <ListItemIcon>
-            <VisibilityIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Xem QR" />
-        </MenuItem>
-
         <Divider />
 
         <MenuItem
@@ -969,7 +926,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           <ListItemText primary="Xuất PDF bill tạm" />
         </MenuItem>
 
-        <Divider />
+        {/* <Divider />
 
         <MenuItem
           disabled={!flowMenuRow}
@@ -1018,7 +975,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
             <AutoAwesomeIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText primary="Chạy toàn bộ quy trình" />
-        </MenuItem>
+        </MenuItem>*/}
       </Menu>
 
       {showForm && (
@@ -1056,12 +1013,16 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Tạo hóa đơn hàng loạt</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Tạo hóa đơn hàng loạt
+        </DialogTitle>
+
         <DialogContent sx={{ mt: 1 }}>
           <Stack spacing={2}>
             <MasterSelectField
               label="Lớp"
               required
+              size="small"
               value={selectedBulkClass}
               onOpen={classDialog.onOpen}
               error={!bulkData.classId ? "Vui lòng chọn lớp" : undefined}
@@ -1073,6 +1034,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
               <TextField
                 label="Tháng"
                 type="month"
+                size="small"
                 value={bulkData.month}
                 onChange={(event) =>
                   setBulkData((current) => ({
@@ -1083,24 +1045,11 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                 fullWidth
                 InputLabelProps={{ shrink: true }}
               />
-              <TextField
-                label="Số tiền"
-                type="number"
-                value={bulkData.amount}
-                onChange={(event) =>
-                  setBulkData((current) => ({
-                    ...current,
-                    amount: Number(event.target.value),
-                  }))
-                }
-                fullWidth
-              />
-            </Stack>
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
                 label="Hạn thanh toán"
                 type="date"
+                size="small"
                 value={bulkData.dueDate}
                 onChange={(event) =>
                   setBulkData((current) => ({
@@ -1111,22 +1060,83 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                 fullWidth
                 InputLabelProps={{ shrink: true }}
               />
-              <TextField
-                label="Giảm giá"
-                type="number"
-                value={bulkData.discount}
-                onChange={(event) =>
+            </Stack>
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <CurrencyInput
+                label="Số tiền"
+                value={bulkData.amount}
+                onChange={(value) => {
+                  const calc = recalculateBulkAmounts(
+                    value,
+                    bulkData.discount,
+                    bulkData.paidAmount,
+                  );
+
                   setBulkData((current) => ({
                     ...current,
-                    discount: Number(event.target.value),
-                  }))
-                }
-                fullWidth
+                    amount: value,
+                    ...calc,
+                  }));
+                }}
+              />
+
+              <CurrencyInput
+                label="Giảm giá"
+                value={bulkData.discount}
+                onChange={(value) => {
+                  const calc = recalculateBulkAmounts(
+                    bulkData.amount,
+                    value,
+                    bulkData.paidAmount,
+                  );
+
+                  setBulkData((current) => ({
+                    ...current,
+                    discount: value,
+                    ...calc,
+                  }));
+                }}
               />
             </Stack>
 
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <CurrencyInput
+                label="Thực thu"
+                value={bulkData.finalAmount}
+                disabled
+                onChange={() => {}}
+              />
+
+              <CurrencyInput
+                label="Đã thanh toán"
+                value={bulkData.paidAmount}
+                onChange={(value) => {
+                  const calc = recalculateBulkAmounts(
+                    bulkData.amount,
+                    bulkData.discount,
+                    value,
+                  );
+
+                  setBulkData((current) => ({
+                    ...current,
+                    paidAmount: value,
+                    ...calc,
+                  }));
+                }}
+              />
+            </Stack>
+
+            <CurrencyInput
+              label="Còn nợ"
+              value={bulkData.outstandingAmount}
+              disabled
+              onChange={() => {}}
+            />
+
             <TextField
               label="Ghi chú"
+              size="small"
               value={bulkData.note}
               onChange={(event) =>
                 setBulkData((current) => ({
@@ -1160,6 +1170,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                   columns={bulkStudentColumns}
                   checkboxSelection
                   disableRowSelectionOnClick
+                  density="compact"
                   rowSelectionModel={selectedBulkRows}
                   onRowSelectionModelChange={(model) =>
                     setSelectedBulkRows(model)
@@ -1173,19 +1184,28 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
                       },
                     },
                   }}
+                  sx={{
+                    "& .MuiDataGrid-columnHeaderTitle": {
+                      fontWeight: 700,
+                    },
+                  }}
                 />
               </Box>
             )}
           </Stack>
         </DialogContent>
+
         <DialogActions>
           <Button
+            size="small"
             onClick={() => setShowBulkDialog(false)}
             disabled={bulkSubmitting}
           >
             Hủy
           </Button>
+
           <Button
+            size="small"
             variant="contained"
             onClick={() => void handleBulkCreate()}
             disabled={
@@ -1195,7 +1215,7 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
               bulkStudentsLoading
             }
             startIcon={
-              bulkSubmitting ? <CircularProgress size={18} /> : undefined
+              bulkSubmitting ? <CircularProgress size={16} /> : undefined
             }
           >
             {bulkSubmitting ? "Đang tạo..." : "Tạo hóa đơn hàng loạt"}

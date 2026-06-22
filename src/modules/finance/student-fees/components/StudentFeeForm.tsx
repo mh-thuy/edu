@@ -1,40 +1,55 @@
 "use client";
 
 import React from "react";
-import { useForm, Controller } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
+  Box,
   Button,
-  Stack,
+  Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
+import { DatePicker } from "@mui/x-date-pickers";
+import dayjs from "dayjs";
 
 import {
   studentFeeCreateSchema,
   studentFeeUpdateSchema,
 } from "@/modules/finance/student-fees/schemas/student-fee.schema";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { useDisclosure } from "@/hooks/useDisclosure";
 import {
   MasterSelectField,
   type MasterSelectValue,
 } from "@/components/shared/forms/MasterSelectField";
-import { useDisclosure } from "@/hooks/useDisclosure";
-
-import type { z } from "zod";
-import { DatePicker } from "@mui/x-date-pickers";
-import dayjs from "dayjs";
-import { extractApiErrorMessage } from "@/lib/api-client";
 import { StudentSelectDialog } from "@/components/shared/dialogs/StudentSelectDialog";
 import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
+import { extractApiErrorMessage } from "@/lib/api-client";
+import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 
-type StudentFeeCreateInput = z.infer<typeof studentFeeCreateSchema>;
-type StudentFeeUpdateInput = z.infer<typeof studentFeeUpdateSchema>;
+type StudentFeeStatus = "UNPAID" | "PARTIAL" | "PAID";
+
+type StudentFeeFormValues = {
+  studentId?: string;
+  classId?: string;
+  month?: string;
+  amount: number;
+  discount: number;
+  paidAmount: number;
+  dueDate: string;
+  status?: StudentFeeStatus;
+  note?: string;
+};
 
 interface StudentFeeFormProps {
   initialData?: {
@@ -44,14 +59,12 @@ interface StudentFeeFormProps {
     month: string;
     amount: number;
     discount?: number;
+    finalAmount?: number;
+    paidAmount?: number;
+    outstandingAmount?: number;
     dueDate: string;
-    status:
-      | "unpaid"
-      | "partial"
-      | "paid"
-      | "UNPAID"
-      | "PARTIAL"
-      | "PAID";
+    status: "unpaid" | "partial" | "paid" | "UNPAID" | "PARTIAL" | "PAID";
+    note?: string | null;
     student?: {
       code: string;
       fullName: string;
@@ -65,16 +78,49 @@ interface StudentFeeFormProps {
   onSuccess: () => void;
 }
 
+function getStatusLabel(status?: StudentFeeStatus) {
+  switch (status) {
+    case "PAID":
+      return "Đã thanh toán";
+    case "PARTIAL":
+      return "Thanh toán một phần";
+    case "UNPAID":
+    default:
+      return "Chưa thanh toán";
+  }
+}
+
+function getStatusColor(status?: StudentFeeStatus) {
+  switch (status) {
+    case "PAID":
+      return "success";
+    case "PARTIAL":
+      return "warning";
+    case "UNPAID":
+    default:
+      return "error";
+  }
+}
+
+function calculateStatus(
+  finalAmount: number,
+  paidAmount: number,
+): StudentFeeStatus {
+  if (paidAmount <= 0) return "UNPAID";
+  if (paidAmount < finalAmount) return "PARTIAL";
+  return "PAID";
+}
+
 export function StudentFeeForm({
   initialData,
   onClose,
   onSuccess,
 }: StudentFeeFormProps) {
   const snackbar = useSnackbar();
-  const [submitting, setSubmitting] = React.useState(false);
   const isCreating = !initialData;
 
-  // Local display state for selected student/class (id stored in form)
+  const [submitting, setSubmitting] = React.useState(false);
+
   const [selectedStudent, setSelectedStudent] =
     React.useState<MasterSelectValue | null>(
       initialData?.student
@@ -85,6 +131,7 @@ export function StudentFeeForm({
           }
         : null,
     );
+
   const [selectedClass, setSelectedClass] =
     React.useState<MasterSelectValue | null>(
       initialData?.class
@@ -99,68 +146,83 @@ export function StudentFeeForm({
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
-  const resolver: Resolver<StudentFeeUpdateInput> = (
+  const resolver = (
     isCreating
-      ? (zodResolver(studentFeeCreateSchema) as unknown)
-      : (zodResolver(studentFeeUpdateSchema) as unknown)
-  ) as Resolver<StudentFeeUpdateInput>;
+      ? zodResolver(studentFeeCreateSchema)
+      : zodResolver(studentFeeUpdateSchema)
+  ) as any;
 
   const {
     register,
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors },
-  } = useForm<StudentFeeUpdateInput>({
+  } = useForm<StudentFeeFormValues>({
     resolver,
     defaultValues: isCreating
       ? {
           studentId: "",
           classId: "",
-          month: new Date().toISOString().slice(0, 7),
+          month: dayjs().format("YYYY-MM"),
           amount: 0,
           discount: 0,
-          dueDate: new Date().toISOString().split("T")[0] || "",
+          paidAmount: 0,
+          dueDate: dayjs().format("YYYY-MM-DD"),
+          note: "",
         }
       : {
-          amount: initialData?.amount,
-          discount: initialData?.discount ?? 0,
-          dueDate: initialData?.dueDate?.slice(0, 10),
-          status: initialData?.status?.toUpperCase() as
-            | "UNPAID"
-            | "PARTIAL"
-            | "PAID"
-            | undefined,
+          amount: Number(initialData.amount ?? 0),
+          discount: Number(initialData.discount ?? 0),
+          paidAmount: Number(initialData.paidAmount ?? 0),
+          dueDate: initialData.dueDate.slice(0, 10),
+          status: initialData.status.toUpperCase() as StudentFeeStatus,
+          note: initialData.note ?? "",
         },
   });
 
-  const onSubmit = async (
-    data: StudentFeeCreateInput | StudentFeeUpdateInput,
-  ) => {
+  const amount = Number(watch("amount") || 0);
+  const discount = Number(watch("discount") || 0);
+  const paidAmount = Number(watch("paidAmount") || 0);
+
+  const finalAmount = Math.max(amount - discount, 0);
+  const outstandingAmount = Math.max(finalAmount - paidAmount, 0);
+  const calculatedStatus = calculateStatus(finalAmount, paidAmount);
+
+  const onSubmit = async (data: StudentFeeFormValues) => {
     try {
       setSubmitting(true);
-      let response;
 
-      if (isCreating) {
-        response = await fetch("/api/student-fees", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      } else {
-        response = await fetch(`/api/student-fees/${initialData?.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        });
-      }
+      const payload = {
+        ...data,
+        finalAmount,
+        outstandingAmount,
+        status: calculatedStatus,
+      };
+
+      const url = isCreating
+        ? "/api/student-fees"
+        : `/api/student-fees/${initialData.id}`;
+
+      const method = isCreating ? "POST" : "PATCH";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
       if (!response.ok) {
-        throw new Error(await extractApiErrorMessage(response, "Failed to save"));
+        throw new Error(
+          await extractApiErrorMessage(response, "Failed to save"),
+        );
       }
+
       snackbar.showSuccess(
         isCreating ? "Tạo thành công" : "Cập nhật thành công",
       );
+
       onSuccess();
     } catch (err) {
       snackbar.showError(
@@ -179,72 +241,246 @@ export function StudentFeeForm({
     <>
       <Dialog
         open
-        onClose={onClose}
-        maxWidth="sm"
+        onClose={submitting ? undefined : onClose}
+        maxWidth="md"
         fullWidth
         PaperProps={{
           component: "form",
           onSubmit: handleSubmit(onSubmit),
         }}
       >
-        <DialogTitle>
-          {isCreating ? "Thêm học phí" : "Cập nhật học phí"}
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" justifyContent="space-between" gap={2}>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                {isCreating ? "Thêm học phí" : "Cập nhật học phí"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Quản lý học phí, thanh toán và công nợ của học sinh
+              </Typography>
+            </Box>
+
+            <Chip
+              label={getStatusLabel(calculatedStatus)}
+              color={getStatusColor(calculatedStatus)}
+              variant="outlined"
+              sx={{ fontWeight: 700 }}
+            />
+          </Stack>
         </DialogTitle>
-        <DialogContent sx={{ mt: 2 }}>
-          <Stack spacing={2}>
-            {isCreating ? (
-              <>
-                {/* Student picker */}
-                <Controller
-                  name="studentId"
-                  control={control}
-                  render={() => (
-                    <MasterSelectField
+
+        <DialogContent sx={{ mt: 1 }}>
+          <Stack spacing={2.5} pt={1}>
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <Stack spacing={2}>
+                <Typography fontWeight={700}>Thông tin học phí</Typography>
+
+                {isCreating ? (
+                  <>
+                    <Controller
+                      name="studentId"
+                      control={control}
+                      render={() => (
+                        <MasterSelectField
+                          label="Học sinh"
+                          required
+                          value={selectedStudent}
+                          onOpen={studentDialog.onOpen}
+                          error={errors.studentId?.message}
+                          codeLabel="Mã"
+                          nameLabel="Tên"
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      name="classId"
+                      control={control}
+                      render={() => (
+                        <MasterSelectField
+                          label="Lớp"
+                          required
+                          value={selectedClass}
+                          onOpen={classDialog.onOpen}
+                          error={errors.classId?.message}
+                          codeLabel="Mã"
+                          nameLabel="Tên"
+                        />
+                      )}
+                    />
+
+                    <Controller
+                      name="month"
+                      control={control}
+                      render={({ field }) => (
+                        <DatePicker
+                          label="Kỳ học phí"
+                          views={["year", "month"]}
+                          format="MM/YYYY"
+                          value={field.value ? dayjs(field.value) : null}
+                          onChange={(value) => {
+                            field.onChange(
+                              value ? value.format("YYYY-MM") : "",
+                            );
+                          }}
+                          slotProps={{
+                            textField: {
+                              fullWidth: true,
+                              size: "small",
+                              error: !!errors.month,
+                              helperText: errors.month?.message,
+                            },
+                          }}
+                        />
+                      )}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <TextField
                       label="Học sinh"
-                      required
-                      value={selectedStudent}
-                      onOpen={studentDialog.onOpen}
-                      error={errors.studentId?.message}
-                      codeLabel="Mã"
-                      nameLabel="Tên"
+                      value={
+                        initialData.student
+                          ? `${initialData.student.code} - ${initialData.student.fullName}`
+                          : ""
+                      }
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                      size="small"
                     />
-                  )}
-                />
 
-                {/* Class picker */}
-                <Controller
-                  name="classId"
-                  control={control}
-                  render={() => (
-                    <MasterSelectField
+                    <TextField
                       label="Lớp"
-                      required
-                      value={selectedClass}
-                      onOpen={classDialog.onOpen}
-                      error={errors.classId?.message}
-                      codeLabel="Mã"
-                      nameLabel="Tên"
+                      value={
+                        initialData.class
+                          ? `${initialData.class.code} - ${initialData.class.name}`
+                          : ""
+                      }
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                      size="small"
+                    />
+
+                    <TextField
+                      label="Kỳ học phí"
+                      value={initialData.month}
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                      size="small"
+                    />
+                  </>
+                )}
+              </Stack>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <Stack spacing={2}>
+                <Typography fontWeight={700}>Chi tiết thanh toán</Typography>
+
+                <Controller
+                  name="amount"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Học phí gốc"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.amount}
+                      disabled={submitting}
                     />
                   )}
                 />
 
                 <Controller
-                  name="month"
+                  name="discount"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Giảm giá"
+                      value={field.value}
+                      onChange={field.onChange}
+                      error={errors.discount}
+                      disabled={submitting}
+                    />
+                  )}
+                />
+
+                <Divider />
+
+                <CurrencyInput
+                  label="Thành tiền"
+                  value={finalAmount}
+                  readOnly
+                  disabled
+                  sx={{
+                    "& .MuiInputBase-root": {
+                      bgcolor: "success.50",
+                    },
+                    "& .MuiInputBase-input": {
+                      fontWeight: 700,
+                      fontSize: 18,
+                      color: "success.main",
+                    },
+                  }}
+                />
+
+                <Controller
+                  name="paidAmount"
+                  control={control}
+                  render={({ field }) => (
+                    <CurrencyInput
+                      label="Đã thanh toán"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={submitting}
+                    />
+                  )}
+                />
+
+                <CurrencyInput
+                  label="Còn lại"
+                  value={outstandingAmount}
+                  readOnly
+                  disabled
+                  sx={{
+                    "& .MuiInputBase-root": {
+                      bgcolor:
+                        outstandingAmount > 0 ? "error.50" : "success.50",
+                    },
+                    "& .MuiInputBase-input": {
+                      fontWeight: 700,
+                      fontSize: 18,
+                      color:
+                        outstandingAmount > 0 ? "error.main" : "success.main",
+                    },
+                  }}
+                />
+              </Stack>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+              <Stack spacing={2}>
+                <Typography fontWeight={700}>
+                  Thông tin hạn thanh toán
+                </Typography>
+
+                <Controller
+                  name="dueDate"
                   control={control}
                   render={({ field }) => (
                     <DatePicker
-                      label="Kỳ học phí"
-                      views={["year", "month"]}
-                      format="MM/YYYY"
+                      label="Hạn thanh toán"
+                      format="DD/MM/YYYY"
                       value={field.value ? dayjs(field.value) : null}
                       onChange={(value) => {
-                        field.onChange(value ? value.format("YYYY-MM") : "");
+                        field.onChange(value ? value.format("YYYY-MM-DD") : "");
                       }}
                       slotProps={{
                         textField: {
                           fullWidth: true,
-                          error: !!errors.month,
-                          helperText: errors.month?.message,
+                          size: "small",
+                          error: !!errors.dueDate,
+                          helperText: errors.dueDate?.message,
                         },
                       }}
                     />
@@ -252,121 +488,34 @@ export function StudentFeeForm({
                 />
 
                 <TextField
-                  label="Giảm giá"
-                  type="number"
-                  error={!!errors.discount}
-                  helperText={errors.discount?.message}
-                  fullWidth
-                  inputProps={{ min: 0 }}
-                  {...register("discount", { valueAsNumber: true })}
-                />
-              </>
-            ) : (
-              <>
-                <TextField
-                  label="Học sinh"
-                  value={
-                    initialData?.student
-                      ? `${initialData.student.code} - ${initialData.student.fullName}`
-                      : ""
-                  }
+                  label="Trạng thái"
+                  value={getStatusLabel(calculatedStatus)}
                   InputProps={{ readOnly: true }}
                   fullWidth
                   size="small"
                 />
+
                 <TextField
-                  label="Lớp"
-                  value={
-                    initialData?.class
-                      ? `${initialData.class.code} - ${initialData.class.name}`
-                      : ""
-                  }
-                  InputProps={{ readOnly: true }}
+                  label="Ghi chú"
+                  {...register("note")}
+                  error={!!errors.note}
+                  helperText={errors.note?.message}
                   fullWidth
                   size="small"
+                  multiline
+                  minRows={3}
+                  disabled={submitting}
                 />
-                <TextField
-                  label="Tháng"
-                  value={initialData?.month ?? ""}
-                  InputProps={{ readOnly: true }}
-                  fullWidth
-                  size="small"
-                />
-              </>
-            )}
-
-            <Controller
-              name="amount"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  label="Số tiền"
-                  fullWidth
-                  value={
-                    field.value
-                      ? Number(field.value).toLocaleString("vi-VN")
-                      : ""
-                  }
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/[^\d]/g, "");
-                    field.onChange(raw ? Number(raw) : 0);
-                  }}
-                  error={!!errors.amount}
-                  helperText={errors.amount?.message}
-                  InputProps={{
-                    endAdornment: "VND",
-                  }}
-                />
-              )}
-            />
-
-            <Controller
-              name="dueDate"
-              control={control}
-              render={({ field }) => (
-                <DatePicker
-                  label="Hạn thanh toán"
-                  value={field.value ? dayjs(field.value) : null}
-                  onChange={(value) => {
-                    field.onChange(value ? value.format("YYYY-MM-DD") : "");
-                  }}
-                />
-              )}
-            />
-
-            {!isCreating && (
-              <TextField
-                label="Giảm giá"
-                type="number"
-                error={!!errors.discount}
-                helperText={errors.discount?.message}
-                fullWidth
-                inputProps={{ min: 0 }}
-                {...register("discount", { valueAsNumber: true })}
-              />
-            )}
-
-            {!isCreating && (
-              <TextField
-                select
-                label="Trạng thái"
-                {...register("status")}
-                error={!!errors.status}
-                helperText={errors.status?.message}
-                fullWidth
-                slotProps={{ select: { native: true } }}
-              >
-                <option value="UNPAID">Chưa thanh toán</option>
-                <option value="PARTIAL">Thanh toán một phần</option>
-                <option value="PAID">Đã thanh toán</option>
-              </TextField>
-            )}
+              </Stack>
+            </Paper>
           </Stack>
         </DialogContent>
-        <DialogActions>
+
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={onClose} disabled={submitting}>
             Hủy
           </Button>
+
           <Button
             type="submit"
             variant="contained"
@@ -378,26 +527,40 @@ export function StudentFeeForm({
         </DialogActions>
       </Dialog>
 
-      {/* Student picker dialog */}
       <StudentSelectDialog
         open={studentDialog.open}
         onClose={studentDialog.onClose}
         onSelect={(item) => {
-          const display = { id: item.id, code: item.code, name: item.fullName };
-          setSelectedStudent(display);
-          setValue("studentId", item.id, { shouldValidate: true });
+          setSelectedStudent({
+            id: item.id,
+            code: item.code,
+            name: item.fullName,
+          });
+
+          setValue("studentId", item.id, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
+
           studentDialog.onClose();
         }}
       />
 
-      {/* Class picker dialog */}
       <ClassSelectDialog
         open={classDialog.open}
         onClose={classDialog.onClose}
         onSelect={(item) => {
-          const display = { id: item.id, code: item.code, name: item.name };
-          setSelectedClass(display);
-          setValue("classId", item.id, { shouldValidate: true });
+          setSelectedClass({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+          });
+
+          setValue("classId", item.id, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
+
           classDialog.onClose();
         }}
       />

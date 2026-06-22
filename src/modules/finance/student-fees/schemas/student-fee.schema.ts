@@ -8,6 +8,7 @@ export const studentFeeCreateSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   amount: z.number().positive("Amount must be positive"),
   discount: z.number().min(0, "Discount must be non-negative").default(0),
+  paidAmount: z.number().min(0, "Paid amount must be non-negative").default(0),
   dueDate: z.string().min(1, "Due date is required"),
   note: z.string().optional(),
 });
@@ -18,7 +19,9 @@ export const studentFeeUpdateSchema = studentFeeCreateSchema.partial().extend({
 
 export const bulkCreateStudentFeesSchema = z.object({
   classId: z.string().min(1, "Class is required"),
-  studentIds: z.array(z.string().min(1)).min(1, "At least one student is required"),
+  studentIds: z
+    .array(z.string().min(1))
+    .min(1, "At least one student is required"),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   amount: z.number().positive("Amount must be positive"),
   dueDate: z.string().min(1, "Due date is required"),
@@ -36,9 +39,7 @@ export const studentFeeFilterSchema = z.object({
     .transform((val) => {
       if (!val) return undefined;
       // Support comma-separated values or single value.
-      const statuses = val
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
+      const statuses = val.split(",").map((s) => s.trim().toUpperCase());
       return statuses.length === 1 ? statuses[0] : statuses;
     }),
   classId: z.string().optional(),

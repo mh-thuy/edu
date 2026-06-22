@@ -1,5 +1,7 @@
 "use client";
 
+import SearchIcon from "@mui/icons-material/Search";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import {
   Box,
   Button,
@@ -7,11 +9,8 @@ import {
   Paper,
   Stack,
   Typography,
-  SxProps,
-  Theme,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import type { SxProps, Theme } from "@mui/material";
 import type { ReactElement } from "react";
 
 export type MasterSelectValue = {
@@ -29,8 +28,8 @@ export type MasterSelectFieldProps = {
   required?: boolean;
   codeLabel?: string;
   nameLabel?: string;
-  size?: "small" | "medium"; // Thêm prop size
-  sx?: SxProps<Theme>; // Thêm prop sx để Grid bên ngoài can thiệp
+  size?: "small" | "medium";
+  sx?: SxProps<Theme>;
 };
 
 export function MasterSelectField({
@@ -42,20 +41,19 @@ export function MasterSelectField({
   required = false,
   codeLabel = "Mã",
   nameLabel = "Tên",
-  size = "medium", // Mặc định nếu không truyền
+  size = "medium",
   sx,
 }: MasterSelectFieldProps): ReactElement {
   const hasValue = Boolean(value?.id);
   const isSmall = size === "small";
 
   return (
-    <Box sx={{ ...sx, position: "relative" }}>
-      {/* 1. Nếu dùng size="small" để lọc, ta biến Label thành một thẻ nhỏ tinh tế chặn ở góc viền giống chuẩn MUI */}
+    <Box sx={[{ position: "relative" }, ...(Array.isArray(sx) ? sx : [sx])]}>
       <Typography
         component="label"
         variant="caption"
         fontWeight={500}
-        color={error ? "error" : "text.secondary"}
+        color={error ? "error.main" : "text.secondary"}
         sx={{
           position: "absolute",
           left: 12,
@@ -67,17 +65,20 @@ export function MasterSelectField({
         }}
       >
         {label}
-        {required && <span style={{ color: "red", marginLeft: 2 }}>*</span>}
+        {required && (
+          <Typography component="span" color="error.main" ml={0.25}>
+            *
+          </Typography>
+        )}
       </Typography>
 
-      {/* 2. Khung hiển thị dữ liệu */}
       <Paper
         variant="outlined"
+        aria-invalid={!!error}
         sx={{
           px: 1.5,
-          // Tính toán padding động: nếu small thì dùng 0.5 (cao chuẩn 40px), medium dùng 1.5
           py: isSmall ? 0.5 : 1.5,
-          minHeight: isSmall ? 40 : 56, // Ép cứng chiều cao chuẩn xác từng pixel
+          minHeight: isSmall ? 40 : 56,
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
@@ -85,18 +86,18 @@ export function MasterSelectField({
           borderRadius: 1,
           transition: "border-color 0.2s",
           bgcolor: disabled ? "action.disabledBackground" : "background.paper",
+          opacity: disabled ? 0.8 : 1,
           "&:hover": {
             borderColor: disabled ? undefined : "primary.main",
           },
         }}
       >
         <Stack direction="row" alignItems="center" spacing={1.5} width="100%">
-          {/* Nội dung hiển thị */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
             {hasValue ? (
               <Stack
                 direction="row"
-                spacing={isSmall ? 1.5 : 3} // Giảm khoảng cách nếu ở chế độ nhỏ
+                spacing={isSmall ? 1.5 : 3}
                 alignItems="center"
               >
                 <Stack
@@ -112,8 +113,9 @@ export function MasterSelectField({
                   >
                     {codeLabel}:
                   </Typography>
+
                   <Typography variant="body2" fontWeight={600} noWrap>
-                    {value!.code}
+                    {value?.code}
                   </Typography>
                 </Stack>
 
@@ -130,8 +132,9 @@ export function MasterSelectField({
                   >
                     {nameLabel}:
                   </Typography>
+
                   <Typography variant="body2" noWrap>
-                    {value!.name}
+                    {value?.name}
                   </Typography>
                 </Stack>
               </Stack>
@@ -146,18 +149,19 @@ export function MasterSelectField({
             )}
           </Box>
 
-          {/* Nút bấm Chọn / Đổi */}
           <Button
             size="small"
-            variant={hasValue ? "text" : "contained"} // Đổi sang text trên bản small nhìn thanh thoát hơn
+            variant={hasValue ? "text" : "contained"}
             startIcon={hasValue ? <SwapHorizIcon /> : <SearchIcon />}
             onClick={onOpen}
             disabled={disabled}
             sx={{
               flexShrink: 0,
-              height: 28, // Nút nhỏ nằm gọn gàng bên trong khung 40px
+              height: isSmall ? 28 : 32,
               boxShadow: "none",
-              "&:hover": { boxShadow: "none" },
+              "&:hover": {
+                boxShadow: "none",
+              },
             }}
           >
             {hasValue ? "Đổi" : "Chọn"}
@@ -165,7 +169,6 @@ export function MasterSelectField({
         </Stack>
       </Paper>
 
-      {/* Thông báo lỗi */}
       {error && (
         <FormHelperText error sx={{ mx: "14px", mt: 0.5 }}>
           {error}

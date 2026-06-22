@@ -1,8 +1,8 @@
 # Hướng dẫn UI - Hệ thống quản lý trung tâm đào tạo
 
-Version: 2.0  
-Style: Admin Dashboard  
-Ngôn ngữ giao diện: Tiếng Việt  
+Version: 2.0
+Style: Admin Dashboard
+Ngôn ngữ giao diện: Tiếng Việt
 Tech stack: Next.js + React + TypeScript + MUI + React Hook Form + Zod
 
 ---
@@ -297,7 +297,6 @@ Dùng dialog cho:
 - Chọn giáo viên
 - Chọn lớp
 - Chọn phòng
-- Xem QR
 - In bill tạm
 - Ghi nhận thanh toán
 
@@ -760,7 +759,6 @@ Thao tác
 
 ```text
 Xem chi tiết
-Xem QR
 In bill tạm
 Ghi nhận thanh toán
 ```
@@ -800,7 +798,7 @@ Hệ thống sẽ sinh học phí, QR code và bill tạm cho toàn bộ học v
 Rule:
 
 - Không tạo học phí trùng student + class + month.
-- Sau khi tạo học phí thành công, hiển thị action xem QR và in bill tạm.
+- Sau khi tạo học phí thành công, hiển thị in bill tạm.
 
 ---
 
@@ -1208,4 +1206,3 @@ Khi implement UI:
 8. Sau khi sửa phải chạy lint/typecheck/build.
 9. Nếu API chưa có, tạo service interface rõ ràng.
 10. Nếu rule nghiệp vụ chưa rõ, thêm TODO rõ ràng thay vì tự suy diễn.
-

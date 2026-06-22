@@ -109,13 +109,15 @@ export class StudentFeeService {
     const mapping: Record<string, string> = {
       VCB: "970436",
       ACB: "970416",
+      BIDV: "970418",
     };
 
     return mapping[bankCode.toUpperCase()] ?? bankCode;
   }
 
   private static buildTlv(id: string, value: string) {
-    return `${id}${String(value.length).padStart(2, "0")}${value}`;
+    const byteLength = Buffer.byteLength(value, "utf8");
+    return `${id}${String(byteLength).padStart(2, "0")}${value}`;
   }
 
   private static calculateCrc16(payload: string) {
@@ -135,15 +137,49 @@ export class StudentFeeService {
     return crc.toString(16).toUpperCase().padStart(4, "0");
   }
 
+  private static normalizeTransferContent(content: string) {
+    return content
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D")
+      .replace(/[^a-zA-Z0-9\s\-_.]/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 50);
+  }
+
   private static buildVietQrPayload(input: {
     bankCode: string;
     accountNumber: string;
-    amount: string;
+    amount: string | number;
     transferContent: string;
   }) {
+    const amount = Math.round(Number(input.amount));
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Invalid QR amount");
+    }
+
+    const bankBin = this.getBankBin(input.bankCode);
+
+    const accountNumber = input.accountNumber.replace(/\s+/g, "").trim();
+
+    if (!bankBin || bankBin.length !== 6) {
+      throw new Error("Invalid bank code");
+    }
+
+    if (!accountNumber) {
+      throw new Error("Invalid account number");
+    }
+
+    const transferContent = this.normalizeTransferContent(
+      input.transferContent,
+    );
+
     const beneficiaryOrg = [
-      this.buildTlv("00", this.getBankBin(input.bankCode)),
-      this.buildTlv("01", input.accountNumber),
+      this.buildTlv("00", bankBin),
+      this.buildTlv("01", accountNumber),
     ].join("");
 
     const merchantAccountInfo = [
@@ -152,35 +188,22 @@ export class StudentFeeService {
       this.buildTlv("02", "QRIBFTTA"),
     ].join("");
 
-    const additionalData = this.buildTlv("08", input.transferContent);
+    const additionalData = this.buildTlv("08", transferContent);
 
     const payloadWithoutCrc = [
       this.buildTlv("00", "01"),
       this.buildTlv("01", "12"),
       this.buildTlv("38", merchantAccountInfo),
       this.buildTlv("53", "704"),
-      this.buildTlv("54", String(Number(input.amount))),
+      this.buildTlv("54", String(amount)),
       this.buildTlv("58", "VN"),
       this.buildTlv("62", additionalData),
       "6304",
     ].join("");
 
-    return `${payloadWithoutCrc}${this.calculateCrc16(payloadWithoutCrc)}`;
-  }
+    const crc = this.calculateCrc16(payloadWithoutCrc);
 
-  private static async getDefaultPaymentAccount(tx: Prisma.TransactionClient) {
-    const account = await tx.paymentAccount.findFirst({
-      where: {
-        isActive: true,
-      },
-      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    });
-
-    if (!account) {
-      throw new ConflictError("Chưa cấu hình tài khoản nhận học phí");
-    }
-
-    return account;
+    return `${payloadWithoutCrc}${crc}`;
   }
 
   private static async getStudentFeeOrThrow(
@@ -209,6 +232,8 @@ export class StudentFeeService {
       },
       orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     });
+
+    console.log("Default payment account:", account);
 
     if (!account) {
       throw new ConflictError("Chưa cấu hình tài khoản nhận học phí");
