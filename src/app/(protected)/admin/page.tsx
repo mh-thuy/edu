@@ -17,6 +17,7 @@ import GroupIcon from "@mui/icons-material/Group";
 import ReceiptIcon from "@mui/icons-material/Receipt";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import { unwrapApiResponse } from "@/lib/api-client";
+import Link from "next/link";
 
 interface DashboardStats {
   totalFeeAmount: number;
@@ -218,21 +219,21 @@ export default function AdminPage() {
                   sx={{ flex: "1 0 auto" }}
                 >
                   Quản lý:{" "}
-                  <a href="/admin/student-fees" style={{ color: "#1976d2" }}>
+                  <Link href="/admin/student-fees" style={{ color: "#1976d2" }}>
                     Hóa đơn
-                  </a>
+                  </Link>
                   {" | "}
-                  <a href="/admin/payments" style={{ color: "#1976d2" }}>
+                  <Link href="/admin/payments" style={{ color: "#1976d2" }}>
                     Thanh toán
-                  </a>
+                  </Link>
                   {" | "}
-                  <a href="/admin/teacher-payroll" style={{ color: "#1976d2" }}>
+                  <Link href="/admin/teacher-payroll" style={{ color: "#1976d2" }}>
                     Lương
-                  </a>
+                  </Link>
                   {" | "}
-                  <a href="/admin/reports" style={{ color: "#1976d2" }}>
+                  <Link href="/admin/reports" style={{ color: "#1976d2" }}>
                     Báo cáo
-                  </a>
+                  </Link>
                 </Typography>
               </Stack>
             </CardContent>

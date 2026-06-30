@@ -8,6 +8,11 @@ type Params = Promise<{ id: string }>;
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const payment = await PaymentService.getPaymentById(id);
 
@@ -23,6 +28,11 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const body = await request.json();
 

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const feeStatusSchema = z.enum(["UNPAID", "PARTIAL", "PAID"]);
+const feeStatusSchema = z.enum(["UNPAID", "PARTIAL", "PAID", "OVERDUE"]);
 
 export const studentFeeCreateSchema = z.object({
   studentId: z.string().min(1, "Student is required"),
@@ -8,7 +8,6 @@ export const studentFeeCreateSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   amount: z.number().positive("Amount must be positive"),
   discount: z.number().min(0, "Discount must be non-negative").default(0),
-  paidAmount: z.number().min(0, "Paid amount must be non-negative").default(0),
   dueDate: z.string().min(1, "Due date is required"),
   note: z.string().optional(),
 });
@@ -44,6 +43,10 @@ export const studentFeeFilterSchema = z.object({
     }),
   classId: z.string().optional(),
   studentId: z.string().optional(),
+  overdue: z
+    .enum(["true", "false"])
+    .transform((value) => value === "true")
+    .optional(),
   month: z
     .string()
     .regex(/^\d{4}-\d{2}$/)

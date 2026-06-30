@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { PaymentService } from "@/modules/finance/payments/services/payment.service";
 import {
   paymentCreateSchema,
@@ -8,6 +9,11 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { searchParams } = new URL(request.url);
     const filter = {
       page: searchParams.get("page") || "1",
@@ -30,6 +36,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const body = await request.json();
     const validated = paymentCreateSchema.parse(body);
     const payment = await PaymentService.createPayment(validated);

@@ -12,9 +12,9 @@ export async function POST(_: Request, { params }: { params: Params }) {
     }
 
     const { id } = await params;
-    const qr = await StudentFeeService.generatePaymentQr(id);
-    return apiSuccess(qr, 201);
+    const receipt = await StudentFeeService.generateReceiptForStudentFee(id);
+    return apiSuccess(receipt, 201);
   } catch (error) {
-    return handleApiError(error, "Failed to generate payment QR");
+    return handleApiError(error, "Failed to generate receipt for tuition fee");
   }
 }

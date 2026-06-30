@@ -7,6 +7,11 @@ type Params = Promise<{ id: string }>;
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const receipt = await ReceiptService.getReceiptById(id);
 

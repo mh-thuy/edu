@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 
 const sendNoticeSchema = z.object({
@@ -10,6 +11,11 @@ type Params = Promise<{ id: string }>;
 
 export async function POST(request: Request, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const body = await request.json().catch(() => ({}));
     const validated = sendNoticeSchema.parse(body);
     const { id } = await params;

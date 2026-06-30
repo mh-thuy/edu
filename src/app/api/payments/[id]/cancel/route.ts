@@ -1,11 +1,14 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiRole } from "@/lib/api-auth";
-import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
+import { PaymentService } from "@/modules/finance/payments/services/payment.service";
 
 type Params = Promise<{ id: string }>;
 
-export async function POST(request: NextRequest, { params }: { params: Params }) {
+export async function POST(
+  _request: NextRequest,
+  { params }: { params: Params },
+) {
   try {
     const user = await requireApiRole(["ADMIN", "STAFF"]);
     if (user instanceof Response) {
@@ -13,10 +16,9 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     }
 
     const { id } = await params;
-    const receipt = await ReceiptService.markAsPrinted(id);
-
-    return apiSuccess(receipt);
+    const payment = await PaymentService.cancelPayment(id);
+    return apiSuccess(payment);
   } catch (error) {
-    return handleApiError(error, "Failed to mark receipt as printed");
+    return handleApiError(error, "Failed to cancel payment");
   }
 }

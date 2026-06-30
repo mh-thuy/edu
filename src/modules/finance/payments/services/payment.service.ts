@@ -97,7 +97,8 @@ export class PaymentService {
           method: this.toPaymentMethod(data.method),
           paymentDate: new Date(data.paymentDate),
           notes: data.notes,
-          status: PaymentStatus.PENDING,
+          status: PaymentStatus.CONFIRMED,
+          confirmedAt: new Date(),
         },
         include: {
           receipt: true,
@@ -110,6 +111,9 @@ export class PaymentService {
           },
         },
       });
+
+      await StudentFeeService.syncFeeFinancialState(data.studentFeeId, tx);
+      await StudentFeeService.invalidateFlowArtifacts(data.studentFeeId, tx);
 
       return withReceiptAlias(payment);
     });
@@ -262,6 +266,9 @@ export class PaymentService {
       },
     });
     if (!payment) throw new NotFoundError("Không tìm thấy thanh toán");
+    if (payment.status === PaymentStatus.CANCELLED) {
+      throw new ConflictError("Không thể sửa thanh toán đã hủy");
+    }
 
     // Check if receipt already issued (locked)
     const receipt = await prisma.receipt.findFirst({
@@ -314,6 +321,9 @@ export class PaymentService {
         },
       });
 
+      await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
+      await StudentFeeService.invalidateFlowArtifacts(payment.studentFeeId, tx);
+
       return withReceiptAlias(updated);
     });
   }
@@ -333,8 +343,54 @@ export class PaymentService {
       throw new ConflictError("Không thể xóa thanh toán đã phát hành biên lai");
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.delete({ where: { id } });
+    await this.cancelPayment(id);
+  }
+
+  static async cancelPayment(id: string): Promise<PaymentApiResponse> {
+    return prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.findUnique({
+        where: { id },
+        include: {
+          receipt: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
+          },
+        },
+      });
+
+      if (!payment) {
+        throw new NotFoundError("Không tìm thấy thanh toán");
+      }
+
+      if (payment.receipt) {
+        throw new ConflictError("Không thể hủy thanh toán đã phát hành biên lai");
+      }
+
+      const cancelled = await tx.payment.update({
+        where: { id },
+        data: {
+          status: PaymentStatus.CANCELLED,
+          cancelledAt: new Date(),
+        },
+        include: {
+          receipt: true,
+          studentFee: {
+            include: {
+              student: true,
+              class: true,
+              payments: true,
+            },
+          },
+        },
+      });
+
+      await StudentFeeService.syncFeeFinancialState(payment.studentFeeId, tx);
+
+      return withReceiptAlias(cancelled);
     });
   }
 
@@ -360,6 +416,10 @@ export class PaymentService {
 
       if (payment.status === PaymentStatus.CONFIRMED) {
         return withReceiptAlias(payment);
+      }
+
+      if (payment.status === PaymentStatus.CANCELLED) {
+        throw new ConflictError("Không thể xác nhận thanh toán đã hủy");
       }
 
       if (payment.status !== PaymentStatus.PENDING) {

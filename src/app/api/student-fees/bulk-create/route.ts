@@ -1,10 +1,16 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import { bulkCreateStudentFeesSchema } from "@/modules/finance/student-fees/schemas/student-fee.schema";
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const body = await request.json();
 
     // Validate the request body with bulk create schema
