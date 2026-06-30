@@ -1,10 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { apiError, apiSuccess } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 import { PaymentStatus } from "@prisma/client";
 
 export async function GET() {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     // Get debt statistics
     const unpaidCount = await prisma.studentFee.count({
       where: { status: "UNPAID" },

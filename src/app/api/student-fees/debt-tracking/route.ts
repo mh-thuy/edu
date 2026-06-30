@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest } from "next/server";
 import { FeeStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { apiError, apiSuccess } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 
 function normalizeFeeStatus(status?: string): FeeStatus | undefined {
@@ -19,6 +20,11 @@ function formatBillingMonth(year: number, month: number): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.max(1, parseInt(searchParams.get("pageSize") || "10", 10));

@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiRole } from "@/lib/api-auth";
 import { StudentFeeService } from "@/modules/finance/student-fees/services/student-fee.service";
 import {
   studentFeeFilterSchema,
@@ -8,6 +9,11 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { searchParams } = new URL(request.url);
     const filter = {
       page: searchParams.get("page") || "1",
@@ -16,6 +22,7 @@ export async function GET(request: NextRequest) {
       status: searchParams.get("status") || undefined,
       classId: searchParams.get("classId") || undefined,
       studentId: searchParams.get("studentId") || undefined,
+      overdue: searchParams.get("overdue") || undefined,
       month: searchParams.get("month") || undefined,
     };
 
@@ -30,6 +37,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const body = await request.json();
 
     // Validate the request body with create schema

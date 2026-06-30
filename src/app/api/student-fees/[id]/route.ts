@@ -8,6 +8,11 @@ type Params = Promise<{ id: string }>;
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const fee = await StudentFeeService.getStudentFeeById(id);
 
@@ -23,12 +28,21 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) {
+      return user;
+    }
+
     const { id } = await params;
     const body = await request.json();
 
     const validated = studentFeeUpdateSchema.parse(body);
     const updated = await StudentFeeService.updateStudentFee(id, {
       ...validated,
+      status:
+        validated.status && validated.status !== "OVERDUE"
+          ? validated.status
+          : undefined,
       dueDate: validated.dueDate ? new Date(validated.dueDate) : undefined,
     });
 

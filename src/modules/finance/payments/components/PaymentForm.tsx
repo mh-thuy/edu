@@ -19,6 +19,7 @@ import {
   MenuItem,
   InputAdornment,
 } from "@mui/material";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 import {
   paymentCreateSchema,
@@ -111,6 +112,22 @@ interface PaymentFormProps {
       }>;
     } | null;
   };
+  presetStudentFee?: {
+    id: string;
+    month: string;
+    amount: number;
+    discount?: number;
+    outstanding: number;
+    status: FeeStatus;
+    student?: {
+      code: string;
+      fullName: string;
+    } | null;
+    class?: {
+      code: string;
+      name: string;
+    } | null;
+  };
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -145,6 +162,7 @@ const normalizeFeeStatus = (status: string): FeeStatus => {
 
 export function PaymentForm({
   initialData,
+  presetStudentFee,
   onClose,
   onSuccess,
 }: PaymentFormProps) {
@@ -154,12 +172,14 @@ export function PaymentForm({
   const [loadingFees, setLoadingFees] = useState(false);
   const [feeSearch, setFeeSearch] = useState("");
   const [selectedFeeOption, setSelectedFeeOption] = useState<StudentFeeOption | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   const isEditing = Boolean(initialData);
 
   const defaultValues = useMemo<PaymentFormData>(
     () => ({
       studentFeeId: initialData?.studentFeeId || "",
+      ...(presetStudentFee ? { studentFeeId: presetStudentFee.id } : {}),
       amount: initialData?.amount || 0,
       method: initialData?.method || "cash",
       paymentDate:
@@ -168,7 +188,7 @@ export function PaymentForm({
         "",
       notes: initialData?.notes || "",
     }),
-    [initialData],
+    [initialData, presetStudentFee],
   );
 
   const resolver = useMemo(
@@ -184,7 +204,7 @@ export function PaymentForm({
     watch,
     control,
     register,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<PaymentFormData>({
     resolver,
     defaultValues,
@@ -237,7 +257,7 @@ export function PaymentForm({
   }, [showError]);
 
   useEffect(() => {
-    if (isEditing) {
+    if (isEditing || presetStudentFee) {
       return;
     }
 
@@ -248,9 +268,13 @@ export function PaymentForm({
     return () => {
       window.clearTimeout(timer);
     };
-  }, [feeSearch, isEditing, loadFees]);
+  }, [feeSearch, isEditing, loadFees, presetStudentFee]);
 
   const selectedFee = useMemo(() => {
+    if (presetStudentFee && !isEditing) {
+      return presetStudentFee;
+    }
+
     if (initialData?.studentFee) {
       const outstanding =
         (initialData.studentFee.amount - (initialData.studentFee.discount || 0)) -
@@ -274,7 +298,33 @@ export function PaymentForm({
     }
 
     return fees.find((fee) => fee.id === selectedFeeId) || selectedFeeOption || null;
-  }, [fees, initialData, selectedFeeId, selectedFeeOption]);
+  }, [fees, initialData, presetStudentFee, selectedFeeId, selectedFeeOption, isEditing]);
+
+  const requestClose = () => {
+    if (submitting) {
+      return;
+    }
+    if (isDirty) {
+      setShowLeaveConfirm(true);
+      return;
+    }
+    onClose();
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty || submitting) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty, submitting]);
 
   const onSubmit = async (data: PaymentFormData) => {
     if (!selectedFee) {
@@ -355,7 +405,7 @@ export function PaymentForm({
     <>
       <Dialog
         open
-        onClose={onClose}
+        onClose={requestClose}
         maxWidth="sm"
         fullWidth
         PaperProps={{
@@ -372,7 +422,7 @@ export function PaymentForm({
               name="studentFeeId"
               control={control}
               render={({ field }) =>
-                !isEditing ? (
+                !isEditing && !presetStudentFee ? (
                   <Stack spacing={1.25}>
                     <TextField
                       label="Tìm hóa đơn"
@@ -546,7 +596,7 @@ export function PaymentForm({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose} disabled={submitting}>
+          <Button onClick={requestClose} disabled={submitting}>
             Hủy
           </Button>
           <Button
@@ -561,6 +611,19 @@ export function PaymentForm({
       </Dialog>
 
       {Snackbar}
+      <ConfirmDialog
+        open={showLeaveConfirm}
+        title="Xác nhận rời trang"
+        message="Dữ liệu chưa lưu sẽ bị mất. Bạn có chắc muốn rời đi?"
+        confirmLabel="Rời đi"
+        cancelLabel="Ở lại"
+        confirmColor="warning"
+        onConfirm={() => {
+          setShowLeaveConfirm(false);
+          onClose();
+        }}
+        onCancel={() => setShowLeaveConfirm(false)}
+      />
     </>
   );
 }

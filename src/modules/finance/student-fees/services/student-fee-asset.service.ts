@@ -56,22 +56,6 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("vi-VN").format(value);
 }
 
-function formatDate(value: Date | null) {
-  if (!value) {
-    return "Chưa có";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(value);
-}
-
-function monthLabel(year: number, month: number) {
-  return `${String(month).padStart(2, "0")}/${year}`;
-}
-
 function dataUrlToUint8Array(dataUrl: string) {
   const [, base64 = ""] = dataUrl.split(",", 2);
   return Uint8Array.from(Buffer.from(base64, "base64"));

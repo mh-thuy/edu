@@ -36,6 +36,7 @@ import { StudentSelectDialog } from "@/components/shared/dialogs/StudentSelectDi
 import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
 import { extractApiErrorMessage } from "@/lib/api-client";
 import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 type StudentFeeStatus = "UNPAID" | "PARTIAL" | "PAID";
 
@@ -45,7 +46,6 @@ type StudentFeeFormValues = {
   month?: string;
   amount: number;
   discount: number;
-  paidAmount: number;
   dueDate: string;
   status?: StudentFeeStatus;
   note?: string;
@@ -102,10 +102,7 @@ function getStatusColor(status?: StudentFeeStatus) {
   }
 }
 
-function calculateStatus(
-  finalAmount: number,
-  paidAmount: number,
-): StudentFeeStatus {
+function calculateStatus(finalAmount: number, paidAmount: number): StudentFeeStatus {
   if (paidAmount <= 0) return "UNPAID";
   if (paidAmount < finalAmount) return "PARTIAL";
   return "PAID";
@@ -120,6 +117,7 @@ export function StudentFeeForm({
   const isCreating = !initialData;
 
   const [submitting, setSubmitting] = React.useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false);
 
   const [selectedStudent, setSelectedStudent] =
     React.useState<MasterSelectValue | null>(
@@ -146,11 +144,9 @@ export function StudentFeeForm({
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
-  const resolver = (
-    isCreating
-      ? zodResolver(studentFeeCreateSchema)
-      : zodResolver(studentFeeUpdateSchema)
-  ) as any;
+  const resolver = (isCreating
+    ? zodResolver(studentFeeCreateSchema)
+    : zodResolver(studentFeeUpdateSchema)) as Resolver<StudentFeeFormValues>;
 
   const {
     register,
@@ -158,7 +154,7 @@ export function StudentFeeForm({
     control,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<StudentFeeFormValues>({
     resolver,
     defaultValues: isCreating
@@ -168,14 +164,12 @@ export function StudentFeeForm({
           month: dayjs().format("YYYY-MM"),
           amount: 0,
           discount: 0,
-          paidAmount: 0,
           dueDate: dayjs().format("YYYY-MM-DD"),
           note: "",
         }
       : {
           amount: Number(initialData.amount ?? 0),
           discount: Number(initialData.discount ?? 0),
-          paidAmount: Number(initialData.paidAmount ?? 0),
           dueDate: initialData.dueDate.slice(0, 10),
           status: initialData.status.toUpperCase() as StudentFeeStatus,
           note: initialData.note ?? "",
@@ -184,7 +178,7 @@ export function StudentFeeForm({
 
   const amount = Number(watch("amount") || 0);
   const discount = Number(watch("discount") || 0);
-  const paidAmount = Number(watch("paidAmount") || 0);
+  const paidAmount = Number(initialData?.paidAmount ?? 0);
 
   const finalAmount = Math.max(amount - discount, 0);
   const outstandingAmount = Math.max(finalAmount - paidAmount, 0);
@@ -194,12 +188,14 @@ export function StudentFeeForm({
     try {
       setSubmitting(true);
 
-      const payload = {
-        ...data,
-        finalAmount,
-        outstandingAmount,
-        status: calculatedStatus,
-      };
+      const payload = isCreating
+        ? data
+        : {
+            amount: data.amount,
+            discount: data.discount,
+            dueDate: data.dueDate,
+            note: data.note,
+          };
 
       const url = isCreating
         ? "/api/student-fees"
@@ -237,11 +233,40 @@ export function StudentFeeForm({
     }
   };
 
+  const requestClose = () => {
+    if (submitting) {
+      return;
+    }
+
+    if (isDirty) {
+      setShowLeaveConfirm(true);
+      return;
+    }
+
+    onClose();
+  };
+
+  React.useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isDirty || submitting) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty, submitting]);
+
   return (
     <>
       <Dialog
         open
-        onClose={submitting ? undefined : onClose}
+        onClose={requestClose}
         maxWidth="md"
         fullWidth
         PaperProps={{
@@ -424,17 +449,11 @@ export function StudentFeeForm({
                   }}
                 />
 
-                <Controller
-                  name="paidAmount"
-                  control={control}
-                  render={({ field }) => (
-                    <CurrencyInput
-                      label="Đã thanh toán"
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={submitting}
-                    />
-                  )}
+                <CurrencyInput
+                  label="Đã thanh toán"
+                  value={paidAmount}
+                  readOnly
+                  disabled
                 />
 
                 <CurrencyInput
@@ -512,7 +531,7 @@ export function StudentFeeForm({
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={onClose} disabled={submitting}>
+          <Button onClick={requestClose} disabled={submitting}>
             Hủy
           </Button>
 
@@ -563,6 +582,20 @@ export function StudentFeeForm({
 
           classDialog.onClose();
         }}
+      />
+
+      <ConfirmDialog
+        open={showLeaveConfirm}
+        title="Xác nhận rời trang"
+        message="Dữ liệu chưa lưu sẽ bị mất. Bạn có chắc muốn rời đi?"
+        confirmLabel="Rời đi"
+        cancelLabel="Ở lại"
+        confirmColor="warning"
+        onConfirm={() => {
+          setShowLeaveConfirm(false);
+          onClose();
+        }}
+        onCancel={() => setShowLeaveConfirm(false)}
       />
 
       {snackbar.Snackbar}

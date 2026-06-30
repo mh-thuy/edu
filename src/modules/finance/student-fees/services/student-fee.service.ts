@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { StudentFeeAssetService } from "@/modules/finance/student-fees/services/student-fee-asset.service";
+import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
 import type {
   FeeStatus,
   PaymentNoticeStatus,
@@ -24,7 +25,11 @@ const paymentRequestDetailInclude = {
 const studentFeeDetailInclude = {
   student: true,
   class: true,
-  payments: true,
+  payments: {
+    include: {
+      receipt: true,
+    },
+  },
   paymentRequests: {
     orderBy: {
       createdAt: "desc",
@@ -58,6 +63,32 @@ function parseBillingMonth(month: string): {
 }
 
 export class StudentFeeService {
+  private static getDisplayStatus(input: {
+    status: FeeStatus;
+    dueDate: Date | null;
+    outstandingAmount: Prisma.Decimal | number;
+  }): FeeStatus | "OVERDUE" {
+    if (
+      input.status !== "PAID" &&
+      input.dueDate &&
+      input.dueDate.getTime() < Date.now() &&
+      toDecimal(input.outstandingAmount).gt(0)
+    ) {
+      return "OVERDUE";
+    }
+
+    return input.status;
+  }
+
+  private static buildFeeNumber(input: {
+    billingYear: number;
+    billingMonth: number;
+    studentCode: string;
+    classCode: string;
+  }) {
+    return `FEE-${input.billingYear}${String(input.billingMonth).padStart(2, "0")}-${input.studentCode}-${input.classCode}`;
+  }
+
   private static getClient(
     tx?: Prisma.TransactionClient,
   ): Prisma.TransactionClient | typeof prisma {
@@ -426,10 +457,22 @@ export class StudentFeeService {
       fee.paymentRequests
         .flatMap((request) => request.notices)
         .find((notice) => notice.isLatest) ?? null;
+    const displayStatus = this.getDisplayStatus({
+      status: fee.status,
+      dueDate: fee.dueDate,
+      outstandingAmount: fee.outstandingAmount,
+    });
 
     return {
       ...fee,
+      feeNumber: this.buildFeeNumber({
+        billingYear: fee.billingYear,
+        billingMonth: fee.billingMonth,
+        studentCode: fee.student.code,
+        classCode: fee.class.code,
+      }),
       month: `${fee.billingYear}-${String(fee.billingMonth).padStart(2, "0")}`,
+      displayStatus,
       activeQr,
       latestNotice,
       flowStatus: {
@@ -699,7 +742,7 @@ export class StudentFeeService {
   }
 
   static async getStudentFees(filter: StudentFeeFilter) {
-    const { page, pageSize, search, status, classId, studentId, month } =
+    const { page, pageSize, search, status, classId, studentId, month, overdue } =
       filter;
     const skip = (page - 1) * pageSize;
     const billing = month ? parseBillingMonth(month) : undefined;
@@ -745,7 +788,22 @@ export class StudentFeeService {
 
     if (status) {
       if (Array.isArray(status)) {
-        where.status = { in: status as FeeStatus[] };
+        const normalizedStatus = status.filter(
+          (value): value is FeeStatus =>
+            value === "UNPAID" || value === "PARTIAL" || value === "PAID",
+        );
+        if (normalizedStatus.length > 0) {
+          where.status = { in: normalizedStatus };
+        }
+        if (status.includes("OVERDUE")) {
+          where.status = { in: ["UNPAID", "PARTIAL"] };
+          where.dueDate = { lt: new Date() };
+          where.outstandingAmount = { gt: 0 };
+        }
+      } else if (status === "OVERDUE") {
+        where.status = { in: ["UNPAID", "PARTIAL"] };
+        where.dueDate = { lt: new Date() };
+        where.outstandingAmount = { gt: 0 };
       } else {
         where.status = status as FeeStatus;
       }
@@ -756,6 +814,12 @@ export class StudentFeeService {
     if (billing) {
       where.billingYear = billing.billingYear;
       where.billingMonth = billing.billingMonth;
+    }
+
+    if (overdue) {
+      where.status = { in: ["UNPAID", "PARTIAL"] };
+      where.dueDate = { lt: new Date() };
+      where.outstandingAmount = { gt: 0 };
     }
 
     const [items, total] = await Promise.all([
@@ -822,7 +886,9 @@ export class StudentFeeService {
         nextDiscount.toNumber(),
       );
       const totalPaid = sumDecimals(
-        fee.payments.map((payment) => payment.amount),
+        fee.payments
+          .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+          .map((payment) => payment.amount),
       );
 
       if (totalPaid.gt(amounts.finalAmount)) {
@@ -1157,6 +1223,39 @@ export class StudentFeeService {
     await this.sendPaymentNotice(studentFeeId);
 
     return this.getStudentFeeById(studentFeeId);
+  }
+
+  static async generateReceiptForStudentFee(studentFeeId: string) {
+    return prisma.$transaction(async (tx) => {
+      const fee = await tx.studentFee.findUnique({
+        where: { id: studentFeeId },
+        include: {
+          payments: {
+            include: {
+              receipt: true,
+            },
+            orderBy: {
+              paymentDate: "desc",
+            },
+          },
+        },
+      });
+
+      if (!fee) {
+        throw new NotFoundError("Không tìm thấy học phí");
+      }
+
+      const candidate = fee.payments.find(
+        (payment) =>
+          payment.status === PaymentStatus.CONFIRMED && payment.receipt === null,
+      );
+
+      if (!candidate) {
+        throw new ConflictError("Không có thanh toán hợp lệ để tạo biên lai");
+      }
+
+      return ReceiptService.ensureReceiptForPayment(tx, candidate.id);
+    });
   }
 
   static async deleteStudentFee(id: string) {
