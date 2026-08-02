@@ -19,7 +19,6 @@ import {
   type ClassScheduleFormData,
 } from "@/modules/schedule/schemas/schedule.schema";
 import { ClassSelectDialog } from "@/components/shared/dialogs/ClassSelectDialog";
-import { RoomSelectDialog } from "@/components/shared/dialogs/RoomSelectDialog";
 import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
 import {
   MasterSelectField,
@@ -40,11 +39,6 @@ type ScheduleConflictItem = {
   dayOfWeek: number;
   startMinute: number;
   endMinute: number;
-  room?: {
-    id: string;
-    code: string;
-    name: string;
-  } | null;
   teacher?: {
     id: string;
     code: string;
@@ -63,7 +57,6 @@ export type ConflictResult = {
 
 type ScheduleSubmitData = {
   classId: string;
-  roomId: string;
   teacherId: string;
   dayOfWeek: number;
   startMinute: number;
@@ -109,9 +102,6 @@ export function ScheduleForm({
       classId: defaultValues?.classId ?? "",
       classCode: defaultValues?.classCode ?? "",
       className: defaultValues?.className ?? "",
-      roomId: defaultValues?.roomId ?? "",
-      roomCode: defaultValues?.roomCode ?? "",
-      roomName: defaultValues?.roomName ?? "",
       teacherId: defaultValues?.teacherId ?? "",
       teacherCode: defaultValues?.teacherCode ?? "",
       teacherName: defaultValues?.teacherName ?? "",
@@ -122,16 +112,12 @@ export function ScheduleForm({
   });
 
   const classDialog = useDisclosure();
-  const roomDialog = useDisclosure();
   const teacherDialog = useDisclosure();
   const [conflict, setConflict] = useState<ConflictResult | null>(null);
 
   const classId = useWatch({ control, name: "classId" });
   const classCode = useWatch({ control, name: "classCode" });
   const className = useWatch({ control, name: "className" });
-  const roomId = useWatch({ control, name: "roomId" });
-  const roomCode = useWatch({ control, name: "roomCode" });
-  const roomName = useWatch({ control, name: "roomName" });
   const teacherId = useWatch({ control, name: "teacherId" });
   const teacherCode = useWatch({ control, name: "teacherCode" });
   const teacherName = useWatch({ control, name: "teacherName" });
@@ -148,16 +134,6 @@ export function ScheduleForm({
       name: className ?? "",
     };
   }, [classCode, classId, className]);
-
-  const selectedRoom = useMemo<MasterSelectValue | null>(() => {
-    if (!roomId) return null;
-
-    return {
-      id: roomId,
-      code: roomCode ?? "",
-      name: roomName ?? "",
-    };
-  }, [roomCode, roomId, roomName]);
 
   const selectedTeacher = useMemo<MasterSelectValue | null>(() => {
     if (!teacherId) return null;
@@ -186,23 +162,6 @@ export function ScheduleForm({
     classDialog.onClose();
   };
 
-  const handleRoomSelect = (item: MasterItem) => {
-    setValue("roomId", item.id, {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
-    setValue("roomCode", item.code, {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
-    setValue("roomName", item.name, {
-      shouldValidate: true,
-      shouldDirty: true,
-    });
-
-    roomDialog.onClose();
-  };
-
   const handleTeacherSelect = (item: MasterItem) => {
     setValue("teacherId", item.id, {
       shouldValidate: true,
@@ -223,7 +182,6 @@ export function ScheduleForm({
   const handleFormSubmit = async (data: ClassScheduleFormData) => {
     await onSubmit({
       classId: data.classId,
-      roomId: data.roomId,
       teacherId: data.teacherId,
       dayOfWeek: data.dayOfWeek,
       startMinute: timeToInt(data.startTime),
@@ -233,7 +191,6 @@ export function ScheduleForm({
 
   useEffect(() => {
     if (
-      !roomId ||
       !teacherId ||
       dayOfWeek === undefined ||
       !startTime ||
@@ -252,7 +209,6 @@ export function ScheduleForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            roomId,
             teacherId,
             dayOfWeek,
             startMinute: timeToInt(startTime),
@@ -288,7 +244,6 @@ export function ScheduleForm({
     dayOfWeek,
     endTime,
     onConflictCheck,
-    roomId,
     scheduleId,
     startTime,
     teacherId,
@@ -301,16 +256,12 @@ export function ScheduleForm({
 
     const messages: string[] = [];
 
-    if (conflict.conflicts.some((item) => item.room?.id === roomId)) {
-      messages.push("Phòng học đã có lịch trùng trong khung giờ này.");
-    }
-
     if (conflict.conflicts.some((item) => item.teacher?.id === teacherId)) {
       messages.push("Giáo viên đã có lịch trùng trong khung giờ này.");
     }
 
     return messages.join(" ");
-  }, [conflict, roomId, teacherId]);
+  }, [conflict, teacherId]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(handleFormSubmit)}>
@@ -323,16 +274,6 @@ export function ScheduleForm({
           nameLabel="Tên lớp"
           required
           error={errors.classId?.message}
-        />
-
-        <MasterSelectField
-          label="Chọn phòng học"
-          value={selectedRoom}
-          onOpen={roomDialog.onOpen}
-          codeLabel="Mã phòng"
-          nameLabel="Tên phòng"
-          required
-          error={errors.roomId?.message}
         />
 
         <MasterSelectField
@@ -413,13 +354,6 @@ export function ScheduleForm({
         open={classDialog.open}
         onClose={classDialog.onClose}
         onSelect={handleClassSelect}
-      />
-
-      <RoomSelectDialog
-        open={roomDialog.open}
-        onClose={roomDialog.onClose}
-        onSelect={handleRoomSelect}
-        status="AVAILABLE"
       />
 
       <TeacherSelectDialog

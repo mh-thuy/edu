@@ -39,7 +39,6 @@ export function StudentForm({
       fullName: defaultValues?.fullName ?? "",
       birthday: defaultValues?.birthday ?? undefined,
       phone: defaultValues?.phone ?? "",
-      email: defaultValues?.email ?? "",
       address: defaultValues?.address ?? "",
       parentName: defaultValues?.parentName ?? "",
       status: defaultValues?.status ?? "ACTIVE",
@@ -79,21 +78,6 @@ export function StudentForm({
         />
 
         <Controller
-          name="email"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Email"
-              type="email"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-            />
-          )}
-        />
-
-        <Controller
           name="birthday"
           control={control}
           render={({ field, fieldState: { error } }) => (
@@ -106,7 +90,11 @@ export function StudentForm({
               fullWidth
               InputLabelProps={{ shrink: true }}
               onChange={(event) => {
-                field.onChange(toIsoDateTime(event.target.value));
+                field.onChange(
+                  event.target.value
+                    ? toIsoDateTime(event.target.value)
+                    : null,
+                );
               }}
             />
           )}

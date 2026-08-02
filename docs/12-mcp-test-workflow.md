@@ -73,7 +73,6 @@ button[type="submit"]
 
 Bot must login before testing:
 
-- /rooms
 - /teachers
 - /students
 - /classes

@@ -23,10 +23,6 @@ type TeacherSchedule = {
     code: string;
     name: string;
   } | null;
-  room?: {
-    code: string;
-    name?: string | null;
-  } | null;
 };
 
 const weekdayLabel: Record<number, string> = {
@@ -76,14 +72,6 @@ export function TeacherScheduleList(): ReactElement {
         flex: 1,
         valueGetter: (_value, row) =>
           row.class ? `${row.class.code} - ${row.class.name}` : "-",
-      },
-      {
-        field: "room",
-        headerName: "Phòng",
-        minWidth: 180,
-        flex: 0.8,
-        valueGetter: (_value, row) =>
-          row.room ? `${row.room.code} - ${row.room.name ?? ""}` : "-",
       },
       {
         field: "status",

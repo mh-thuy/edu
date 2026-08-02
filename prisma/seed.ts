@@ -33,47 +33,15 @@ async function cleanup() {
   await prisma.classSchedule.deleteMany();
   await prisma.classStudent.deleteMany();
   await prisma.class.deleteMany();
-  await prisma.room.deleteMany();
   await prisma.student.deleteMany();
   await prisma.teacher.deleteMany();
   await prisma.userRole.deleteMany();
-  await prisma.rolePermission.deleteMany();
-  await prisma.permission.deleteMany();
   await prisma.role.deleteMany();
   await prisma.user.deleteMany();
 }
 
 async function seedAuth() {
   const defaultPasswordHash = await bcrypt.hash("password", 10);
-
-  const permissions = await Promise.all(
-    [
-      ["dashboard.view", "Xem dashboard", "dashboard", "view"],
-      ["users.manage", "Quản lý người dùng", "users", "manage"],
-      ["roles.manage", "Quản lý vai trò", "roles", "manage"],
-      ["teachers.manage", "Quản lý giáo viên", "teachers", "manage"],
-      ["students.manage", "Quản lý học viên", "students", "manage"],
-      ["rooms.manage", "Quản lý phòng học", "rooms", "manage"],
-      ["classes.manage", "Quản lý lớp học", "classes", "manage"],
-      ["schedules.manage", "Quản lý lịch học", "schedules", "manage"],
-      ["student_fees.manage", "Quản lý học phí", "student_fees", "manage"],
-      ["payments.manage", "Quản lý thanh toán", "payments", "manage"],
-      ["receipts.manage", "Quản lý biên lai", "receipts", "manage"],
-      ["payrolls.manage", "Quản lý lương giáo viên", "payrolls", "manage"],
-      ["expenses.manage", "Quản lý chi phí", "expenses", "manage"],
-    ].map(([code, name, resource, action]) =>
-      prisma.permission.create({
-        data: {
-          code,
-          name,
-          resource,
-          action,
-          description: name,
-          isActive: true,
-        },
-      }),
-    ),
-  );
 
   const adminRole = await prisma.role.create({
     data: {
@@ -100,49 +68,6 @@ async function seedAuth() {
       description: "Giáo viên giảng dạy",
       isActive: true,
     },
-  });
-
-  await prisma.rolePermission.createMany({
-    data: permissions.map((permission) => ({
-      roleId: adminRole.id,
-      permissionId: permission.id,
-      isAllowed: true,
-    })),
-  });
-
-  await prisma.rolePermission.createMany({
-    data: permissions
-      .filter((permission) =>
-        [
-          "dashboard",
-          "teachers",
-          "students",
-          "rooms",
-          "classes",
-          "schedules",
-          "student_fees",
-          "payments",
-          "receipts",
-          "expenses",
-        ].includes(permission.resource),
-      )
-      .map((permission) => ({
-        roleId: staffRole.id,
-        permissionId: permission.id,
-        isAllowed: true,
-      })),
-  });
-
-  await prisma.rolePermission.createMany({
-    data: permissions
-      .filter((permission) =>
-        ["dashboard", "classes", "schedules"].includes(permission.resource),
-      )
-      .map((permission) => ({
-        roleId: teacherRole.id,
-        permissionId: permission.id,
-        isAllowed: true,
-      })),
   });
 
   const adminUser = await prisma.user.create({
@@ -184,47 +109,12 @@ async function seedAuth() {
 }
 
 async function seedMasters(teacherUserId: string) {
-  const rooms = await Promise.all([
-    prisma.room.create({
-      data: {
-        code: "R101",
-        name: "Phòng 101",
-        capacity: 20,
-        floor: "1",
-        location: "Cơ sở chính",
-        status: "AVAILABLE",
-      },
-    }),
-    prisma.room.create({
-      data: {
-        code: "R102",
-        name: "Phòng 102",
-        capacity: 15,
-        floor: "1",
-        location: "Cơ sở chính",
-        status: "AVAILABLE",
-      },
-    }),
-    prisma.room.create({
-      data: {
-        code: "R201",
-        name: "Phòng 201",
-        capacity: 25,
-        floor: "2",
-        location: "Cơ sở chính",
-        status: "MAINTENANCE",
-        note: "Đang bảo trì máy lạnh",
-      },
-    }),
-  ]);
-
   const teachers = await Promise.all([
     prisma.teacher.create({
       data: {
         code: "GV001",
         userId: teacherUserId,
         fullName: "Nguyễn Văn An",
-        email: "teacher@edu.local",
         phone: "0901000001",
         bankAccount: "0123456789",
         specialty: "Toán học",
@@ -235,7 +125,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "GV002",
         fullName: "Trần Thị Bình",
-        email: "binh.teacher@edu.local",
         phone: "0901000002",
         bankAccount: "9876543210",
         specialty: "Tiếng Anh",
@@ -246,7 +135,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "GV003",
         fullName: "Lê Minh Cường",
-        email: "cuong.teacher@edu.local",
         phone: "0901000003",
         specialty: "Vật lý",
         status: "ON_LEAVE",
@@ -259,7 +147,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "HV001",
         fullName: "Phạm Gia Hân",
-        email: "han.student@example.com",
         phone: "0912000001",
         birthday: date("2012-03-15"),
         parentName: "Phạm Văn Hải",
@@ -271,7 +158,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "HV002",
         fullName: "Nguyễn Minh Khang",
-        email: "khang.student@example.com",
         phone: "0912000002",
         birthday: date("2011-07-20"),
         parentName: "Nguyễn Thị Hoa",
@@ -283,7 +169,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "HV003",
         fullName: "Trần Bảo Ngọc",
-        email: "ngoc.student@example.com",
         phone: "0912000003",
         birthday: date("2013-11-08"),
         parentName: "Trần Văn Nam",
@@ -295,7 +180,6 @@ async function seedMasters(teacherUserId: string) {
       data: {
         code: "HV004",
         fullName: "Lê Hoàng Long",
-        email: "long.student@example.com",
         phone: "0912000004",
         birthday: date("2010-01-12"),
         parentName: "Lê Thị Mai",
@@ -305,12 +189,11 @@ async function seedMasters(teacherUserId: string) {
     }),
   ]);
 
-  return { rooms, teachers, students };
+  return { teachers, students };
 }
 
 async function seedClasses(
   teachers: Awaited<ReturnType<typeof seedMasters>>["teachers"],
-  rooms: Awaited<ReturnType<typeof seedMasters>>["rooms"],
   students: Awaited<ReturnType<typeof seedMasters>>["students"],
 ) {
   const mathClass = await prisma.class.create({
@@ -318,10 +201,8 @@ async function seedClasses(
       code: "CLS-MATH-001",
       name: "Toán tư duy cơ bản",
       teacherId: teachers[0].id,
-      roomId: rooms[0].id,
       tuitionFee: money(500000),
       totalSessions: 12,
-      maxStudents: 15,
       startDate: date("2026-06-01"),
       endDate: date("2026-08-31"),
       status: "ACTIVE",
@@ -334,10 +215,8 @@ async function seedClasses(
       code: "CLS-ENG-001",
       name: "Tiếng Anh giao tiếp thiếu nhi",
       teacherId: teachers[1].id,
-      roomId: rooms[1].id,
       tuitionFee: money(650000),
       totalSessions: 16,
-      maxStudents: 12,
       startDate: date("2026-06-05"),
       endDate: date("2026-09-30"),
       status: "ACTIVE",
@@ -350,10 +229,8 @@ async function seedClasses(
       code: "CLS-PHY-001",
       name: "Vật lý nâng cao",
       teacherId: teachers[2].id,
-      roomId: rooms[0].id,
       tuitionFee: money(700000),
       totalSessions: 10,
-      maxStudents: 10,
       startDate: date("2026-07-01"),
       endDate: date("2026-09-15"),
       status: "DRAFT",
@@ -407,7 +284,6 @@ async function seedClasses(
     data: [
       {
         classId: mathClass.id,
-        roomId: rooms[0].id,
         teacherId: teachers[0].id,
         dayOfWeek: 2,
         startMinute: timeToMinute("18:00"),
@@ -415,7 +291,6 @@ async function seedClasses(
       },
       {
         classId: mathClass.id,
-        roomId: rooms[0].id,
         teacherId: teachers[0].id,
         dayOfWeek: 4,
         startMinute: timeToMinute("18:00"),
@@ -423,7 +298,6 @@ async function seedClasses(
       },
       {
         classId: englishClass.id,
-        roomId: rooms[1].id,
         teacherId: teachers[1].id,
         dayOfWeek: 7,
         startMinute: timeToMinute("09:00"),
@@ -431,7 +305,6 @@ async function seedClasses(
       },
       {
         classId: englishClass.id,
-        roomId: rooms[1].id,
         teacherId: teachers[1].id,
         dayOfWeek: 1,
         startMinute: timeToMinute("09:00"),
@@ -494,8 +367,8 @@ async function main() {
   await cleanup();
 
   const { adminUser, teacherUser } = await seedAuth();
-  const { rooms, teachers, students } = await seedMasters(teacherUser.id);
-  const classes = await seedClasses(teachers, rooms, students);
+  const { teachers, students } = await seedMasters(teacherUser.id);
+  const classes = await seedClasses(teachers, students);
   await seedPaymentAccounts();
 
   await seedAudit(adminUser.id);

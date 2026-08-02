@@ -33,7 +33,6 @@ export interface Teacher {
   fullName: string;
   code: string;
   phone?: string;
-  email?: string;
   bankAccount?: string;
   specialty?: string;
   status: TeacherFormData["status"];
@@ -56,12 +55,6 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
     headerName: "Số điện thoại",
     minWidth: 140,
     flex: 0.8,
-  },
-  {
-    field: "email",
-    headerName: "Email",
-    minWidth: 180,
-    flex: 1,
   },
   {
     field: "specialty",
@@ -337,7 +330,7 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
 
         <Box sx={{ mt: 2.5 }}>
           <TextField
-            placeholder="Tìm theo mã, số điện thoại hoặc email..."
+            placeholder="Tìm theo mã hoặc số điện thoại..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size="small"

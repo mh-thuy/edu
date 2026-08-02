@@ -110,7 +110,6 @@ Email
 Mã
 Địa chỉ
 Tên lớp
-Tên phòng
 Chuyên môn
 ```
 
@@ -158,7 +157,6 @@ Không lặp lại:
 Dùng cho:
 
 ```text
-Sức chứa phòng
 
 Số buổi học
 
@@ -419,7 +417,6 @@ Teacher
 
 Class
 
-Room
 
 Student Fee
 ```

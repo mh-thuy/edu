@@ -35,12 +35,16 @@ function withReceiptAlias(payment: PaymentWithRelations): PaymentApiResponse {
   };
 }
 
-function sumConfirmedPayments(
+function sumOutstandingPayments(
   payments: Array<{ amount: Prisma.Decimal; status: PaymentStatus }>,
 ) {
   return sumDecimals(
     payments
-      .filter((payment) => payment.status === PaymentStatus.CONFIRMED)
+      .filter(
+        (payment) =>
+          payment.status === PaymentStatus.PENDING ||
+          payment.status === PaymentStatus.CONFIRMED,
+      )
       .map((payment) => payment.amount),
   );
 }
@@ -80,7 +84,7 @@ export class PaymentService {
 
       if (!fee) throw new NotFoundError("Không tìm thấy học phí");
 
-      const alreadyPaid = sumConfirmedPayments(fee.payments);
+      const alreadyPaid = sumOutstandingPayments(fee.payments);
       const totalAfterPayment = alreadyPaid.add(data.amount);
       const netAmount = toDecimal(fee.amount).sub(fee.discount);
 
@@ -274,7 +278,7 @@ export class PaymentService {
     const nextAmount =
       data.amount !== undefined ? toDecimal(data.amount) : toDecimal(payment.amount);
 
-    const paidExcludingCurrent = sumConfirmedPayments(
+    const paidExcludingCurrent = sumOutstandingPayments(
       payment.studentFee.payments.filter((item) => item.id !== id),
     );
     const netAmount = toDecimal(payment.studentFee.amount).sub(
@@ -322,20 +326,15 @@ export class PaymentService {
    * Delete payment
    */
   static async deletePayment(id: string) {
-    const payment = await prisma.payment.findUnique({ where: { id } });
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!payment) throw new NotFoundError("Không tìm thấy thanh toán");
 
-    // Check if receipt already issued
-    const receipt = await prisma.receipt.findFirst({
-      where: { paymentId: id },
-    });
-    if (receipt) {
-      throw new ConflictError("Không thể xóa thanh toán đã phát hành biên lai");
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.payment.delete({ where: { id } });
-    });
+    throw new ConflictError(
+      "Không thể xóa thanh toán; dữ liệu tài chính chỉ được hủy hoặc hoàn tiền",
+    );
   }
 
   static async confirmPayment(id: string): Promise<PaymentApiResponse> {

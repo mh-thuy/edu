@@ -33,10 +33,8 @@ export interface Class {
   code: string;
   name: string;
   teacherId?: string | null;
-  roomId?: string | null;
   tuitionFee: number;
   totalSessions: number;
-  maxStudents: number;
   startDate?: string | null;
   endDate?: string | null;
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
@@ -45,10 +43,6 @@ export interface Class {
     user?: {
       fullName?: string | null;
     } | null;
-  } | null;
-  room?: {
-    code?: string;
-    name?: string | null;
   } | null;
 }
 
@@ -84,13 +78,6 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
   {
     field: "totalSessions",
     headerName: "Số buổi",
-    minWidth: 100,
-    align: "center",
-    headerAlign: "center",
-  },
-  {
-    field: "maxStudents",
-    headerName: "Sĩ số",
     minWidth: 100,
     align: "center",
     headerAlign: "center",
@@ -317,7 +304,6 @@ export function ClassList({ role }: ClassListProps): ReactElement {
     ...row,
     tuitionFee: row.tuitionFee ?? 0,
     totalSessions: row.totalSessions ?? 0,
-    maxStudents: row.maxStudents ?? 0,
     _onEdit: handleEdit,
     _onDelete: handleDelete,
   }));
@@ -447,16 +433,12 @@ export function ClassList({ role }: ClassListProps): ReactElement {
                   name: editingClass.name ?? "",
                   tuitionFee: editingClass.tuitionFee ?? 0,
                   totalSessions: editingClass.totalSessions ?? 0,
-                  maxStudents: editingClass.maxStudents ?? 0,
                   teacherId: editingClass.teacherId ?? null,
-                  roomId: editingClass.roomId ?? null,
                   startDate: editingClass.startDate ?? undefined,
                   endDate: editingClass.endDate ?? undefined,
                   status: editingClass.status ?? "DRAFT",
                   teacherCode: editingClass.teacher?.code ?? "",
                   teacherName: editingClass.teacher?.user?.fullName ?? "",
-                  roomCode: editingClass.room?.code ?? "",
-                  roomName: editingClass.room?.name ?? "",
                 }
               : undefined
           }

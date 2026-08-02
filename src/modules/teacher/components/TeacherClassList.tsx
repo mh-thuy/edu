@@ -22,12 +22,7 @@ type TeacherClass = {
   name: string;
   tuitionFee: number;
   totalSessions: number;
-  maxStudents: number;
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
-  room?: {
-    code?: string;
-    name?: string | null;
-  } | null;
 };
 
 const formatCurrency = (value: number): string =>
@@ -72,14 +67,6 @@ export function TeacherClassList(): ReactElement {
       { field: "code", headerName: "Mã lớp", minWidth: 120, flex: 0.7 },
       { field: "name", headerName: "Tên lớp", minWidth: 220, flex: 1 },
       {
-        field: "room",
-        headerName: "Phòng",
-        minWidth: 180,
-        flex: 0.9,
-        valueGetter: (_value, row) =>
-          row.room ? `${row.room.code} - ${row.room.name ?? ""}` : "-",
-      },
-      {
         field: "tuitionFee",
         headerName: "Học phí",
         minWidth: 140,
@@ -91,13 +78,6 @@ export function TeacherClassList(): ReactElement {
         field: "totalSessions",
         headerName: "Số buổi",
         minWidth: 110,
-        align: "center",
-        headerAlign: "center",
-      },
-      {
-        field: "maxStudents",
-        headerName: "Sĩ số tối đa",
-        minWidth: 120,
         align: "center",
         headerAlign: "center",
       },

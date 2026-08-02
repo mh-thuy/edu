@@ -30,14 +30,6 @@ enum StudentStatus {
   @@map("student_status")
 }
 
-enum RoomStatus {
-  AVAILABLE
-  MAINTENANCE
-  UNAVAILABLE
-
-  @@map("room_status")
-}
-
 enum ClassStatus {
   DRAFT
   ACTIVE
@@ -168,24 +160,8 @@ model Role {
   isActive    Boolean @default(true) @map("is_active")
 
   users       UserRole[]
-  permissions RolePermission[]
 
   @@map("roles")
-}
-
-model Permission {
-  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String  @unique(map: "uq_permissions_code") @db.VarChar(100)
-  name        String  @db.VarChar(255)
-  resource    String  @db.VarChar(100)
-  action      String  @db.VarChar(50)
-  description String?
-  isActive    Boolean @default(true) @map("is_active")
-
-  roles RolePermission[]
-
-  @@index([resource, action], map: "idx_permissions_resource_action")
-  @@map("permissions")
 }
 
 model UserRole {
@@ -200,25 +176,11 @@ model UserRole {
   @@map("user_roles")
 }
 
-model RolePermission {
-  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roleId       String  @map("role_id") @db.Uuid
-  permissionId String  @map("permission_id") @db.Uuid
-  isAllowed    Boolean @default(true) @map("is_allowed")
-
-  role       Role       @relation(fields: [roleId], references: [id], map: "fk_role_permissions_role")
-  permission Permission @relation(fields: [permissionId], references: [id], map: "fk_role_permissions_permission")
-
-  @@unique([roleId, permissionId], map: "uq_role_permissions_role_permission")
-  @@map("role_permissions")
-}
-
 model Teacher {
   id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code        String        @unique(map: "uq_teachers_code") @db.VarChar(50)
   userId      String?       @unique(map: "uq_teachers_user_id") @map("user_id") @db.Uuid
   fullName    String        @map("full_name") @db.VarChar(255)
-  email       String?       @unique(map: "uq_teachers_email") @db.VarChar(255)
   phone       String?       @db.VarChar(50)
   bankAccount String?       @map("bank_account") @db.VarChar(100)
   specialty   String?       @db.VarChar(255)
@@ -241,7 +203,6 @@ model Student {
   id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code       String        @unique(map: "uq_students_code") @db.VarChar(50)
   fullName   String        @map("full_name") @db.VarChar(255)
-  email      String?       @unique(map: "uq_students_email") @db.VarChar(255)
   phone      String?       @db.VarChar(50)
   birthday   DateTime?     @db.Date
   parentName String?       @map("parent_name") @db.VarChar(255)
@@ -260,35 +221,13 @@ model Student {
   @@map("students")
 }
 
-model Room {
-  id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code     String     @unique(map: "uq_rooms_code") @db.VarChar(50)
-  name     String     @db.VarChar(255)
-  capacity Int        @default(0)
-  floor    String?    @db.VarChar(50)
-  location String?    @db.VarChar(255)
-  status   RoomStatus @default(AVAILABLE)
-  note     String?
-
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  classes   Class[]
-  schedules ClassSchedule[]
-
-  @@map("rooms")
-}
-
 model Class {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code          String      @unique(map: "uq_classes_code") @db.VarChar(50)
   name          String      @db.VarChar(255)
   teacherId     String?     @map("teacher_id") @db.Uuid
-  roomId        String?     @map("room_id") @db.Uuid
   tuitionFee    Decimal     @default(0) @map("tuition_fee") @db.Decimal(12, 2)
   totalSessions Int         @default(0) @map("total_sessions")
-  maxStudents   Int         @default(0) @map("max_students")
   startDate     DateTime?   @map("start_date") @db.Date
   endDate       DateTime?   @map("end_date") @db.Date
   status        ClassStatus @default(DRAFT)
@@ -299,7 +238,6 @@ model Class {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   teacher      Teacher?             @relation(fields: [teacherId], references: [id], map: "fk_classes_teacher")
-  room         Room?                @relation(fields: [roomId], references: [id], map: "fk_classes_room")
   students     ClassStudent[]
   schedules    ClassSchedule[]
   attendances  Attendance[]
@@ -308,7 +246,6 @@ model Class {
   payrollItems TeacherPayrollItem[]
 
   @@index([teacherId], map: "idx_classes_teacher_id")
-  @@index([roomId], map: "idx_classes_room_id")
   @@index([status], map: "idx_classes_status")
   @@map("classes")
 }
@@ -338,7 +275,6 @@ model ClassStudent {
 model ClassSchedule {
   id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   classId     String  @map("class_id") @db.Uuid
-  roomId      String  @map("room_id") @db.Uuid
   teacherId   String  @map("teacher_id") @db.Uuid
   dayOfWeek   Int     @map("day_of_week") @db.SmallInt
   startMinute Int     @map("start_minute")
@@ -350,12 +286,10 @@ model ClassSchedule {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   class       Class        @relation(fields: [classId], references: [id], map: "fk_class_schedules_class")
-  room        Room         @relation(fields: [roomId], references: [id], map: "fk_class_schedules_room")
   teacher     Teacher      @relation(fields: [teacherId], references: [id], map: "fk_class_schedules_teacher")
   attendances Attendance[]
 
   @@index([classId], map: "idx_class_schedules_class_id")
-  @@index([roomId, dayOfWeek], map: "idx_class_schedules_room_day")
   @@index([teacherId, dayOfWeek], map: "idx_class_schedules_teacher_day")
   @@map("class_schedules")
 }

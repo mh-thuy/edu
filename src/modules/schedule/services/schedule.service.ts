@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { NotFoundError } from "@/lib/errors";
 import type { ClassSchedule, Prisma } from "@prisma/client";
-import { ConflictError } from "@/lib/errors";
 import type {
   ClassScheduleCreate,
   ClassScheduleUpdate,
@@ -10,7 +10,6 @@ import type {
 type ClassScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
   include: {
     class: true;
-    room: true;
     teacher: true;
   };
 }>;
@@ -30,18 +29,13 @@ export class ScheduleConflictError extends Error {
 async function assertScheduleRelations(
   data: {
     classId: string;
-    roomId: string;
     teacherId: string;
   },
 ): Promise<void> {
-  const [classData, room, teacher] = await Promise.all([
+  const [classData, teacher] = await Promise.all([
     prisma.class.findUnique({
       where: { id: data.classId },
       select: { id: true },
-    }),
-    prisma.room.findUnique({
-      where: { id: data.roomId },
-      select: { id: true, status: true },
     }),
     prisma.teacher.findUnique({
       where: { id: data.teacherId },
@@ -51,14 +45,6 @@ async function assertScheduleRelations(
 
   if (!classData) {
     throw new Error("Không tìm thấy lớp học");
-  }
-
-  if (!room) {
-    throw new Error("Không tìm thấy phòng học");
-  }
-
-  if (room.status === "MAINTENANCE" || room.status === "UNAVAILABLE") {
-    throw new ConflictError("Không thể tạo lịch với phòng đang bảo trì hoặc không sử dụng");
   }
 
   if (!teacher) {
@@ -80,7 +66,6 @@ function toClassScheduleCreateInput(
 ): Prisma.ClassScheduleUncheckedCreateInput {
   return {
     classId: data.classId,
-    roomId: data.roomId,
     teacherId: data.teacherId,
     dayOfWeek: data.dayOfWeek,
     startMinute: data.startMinute,
@@ -93,7 +78,6 @@ function toClassScheduleUpdateInput(
 ): Prisma.ClassScheduleUncheckedUpdateInput {
   return {
     ...(data.classId !== undefined && { classId: data.classId }),
-    ...(data.roomId !== undefined && { roomId: data.roomId }),
     ...(data.teacherId !== undefined && { teacherId: data.teacherId }),
     ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
     ...(data.startMinute !== undefined && { startMinute: data.startMinute }),
@@ -103,7 +87,6 @@ function toClassScheduleUpdateInput(
 
 export async function getScheduleConflicts(
   data: {
-    roomId?: string | null;
     teacherId?: string | null;
     dayOfWeek: number;
     startMinute: number;
@@ -111,10 +94,9 @@ export async function getScheduleConflicts(
   },
   excludeId?: string,
 ): Promise<ScheduleConflict[]> {
-  const conflictTargets: Prisma.ClassScheduleWhereInput[] = [
-    ...(data.roomId ? [{ roomId: data.roomId }] : []),
-    ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
-  ];
+  const conflictTargets: Prisma.ClassScheduleWhereInput[] = data.teacherId
+    ? [{ teacherId: data.teacherId }]
+    : [];
 
   if (conflictTargets.length === 0) return [];
 
@@ -130,7 +112,6 @@ export async function getScheduleConflicts(
     },
     include: {
       class: true,
-      room: true,
       teacher: true,
     },
   });
@@ -160,7 +141,6 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
     data: toClassScheduleCreateInput(data),
     include: {
       class: true,
-      room: true,
       teacher: true,
     },
   });
@@ -178,7 +158,6 @@ export async function getClassScheduleById(
     where: { id },
     include: {
       class: true,
-      room: true,
       teacher: true,
     },
   });
@@ -201,7 +180,6 @@ export async function getSchedules(filter: ScheduleFilter) {
       take: pageSize,
       include: {
         class: true,
-        room: true,
         teacher: true,
       },
       orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
@@ -241,7 +219,6 @@ export async function getSchedulesByTeacherUserId(
       take: pageSize,
       include: {
         class: true,
-        room: true,
         teacher: true,
       },
       orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
@@ -270,12 +247,11 @@ export async function updateClassSchedule(
   });
 
   if (!current) {
-    throw new Error("Schedule not found");
+    throw new NotFoundError("Không tìm thấy lịch học");
   }
 
   const merged = {
     classId: data.classId ?? current.classId,
-    roomId: data.roomId ?? current.roomId,
     teacherId: data.teacherId ?? current.teacherId,
     dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
     startMinute: data.startMinute ?? current.startMinute,
@@ -294,7 +270,6 @@ export async function updateClassSchedule(
     data: toClassScheduleUpdateInput(data),
     include: {
       class: true,
-      room: true,
       teacher: true,
     },
   });
@@ -306,6 +281,11 @@ export async function updateClassSchedule(
 }
 
 export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
+  const schedule = await prisma.classSchedule.findUnique({ where: { id } });
+  if (!schedule) {
+    throw new NotFoundError("Không tìm thấy lịch học");
+  }
+
   return prisma.classSchedule.delete({
     where: { id },
   });
@@ -326,7 +306,6 @@ export async function getWeeklySchedule(
     },
     include: {
       class: true,
-      room: true,
       teacher: true,
     },
     orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],

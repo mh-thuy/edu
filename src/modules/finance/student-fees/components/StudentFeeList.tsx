@@ -14,9 +14,6 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
   MenuItem,
   Paper,
   Stack,
@@ -31,11 +28,7 @@ import {
   type GridRowSelectionModel,
 } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
-import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
-import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
-import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
-import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
 
@@ -152,36 +145,6 @@ const getStatusColor = (
   }
 };
 
-type FlowStatus = "PENDING" | "GENERATED" | "SENT" | "FAILED";
-
-const getFlowStatusLabel = (status: FlowStatus): string => {
-  switch (status) {
-    case "GENERATED":
-      return "Generated";
-    case "SENT":
-      return "Sent";
-    case "FAILED":
-      return "Failed";
-    default:
-      return "Pending";
-  }
-};
-
-const getFlowStatusColor = (
-  status: FlowStatus,
-): "default" | "success" | "warning" | "error" => {
-  switch (status) {
-    case "GENERATED":
-      return "success";
-    case "SENT":
-      return "warning";
-    case "FAILED":
-      return "error";
-    default:
-      return "default";
-  }
-};
-
 const emptySelectionModel = (): GridRowSelectionModel => ({
   type: "include",
   ids: new Set<GridRowId>(),
@@ -192,7 +155,7 @@ type StudentFeeListProps = {
 };
 
 export function StudentFeeList({ role }: StudentFeeListProps) {
-  const canDelete = role === "ADMIN";
+  void role;
   const snackbar = useSnackbar();
   const classDialog = useDisclosure();
 
@@ -226,11 +189,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
   const [selectedBulkRows, setSelectedBulkRows] =
     useState<GridRowSelectionModel>(emptySelectionModel);
 
-  // Flow menu anchor: tracks which row's menu is open + the anchor element.
-  const [flowMenuAnchor, setFlowMenuAnchor] = useState<HTMLElement | null>(
-    null,
-  );
-  const [flowMenuRow, setFlowMenuRow] = useState<StudentFee | null>(null);
 
   const {
     data: fees,
@@ -338,30 +296,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
     setShowForm(true);
   }, []);
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      if (!confirm("Bạn có chắc chắn muốn xóa?")) return;
-
-      try {
-        const response = await fetch(`/api/student-fees/${id}`, {
-          method: "DELETE",
-        });
-        if (!response.ok) {
-          throw new Error(
-            await extractApiErrorMessage(response, "Failed to delete"),
-          );
-        }
-        snackbar.showSuccess("Xóa học phí thành công");
-        await refresh();
-      } catch (deleteError) {
-        snackbar.showError(
-          deleteError instanceof Error ? deleteError.message : "Xóa thất bại",
-        );
-      }
-    },
-    [refresh, snackbar],
-  );
-
   const handleBulkCreate = useCallback(async () => {
     if (
       !bulkData.classId ||
@@ -431,110 +365,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
       setBulkSubmitting(false);
     }
   }, [bulkData, refresh, selectedBulkRows, snackbar]);
-
-  const handleFlowAction = useCallback(
-    async (
-      id: string,
-      action:
-        | "generate-qr"
-        | "generate-notice"
-        | "send-notice"
-        | "generate-all",
-      successMessage: string,
-    ) => {
-      try {
-        const response = await fetch(`/api/student-fees/${id}/${action}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body:
-            action === "send-notice"
-              ? JSON.stringify({ sendMethod: "MANUAL" })
-              : "{}",
-        });
-
-        if (!response.ok) {
-          throw new Error(
-            await extractApiErrorMessage(response, "Thao tác thất bại"),
-          );
-        }
-
-        snackbar.showSuccess(successMessage);
-        await refresh();
-      } catch (actionError) {
-        snackbar.showError(
-          actionError instanceof Error
-            ? actionError.message
-            : "Thao tác thất bại",
-        );
-      }
-    },
-    [refresh, snackbar],
-  );
-
-  const handleOpenQr = useCallback(
-    (url?: string | null) => {
-      if (!url) {
-        snackbar.showError("Chưa có ảnh QR để xem");
-        return;
-      }
-
-      window.open(url, "_blank", "noopener,noreferrer");
-    },
-    [snackbar],
-  );
-
-  const handleExportPdf = useCallback(
-    async (id: string) => {
-      try {
-        const response = await fetch(
-          `/api/student-fees/${id}/export-notice-pdf`,
-          { method: "POST" },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await extractApiErrorMessage(response, "Xuất PDF thất bại"),
-          );
-        }
-
-        const result = await unwrapApiResponse<{ pdfUrl: string }>(response);
-        window.open(result.pdfUrl, "_blank", "noopener,noreferrer");
-        snackbar.showSuccess("Đã xuất PDF bill tạm");
-        await refresh();
-      } catch (exportError) {
-        snackbar.showError(
-          exportError instanceof Error
-            ? exportError.message
-            : "Xuất PDF thất bại",
-        );
-      }
-    },
-    [refresh, snackbar],
-  );
-
-  // ---- Flow menu open/close ----
-  const handleOpenFlowMenu = useCallback(
-    (event: React.MouseEvent<HTMLElement>, row: StudentFee) => {
-      setFlowMenuAnchor(event.currentTarget);
-      setFlowMenuRow(row);
-    },
-    [],
-  );
-
-  const handleCloseFlowMenu = useCallback(() => {
-    setFlowMenuAnchor(null);
-    setFlowMenuRow(null);
-  }, []);
-
-  // Wraps a flow action so the menu closes before the request fires —
-  // avoids the menu staying open while the row data refreshes underneath it.
-  const runFlowMenuAction = useCallback(
-    (action: () => void | Promise<void>) => {
-      handleCloseFlowMenu();
-      void action();
-    },
-    [handleCloseFlowMenu],
-  );
 
   const columns: GridColDef<StudentFee>[] = useMemo(
     () => [
@@ -628,37 +458,17 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
             justifyContent="center"
             sx={{ width: "100%", height: "100%" }}
           >
-            <Tooltip title="Quy trình QR / Bill / Notice">
-              <IconButton
-                size="small"
-                onClick={(event) => handleOpenFlowMenu(event, params.row)}
-              >
-                <AutoAwesomeIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-
             <Tooltip title="Sửa">
               <IconButton size="small" onClick={() => handleEdit(params.row)}>
                 <EditIcon fontSize="small" />
               </IconButton>
             </Tooltip>
 
-            <Tooltip title={canDelete ? "Xóa" : "Bạn không có quyền xóa"}>
-              <span>
-                <IconButton
-                  size="small"
-                  disabled={!canDelete}
-                  onClick={() => handleDelete(params.row.id)}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
           </Stack>
         ),
       },
     ],
-    [canDelete, handleDelete, handleEdit, handleOpenFlowMenu],
+    [handleEdit],
   );
 
   const bulkStudentColumns: GridColDef<BulkStudentRow>[] = useMemo(
@@ -848,135 +658,6 @@ export function StudentFeeList({ role }: StudentFeeListProps) {
           )}
         </Paper>
       </Stack>
-
-      {/* Flow actions menu — grouped QR / Invoice / Notice steps for one row */}
-      <Menu
-        anchorEl={flowMenuAnchor}
-        open={Boolean(flowMenuAnchor)}
-        onClose={handleCloseFlowMenu}
-        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        transformOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        <MenuItem
-          disabled={!flowMenuRow}
-          onClick={() =>
-            flowMenuRow &&
-            runFlowMenuAction(() =>
-              handleFlowAction(
-                flowMenuRow.id,
-                "generate-qr",
-                "Đã tạo QR thanh toán",
-              ),
-            )
-          }
-        >
-          <ListItemIcon>
-            <QrCode2Icon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Tạo QR thanh toán"
-            secondary={
-              flowMenuRow
-                ? getFlowStatusLabel(flowMenuRow.flowStatus?.qr ?? "PENDING")
-                : undefined
-            }
-          />
-        </MenuItem>
-
-        <Divider />
-
-        <MenuItem
-          disabled={!flowMenuRow}
-          onClick={() =>
-            flowMenuRow &&
-            runFlowMenuAction(() =>
-              handleFlowAction(
-                flowMenuRow.id,
-                "generate-notice",
-                "Đã tạo bill tạm",
-              ),
-            )
-          }
-        >
-          <ListItemIcon>
-            <ReceiptLongIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Tạo bill tạm"
-            secondary={
-              flowMenuRow
-                ? getFlowStatusLabel(
-                    flowMenuRow.flowStatus?.temporaryInvoice ?? "PENDING",
-                  )
-                : undefined
-            }
-          />
-        </MenuItem>
-
-        <MenuItem
-          disabled={!flowMenuRow}
-          onClick={() =>
-            flowMenuRow &&
-            runFlowMenuAction(() => handleExportPdf(flowMenuRow.id))
-          }
-        >
-          <ListItemIcon>
-            <PictureAsPdfIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Xuất PDF bill tạm" />
-        </MenuItem>
-
-        {/* <Divider />
-
-        <MenuItem
-          disabled={!flowMenuRow}
-          onClick={() =>
-            flowMenuRow &&
-            runFlowMenuAction(() =>
-              handleFlowAction(
-                flowMenuRow.id,
-                "send-notice",
-                "Đã gửi thông báo học phí",
-              ),
-            )
-          }
-        >
-          <ListItemIcon>
-            <SendIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText
-            primary="Gửi thông báo học phí"
-            secondary={
-              flowMenuRow
-                ? getFlowStatusLabel(
-                    flowMenuRow.flowStatus?.paymentNotice ?? "PENDING",
-                  )
-                : undefined
-            }
-          />
-        </MenuItem>
-
-        <Divider />
-
-        <MenuItem
-          disabled={!flowMenuRow}
-          onClick={() =>
-            flowMenuRow &&
-            runFlowMenuAction(() =>
-              handleFlowAction(
-                flowMenuRow.id,
-                "generate-all",
-                "Đã hoàn tất full flow học phí",
-              ),
-            )
-          }
-        >
-          <ListItemIcon>
-            <AutoAwesomeIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Chạy toàn bộ quy trình" />
-        </MenuItem>*/}
-      </Menu>
 
       {showForm && (
         <StudentFeeForm

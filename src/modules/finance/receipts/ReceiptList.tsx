@@ -25,7 +25,6 @@ import {
 } from "@mui/x-data-grid";
 import PrintIcon from "@mui/icons-material/Print";
 import VisibilityIcon from "@mui/icons-material/Visibility";
-import DeleteIcon from "@mui/icons-material/Delete";
 import SearchIcon from "@mui/icons-material/Search";
 import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
@@ -35,9 +34,8 @@ import { EmptyState } from "@/components/shared/tables/EmptyState";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { useApiCall } from "@/hooks/useApiCall";
-import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
-type PaymentMethod = "cash" | "transfer" | "wallet";
+type PaymentMethod = "CASH" | "TRANSFER" | "WALLET";
 
 interface Receipt {
   id: string;
@@ -95,9 +93,9 @@ const formatDateTime = (dateString: string) => {
 
 const getMethodLabel = (method: PaymentMethod) => {
   const labels: Record<PaymentMethod, string> = {
-    cash: "Tiền mặt",
-    transfer: "Chuyển khoản",
-    wallet: "Ví điện tử",
+    CASH: "Tiền mặt",
+    TRANSFER: "Chuyển khoản",
+    WALLET: "Ví điện tử",
   };
   return labels[method] || method;
 };
@@ -107,13 +105,12 @@ type ReceiptListProps = {
 };
 
 export function ReceiptList({ role }: ReceiptListProps) {
-  const canDelete = role === "ADMIN";
+  void role;
   const snackbar = useSnackbar();
   const { showSuccess, showError } = snackbar;
 
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   // Search and filter states
   const [search, setSearch] = useState("");
@@ -139,7 +136,6 @@ export function ReceiptList({ role }: ReceiptListProps) {
   });
 
   const { execute: markPrinted, isLoading: marking } = useApiCall();
-  const { execute: deleteReceipt, isLoading: deleting } = useApiCall();
 
   const handleSearch = useCallback(() => {
     setSearch(searchInput);
@@ -177,24 +173,6 @@ export function ReceiptList({ role }: ReceiptListProps) {
       }
     },
     [markPrinted, showSuccess, showError, refresh],
-  );
-
-  const handleDelete = useCallback(
-    async (id: string) => {
-      try {
-        await deleteReceipt(`/api/receipts/${id}`, {
-          method: "DELETE",
-        });
-        showSuccess?.("Đã xóa phiếu thu");
-        refresh();
-        setDeleteId(null);
-      } catch (error) {
-        showError?.(
-          error instanceof Error ? error.message : "Không thể xóa phiếu thu",
-        );
-      }
-    },
-    [deleteReceipt, showSuccess, showError, refresh],
   );
 
   const columns: GridColDef[] = useMemo(
@@ -335,17 +313,10 @@ export function ReceiptList({ role }: ReceiptListProps) {
             onClick={() => handlePrint(params.row as Receipt)}
             disabled={marking}
           />,
-          <GridActionsCellItem
-            key="delete"
-            icon={<DeleteIcon />}
-            label="Xóa"
-            onClick={() => setDeleteId(params.row.id)}
-            disabled={!!(params.row as Receipt).printedAt || !canDelete || deleting}
-          />,
         ],
       },
     ],
-    [canDelete, deleting, handlePrint, marking],
+    [handlePrint, marking],
   );
 
   return (
@@ -595,14 +566,6 @@ export function ReceiptList({ role }: ReceiptListProps) {
         </Dialog>
       )}
 
-      <ConfirmDialog
-        open={!!deleteId}
-        title="Xóa phiếu thu"
-        message="Bạn có chắc chắn muốn xóa phiếu thu này? Chỉ có thể xóa phiếu thu chưa in."
-        onConfirm={() => deleteId && handleDelete(deleteId)}
-        onCancel={() => setDeleteId(null)}
-        isLoading={deleting}
-      />
     </>
   );
 }

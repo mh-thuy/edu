@@ -366,13 +366,9 @@ Khi sửa lịch học, bắt buộc test:
 ```text
 Tạo lịch hợp lệ
 
-Tạo lịch trùng phòng
-
 Tạo lịch trùng giáo viên
 
 Tạo lịch start_time >= end_time
-
-Đổi phòng
 
 Đổi giáo viên
 

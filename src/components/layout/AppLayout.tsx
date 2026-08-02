@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Drawer } from "@mui/material";
+import { Box, Drawer, useMediaQuery, useTheme } from "@mui/material";
 import { useState, type ReactElement, type ReactNode } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -12,8 +12,23 @@ type AppLayoutProps = {
 };
 
 export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
-  const [open, setOpen] = useState<boolean>(false);
-  const sidebar = <Sidebar role={user.role} />;
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up("lg"), { noSsr: true });
+  const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    if (isDesktop) {
+      setDesktopCollapsed((previous) => !previous);
+      return;
+    }
+
+    setMobileOpen((previous) => !previous);
+  };
+
+  const sidebar = (
+    <Sidebar role={user.role} onNavigate={() => setMobileOpen(false)} />
+  );
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -21,11 +36,13 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       <Box
         sx={{
           display: { xs: "none", lg: "block" },
-          width: 280,
+          width: desktopCollapsed ? 0 : 280,
           flexShrink: 0,
+          overflow: "hidden",
+          transition: "width 200ms ease",
           backgroundColor: "background.paper",
           borderRight: 1,
-          borderColor: "divider",
+          borderColor: desktopCollapsed ? "transparent" : "divider",
         }}
       >
         {sidebar}
@@ -33,15 +50,15 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       
       {/* Mobile drawer */}
       <Drawer
-        open={open}
-        onClose={() => setOpen(false)}
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
       >
         {sidebar}
       </Drawer>
       
       {/* Main content */}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Header user={user} onToggleSidebar={() => setOpen((prev) => !prev)} />
+        <Header user={user} onToggleSidebar={toggleSidebar} />
         <Box component="main" sx={{ p: { xs: 2, md: 3 } }}>
           {children}
         </Box>

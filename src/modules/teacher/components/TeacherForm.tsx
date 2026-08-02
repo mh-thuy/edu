@@ -35,7 +35,6 @@ export function TeacherForm({
       fullName: defaultValues?.fullName ?? "",
       code: defaultValues?.code ?? "",
       phone: defaultValues?.phone ?? "",
-      email: defaultValues?.email ?? "",
       bankAccount: defaultValues?.bankAccount ?? "",
       specialty: defaultValues?.specialty ?? "",
       status: defaultValues?.status ?? "ACTIVE",
@@ -94,23 +93,6 @@ export function TeacherForm({
             )}
           />
         </Stack>
-
-        <Controller
-          name="email"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Email"
-              type="email"
-              placeholder="VD: giaovien@example.com"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              size="small"
-            />
-          )}
-        />
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <Controller

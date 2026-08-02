@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { sumDecimals, toDecimal } from "@/lib/decimal";
 import { ConflictError, NotFoundError } from "@/lib/errors";
-import { StudentFeeAssetService } from "@/modules/finance/student-fees/services/student-fee-asset.service";
+import {
+  StudentFeeAssetService,
+  type NoticePdfInput,
+} from "@/modules/finance/student-fees/services/student-fee-asset.service";
 import type {
   FeeStatus,
   PaymentNoticeStatus,
@@ -797,6 +800,8 @@ export class StudentFeeService {
       status?: FeeStatus;
     },
   ) {
+    const editableData = { ...data };
+    delete editableData.status;
     return prisma.$transaction(async (tx) => {
       const fee = await tx.studentFee.findUnique({
         where: { id },
@@ -839,7 +844,7 @@ export class StudentFeeService {
       await tx.studentFee.update({
         where: { id },
         data: {
-          ...data,
+          ...editableData,
           amount: amounts.amount.toNumber(),
           discount: amounts.discount.toNumber(),
           finalAmount: amounts.finalAmount.toNumber(),
@@ -858,7 +863,7 @@ export class StudentFeeService {
     });
   }
 
-  static async generatePaymentQr(studentFeeId: string) {
+  private static async createPaymentQr(studentFeeId: string) {
     return prisma.$transaction(async (tx) => {
       const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
       const outstanding = toDecimal(fee.outstandingAmount);
@@ -931,7 +936,7 @@ export class StudentFeeService {
     });
   }
 
-  static async generatePaymentNotice(studentFeeId: string) {
+  private static async createPaymentNotice(studentFeeId: string) {
     return prisma.$transaction(async (tx) => {
       const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
       const paymentRequests = fee.paymentRequests;
@@ -1028,7 +1033,7 @@ export class StudentFeeService {
     });
   }
 
-  static async exportPaymentNoticePdf(studentFeeId: string) {
+  private static async createPaymentNoticePdf(studentFeeId: string) {
     return prisma.$transaction(async (tx) => {
       const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
       const paymentRequests = fee.paymentRequests;
@@ -1047,7 +1052,7 @@ export class StudentFeeService {
         throw new ConflictError("Cần tạo QR thanh toán trước khi xuất PDF");
       }
 
-      const { pdfUrl } = await StudentFeeAssetService.generateNoticePdfAsset({
+      const { pdfUrl, downloadUrl } = await StudentFeeAssetService.generateNoticePdfAsset({
         notice: {
           noticeNumber: latestNotice.noticeNumber,
           dueDate: latestNotice.dueDate,
@@ -1097,42 +1102,109 @@ export class StudentFeeService {
       });
 
       return {
-        pdfUrl,
+        pdfUrl: downloadUrl,
         notice: updatedNotice,
       };
     });
   }
 
-  static async sendPaymentNotice(studentFeeId: string, sendMethod = "MANUAL") {
+  private static async createStudentFeesSummaryPdf(
+    studentId: string,
+    feeIds?: string[],
+  ) {
     return prisma.$transaction(async (tx) => {
-      const fee = await this.getStudentFeeOrThrow(studentFeeId, tx);
-      const latestNotice = fee.paymentRequests
-        .flatMap((request) => request.notices)
-        .find((notice) => notice.isLatest);
+      const fees = await tx.studentFee.findMany({
+        where: {
+          studentId,
+          outstandingAmount: { gt: 0 },
+          ...(feeIds?.length ? { id: { in: feeIds } } : {}),
+        },
+        include: studentFeeDetailInclude,
+        orderBy: [{ billingYear: "asc" }, { billingMonth: "asc" }],
+      });
 
-      if (!latestNotice) {
-        throw new ConflictError("Cần tạo bill tạm trước khi gửi thông báo");
+      if (fees.length === 0) {
+        throw new NotFoundError("Học viên chưa có học phí đã đăng ký");
       }
 
-      if (!fee.student.phone) {
-        throw new ConflictError(
-          "Học viên chưa có số điện thoại để gửi thông báo",
-        );
-      }
+      const noticeIds: string[] = [];
+      const inputs: NoticePdfInput[] = fees.map((fee) => {
+        const latestNotice = fee.paymentRequests
+          .flatMap((request) => request.notices)
+          .find((notice) => notice.isLatest);
+        const activeRequest =
+          fee.paymentRequests.find((request) => request.status === "ACTIVE") ??
+          fee.paymentRequests[0] ??
+          null;
 
-      return tx.paymentNotice.update({
-        where: { id: latestNotice.id },
+        if (!latestNotice || !activeRequest?.qrCode) {
+          throw new ConflictError(
+            `Cần tạo QR và bill tạm cho học phí tháng ${fee.billingMonth}/${fee.billingYear} trước khi xuất PDF tổng hợp`,
+          );
+        }
+
+        noticeIds.push(latestNotice.id);
+
+        return {
+          notice: {
+            noticeNumber: latestNotice.noticeNumber,
+            dueDate: latestNotice.dueDate,
+            amount: Number(latestNotice.amount),
+            createdAt: latestNotice.createdAt,
+          },
+          fee: {
+            billingYear: fee.billingYear,
+            billingMonth: fee.billingMonth,
+            amount: Number(fee.amount),
+            discount: Number(fee.discount),
+            finalAmount: Number(fee.finalAmount),
+            student: {
+              code: fee.student.code,
+              fullName: fee.student.fullName,
+              parentName: fee.student.parentName,
+              phone: fee.student.phone,
+            },
+            class: {
+              code: fee.class.code,
+              name: fee.class.name,
+            },
+          },
+          qrCode: {
+            qrPayload: activeRequest.qrCode.qrPayload,
+            transferContent: activeRequest.transferContent,
+            paymentAccount: {
+              bankName: activeRequest.paymentAccount.bankName,
+              bankCode: activeRequest.paymentAccount.bankCode,
+              accountNumber: activeRequest.paymentAccount.accountNumber,
+              accountName: activeRequest.paymentAccount.accountName,
+            },
+          },
+        };
+      });
+
+      const result =
+        await StudentFeeAssetService.generateCombinedNoticePdfAsset(inputs);
+
+      await tx.paymentNotice.updateMany({
+        where: { id: { in: noticeIds } },
         data: {
-          sentAt: new Date(),
-          sendMethod,
-          status: "SENT",
+          pdfUrl: result.pdfUrl,
+          printedAt: new Date(),
+          status: "PRINTED",
         },
       });
+
+      return {
+        ...result,
+        pdfUrl: result.downloadUrl,
+        student: fees[0]?.student,
+        feeCount: fees.length,
+      };
     });
   }
 
-  static async generateAll(studentFeeId: string) {
-    await this.generatePaymentQr(studentFeeId).catch((error: unknown) => {
+  static async generatePaymentPackage(studentFeeId: string) {
+    await this.createPaymentQr(studentFeeId).catch((error: unknown) => {
       if (
         error instanceof ConflictError &&
         error.message === "QR thanh toán hiện tại vẫn còn hiệu lực"
@@ -1143,7 +1215,7 @@ export class StudentFeeService {
       throw error;
     });
 
-    await this.generatePaymentNotice(studentFeeId).catch((error: unknown) => {
+    await this.createPaymentNotice(studentFeeId).catch((error: unknown) => {
       if (
         error instanceof ConflictError &&
         error.message === "Bill tạm hiện tại vẫn còn hiệu lực"
@@ -1154,9 +1226,47 @@ export class StudentFeeService {
       throw error;
     });
 
-    await this.sendPaymentNotice(studentFeeId);
+    const pdf = await this.createPaymentNoticePdf(studentFeeId);
+    const fee = await this.getStudentFeeById(studentFeeId);
 
-    return this.getStudentFeeById(studentFeeId);
+    return {
+      fee,
+      qr: fee?.activeQr,
+      notice: fee?.latestNotice,
+      pdfUrl: pdf.pdfUrl,
+    };
+  }
+
+  static async generateStudentPaymentPackage(
+    studentId: string,
+    feeIds?: string[],
+  ) {
+    const fees = await prisma.studentFee.findMany({
+      where: {
+        studentId,
+        outstandingAmount: { gt: 0 },
+        ...(feeIds?.length ? { id: { in: feeIds } } : {}),
+      },
+      select: { id: true },
+      orderBy: [{ billingYear: "asc" }, { billingMonth: "asc" }],
+    });
+
+    if (fees.length === 0) {
+      throw new NotFoundError("Học viên không còn học phí cần thanh toán");
+    }
+
+    if (feeIds?.length && fees.length !== feeIds.length) {
+      throw new ConflictError(
+        "Danh sách học phí không hợp lệ hoặc không thuộc học viên này",
+      );
+    }
+
+    for (const fee of fees) {
+      await this.generatePaymentPackage(fee.id);
+    }
+
+    const summary = await this.createStudentFeesSummaryPdf(studentId, feeIds);
+    return { ...summary, feeCount: fees.length };
   }
 
   static async deleteStudentFee(id: string) {
@@ -1169,11 +1279,9 @@ export class StudentFeeService {
       throw new NotFoundError("Không tìm thấy học phí");
     }
 
-    if (fee.payments.length > 0) {
-      throw new ConflictError("Không thể xóa học phí đã có thanh toán");
-    }
-
-    return prisma.studentFee.delete({ where: { id } });
+    throw new ConflictError(
+      "Không thể xóa học phí; dữ liệu học phí chỉ được hủy theo nghiệp vụ",
+    );
   }
 
   static async getStudentDebtSummary(studentId: string, classId?: string) {

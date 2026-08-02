@@ -29,7 +29,6 @@ import { ScheduleForm, type ConflictResult } from "./ScheduleForm";
 
 type ScheduleSubmitData = {
   classId: string;
-  roomId: string;
   teacherId: string;
   dayOfWeek: number;
   startMinute: number;
@@ -42,11 +41,6 @@ type ScheduleConflict = {
   startMinute: number;
   endMinute: number;
   class?: {
-    code: string;
-    name: string;
-  } | null;
-  room?: {
-    id: string;
     code: string;
     name: string;
   } | null;
@@ -63,14 +57,8 @@ export interface Schedule {
   startMinute: number;
   endMinute: number;
   classId: string;
-  roomId: string;
   teacherId: string;
   class?: {
-    id: string;
-    name: string;
-    code: string;
-  } | null;
-  room?: {
     id: string;
     name: string;
     code: string;
@@ -108,10 +96,6 @@ function buildConflictMessage(
   formData: ScheduleSubmitData,
 ): string {
   const messages: string[] = [];
-
-  if (conflicts.some((item) => item.room?.id === formData.roomId)) {
-    messages.push("Phòng học đã có lịch trùng.");
-  }
 
   if (conflicts.some((item) => item.teacher?.id === formData.teacherId)) {
     messages.push("Giáo viên đã có lịch trùng.");
@@ -199,15 +183,6 @@ export function ScheduleList(): ReactElement {
         renderCell: (params) =>
           params.row.teacher
             ? `${params.row.teacher.fullName} (${params.row.teacher.code})`
-            : "-",
-      },
-      {
-        field: "roomId",
-        headerName: "Phòng",
-        minWidth: 160,
-        renderCell: (params) =>
-          params.row.room
-            ? `${params.row.room.name} (${params.row.room.code})`
             : "-",
       },
       {
@@ -319,7 +294,7 @@ export function ScheduleList(): ReactElement {
     async (formData: ScheduleSubmitData) => {
       if (hasConflict) {
         showError(
-          "Không thể lưu vì lịch học đang bị trùng phòng hoặc giáo viên.",
+          "Không thể lưu vì lịch học đang bị trùng giáo viên.",
         );
         return;
       }
@@ -441,7 +416,7 @@ export function ScheduleList(): ReactElement {
                   color="text.secondary"
                   sx={{ mt: 0.5 }}
                 >
-                  Danh sách lịch học, phòng học và tự động kiểm tra trùng lịch
+                  Danh sách lịch học và tự động kiểm tra trùng lịch
                 </Typography>
               </Box>
             </Box>
@@ -565,9 +540,6 @@ export function ScheduleList(): ReactElement {
                   classId: editingSchedule.classId,
                   classCode: editingSchedule.class?.code ?? "",
                   className: editingSchedule.class?.name ?? "",
-                  roomId: editingSchedule.roomId,
-                  roomCode: editingSchedule.room?.code ?? "",
-                  roomName: editingSchedule.room?.name ?? "",
                   teacherId: editingSchedule.teacherId,
                   teacherCode: editingSchedule.teacher?.code ?? "",
                   teacherName: editingSchedule.teacher?.fullName ?? "",

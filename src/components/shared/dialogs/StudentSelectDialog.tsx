@@ -9,7 +9,6 @@ export interface StudentItem {
   code: string;
   fullName: string;
   phone?: string;
-  email?: string;
   status?: string;
 }
 
@@ -31,12 +30,6 @@ export function StudentSelectDialog({
       field: "phone",
       headerName: "Số điện thoại",
       width: 150,
-      renderCell: (params) => params.value ?? "-",
-    },
-    {
-      field: "email",
-      headerName: "Email",
-      width: 200,
       renderCell: (params) => params.value ?? "-",
     },
     {

@@ -10,6 +10,8 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
@@ -19,7 +21,6 @@ import {
   type GridRenderCellParams,
 } from "@mui/x-data-grid";
 import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ReceiptIcon from "@mui/icons-material/Receipt";
@@ -35,7 +36,7 @@ import { DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
-type PaymentMethod = "cash" | "transfer" | "wallet";
+type PaymentMethod = "CASH" | "TRANSFER" | "WALLET";
 type PaymentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "FAILED" | "REFUNDED";
 
 interface Payment {
@@ -71,6 +72,24 @@ interface Payment {
   } | null;
 }
 
+interface RegisteredStudentFee {
+  id: string;
+  studentId: string;
+  billingYear: number;
+  billingMonth: number;
+  amount: number;
+  finalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  status: "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED";
+  student?: { code: string; fullName: string } | null;
+  class?: { code: string; name: string } | null;
+  flowStatus?: {
+    qr: "PENDING" | "GENERATED" | "FAILED";
+    temporaryInvoice: "PENDING" | "GENERATED" | "SENT" | "FAILED";
+  };
+}
+
 const formatCurrency = (value: number): string =>
   `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 
@@ -79,9 +98,9 @@ const formatDate = (value: string): string =>
 
 const getMethodLabel = (method: PaymentMethod): string => {
   const labels: Record<PaymentMethod, string> = {
-    cash: "Tiền mặt",
-    transfer: "Chuyển khoản",
-    wallet: "Ví điện tử",
+    CASH: "Tiền mặt",
+    TRANSFER: "Chuyển khoản",
+    WALLET: "Ví điện tử",
   };
 
   return labels[method];
@@ -92,7 +111,7 @@ type PaymentListProps = {
 };
 
 export function PaymentList({ role }: PaymentListProps) {
-  const canDelete = role === "ADMIN";
+  void role;
   const { showError, showSuccess, Snackbar } = useSnackbar();
   const [showForm, setShowForm] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -100,6 +119,8 @@ export function PaymentList({ role }: PaymentListProps) {
   const [filterMethod, setFilterMethod] = useState<string>("");
   const [filterDateStart, setFilterDateStart] = useState<string>("");
   const [filterDateEnd, setFilterDateEnd] = useState<string>("");
+  const [feeSearch, setFeeSearch] = useState("");
+  const [activeView, setActiveView] = useState<"fees" | "payments">("fees");
 
   const {
     data: payments,
@@ -118,31 +139,18 @@ export function PaymentList({ role }: PaymentListProps) {
     endDate: filterDateEnd || undefined,
   });
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      if (!confirm("Bạn có chắc chắn muốn xóa?")) {
-        return;
-      }
-
-      try {
-        const response = await fetch(`/api/payments/${id}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
-          throw new Error(await extractApiErrorMessage(response, "Failed to delete"));
-        }
-
-        showSuccess("Xóa thanh toán thành công");
-        await refresh();
-      } catch (error) {
-        showError(
-          error instanceof Error ? error.message : "Xóa thanh toán thất bại",
-        );
-      }
-    },
-    [refresh, showError, showSuccess],
-  );
+  const {
+    data: registeredFees,
+    isLoading: isFeesLoading,
+    error: feesError,
+    page: feesPage,
+    pageSize: feesPageSize,
+    setPageNumber: setFeesPage,
+    setPageSize: setFeesPageSize,
+  } = useList<RegisteredStudentFee>("/api/student-fees", {
+    pageSize: 100,
+    search: feeSearch || undefined,
+  });
 
   const handleGenerateReceipt = useCallback(
     async (paymentId: string) => {
@@ -268,6 +276,31 @@ export function PaymentList({ role }: PaymentListProps) {
           formatDate(row.paymentDate),
       },
       {
+        field: "status",
+        headerName: "Trạng thái",
+        width: 130,
+        align: "center",
+        headerAlign: "center",
+        renderCell: ({ row }) => (
+          <Chip
+            label={
+              row.status === "CONFIRMED"
+                ? "Đã xác nhận"
+                : row.status === "PENDING"
+                  ? "Chờ xác nhận"
+                  : row.status === "CANCELLED"
+                    ? "Đã hủy"
+                    : row.status === "REFUNDED"
+                      ? "Đã hoàn tiền"
+                      : "Thất bại"
+            }
+            size="small"
+            color={row.status === "CONFIRMED" ? "success" : "warning"}
+            variant="outlined"
+          />
+        ),
+      },
+      {
         field: "receipt",
         headerName: "Phiếu thu",
         width: 170,
@@ -338,21 +371,101 @@ export function PaymentList({ role }: PaymentListProps) {
               disabled={hasReceipt}
               onClick={() => void handleGenerateReceipt(row.id)}
             />,
-            <GridActionsCellItem
-              key="delete"
-              icon={<DeleteIcon />}
-              label="Xóa"
-              disabled={hasReceipt || !canDelete}
-              onClick={() => void handleDelete(row.id)}
-            />,
           ];
         },
       },
     ],
-    [canDelete, handleConfirmPayment, handleDelete, handleGenerateReceipt],
+    [handleConfirmPayment, handleGenerateReceipt],
+  );
+
+  const feeColumns: GridColDef<RegisteredStudentFee>[] = useMemo(
+    () => [
+      {
+        field: "student",
+        headerName: "Học viên",
+        minWidth: 220,
+        flex: 1,
+        renderCell: ({ row }) =>
+          row.student ? `${row.student.code} - ${row.student.fullName}` : "-",
+      },
+      {
+        field: "class",
+        headerName: "Lớp",
+        minWidth: 200,
+        flex: 1,
+        renderCell: ({ row }) =>
+          row.class ? `${row.class.code} - ${row.class.name}` : "-",
+      },
+      {
+        field: "month",
+        headerName: "Kỳ học phí",
+        width: 120,
+        renderCell: ({ row }) =>
+          `${row.billingYear}-${String(row.billingMonth).padStart(2, "0")}`,
+      },
+      {
+        field: "outstandingAmount",
+        headerName: "Còn nợ",
+        width: 140,
+        align: "right",
+        headerAlign: "right",
+        renderCell: ({ row }) => formatCurrency(row.outstandingAmount),
+      },
+      {
+        field: "status",
+        headerName: "Trạng thái",
+        width: 140,
+        align: "center",
+        headerAlign: "center",
+        renderCell: ({ row }) => (
+          <Chip
+            label={
+              row.status === "PAID"
+                ? "Đã thanh toán"
+                : row.status === "PARTIAL"
+                  ? "Một phần"
+                  : row.status === "CANCELLED"
+                    ? "Đã hủy"
+                    : "Chưa thanh toán"
+            }
+            size="small"
+            color={row.status === "PAID" ? "success" : "warning"}
+            variant="outlined"
+          />
+        ),
+      },
+      {
+        field: "paymentPackage",
+        headerName: "Bộ thanh toán",
+        width: 150,
+        align: "center",
+        headerAlign: "center",
+        renderCell: ({ row }) => {
+          const qrReady = row.flowStatus?.qr === "GENERATED";
+          const noticeReady =
+            row.flowStatus?.temporaryInvoice === "GENERATED" ||
+            row.flowStatus?.temporaryInvoice === "SENT";
+          const ready = qrReady && noticeReady;
+          const partial = qrReady || noticeReady;
+
+          return (
+            <Chip
+              size="small"
+              label={ready ? "Đã tạo" : partial ? "Chưa đủ" : "Chưa tạo"}
+              color={ready ? "success" : partial ? "warning" : "default"}
+              variant="outlined"
+            />
+          );
+        },
+      },
+    ],
+    [],
   );
 
   const hasRows = (payments?.items.length || 0) > 0;
+  const hasPaymentFilters = Boolean(
+    search || filterMethod || filterDateStart || filterDateEnd,
+  );
 
   return (
     <>
@@ -374,7 +487,7 @@ export function PaymentList({ role }: PaymentListProps) {
               justifyContent="space-between"
             >
               <Typography variant="h6" fontWeight={700}>
-                Quản lý thanh toán
+                Thanh toán học phí
               </Typography>
               <Button
                 variant="contained"
@@ -388,62 +501,97 @@ export function PaymentList({ role }: PaymentListProps) {
               </Button>
             </Stack>
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Tìm kiếm"
-                placeholder="Mã/tên học viên, mã/tên lớp, tháng, ghi chú"
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPageNumber(1);
-                }}
-                fullWidth
-                InputProps={{
-                  startAdornment: <SearchIcon fontSize="small" />,
-                }}
+            <Tabs
+              value={activeView}
+              onChange={(_, value: "fees" | "payments") => setActiveView(value)}
+              variant="scrollable"
+              allowScrollButtonsMobile
+            >
+              <Tab
+                value="fees"
+                label={`Cần thu (${registeredFees?.total ?? 0})`}
               />
-
-              <TextField
-                select
-                label="Phương thức"
-                value={filterMethod}
-                onChange={(event) => {
-                  setFilterMethod(event.target.value);
-                  setPageNumber(1);
-                }}
-                sx={{ width: 300 }}
-              >
-                <MenuItem value="">Tất cả</MenuItem>
-                <MenuItem value="cash">Tiền mặt</MenuItem>
-                <MenuItem value="transfer">Chuyển khoản</MenuItem>
-                <MenuItem value="wallet">Ví điện tử</MenuItem>
-              </TextField>
-
-              <DatePicker
-                label="Từ ngày"
-                format="DD/MM/YYYY"
-                value={filterDateStart ? dayjs(filterDateStart) : null}
-                onChange={(value) => {
-                  setFilterDateStart(value ? value.format("YYYY-MM-DD") : "");
-                  setPageNumber(1);
-                }}
+              <Tab
+                value="payments"
+                label={`Lịch sử giao dịch (${payments?.total ?? 0})`}
               />
+            </Tabs>
 
-              <DatePicker
-                label="Đến ngày"
-                format="DD/MM/YYYY"
-                value={filterDateEnd ? dayjs(filterDateEnd) : null}
-                onChange={(value) => {
-                  setFilterDateEnd(value ? value.format("YYYY-MM-DD") : "");
-                  setPageNumber(1);
-                }}
-                minDate={filterDateStart ? dayjs(filterDateStart) : undefined}
-              />
-            </Stack>
+            {activeView === "payments" && (
+              <Stack spacing={1.5}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <TextField
+                    label="Tìm giao dịch"
+                    placeholder="Học viên, lớp, tháng, ghi chú"
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPageNumber(1);
+                    }}
+                    fullWidth
+                    InputProps={{
+                      startAdornment: <SearchIcon fontSize="small" />,
+                    }}
+                  />
+
+                  <TextField
+                    select
+                    label="Phương thức"
+                    value={filterMethod}
+                    onChange={(event) => {
+                      setFilterMethod(event.target.value);
+                      setPageNumber(1);
+                    }}
+                    sx={{ width: { xs: "100%", md: 220 } }}
+                  >
+                    <MenuItem value="">Tất cả</MenuItem>
+                    <MenuItem value="cash">Tiền mặt</MenuItem>
+                    <MenuItem value="transfer">Chuyển khoản</MenuItem>
+                    <MenuItem value="wallet">Ví điện tử</MenuItem>
+                  </TextField>
+
+                  <DatePicker
+                    label="Từ ngày"
+                    format="DD/MM/YYYY"
+                    value={filterDateStart ? dayjs(filterDateStart) : null}
+                    onChange={(value) => {
+                      setFilterDateStart(value ? value.format("YYYY-MM-DD") : "");
+                      setPageNumber(1);
+                    }}
+                  />
+
+                  <DatePicker
+                    label="Đến ngày"
+                    format="DD/MM/YYYY"
+                    value={filterDateEnd ? dayjs(filterDateEnd) : null}
+                    onChange={(value) => {
+                      setFilterDateEnd(value ? value.format("YYYY-MM-DD") : "");
+                      setPageNumber(1);
+                    }}
+                    minDate={filterDateStart ? dayjs(filterDateStart) : undefined}
+                  />
+                </Stack>
+                <Box display="flex" justifyContent="flex-end">
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setSearch("");
+                      setFilterMethod("");
+                      setFilterDateStart("");
+                      setFilterDateEnd("");
+                      setPageNumber(1);
+                    }}
+                    disabled={!hasPaymentFilters}
+                  >
+                    Xóa bộ lọc
+                  </Button>
+                </Box>
+              </Stack>
+            )}
           </Stack>
         </Paper>
 
-        <Paper
+        {activeView === "fees" && <Paper
           elevation={0}
           sx={{
             borderRadius: 3,
@@ -452,6 +600,73 @@ export function PaymentList({ role }: PaymentListProps) {
             overflow: "hidden",
           }}
         >
+            <Stack spacing={2} sx={{ p: 2.5 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>
+                Học phí cần thu
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Chọn một dòng để tạo trọn bộ QR, bill tạm và PDF cho toàn bộ học phí còn nợ của học viên.
+              </Typography>
+            </Box>
+            <TextField
+              label="Tìm học phí"
+              placeholder="Mã/tên học viên, mã/tên lớp, tháng"
+              value={feeSearch}
+              onChange={(event) => {
+                setFeeSearch(event.target.value);
+                setFeesPage(1);
+              }}
+              fullWidth
+            />
+            <Box display="flex" justifyContent="flex-end">
+              <Button
+                size="small"
+                onClick={() => {
+                  setFeeSearch("");
+                  setFeesPage(1);
+                }}
+                disabled={!feeSearch}
+              >
+                Xóa tìm kiếm
+              </Button>
+            </Box>
+          </Stack>
+          {feesError ? (
+            <Box p={3}>
+              <Alert severity="error">{feesError}</Alert>
+            </Box>
+          ) : (
+            <BaseTable
+              rows={registeredFees?.items || []}
+              columns={feeColumns}
+              isLoading={isFeesLoading}
+              totalRows={registeredFees?.total || 0}
+              page={feesPage}
+              pageSize={feesPageSize}
+              onPageChange={setFeesPage}
+              onPageSizeChange={setFeesPageSize}
+            />
+          )}
+        </Paper>}
+
+        {activeView === "payments" && <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: "1px solid",
+            borderColor: "divider",
+            overflow: "hidden",
+          }}
+          >
+          <Stack spacing={0.5} sx={{ p: 2.5, pb: 1 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Lịch sử giao dịch
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Xác nhận các khoản đang chờ và in phiếu thu từ giao dịch đã ghi nhận.
+            </Typography>
+          </Stack>
           {error ? (
             <Box p={3}>
               <Alert severity="error">{error}</Alert>
@@ -473,7 +688,7 @@ export function PaymentList({ role }: PaymentListProps) {
               onPageSizeChange={setPageSize}
             />
           )}
-        </Paper>
+        </Paper>}
       </Stack>
 
       {showForm && (

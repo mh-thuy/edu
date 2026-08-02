@@ -16,11 +16,11 @@ import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
 import { useState, type ReactElement } from "react";
 import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
-import { RoomSelectDialog } from "@/components/shared/dialogs/RoomSelectDialog";
 import {
   MasterSelectField,
   type MasterSelectValue,
 } from "@/components/shared/forms/MasterSelectField";
+import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { useDisclosure } from "@/hooks/useDisclosure";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
@@ -28,17 +28,9 @@ type ClassFormData = z.infer<typeof classCreateSchema>;
 type ClassFormDefaultValues = Partial<ClassFormData> & {
   teacherCode?: string;
   teacherName?: string;
-  roomCode?: string;
-  roomName?: string;
 };
 
 type TeacherSelectData = {
-  id: string;
-  code: string;
-  name: string;
-};
-
-type RoomSelectData = {
   id: string;
   code: string;
   name: string;
@@ -56,22 +48,12 @@ export function ClassForm({
   defaultValues,
 }: ClassFormProps): ReactElement {
   const teacherDialog = useDisclosure();
-  const roomDialog = useDisclosure();
   const [selectedTeacher, setSelectedTeacher] = useState<MasterSelectValue | null>(
     defaultValues?.teacherId
       ? {
           id: defaultValues.teacherId,
           code: defaultValues.teacherCode ?? "",
           name: defaultValues.teacherName ?? "",
-        }
-      : null,
-  );
-  const [selectedRoom, setSelectedRoom] = useState<MasterSelectValue | null>(
-    defaultValues?.roomId
-      ? {
-          id: defaultValues.roomId,
-          code: defaultValues.roomCode ?? "",
-          name: defaultValues.roomName ?? "",
         }
       : null,
   );
@@ -82,10 +64,8 @@ export function ClassForm({
       code: defaultValues?.code ?? "",
       name: defaultValues?.name ?? "",
       teacherId: defaultValues?.teacherId ?? null,
-      roomId: defaultValues?.roomId ?? null,
       tuitionFee: defaultValues?.tuitionFee ?? 0,
       totalSessions: defaultValues?.totalSessions ?? 0,
-      maxStudents: defaultValues?.maxStudents ?? 30,
       startDate: defaultValues?.startDate ?? undefined,
       endDate: defaultValues?.endDate ?? undefined,
       status: defaultValues?.status ?? "DRAFT",
@@ -99,15 +79,6 @@ export function ClassForm({
     });
     setSelectedTeacher(teacher);
     teacherDialog.onClose();
-  };
-
-  const handleRoomSelect = (room: RoomSelectData) => {
-    setValue("roomId", room.id, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setSelectedRoom(room);
-    roomDialog.onClose();
   };
 
   const toInputDateValue = (value?: string) => value?.slice(0, 10) ?? "";
@@ -125,16 +96,6 @@ export function ClassForm({
             onOpen={teacherDialog.onOpen}
             codeLabel="Mã giáo viên"
             nameLabel="Thông tin hiển thị"
-          />
-        </Box>
-
-        <Box>
-          <MasterSelectField
-            label="Phòng học"
-            value={selectedRoom}
-            onOpen={roomDialog.onOpen}
-            codeLabel="Mã phòng"
-            nameLabel="Tên phòng"
           />
         </Box>
 
@@ -212,16 +173,11 @@ export function ClassForm({
           name="tuitionFee"
           control={control}
           render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
+            <CurrencyInput
               label="Học phí"
-              type="number"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              onChange={(event) => {
-                field.onChange(Number(event.target.value || 0));
-              }}
+              value={field.value}
+              onChange={field.onChange}
+              error={error}
             />
           )}
         />
@@ -233,24 +189,6 @@ export function ClassForm({
             <TextField
               {...field}
               label="Tổng số buổi"
-              type="number"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              onChange={(event) => {
-                field.onChange(Number(event.target.value || 0));
-              }}
-            />
-          )}
-        />
-
-        <Controller
-          name="maxStudents"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Sĩ số tối đa"
               type="number"
               error={!!error}
               helperText={error?.message}
@@ -286,11 +224,6 @@ export function ClassForm({
         onSelect={handleTeacherSelect}
       />
 
-      <RoomSelectDialog
-        open={roomDialog.open}
-        onClose={roomDialog.onClose}
-        onSelect={handleRoomSelect}
-      />
     </form>
   );
 }

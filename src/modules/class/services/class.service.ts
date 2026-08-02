@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Class, Prisma } from "@prisma/client";
 import type {
   ClassCreate,
@@ -27,10 +27,8 @@ function buildClassCreateInput(data: ClassCreate): Prisma.ClassUncheckedCreateIn
     code: data.code,
     name: data.name,
     teacherId: toNullableString(data.teacherId),
-    roomId: toNullableString(data.roomId),
     tuitionFee: data.tuitionFee,
     totalSessions: data.totalSessions,
-    maxStudents: data.maxStudents,
     startDate: toNullableDate(data.startDate),
     endDate: toNullableDate(data.endDate),
     status: data.status,
@@ -44,12 +42,8 @@ function buildClassUpdateInput(data: ClassUpdate): Prisma.ClassUncheckedUpdateIn
     ...(data.teacherId !== undefined && {
       teacherId: toNullableString(data.teacherId),
     }),
-    ...(data.roomId !== undefined && {
-      roomId: toNullableString(data.roomId),
-    }),
     ...(data.tuitionFee !== undefined && { tuitionFee: data.tuitionFee }),
     ...(data.totalSessions !== undefined && { totalSessions: data.totalSessions }),
-    ...(data.maxStudents !== undefined && { maxStudents: data.maxStudents }),
     ...(data.startDate !== undefined && {
       startDate: data.startDate ? new Date(data.startDate) : null,
     }),
@@ -71,7 +65,6 @@ export async function getClassById(id: string): Promise<ClassWithRelations | nul
     where: { id },
     include: {
       teacher: { include: { user: true } },
-      room: true,
       students: { include: { student: true } },
       schedules: true,
     },
@@ -99,7 +92,6 @@ export async function getClasses(filter: ClassFilter) {
       take: pageSize,
       include: {
         teacher: { include: { user: true } },
-        room: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -142,7 +134,6 @@ export async function getClassesByTeacherUserId(
       take: pageSize,
       include: {
         teacher: { include: { user: true } },
-        room: true,
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -162,6 +153,30 @@ export async function updateClass(
   id: string,
   data: ClassUpdate,
 ): Promise<Class> {
+  const current = await prisma.class.findUnique({
+    where: { id },
+    select: {
+      status: true,
+    },
+  });
+
+  if (!current) {
+    throw new NotFoundError("Không tìm thấy lớp học");
+  }
+
+  if (data.status !== undefined && data.status !== current.status) {
+    const allowedTransitions: Record<Class["status"], Class["status"][]> = {
+      DRAFT: ["ACTIVE", "CANCELLED"],
+      ACTIVE: ["COMPLETED", "CANCELLED"],
+      COMPLETED: [],
+      CANCELLED: [],
+    };
+
+    if (!allowedTransitions[current.status].includes(data.status)) {
+      throw new ConflictError("Trạng thái lớp học không hợp lệ");
+    }
+  }
+
   return prisma.class.update({
     where: { id },
     data: buildClassUpdateInput(data),
@@ -173,36 +188,18 @@ export async function deleteClass(id: string): Promise<Class> {
     where: { id },
     select: {
       fees: {
-        where: {
-          payments: {
-            some: {},
-          },
-        },
-        select: {
-          id: true,
-            payments: {
-              select: {
-                receipt: {
-                  select: {
-                    id: true,
-                  },
-              },
-            },
-            take: 1,
-          },
-        },
         take: 1,
       },
     },
   });
 
   if (!classData) {
-    throw new Error("Class not found");
+    throw new NotFoundError("Không tìm thấy lớp học");
   }
 
   if (classData.fees.length > 0) {
     throw new ConflictError(
-      "Cannot delete class with student fees that already have payments or receipts",
+      "Không thể xóa lớp học đã phát sinh học phí",
     );
   }
 
@@ -226,22 +223,11 @@ export async function assignStudentToClass(
 
   const classData = await prisma.class.findUnique({
     where: { id: classId },
-    select: {
-      maxStudents: true,
-      _count: {
-        select: {
-          students: true,
-        },
-      },
-    },
+    select: { id: true },
   });
 
   if (!classData) {
-    throw new Error("Class not found");
-  }
-
-  if (classData._count.students >= classData.maxStudents) {
-    throw new ConflictError("Cannot enroll student: class is full");
+    throw new NotFoundError("Không tìm thấy lớp học");
   }
 
   return prisma.classStudent.upsert({

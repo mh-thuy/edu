@@ -1,17 +1,23 @@
 import { z } from "zod";
 
+const birthdaySchema = z.union([
+  z.string().datetime(),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid birthday format"),
+]);
+
 export const studentCreateSchema = z.object({
   code: z.string().min(1, "Student code is required").max(50),
   fullName: z.string().min(1, "Full name is required").max(100),
-  birthday: z.string().datetime().optional(),
+  birthday: birthdaySchema.optional(),
   parentName: z.string().optional(),
   phone: z.string().optional(),
-  email: z.string().email().optional(),
   address: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
-export const studentUpdateSchema = studentCreateSchema.partial();
+export const studentUpdateSchema = studentCreateSchema.partial().extend({
+  birthday: birthdaySchema.nullable().optional(),
+});
 
 export const studentFilterSchema = z.object({
   search: z.string().optional(),

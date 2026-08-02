@@ -150,7 +150,7 @@ export function StudentFeeForm({
     isCreating
       ? zodResolver(studentFeeCreateSchema)
       : zodResolver(studentFeeUpdateSchema)
-  ) as any;
+  ) as unknown as Resolver<StudentFeeFormValues>;
 
   const {
     register,

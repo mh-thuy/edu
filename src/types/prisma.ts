@@ -3,7 +3,6 @@ import type { Prisma } from "@prisma/client";
 export type ScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
   include: {
     class: true;
-    room: true;
     teacher: true;
   };
 }>;
@@ -15,7 +14,6 @@ export type ClassWithRelations = Prisma.ClassGetPayload<{
         user: true;
       };
     };
-    room: true;
     students: {
       include: {
         student: true;
@@ -32,7 +30,6 @@ export type ClassListItem = Prisma.ClassGetPayload<{
         user: true;
       };
     };
-    room: true;
   };
 }>;
 

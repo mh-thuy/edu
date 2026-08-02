@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Prisma, Teacher } from "@prisma/client";
 import type {
   TeacherCreate,
@@ -15,7 +15,6 @@ function buildTeacherCreateInput(
     fullName: data.fullName,
     code: data.code,
     phone: data.phone || null,
-    email: data.email || null,
     bankAccount: data.bankAccount || null,
     specialty: data.specialty || null,
     status: data.status,
@@ -29,7 +28,6 @@ function buildTeacherUpdateInput(
     ...(data.fullName !== undefined && { fullName: data.fullName }),
     ...(data.code !== undefined && { code: data.code }),
     ...(data.phone !== undefined && { phone: data.phone || null }),
-    ...(data.email !== undefined && { email: data.email || null }),
     ...(data.bankAccount !== undefined && {
       bankAccount: data.bankAccount || null,
     }),
@@ -65,7 +63,6 @@ export async function getTeachers(filter: TeacherFilter) {
         { code: { contains: search, mode: "insensitive" } },
         { user: { fullName: { contains: search, mode: "insensitive" } } },
         { phone: { contains: search, mode: "insensitive" } },
-        { email: { contains: search, mode: "insensitive" } },
         { specialty: { contains: search, mode: "insensitive" } },
       ],
     }),
@@ -105,23 +102,12 @@ export async function updateTeacher(
   const currentTeacher = await prisma.teacher.findUnique({
     where: { id },
     select: {
-      email: true,
       userId: true,
     },
   });
 
   if (!currentTeacher) {
-    throw new Error("Teacher not found");
-  }
-
-  if (
-    currentTeacher.userId &&
-    data.email !== undefined &&
-    data.email !== currentTeacher.email
-  ) {
-    throw new ConflictError(
-      "Cannot update teacher email separately when teacher is linked to a user",
-    );
+    throw new NotFoundError("Không tìm thấy giáo viên");
   }
 
   return prisma.teacher.update({
@@ -144,7 +130,7 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
   });
 
   if (!teacher) {
-    throw new Error("Teacher not found");
+    throw new NotFoundError("Không tìm thấy giáo viên");
   }
 
   if (teacher._count.classes > 0) {

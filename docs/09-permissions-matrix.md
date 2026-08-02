@@ -30,7 +30,6 @@ N = No access
 | Roles           | Y     | N     | N       |
 | Teachers        | Y     | Y     | R       |
 | Students        | Y     | Y     | N       |
-| Rooms           | Y     | Y     | R       |
 | Classes         | Y     | Y     | R       |
 | Enrollment      | Y     | Y     | N       |
 | Schedule        | Y     | Y     | R       |

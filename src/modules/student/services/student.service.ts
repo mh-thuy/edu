@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ConflictError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { Prisma, Student } from "@prisma/client";
 import type {
   StudentCreate,
@@ -12,7 +12,6 @@ function buildStudentCreateInput(data: StudentCreate): Prisma.StudentCreateInput
   return {
     code: data.code,
     fullName: data.fullName,
-    email: data.email || null,
     phone: data.phone || null,
     birthday: data.birthday ? new Date(data.birthday) : null,
     parentName: data.parentName || null,
@@ -25,7 +24,6 @@ function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput
   return {
     ...(data.code !== undefined && { code: data.code }),
     ...(data.fullName !== undefined && { fullName: data.fullName }),
-    ...(data.email !== undefined && { email: data.email || null }),
     ...(data.phone !== undefined && { phone: data.phone || null }),
     ...(data.birthday !== undefined && {
       birthday: data.birthday ? new Date(data.birthday) : null,
@@ -117,7 +115,7 @@ export async function deleteStudent(id: string): Promise<Student> {
   });
 
   if (!student) {
-    throw new Error("Student not found");
+    throw new NotFoundError("Không tìm thấy học viên");
   }
 
   if (student._count.enrollments > 0) {

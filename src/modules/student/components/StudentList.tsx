@@ -21,6 +21,7 @@ import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { useList } from "@/hooks/useList";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { extractApiErrorMessage } from "@/lib/api-client";
 import { StudentForm } from "./StudentForm";
 import type { ReactElement } from "react";
 import type { z } from "zod";
@@ -33,7 +34,8 @@ export interface Student {
   code: string;
   fullName: string;
   birthday?: string | null;
-  email?: string | null;
+  parentName?: string | null;
+  address?: string | null;
   phone?: string | null;
   status: "ACTIVE" | "INACTIVE";
 }
@@ -53,12 +55,6 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
   {
     field: "fullName",
     headerName: "Họ tên",
-    minWidth: 180,
-    flex: 1,
-  },
-  {
-    field: "email",
-    headerName: "Email",
     minWidth: 180,
     flex: 1,
   },
@@ -244,7 +240,10 @@ export function StudentList({ role }: StudentListProps): ReactElement {
 
         if (!response.ok) {
           throw new Error(
-            isEdit ? "Cập nhật học sinh thất bại" : "Thêm học sinh thất bại",
+            await extractApiErrorMessage(
+              response,
+              isEdit ? "Cập nhật học sinh thất bại" : "Thêm học sinh thất bại",
+            ),
           );
         }
 
@@ -270,7 +269,6 @@ export function StudentList({ role }: StudentListProps): ReactElement {
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
-    email: row.email ?? "",
     phone: row.phone ?? "",
     _onEdit: handleEdit,
     _onDelete: handleDelete,
@@ -337,7 +335,7 @@ export function StudentList({ role }: StudentListProps): ReactElement {
 
         <Box sx={{ mt: 2.5 }}>
           <TextField
-            placeholder="Tìm theo mã học sinh, họ tên, email hoặc số điện thoại..."
+            placeholder="Tìm theo mã học sinh, họ tên hoặc số điện thoại..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             size="small"
@@ -400,7 +398,8 @@ export function StudentList({ role }: StudentListProps): ReactElement {
                   code: editingStudent.code ?? "",
                   fullName: editingStudent.fullName ?? "",
                   birthday: editingStudent.birthday ?? undefined,
-                  email: editingStudent.email ?? "",
+                  parentName: editingStudent.parentName ?? "",
+                  address: editingStudent.address ?? "",
                   phone: editingStudent.phone ?? "",
                   status: editingStudent.status ?? "ACTIVE",
                 }

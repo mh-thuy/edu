@@ -10,7 +10,6 @@ const timeStringSchema = z
 
 const requiredClassScheduleSchema = z.object({
   classId: z.string().min(1, "Lớp học là bắt buộc"),
-  roomId: z.string().min(1, "Phòng học là bắt buộc"),
   teacherId: z.string().min(1, "Giáo viên là bắt buộc"),
   dayOfWeek: z.number().int().min(0).max(6),
   startMinute: minuteSchema,
@@ -22,9 +21,6 @@ export const classScheduleFormSchema = z
     classId: z.string().min(1, "Lớp học là bắt buộc"),
     classCode: z.string().optional(),
     className: z.string().optional(),
-    roomId: z.string().min(1, "Phòng học là bắt buộc"),
-    roomCode: z.string().optional(),
-    roomName: z.string().optional(),
     teacherId: z.string().min(1, "Giáo viên là bắt buộc"),
     teacherCode: z.string().optional(),
     teacherName: z.string().optional(),

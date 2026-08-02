@@ -13,7 +13,6 @@ export interface TeacherItem extends SelectableItem {
   user?: {
     fullName: string;
   } | null;
-  email?: string;
   phone?: string;
   specialty?: string;
   status?: string;
@@ -21,7 +20,7 @@ export interface TeacherItem extends SelectableItem {
 
 /**
  * The value returned to the parent after selection.
- * `name` is populated from teacher full name, then email, then code.
+ * `name` is populated from teacher full name, then code.
  */
 export interface TeacherSelectValue {
   id: string;
@@ -48,13 +47,6 @@ export function TeacherSelectDialog({
       headerName: "Họ tên",
       width: 220,
       valueGetter: (_value, row) => row.user?.fullName ?? "-",
-    },
-    {
-      field: "email",
-      headerName: "Email",
-      flex: 1,
-      minWidth: 200,
-      renderCell: (params) => params.value ?? "-",
     },
     {
       field: "phone",
@@ -86,7 +78,7 @@ export function TeacherSelectDialog({
     onSelect({
       id: item.id,
       code: item.code,
-      name: item.user?.fullName ?? item.email ?? item.code,
+      name: item.user?.fullName ?? item.code,
     });
   };
 
@@ -98,7 +90,7 @@ export function TeacherSelectDialog({
       endpoint="/api/teachers"
       title="Chọn giáo viên"
       columns={columns}
-      searchPlaceholder="Nhập mã, tên giáo viên hoặc email"
+      searchPlaceholder="Nhập mã hoặc tên giáo viên"
       maxWidth="lg"
     />
   );

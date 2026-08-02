@@ -13,7 +13,6 @@ Giao diện được thiết kế cho nhân viên trung tâm sử dụng hằng 
 
 - Học viên
 - Giáo viên
-- Phòng học
 - Lớp học
 - Lịch học
 - Học phí
@@ -73,7 +72,6 @@ Tổng quan
 Quản lý đào tạo
 - Học viên
 - Giáo viên
-- Phòng học
 - Lớp học
 - Đăng ký lớp
 - Lịch học
@@ -248,7 +246,6 @@ Ví dụ:
 
 ```text
 Mã học viên là bắt buộc
-Email không đúng định dạng
 Số tiền phải lớn hơn 0
 Ngày kết thúc phải lớn hơn ngày bắt đầu
 ```
@@ -296,7 +293,6 @@ Dùng dialog cho:
 - Chọn học viên
 - Chọn giáo viên
 - Chọn lớp
-- Chọn phòng
 - In bill tạm
 - Ghi nhận thanh toán
 
@@ -325,7 +321,6 @@ Không dùng Select cho dữ liệu lớn như:
 - Học viên
 - Giáo viên
 - Lớp học
-- Phòng học nếu danh sách nhiều
 - Khoản học phí
 
 Thay bằng:
@@ -533,7 +528,7 @@ Trạng thái
 
 ```text
 Mã GV
-Họ tên / Email
+Họ tên
 Số điện thoại
 Chuyên môn
 Có tài khoản
@@ -546,7 +541,6 @@ Thao tác
 ```text
 Mã giáo viên
 Tài khoản liên kết
-Email
 Số điện thoại
 Số tài khoản ngân hàng
 Chuyên môn
@@ -556,8 +550,6 @@ Trạng thái
 ## 14.3 UI rules
 
 - Giáo viên có thể có hoặc không có tài khoản đăng nhập.
-- Nếu chọn `user_id`, email lấy từ user và readonly.
-- Nếu không chọn `user_id`, cho phép nhập email riêng.
 - Hiển thị rõ giáo viên có tài khoản login hay không.
 - Không cho người dùng nhập trùng mã giáo viên.
 
@@ -571,7 +563,6 @@ Trạng thái
 Mã HV
 Họ tên
 Số điện thoại
-Email
 Phụ huynh
 Trạng thái
 Thao tác
@@ -582,7 +573,6 @@ Thao tác
 ```text
 Mã học viên
 Họ tên
-Email
 Số điện thoại
 Ngày sinh
 Tên phụ huynh
@@ -594,45 +584,11 @@ Trạng thái
 
 - Mã học viên bắt buộc.
 - Họ tên bắt buộc.
-- Email không bắt buộc nhưng nếu nhập phải đúng định dạng.
 - Trạng thái mặc định là `Đang học`.
 
 ---
 
-# 16. Module Phòng học
-
-## 16.1 List columns
-
-```text
-Mã phòng
-Tên phòng
-Sức chứa
-Tầng
-Vị trí
-Trạng thái
-Thao tác
-```
-
-## 16.2 Form fields
-
-```text
-Mã phòng
-Tên phòng
-Sức chứa
-Tầng
-Vị trí
-Trạng thái
-Ghi chú
-```
-
-## 16.3 UI rules
-
-- Không cho chọn phòng đang bảo trì hoặc không sử dụng khi tạo lịch học mới.
-- Sức chứa phải lớn hơn 0.
-
----
-
-# 17. Module Lớp học
+# 16. Module Lớp học
 
 ## 17.1 List columns
 
@@ -640,7 +596,6 @@ Ghi chú
 Mã lớp
 Tên lớp
 Giáo viên
-Phòng
 Học phí
 Số học viên
 Trạng thái
@@ -653,10 +608,8 @@ Thao tác
 Mã lớp
 Tên lớp
 Giáo viên phụ trách
-Phòng mặc định
 Học phí
 Tổng số buổi
-Số học viên tối đa
 Ngày bắt đầu
 Ngày kết thúc
 Trạng thái
@@ -665,7 +618,6 @@ Trạng thái
 ## 17.3 UI rules
 
 - Giáo viên chọn qua TeacherSelectDialog.
-- Phòng chọn qua RoomSelectDialog.
 - Không dùng select dài.
 - Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.
 - Không cho xóa lớp nếu đã phát sinh học phí hoặc thanh toán.
@@ -688,14 +640,7 @@ Rule:
 
 - Chọn học viên qua StudentSelectDialog.
 - Không cho thêm trùng học viên.
-- Cảnh báo nếu lớp đã đủ số lượng.
-- Hiển thị số lượng hiện tại / tối đa.
-
-Ví dụ:
-
-```text
-Sĩ số: 12 / 15
-```
+- Hiển thị danh sách học viên hiện tại của lớp.
 
 ---
 
@@ -706,7 +651,6 @@ Sĩ số: 12 / 15
 ```text
 Lớp
 Giáo viên
-Phòng
 Thứ
 Giờ bắt đầu
 Giờ kết thúc
@@ -718,7 +662,6 @@ Thao tác
 ```text
 Lớp
 Giáo viên
-Phòng
 Thứ trong tuần
 Giờ bắt đầu
 Giờ kết thúc
@@ -726,15 +669,15 @@ Giờ kết thúc
 
 ## 19.3 UI rules
 
-- Khi chọn lớp, tự gợi ý giáo viên/phòng mặc định.
-- Khi đổi giờ/phòng/giáo viên, gọi API check conflict.
+- Khi chọn lớp, tự gợi ý giáo viên mặc định.
+- Khi đổi giờ/giáo viên, gọi API check conflict.
 - Nếu conflict, hiển thị lỗi rõ ràng.
 - Không cho lưu nếu start_time >= end_time.
 
 Ví dụ lỗi:
 
 ```text
-Phòng R001 đã có lớp ENG001 từ 18:00 đến 20:00.
+Giáo viên đã có lớp khác trong cùng khung giờ.
 ```
 
 ---
@@ -1187,7 +1130,7 @@ Validation
 Empty state
 Loading state
 Error state
-Permission
+Role authorization
 ```
 
 ---

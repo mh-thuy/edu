@@ -12,7 +12,7 @@ const NOTICE_OUTPUT_DIR = path.join(
 );
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 
-type NoticePdfInput = {
+export type NoticePdfInput = {
   notice: {
     noticeNumber: string;
     dueDate: Date | null;
@@ -56,22 +56,6 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("vi-VN").format(value);
 }
 
-function formatDate(value: Date | null) {
-  if (!value) {
-    return "Chưa có";
-  }
-
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(value);
-}
-
-function monthLabel(year: number, month: number) {
-  return `${String(month).padStart(2, "0")}/${year}`;
-}
-
 function dataUrlToUint8Array(dataUrl: string) {
   const [, base64 = ""] = dataUrl.split(",", 2);
   return Uint8Array.from(Buffer.from(base64, "base64"));
@@ -110,6 +94,29 @@ function splitTextByWidth(
 }
 
 export class StudentFeeAssetService {
+  static getDownloadUrl(pdfUrl: string) {
+    const fileName = path.basename(pdfUrl);
+    return `/api/student-fees/payment-package/${encodeURIComponent(fileName)}`;
+  }
+
+  static async readNoticePdf(fileName: string) {
+    if (
+      path.basename(fileName) !== fileName ||
+      !fileName.toLowerCase().endsWith(".pdf")
+    ) {
+      return null;
+    }
+
+    try {
+      return await readFile(path.join(NOTICE_OUTPUT_DIR, fileName));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   static async generateQrDataUrl(qrPayload: string) {
     return QRCode.toDataURL(qrPayload, {
       errorCorrectionLevel: "M",
@@ -579,7 +586,40 @@ export class StudentFeeAssetService {
       pdfUrl: normalizePublicUrl(
         path.join("generated", "payment-notices", fileName),
       ),
+      downloadUrl: this.getDownloadUrl(fileName),
       qrDataUrl,
+    };
+  }
+
+  static async generateCombinedNoticePdfAsset(inputs: NoticePdfInput[]) {
+    if (inputs.length === 0) {
+      throw new Error("Không có học phí để xuất PDF");
+    }
+
+    const combinedPdf = await PDFDocument.create();
+
+    for (const input of inputs) {
+      const generated = await this.generateNoticePdfAsset(input);
+      const sourcePath = path.join(PUBLIC_ROOT, generated.pdfUrl.slice(1));
+      const sourcePdf = await PDFDocument.load(await readFile(sourcePath));
+      const pages = await combinedPdf.copyPages(
+        sourcePdf,
+        sourcePdf.getPageIndices(),
+      );
+
+      pages.forEach((page) => combinedPdf.addPage(page));
+    }
+
+    const pdfBytes = await combinedPdf.save();
+    const fileName = `student-fees-summary-${Date.now()}.pdf`;
+    const outputPath = path.join(NOTICE_OUTPUT_DIR, fileName);
+    await writeFile(outputPath, pdfBytes);
+
+    return {
+      pdfUrl: normalizePublicUrl(
+        path.join("generated", "payment-notices", fileName),
+      ),
+      downloadUrl: this.getDownloadUrl(fileName),
     };
   }
 }

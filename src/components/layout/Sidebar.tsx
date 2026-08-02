@@ -2,7 +2,6 @@
 
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
-import MeetingRoomOutlinedIcon from "@mui/icons-material/MeetingRoomOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
 import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
@@ -42,12 +41,6 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF", "TEACHER"],
   },
   {
-    label: "Quản lý phòng",
-    href: "/admin/rooms",
-    icon: <MeetingRoomOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
-  },
-  {
     label: "Giáo viên",
     href: "/admin/teachers",
     icon: <SchoolOutlinedIcon fontSize="small" />,
@@ -69,7 +62,7 @@ const items: SidebarItem[] = [
     label: "Lịch học",
     href: "/admin/schedules",
     icon: <ScheduleOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
+    roles: ["ADMIN", "STAFF"],
   },
   {
     label: "Học phí",
@@ -123,9 +116,10 @@ const items: SidebarItem[] = [
 
 type SidebarProps = {
   role: RoleCode;
+  onNavigate?: () => void;
 };
 
-export function Sidebar({ role }: SidebarProps): ReactElement {
+export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
 
   const visibleItems = items.filter((item) => item.roles.includes(role));
@@ -164,6 +158,7 @@ export function Sidebar({ role }: SidebarProps): ReactElement {
               component={Link}
               href={item.href}
               selected={selected}
+              onClick={onNavigate}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { ReceiptFilter } from "@/modules/finance/receipts/schemas/receipt.schema";
 
 export type ReceiptWithRelations = Prisma.ReceiptGetPayload<{
@@ -291,7 +292,7 @@ export class ReceiptService {
   static async markAsPrinted(id: string): Promise<ReceiptWithRelations> {
     const receipt = await prisma.receipt.findUnique({ where: { id } });
     if (!receipt) {
-      throw new Error("Receipt not found");
+      throw new NotFoundError("Không tìm thấy biên lai");
     }
 
     return prisma.receipt.update({
@@ -318,13 +319,11 @@ export class ReceiptService {
   static async deleteReceipt(id: string): Promise<void> {
     const receipt = await prisma.receipt.findUnique({ where: { id } });
     if (!receipt) {
-      throw new Error("Receipt not found");
+      throw new NotFoundError("Không tìm thấy biên lai");
     }
 
-    if (receipt.printedAt) {
-      throw new Error("Cannot delete printed receipt");
-    }
-
-    await prisma.receipt.delete({ where: { id } });
+    throw new ConflictError(
+      "Không thể xóa biên lai; biên lai chỉ được hủy theo nghiệp vụ",
+    );
   }
 }
