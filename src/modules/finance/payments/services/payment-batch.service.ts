@@ -23,9 +23,11 @@ export async function completePaymentBatch(tx: Prisma.TransactionClient, batchId
     if (!allocation.amount.equals(allocation.tuitionFee.finalAmount)) throw new ConflictError(`Số tiền phân bổ của ${allocation.tuitionFee.feeNo} không khớp`);
   }
   const paymentDate = data?.paymentDate || batch.paymentDate;
-  for (const allocation of batch.allocations) {
-    const payment = await tx.tuitionPayment.create({ data: { paymentNo: `PAY-${batch.batchNo}-${allocation.tuitionFee.feeNo}`.slice(0, 30), tuitionFeeId: allocation.tuitionFeeId, studentId: batch.studentId, paymentBatchId: batch.id, paymentDate, amount: allocation.amount, paymentMethod: batch.paymentMethod, paymentStatus: TuitionPaymentStatus.SUCCESS, bankAccountId: data?.bankAccountId || batch.bankAccountId, bankTransactionNo: data?.bankTransactionNo, transactionReference: data?.transactionReference || batch.transactionReference, payerName: batch.payerName, paymentContent: data?.paymentContent || batch.paymentContent, receivedBy: actorId, confirmedBy: actorId, confirmedAt: new Date(), createdBy: actorId, updatedBy: actorId } });
-    await tx.tuitionReceipt.create({ data: { receiptNo: `REC-${batch.batchNo}-${allocation.tuitionFee.feeNo}`.slice(0, 30), paymentId: payment.id, issuedBy: actorId, receiverName: batch.payerName || batch.studentId, amount: allocation.amount } });
+  for (const [index, allocation] of batch.allocations.entries()) {
+    const sequence = String(index + 1).padStart(3, "0");
+    const batchToken = batch.batchNo.slice(-20);
+    const payment = await tx.tuitionPayment.create({ data: { paymentNo: `PAY-${batchToken}-${sequence}`, tuitionFeeId: allocation.tuitionFeeId, studentId: batch.studentId, paymentBatchId: batch.id, paymentDate, amount: allocation.amount, paymentMethod: batch.paymentMethod, paymentStatus: TuitionPaymentStatus.SUCCESS, bankAccountId: data?.bankAccountId || batch.bankAccountId, bankTransactionNo: data?.bankTransactionNo, transactionReference: data?.transactionReference || batch.transactionReference, payerName: batch.payerName, paymentContent: data?.paymentContent || batch.paymentContent, receivedBy: actorId, confirmedBy: actorId, confirmedAt: new Date(), createdBy: actorId, updatedBy: actorId } });
+    await tx.tuitionReceipt.create({ data: { receiptNo: `REC-${batchToken}-${sequence}`, paymentId: payment.id, issuedBy: actorId, receiverName: batch.payerName || batch.studentId, amount: allocation.amount } });
     await tx.tuitionFee.update({ where: { id: allocation.tuitionFeeId }, data: { status: TuitionFeeStatus.PAID, version: { increment: 1 }, updatedBy: actorId } });
   }
   await tx.paymentBatchReceipt.create({ data: { receiptNo: `BRC-${batch.batchNo}`.slice(0, 40), paymentBatchId: batch.id, issuedBy: actorId, receiverName: batch.payerName || batch.studentId, amount: batch.totalAmount } });

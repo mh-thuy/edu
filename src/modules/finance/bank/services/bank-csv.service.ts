@@ -57,6 +57,15 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
+  const legacyHash = crypto.createHash("sha256").update(`${bankAccountId}:${row.raw}`).digest("hex");
+  const identity = row.transactionNo?.trim()
+    ? `${bankAccountId}:transaction-no:${row.transactionNo.trim()}`
+    : `${bankAccountId}:row:${row.raw}`;
+  const transactionHash = crypto.createHash("sha256").update(identity).digest("hex");
+  return { transactionHash, legacyHash };
+}
+
 export async function importBankCsv(args: { buffer: Buffer; fileName: string; fileUrl: string; bankAccountId: string; actorId: string }) {
   const fileHash = crypto.createHash("sha256").update(args.buffer).digest("hex");
   const rows = parseBankCsv(args.buffer);
@@ -69,8 +78,24 @@ export async function importBankCsv(args: { buffer: Buffer; fileName: string; fi
     const statement = await tx.bankStatementImport.create({ data: { bankAccountId: args.bankAccountId, fileName: args.fileName, fileUrl: args.fileUrl, fileHash, encoding: "windows-1252", delimiter: ";", dateFormat: "dd/MM/yyyy HH:mm", totalRows: rows.length, validRows: rows.length, invalidRows: 0, duplicatedRows: 0, importStatus: BankImportStatus.PROCESSING, importedBy: args.actorId } });
     let matchedRows = 0;
     let unmatchedRows = 0;
+    let duplicatedRows = 0;
+    const importedHashes = new Set<string>();
     for (const row of rows) {
-      const transactionHash = crypto.createHash("sha256").update(`${args.bankAccountId}:${row.raw}`).digest("hex");
+      const { transactionHash, legacyHash } = getTransactionHashes(args.bankAccountId, row);
+      if (
+        importedHashes.has(transactionHash) ||
+        (await tx.bankStatementTransaction.findFirst({
+          where: {
+            bankAccountId: args.bankAccountId,
+            OR: [{ transactionHash }, { transactionHash: legacyHash }],
+          },
+          select: { id: true },
+        }))
+      ) {
+        duplicatedRows += 1;
+        continue;
+      }
+      importedHashes.add(transactionHash);
       const isCredit = row.amount.greaterThan(0);
       const fees = isCredit ? await tx.tuitionFee.findMany({ where: { status: { in: ["UNPAID", "OVERDUE"] }, finalAmount: row.amount }, include: { student: true } }) : [];
       const description = normalize(row.description);
@@ -96,7 +121,7 @@ export async function importBankCsv(args: { buffer: Buffer; fileName: string; fi
       const transaction = await tx.bankStatementTransaction.create({ data: { statementImportId: statement.id, bankAccountId: args.bankAccountId, rowNo: row.rowNo, bankTransactionNo: row.transactionNo, transactionDate: row.transactionDate, description: row.description, creditAmount: isCredit ? row.amount : 0, debitAmount: isCredit ? 0 : row.amount.abs(), balanceAmount: row.balance, transactionHash, reconciliationStatus: status, matchScore: selected?.score, matchMethod: selected?.method, matchedStudentId: status === BankReconciliationStatus.AUTO_MATCHED && selectedFee ? selectedFee.studentId : undefined, matchedTuitionFeeId: status === BankReconciliationStatus.AUTO_MATCHED && selectedFee ? selectedFee.id : undefined } });
       for (const candidate of candidates.slice(0, 5)) await tx.bankStatementMatchCandidate.create({ data: { statementTransactionId: transaction.id, studentId: candidate.fee.studentId, tuitionFeeId: candidate.fee.id, matchMethod: candidate.method, matchScore: candidate.score, amountDifference: 0, isSelected: status === BankReconciliationStatus.AUTO_MATCHED && selectedFee ? candidate.fee.id === selectedFee.id : false } });
     }
-    return tx.bankStatementImport.update({ where: { id: statement.id }, data: { matchedRows, unmatchedRows, importStatus: BankImportStatus.COMPLETED }, include: { transactions: true } });
+    return tx.bankStatementImport.update({ where: { id: statement.id }, data: { matchedRows, unmatchedRows, duplicatedRows, importStatus: BankImportStatus.COMPLETED }, include: { transactions: true } });
   });
 }
 
@@ -124,7 +149,8 @@ export async function confirmBankBatchTransaction(transactionId: string, batchId
     const transaction = await tx.bankStatementTransaction.findUnique({ where: { id: transactionId } });
     if (!transaction) throw new NotFoundError("Không tìm thấy giao dịch ngân hàng");
     if (transaction.debitAmount.greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
-    if (transaction.paymentId || transaction.paymentBatchId) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+    if (transaction.paymentId) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+    if (transaction.paymentBatchId && transaction.paymentBatchId !== batchId) throw new ConflictError("Giao dịch ngân hàng đã được gắn với batch khác");
     const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");
     if (batch.status !== "PENDING") throw new ConflictError("Batch thanh toán không còn chờ xử lý");
