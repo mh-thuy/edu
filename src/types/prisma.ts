@@ -1,12 +1,5 @@
 import type { Prisma } from "@prisma/client";
 
-export type ScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
-  include: {
-    class: true;
-    teacher: true;
-  };
-}>;
-
 export type ClassWithRelations = Prisma.ClassGetPayload<{
   include: {
     teacher: {
