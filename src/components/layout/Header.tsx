@@ -44,25 +44,29 @@ export function Header({ user, onToggleSidebar, currentTitle = "Tổng quan" }: 
     <Box
       component="header"
       sx={{
-        height: 64,
-        px: 2,
+        height: 72,
+        px: { xs: 1.5, md: 3 },
         borderBottom: "1px solid",
         borderColor: "divider",
-        bgcolor: "background.paper",
+        bgcolor: "rgba(255,255,255,0.88)",
+        backdropFilter: "blur(14px)",
+        position: "sticky",
+        top: 0,
+        zIndex: 10,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
       }}
     >
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" size="small">
+        <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" sx={{ bgcolor: "#f1f5f9", "&:hover": { bgcolor: "#e2e8f0" } }}>
           <MenuOutlinedIcon />
         </IconButton>
         <Box>
-          <Typography variant="caption" color="text.secondary">
-            Trung tâm đào tạo
+          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+            TRUNG TÂM ĐÀO TẠO
           </Typography>
-          <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+          <Typography variant="h6" fontWeight={800} lineHeight={1.2}>
             {currentTitle}
           </Typography>
         </Box>
@@ -78,7 +82,7 @@ export function Header({ user, onToggleSidebar, currentTitle = "Tổng quan" }: 
           </Typography>
         </Box>
         <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small">
-          <Avatar sx={{ width: 34, height: 34 }}>{initials}</Avatar>
+          <Avatar sx={{ width: 38, height: 38, bgcolor: "primary.main", fontWeight: 700 }}>{initials}</Avatar>
         </IconButton>
         <Menu
           anchorEl={anchorEl}

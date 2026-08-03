@@ -18,6 +18,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Stack,
   Typography,
 } from "@mui/material";
 
@@ -125,22 +126,22 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
   return (
     <Box
       sx={{
-        width: 280,
+      width: 264,
         height: "100%",
-        bgcolor: "background.paper",
+        bgcolor: "#ffffff",
         borderRight: "1px solid",
         borderColor: "divider",
       }}
     >
       {/* Logo */}
-      <Box sx={{ p: 3 }}>
-        <Typography variant="h6" fontWeight={700} color="primary.main">
-          Trung Tâm Giáo Dục
-        </Typography>
-
-        <Typography variant="body2" color="text.secondary">
-          Hệ thống quản lý lớp học
-        </Typography>
+      <Box sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1.25} alignItems="center">
+          <Box sx={{ width: 38, height: 38, borderRadius: 2.5, display: "grid", placeItems: "center", color: "white", fontWeight: 800, bgcolor: "primary.main", boxShadow: "0 8px 16px rgba(37,99,235,.22)" }}>E</Box>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={800} color="text.primary" lineHeight={1.1}>EduCenter</Typography>
+            <Typography variant="caption" color="text.secondary">Quản lý đào tạo</Typography>
+          </Box>
+        </Stack>
       </Box>
 
       <Divider />
@@ -150,7 +151,7 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
         {visibleItems.map((item, index) => {
           const selected =
             pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+            (item.href !== "/" && item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
           const group = groupFor(item.href);
           const previousGroup = index > 0 ? groupFor(visibleItems[index - 1]!.href) : null;
 
@@ -166,7 +167,7 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
                 href={item.href}
                 selected={selected}
                 onClick={onNavigate}
-                sx={{ borderRadius: 2, mb: 0.5, minHeight: 44 }}
+                sx={{ borderRadius: 2.5, mb: 0.5, minHeight: 44, color: "text.secondary", "& .MuiListItemIcon-root": { color: "inherit" }, "&.Mui-selected": { bgcolor: "#eff6ff", color: "primary.main", "&:hover": { bgcolor: "#dbeafe" } }, "&:hover": { bgcolor: "#f8fafc", color: "text.primary" } }}
               >
                 <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
                 <ListItemText

@@ -287,7 +287,7 @@ export function PaymentBatchHistory() {
                             >
                               Xuất biên lai tổng
                             </Button>
-                          ) : (
+                          ) : batch.status === "PENDING" ? (
                             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1 }}>
                               <Button size="small" variant="outlined" href={`/api/payment-batches/${batch.id}/notice/pdf`}>
                                 Tải thông báo PDF
@@ -295,11 +295,11 @@ export function PaymentBatchHistory() {
                               <Button size="small" variant="contained" startIcon={<PrintOutlinedIcon />} component="a" href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer">
                                 Mở để in
                               </Button>
-                              {batch.status === "PENDING" && <Button size="small" color="error" variant="outlined" onClick={() => setCancelTarget(batch)}>
+                              <Button size="small" color="error" variant="outlined" onClick={() => setCancelTarget(batch)}>
                                 Hủy batch
-                              </Button>}
+                              </Button>
                             </Stack>
-                          )}
+                          ) : null}
                         </Box>
                       </Collapse>
                     </TableCell>

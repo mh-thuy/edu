@@ -73,7 +73,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       {/* Main content */}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <Header user={user} onToggleSidebar={toggleSidebar} currentTitle={currentTitle} />
-        <Box component="main" sx={{ p: { xs: 2, md: 3 } }}>
+        <Box component="main" sx={{ p: { xs: 2, md: 3.5 }, maxWidth: 1600, width: "100%", mx: "auto" }}>
           {children}
         </Box>
       </Box>
