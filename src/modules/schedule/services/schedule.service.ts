@@ -296,24 +296,3 @@ export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
     where: { id },
   });
 }
-
-export async function getWeeklySchedule(
-  startDate: Date,
-): Promise<ClassScheduleWithRelations[]> {
-  const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 7);
-
-  return prisma.classSchedule.findMany({
-    where: {
-      class: {
-        startDate: { lte: endDate },
-        endDate: { gte: startDate },
-      },
-    },
-    include: {
-      class: true,
-      teacher: true,
-    },
-    orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
-  });
-}

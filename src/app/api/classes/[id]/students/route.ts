@@ -13,7 +13,7 @@ type Params = Promise<{
   id: string;
 }>;
 
-export async function GET(request: NextRequest, { params }: { params: Params }) {
+export async function GET({ params }: { params: Params }) {
   try {
     const { id } = await params;
     const students = await getClassStudents(id);

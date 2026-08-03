@@ -21,6 +21,12 @@ type HeaderProps = {
   onToggleSidebar: () => void;
 };
 
+const roleLabels: Record<SessionUser["role"], string> = {
+  ADMIN: "Quản trị viên",
+  STAFF: "Nhân viên",
+  TEACHER: "Giáo viên",
+};
+
 export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
@@ -52,7 +58,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
           <MenuOutlinedIcon />
         </IconButton>
         <Typography variant="subtitle1" fontWeight={700}>
-          Center Management Platform
+          Trung tâm đào tạo
         </Typography>
       </Stack>
 
@@ -62,7 +68,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
             {user.fullName}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {user.role}
+            {roleLabels[user.role]}
           </Typography>
         </Box>
         <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small">
@@ -87,7 +93,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
             <ListItemIcon>
               <LogoutOutlinedIcon fontSize="small" />
             </ListItemIcon>
-            {isLoggingOut ? "Logging out..." : "Logout"}
+            {isLoggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
           </MenuItem>
         </Menu>
       </Stack>

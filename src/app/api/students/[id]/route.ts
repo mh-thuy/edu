@@ -8,7 +8,7 @@ type Params = Promise<{
   id: string;
 }>;
 
-export async function GET(request: NextRequest, { params }: { params: Params }) {
+export async function GET({ params }: { params: Params }) {
   try {
     const { id } = await params;
     const student = await getStudentById(id);
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Params }) {
+export async function DELETE({ params }: { params: Params }) {
   try {
     const user = await requireApiRole(["ADMIN"]);
     if (user instanceof Response) {

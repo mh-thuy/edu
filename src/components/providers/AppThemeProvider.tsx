@@ -24,6 +24,59 @@ const theme = createTheme({
   typography: {
     fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
   },
+  components: {
+    MuiButton: {
+      defaultProps: {
+        disableElevation: true,
+      },
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: "none",
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontWeight: 600,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: "none",
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        head: {
+          backgroundColor: "#f8fafc",
+          color: "#475569",
+          fontWeight: 700,
+          whiteSpace: "nowrap",
+        },
+      },
+    },
+    MuiCssBaseline: {
+      styleOverrides: {
+        ".MuiDataGrid-root": {
+          border: 0,
+        },
+        ".MuiDataGrid-columnHeaders": {
+          backgroundColor: "#f8fafc",
+          color: "#475569",
+          fontWeight: 700,
+        },
+        ".MuiDataGrid-cell:focus, .MuiDataGrid-cell:focus-within": {
+          outline: "none",
+        },
+      },
+    },
+  },
 });
 
 type AppThemeProviderProps = {

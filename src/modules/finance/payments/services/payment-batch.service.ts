@@ -76,12 +76,3 @@ export async function getPaymentBatchQr(batchId: string) {
   if (!account) throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
   return { batchNo: batch.batchNo, amount: batch.totalAmount, account, qrUrl: buildVietQrUrl({ bankCode: account.bankCode, accountNo: account.accountNo, accountName: account.accountName, amount: Number(batch.totalAmount), addInfo: `PB ${batch.batchNo}` }) };
 }
-
-export async function confirmPaymentBatch(batchId: string, actorId: string, data: { paymentDate: Date; bankAccountId: string; bankTransactionNo?: string | null; transactionReference?: string | null; paymentContent?: string | null; amount: Prisma.Decimal }) {
-  return prisma.$transaction(async (tx) => {
-    const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
-    if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");
-    if (!batch.totalAmount.equals(data.amount)) throw new ConflictError("Số tiền sao kê không khớp tổng batch thanh toán");
-    return completePaymentBatch(tx, batchId, actorId, { ...data, bankTransactionNo: data.bankTransactionNo || undefined, transactionReference: data.transactionReference || undefined, paymentContent: data.paymentContent || undefined });
-  });
-}

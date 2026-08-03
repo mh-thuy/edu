@@ -20,12 +20,6 @@ export const classFilterSchema = z.object({
   pageSize: z.number().min(1).max(100).default(10),
 });
 
-export const classStudentSchema = z.object({
-  classId: z.string(),
-  studentId: z.string(),
-});
-
 export type ClassCreate = z.infer<typeof classCreateSchema>;
 export type ClassUpdate = z.infer<typeof classUpdateSchema>;
 export type ClassFilter = z.infer<typeof classFilterSchema>;
-export type ClassStudent = z.infer<typeof classStudentSchema>;

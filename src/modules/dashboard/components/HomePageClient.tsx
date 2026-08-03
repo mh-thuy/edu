@@ -9,23 +9,29 @@ type HomePageClientProps = {
   user: SessionUser;
 };
 
+const roleLabels: Record<SessionUser["role"], string> = {
+  ADMIN: "Quản trị viên",
+  STAFF: "Nhân viên",
+  TEACHER: "Giáo viên",
+};
+
 export function HomePageClient({ user }: HomePageClientProps): ReactElement {
   return (
     <Stack spacing={2.5}>
       <Typography variant="h4" fontWeight={700}>
-        Welcome, {user.fullName}
+        Xin chào, {user.fullName}
       </Typography>
       <Card>
         <CardContent>
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Stack direction="row" spacing={1.5} alignItems="center">
               <DashboardOutlinedIcon color="primary" />
-              <Typography variant="h6">System Foundation Ready</Typography>
+              <Typography variant="h6">Hệ thống quản lý trung tâm</Typography>
             </Stack>
-            <Chip label={user.role} color="primary" variant="outlined" />
+            <Chip label={roleLabels[user.role]} color="primary" variant="outlined" />
           </Stack>
           <Alert severity="info" sx={{ mt: 2 }}>
-            Business modules will be implemented in the next development steps.
+            Chào mừng bạn đến với hệ thống quản lý trung tâm đào tạo.
           </Alert>
         </CardContent>
       </Card>

@@ -18,10 +18,3 @@ export class ForbiddenError extends Error {
     this.name = "ForbiddenError";
   }
 }
-
-export function getErrorMessage(
-  error: unknown,
-  fallback = "An unexpected error occurred",
-): string {
-  return error instanceof Error ? error.message : fallback;
-}

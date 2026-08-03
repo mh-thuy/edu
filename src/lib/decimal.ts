@@ -21,13 +21,6 @@ export function toDecimal(value: DecimalValue): Prisma.Decimal {
   return new Prisma.Decimal(value);
 }
 
-export function sumDecimals(values: DecimalValue[]): Prisma.Decimal {
-  return values.reduce<Prisma.Decimal>(
-    (sum, value) => sum.add(toDecimal(value)),
-    ZERO,
-  );
-}
-
 export function decimalToNumber(value: DecimalValue): number {
   return Number(toDecimal(value).toFixed(2));
 }

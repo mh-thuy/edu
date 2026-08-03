@@ -144,7 +144,9 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
       {/* Menu */}
       <List sx={{ px: 1.5, py: 2 }}>
         {visibleItems.map((item) => {
-          const selected = pathname === item.href;
+          const selected =
+            pathname === item.href ||
+            (item.href !== "/" && pathname.startsWith(`${item.href}/`));
 
           return (
             <ListItemButton

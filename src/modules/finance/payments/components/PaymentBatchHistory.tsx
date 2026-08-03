@@ -107,6 +107,14 @@ export function PaymentBatchHistory() {
     void load();
   }, [load]);
 
+  function clearSearch() {
+    const shouldReloadImmediately = !studentCode && !status;
+    setStudent(null);
+    setStudentCode("");
+    setStatus("");
+    if (shouldReloadImmediately) void load();
+  }
+
   return (
     <Stack spacing={2}>
       <Box>
@@ -148,6 +156,9 @@ export function PaymentBatchHistory() {
           </TextField>
           <Button variant="contained" onClick={() => void load()}>
             Tìm kiếm
+          </Button>
+          <Button variant="outlined" onClick={clearSearch}>
+            Xóa tìm kiếm
           </Button>
         </Stack>
       </Paper>

@@ -13,7 +13,6 @@ type Params = Promise<{
 }>;
 
 export async function GET(
-  request: NextRequest,
   { params }: { params: Params },
 ) {
   try {
@@ -56,7 +55,6 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: NextRequest,
   { params }: { params: Params },
 ) {
   try {

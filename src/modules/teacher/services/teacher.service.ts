@@ -150,25 +150,3 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
     where: { id },
   });
 }
-
-export async function checkTeacherScheduleConflict(
-  teacherId: string,
-  dayOfWeek: number,
-  startMinute: number,
-  endMinute: number,
-): Promise<boolean> {
-  const schedules = await prisma.classSchedule.findMany({
-    where: {
-      teacherId,
-      dayOfWeek,
-      startMinute: {
-        lt: endMinute,
-      },
-      endMinute: {
-        gt: startMinute,
-      },
-    },
-  });
-
-  return schedules.length > 0;
-}

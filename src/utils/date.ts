@@ -1,8 +1,3 @@
-export const timeToInt = (time: string): number => {
-  const [hour = 0, minute = 0] = time.split(":").map(Number);
-  return hour * 60 + minute;
-};
-
 export const intToTime = (value: number): string => {
   const hour = Math.floor(value / 60);
   const minute = value % 60;

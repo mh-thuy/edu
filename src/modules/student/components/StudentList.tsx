@@ -83,7 +83,7 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
           }}
         >
           <Chip
-            label={status === "ACTIVE" ? "Hoạt động" : "Ngừng"}
+            label={status === "ACTIVE" ? "Đang hoạt động" : "Ngừng hoạt động"}
             size="small"
             color={status === "ACTIVE" ? "success" : "error"}
             variant="outlined"
@@ -310,7 +310,7 @@ export function StudentList({ role }: StudentListProps): ReactElement {
 
             <Box>
               <Typography variant="h6" fontWeight={700}>
-                Quản lý học sinh
+                Quản lý học viên
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Danh sách học sinh, thông tin liên hệ và trạng thái
