@@ -331,6 +331,55 @@ export function StudentList({ role }: StudentListProps): ReactElement {
           >
             Thêm học sinh
           </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            disabled={isSubmitting}
+            sx={{ borderRadius: 2, height: 40, whiteSpace: "nowrap" }}
+          >
+            Import CSV
+            <input
+              hidden
+              type="file"
+              accept=".csv,text/csv"
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+
+                try {
+                  setIsSubmitting(true);
+                  const form = new FormData();
+                  form.append("file", file);
+                  const response = await fetch("/api/students/import", {
+                    method: "POST",
+                    body: form,
+                  });
+                  if (!response.ok) {
+                    throw new Error(await extractApiErrorMessage(response, "Import học viên thất bại"));
+                  }
+
+                  const result = await response.json() as {
+                    success: boolean;
+                    data?: { importedRows: number; skippedRows: number; errors: Array<{ rowNo: number; message: string }> };
+                  };
+                  if (!result.success || !result.data) {
+                    throw new Error("Import học viên thất bại");
+                  }
+
+                  const errorMessage = result.data.errors.length > 0
+                    ? ` Có ${result.data.errors.length} dòng lỗi.`
+                    : "";
+                  showSuccess(`Đã import ${result.data.importedRows} học viên, bỏ qua ${result.data.skippedRows} dòng.${errorMessage}`);
+                  await refresh();
+                } catch (error) {
+                  showError(error instanceof Error ? error.message : "Import học viên thất bại");
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+            />
+          </Button>
         </Stack>
 
         <Box sx={{ mt: 2.5 }}>

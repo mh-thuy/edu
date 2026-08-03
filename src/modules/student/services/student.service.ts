@@ -20,11 +20,13 @@ function buildStudentCreateInput(data: StudentCreate): Prisma.StudentCreateInput
   };
 }
 
-async function generateStudentCode() {
+export async function generateStudentCode(
+  client: typeof prisma | Prisma.TransactionClient = prisma,
+) {
   const prefix = `HS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
-    if (!(await prisma.student.findUnique({ where: { code }, select: { id: true } }))) return code;
+    if (!(await client.student.findUnique({ where: { code }, select: { id: true } }))) return code;
   }
   throw new ConflictError("Không thể tạo mã học viên tự động, vui lòng thử lại");
 }
@@ -46,7 +48,7 @@ function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput
 }
 
 export async function createStudent(data: StudentCreate): Promise<Student> {
-  const code = await generateStudentCode();
+  const code = await generateStudentCode(prisma);
   return prisma.student.create({
     data: { ...buildStudentCreateInput(data), code },
   });
