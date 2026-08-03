@@ -14,11 +14,13 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import {
   MasterSelectField,
@@ -66,6 +68,9 @@ const statusColors: Record<
 
 export function PaymentBatchHistory() {
   const [items, setItems] = useState<Batch[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [studentCode, setStudentCode] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [status, setStatus] = useState("");
@@ -77,7 +82,7 @@ export function PaymentBatchHistory() {
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const params = new URLSearchParams({ page: "1", pageSize: "100" });
+    const params = new URLSearchParams({ page: String(page + 1), pageSize: String(pageSize) });
     if (studentCode.trim()) params.set("studentCode", studentCode.trim());
     if (status) params.set("status", status);
 
@@ -91,7 +96,9 @@ export function PaymentBatchHistory() {
           ),
         );
       }
-      setItems((await unwrapApiResponse<{ items: Batch[] }>(response)).items);
+      const result = await unwrapApiResponse<{ items: Batch[]; total: number }>(response);
+      setItems(result.items);
+      setTotal(result.total);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -101,7 +108,7 @@ export function PaymentBatchHistory() {
     } finally {
       setLoading(false);
     }
-  }, [studentCode, status]);
+  }, [studentCode, status, page, pageSize]);
 
   useEffect(() => {
     void load();
@@ -112,6 +119,7 @@ export function PaymentBatchHistory() {
     setStudent(null);
     setStudentCode("");
     setStatus("");
+    setPage(0);
     if (shouldReloadImmediately) void load();
   }
 
@@ -146,7 +154,7 @@ export function PaymentBatchHistory() {
             select
             label="Trạng thái"
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => { setStatus(event.target.value); setPage(0); }}
             sx={{ minWidth: 180 }}
           >
             <MenuItem value="">Tất cả</MenuItem>
@@ -165,8 +173,8 @@ export function PaymentBatchHistory() {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Paper sx={{ overflow: "auto" }}>
-        <Table size="small">
+      <Paper sx={{ overflow: "hidden" }}>
+        <Table sx={{ minWidth: 900 }} size="small">
           <TableHead>
             <TableRow>
               <TableCell>Mã batch</TableCell>
@@ -262,14 +270,14 @@ export function PaymentBatchHistory() {
                               Xuất biên lai tổng
                             </Button>
                           ) : (
-                            <Button
-                              size="small"
-                              sx={{ mt: 1 }}
-                              variant="outlined"
-                              href={`/api/payment-batches/${batch.id}/notice/pdf`}
-                            >
-                              Xuất thông báo tổng
-                            </Button>
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1 }}>
+                              <Button size="small" variant="outlined" href={`/api/payment-batches/${batch.id}/notice/pdf`}>
+                                Tải thông báo PDF
+                              </Button>
+                              <Button size="small" variant="contained" startIcon={<PrintOutlinedIcon />} component="a" href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer">
+                                Mở để in
+                              </Button>
+                            </Stack>
                           )}
                         </Box>
                       </Collapse>
@@ -297,6 +305,7 @@ export function PaymentBatchHistory() {
             )}
           </TableBody>
         </Table>
+        <TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} />
       </Paper>
 
       <StudentSelectDialog
@@ -305,6 +314,7 @@ export function PaymentBatchHistory() {
         onSelect={(item: StudentItem) => {
           setStudent({ id: item.id, code: item.code, name: item.fullName });
           setStudentCode(item.code);
+          setPage(0);
           studentDialog.onClose();
         }}
       />

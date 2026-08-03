@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, Chip, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Alert, Button, Chip, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
@@ -19,6 +19,9 @@ const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number
 
 export function TuitionList() {
   const [items, setItems] = useState<Fee[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [studentCode, setStudentCode] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(null);
@@ -32,17 +35,19 @@ export function TuitionList() {
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
-    const query = new URLSearchParams({ pageSize: "200" });
+    const query = new URLSearchParams({ page: String(page + 1), pageSize: String(pageSize) });
     if (studentCode.trim()) query.set("studentCode", studentCode.trim());
     if (classId) query.set("classId", classId);
     if (status) query.set("status", status);
     try {
       const response = await fetch(`/api/tuition-fees?${query}`);
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách học phí"));
-      setItems((await unwrapApiResponse<{ items: Fee[] }>(response)).items);
+      const result = await unwrapApiResponse<{ items: Fee[]; total: number }>(response);
+      setItems(result.items);
+      setTotal(result.total);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Không thể tải danh sách học phí"); }
     finally { setLoading(false); }
-  }, [studentCode, classId, status]);
+  }, [studentCode, classId, status, page, pageSize]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -56,17 +61,17 @@ export function TuitionList() {
     <Paper sx={{ p: 2 }}><Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
       <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: 260 }} />
       <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" sx={{ flex: 1, minWidth: 260 }} />
-      <Select size="small" displayEmpty value={status} onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: 190 }}><MenuItem value="">Tất cả trạng thái</MenuItem>{(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}</Select>
+      <Select size="small" displayEmpty value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }} sx={{ minWidth: 190 }}><MenuItem value="">Tất cả trạng thái</MenuItem>{(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}</Select>
       <Button variant="contained" onClick={() => void load()}>Tìm kiếm</Button>
     </Stack></Paper>
     {error && <Alert severity="error">{error}</Alert>}
-    <Paper sx={{ overflow: "auto" }}><Table size="small"><TableHead><TableRow><TableCell>Mã học phí</TableCell><TableCell>Học sinh</TableCell><TableCell>Lớp</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Giảm giá</TableCell><TableCell>Phụ phí</TableCell><TableCell align="right">Tổng phải thu</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell>Trạng thái</TableCell></TableRow></TableHead><TableBody>
+    <Paper sx={{ overflow: "hidden" }}><Table sx={{ minWidth: 980 }} size="small"><TableHead><TableRow><TableCell>Mã học phí</TableCell><TableCell>Học sinh</TableCell><TableCell>Lớp</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Giảm giá</TableCell><TableCell>Phụ phí</TableCell><TableCell align="right">Tổng phải thu</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell>Trạng thái</TableCell></TableRow></TableHead><TableBody>
       {!loading && items.map((item) => <TableRow key={item.id} hover><TableCell><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">{item.feeNo}</Button></TableCell><TableCell>{item.student?.code}<br /><Typography variant="caption">{item.student?.fullName}</Typography></TableCell><TableCell>{item.class?.name || "-"}</TableCell><TableCell>{money(item.originalAmount)}</TableCell><TableCell>{money(item.discountAmount)}</TableCell><TableCell>{money(item.additionalAmount)}</TableCell><TableCell align="right"><strong>{money(item.finalAmount)}</strong></TableCell><TableCell>{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN") : "-"}</TableCell><TableCell><Chip size="small" color={colors[item.status]} label={labels[item.status]} /></TableCell></TableRow>)}
       {!loading && !items.length && <TableRow><TableCell colSpan={9}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
       {loading && <TableRow><TableCell colSpan={9}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
-    </TableBody></Table></Paper>
-    <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); studentDialog.onClose(); }} />
-    <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); classDialog.onClose(); }} />
+    </TableBody></Table><TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} /></Paper>
+    <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); setPage(0); studentDialog.onClose(); }} />
+    <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); setPage(0); classDialog.onClose(); }} />
   </Stack>;
 }
 
