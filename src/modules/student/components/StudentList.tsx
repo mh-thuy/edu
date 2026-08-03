@@ -395,7 +395,6 @@ export function StudentList({ role }: StudentListProps): ReactElement {
           defaultValues={
             editingStudent
               ? {
-                  code: editingStudent.code ?? "",
                   fullName: editingStudent.fullName ?? "",
                   birthday: editingStudent.birthday ?? undefined,
                   parentName: editingStudent.parentName ?? "",

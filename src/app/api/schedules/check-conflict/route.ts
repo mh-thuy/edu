@@ -6,6 +6,7 @@ import { getScheduleConflicts } from "@/modules/schedule/services/schedule.servi
 const checkScheduleConflictSchema = z
   .object({
     teacherId: z.string().min(1, "teacherId is invalid").optional(),
+    classId: z.string().min(1, "classId is invalid").optional(),
     dayOfWeek: z.number().int().min(0).max(6),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(0).max(1439),
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     const conflicts = await getScheduleConflicts(
       {
         teacherId: data.teacherId,
+        classId: data.classId,
         dayOfWeek: data.dayOfWeek,
         startMinute: data.startMinute,
         endMinute: data.endMinute,

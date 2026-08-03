@@ -30,6 +30,12 @@ export type ClassListItem = Prisma.ClassGetPayload<{
         user: true;
       };
     };
+    _count: {
+      select: {
+        students: true;
+        schedules: true;
+      };
+    };
   };
 }>;
 

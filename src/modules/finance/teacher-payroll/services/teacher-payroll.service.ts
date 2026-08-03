@@ -1,9 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { decimalToNumber, sumDecimals, toDecimal } from "@/lib/decimal";
-import {
-  PaymentStatus,
-  PayrollStatus as PrismaPayrollStatus,
-} from "@prisma/client";
+import { PayrollStatus as PrismaPayrollStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { TeacherPayrollFilter } from "@/modules/finance/teacher-payroll/schemas/teacher-payroll.schema";
 
@@ -104,20 +101,20 @@ export class TeacherPayrollService {
           teacherSharePercentage: true,
         },
       }),
-      prisma.payment.findMany({
+      prisma.tuitionPayment.findMany({
         where: {
-          status: PaymentStatus.CONFIRMED,
+          paymentStatus: "SUCCESS",
           paymentDate: {
             gte: monthStart,
             lt: monthEnd,
           },
-          studentFee: {
+          tuitionFee: {
             classId: { in: classIds },
           },
         },
         select: {
           amount: true,
-          studentFee: {
+          tuitionFee: {
             select: {
               classId: true,
             },
@@ -133,7 +130,7 @@ export class TeacherPayrollService {
 
     const revenueByClassId = new Map<string, number | Prisma.Decimal>();
     for (const payment of payments) {
-      const classId = payment.studentFee.classId;
+      const classId = payment.tuitionFee.classId;
       const current = revenueByClassId.get(classId) ?? 0;
       revenueByClassId.set(classId, toDecimal(current).add(payment.amount));
     }

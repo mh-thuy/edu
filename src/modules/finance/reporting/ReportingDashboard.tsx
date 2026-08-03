@@ -39,7 +39,6 @@ interface ReportData {
 interface DebtReportData {
   totalDebt: number;
   unpaidCount: number;
-  partialCount: number;
   overdueCount: number;
   fees?: Array<{
     id: string;
@@ -64,14 +63,12 @@ interface TeacherReportData {
   }>;
 }
 
-type FeeStatus = "unpaid" | "partial" | "paid";
 type PayrollStatus = "draft" | "approved" | "paid";
 
 interface StudentFeeDebtItem {
   id: string;
   studentId: string;
-  amount: number;
-  outstanding: number;
+  finalAmount: number;
   status: string;
   dueDate: string;
 }
@@ -122,10 +119,10 @@ export function ReportingDashboard() {
     setDateEnd(lastDay.toISOString().split("T")[0] || "");
   }, []);
 
-  const normalizeFeeStatus = (status: string): FeeStatus => {
+  const normalizeFeeStatus = (status: string): "unpaid" | "paid" => {
     const normalized = status.toLowerCase();
-    if (normalized === "paid" || normalized === "partial") {
-      return normalized;
+    if (normalized === "paid") {
+      return "paid";
     }
     return "unpaid";
   };
@@ -178,23 +175,21 @@ const getPaymentMethodLabel = (method: string): string => {
   const loadDebtReport = useCallback(async () => {
     try {
       setDebtLoading(true);
-      const response = await fetch("/api/student-fees?status=unpaid,partial");
+      const response = await fetch("/api/tuition-fees?pageSize=200");
       if (!response.ok) throw new Error("Failed to load debt report");
       const result = await unwrapApiResponse<StudentFeesResponse>(response);
       // Calculate summary
       const debtData: DebtReportData = {
         totalDebt: result.items.reduce(
-          (sum, fee) => sum + (fee.outstanding || 0),
+          (sum, fee) => sum + (fee.status === "PAID" ? 0 : fee.finalAmount || 0),
           0,
         ),
         unpaidCount: result.items.filter((fee) => normalizeFeeStatus(fee.status) === "unpaid")
           .length,
-        partialCount: result.items.filter((fee) => normalizeFeeStatus(fee.status) === "partial")
-          .length,
         overdueCount: result.items.filter(
           (fee) => new Date(fee.dueDate) < new Date() && normalizeFeeStatus(fee.status) !== "paid",
         ).length,
-        fees: result.items,
+        fees: result.items.map((fee) => ({ id: fee.id, studentId: fee.studentId, amount: fee.finalAmount, outstanding: fee.status === "PAID" ? 0 : fee.finalAmount, status: fee.status })),
       };
       setDebtReport(debtData);
     } catch {

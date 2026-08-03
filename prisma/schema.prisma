@@ -48,60 +48,6 @@ enum EnrollmentStatus {
   @@map("enrollment_status")
 }
 
-enum FeeStatus {
-  UNPAID
-  PARTIAL
-  PAID
-  CANCELLED
-
-  @@map("fee_status")
-}
-
-enum PaymentRequestStatus {
-  ACTIVE
-  EXPIRED
-  PAID
-  CANCELLED
-
-  @@map("payment_request_status")
-}
-
-enum PaymentQrStatus {
-  ACTIVE
-  EXPIRED
-  CANCELLED
-
-  @@map("payment_qr_status")
-}
-
-enum PaymentMethod {
-  CASH
-  TRANSFER
-  WALLET
-
-  @@map("payment_method")
-}
-
-enum PaymentStatus {
-  PENDING
-  CONFIRMED
-  CANCELLED
-  REFUNDED
-  FAILED
-
-  @@map("payment_status")
-}
-
-enum PaymentNoticeStatus {
-  DRAFT
-  GENERATED
-  PRINTED
-  SENT
-  CANCELLED
-
-  @@map("payment_notice_status")
-}
-
 enum ReceiptStatus {
   ACTIVE
   CANCELLED
@@ -135,6 +81,119 @@ enum ExpenseStatus {
   @@map("expense_status")
 }
 
+enum TuitionFeeStatus {
+  UNPAID
+  PAID
+  OVERDUE
+  EXEMPTED
+  CANCELLED
+
+  @@map("tuition_fee_status")
+}
+
+enum TuitionFeeItemType {
+  TUITION
+  MATERIAL
+  UNIFORM
+  EXAM_FEE
+  OTHER_FEE
+  DISCOUNT
+  SCHOLARSHIP
+
+  @@map("tuition_fee_item_type")
+}
+
+enum TuitionAdjustmentType {
+  DISCOUNT
+  SCHOLARSHIP
+  ADD_FEE
+  REDUCE_FEE
+  EXEMPTION
+  CANCELLATION
+  TRANSFER_CLASS
+
+  @@map("tuition_adjustment_type")
+}
+
+enum TuitionPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+
+  @@map("tuition_payment_method")
+}
+
+enum TuitionPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+
+  @@map("tuition_payment_status")
+}
+
+enum PaymentBatchStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+
+  @@map("payment_batch_status")
+}
+
+enum TuitionRefundStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  REJECTED
+  CANCELLED
+
+  @@map("tuition_refund_status")
+}
+
+enum BankImportStatus {
+  UPLOADED
+  VALIDATING
+  VALIDATED
+  PROCESSING
+  COMPLETED
+  PARTIALLY_COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("bank_import_status")
+}
+
+enum BankReconciliationStatus {
+  IMPORTED
+  AUTO_MATCHED
+  MANUAL_MATCHED
+  CONFIRMED
+  UNMATCHED
+  AMBIGUOUS
+  DUPLICATED
+  AMOUNT_MISMATCH
+  IGNORED
+  REVERSED
+  ERROR
+
+  @@map("bank_reconciliation_status")
+}
+
+enum BankMatchMethod {
+  TUITION_FEE_NO
+  STUDENT_CODE
+  PAYMENT_REFERENCE
+  PHONE_NUMBER
+  STUDENT_NAME
+  PARENT_NAME
+  AMOUNT
+  MANUAL
+
+  @@map("bank_match_method")
+}
+
 model User {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email        String     @unique(map: "uq_users_email") @db.VarChar(255)
@@ -159,7 +218,7 @@ model Role {
   description String?
   isActive    Boolean @default(true) @map("is_active")
 
-  users       UserRole[]
+  users UserRole[]
 
   @@map("roles")
 }
@@ -215,8 +274,9 @@ model Student {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   enrollments ClassStudent[]
-  fees        StudentFee[]
+  tuitionFees TuitionFee[]   @relation("TuitionFeeStudent")
   attendances Attendance[]
+  paymentBatches PaymentBatch[]
 
   @@map("students")
 }
@@ -241,7 +301,7 @@ model Class {
   students     ClassStudent[]
   schedules    ClassSchedule[]
   attendances  Attendance[]
-  fees         StudentFee[]
+  tuitionFees  TuitionFee[]         @relation("TuitionFeeClass")
   salaryRule   ClassSalaryRule?
   payrollItems TeacherPayrollItem[]
 
@@ -263,8 +323,9 @@ model ClassStudent {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  class   Class   @relation(fields: [classId], references: [id], map: "fk_class_students_class")
-  student Student @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
+  class       Class        @relation(fields: [classId], references: [id], map: "fk_class_students_class")
+  student     Student      @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
+  tuitionFees TuitionFee[] @relation("TuitionFeeEnrollment")
 
   @@unique([classId, studentId], map: "uq_class_students_class_student")
   @@index([classId], map: "idx_class_students_class_id")
@@ -314,202 +375,6 @@ model Attendance {
   @@index([classId, attendanceDate], map: "idx_attendances_class_date")
   @@index([studentId], map: "idx_attendances_student_id")
   @@map("attendances")
-}
-
-model StudentFee {
-  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentId         String    @map("student_id") @db.Uuid
-  classId           String    @map("class_id") @db.Uuid
-  billingYear       Int       @map("billing_year")
-  billingMonth      Int       @map("billing_month") @db.SmallInt
-  amount            Decimal   @default(0) @db.Decimal(12, 2)
-  discount          Decimal   @default(0) @db.Decimal(12, 2)
-  finalAmount       Decimal   @default(0) @map("final_amount") @db.Decimal(12, 2)
-  paidAmount        Decimal   @default(0) @map("paid_amount") @db.Decimal(12, 2)
-  outstandingAmount Decimal   @default(0) @map("outstanding_amount") @db.Decimal(12, 2)
-  dueDate           DateTime? @map("due_date") @db.Date
-  status            FeeStatus @default(UNPAID)
-  note              String?
-
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  student Student @relation(fields: [studentId], references: [id], map: "fk_student_fees_student")
-  class   Class   @relation(fields: [classId], references: [id], map: "fk_student_fees_class")
-
-  paymentRequests PaymentRequest[]
-  payments        Payment[]
-
-  @@unique([studentId, classId, billingYear, billingMonth], map: "uq_student_fees_student_class_month")
-  @@index([studentId], map: "idx_student_fees_student_id")
-  @@index([classId], map: "idx_student_fees_class_id")
-  @@index([billingYear, billingMonth], map: "idx_student_fees_billing_month")
-  @@index([status], map: "idx_student_fees_status")
-  @@map("student_fees")
-}
-
-model PaymentAccount {
-  id            String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code          String  @unique(map: "uq_payment_accounts_code") @db.VarChar(50)
-  bankCode      String  @map("bank_code") @db.VarChar(50)
-  bankName      String  @map("bank_name") @db.VarChar(100)
-  accountNumber String  @map("account_number") @db.VarChar(100)
-  accountName   String  @map("account_name") @db.VarChar(255)
-  isDefault     Boolean @default(false) @map("is_default")
-  isActive      Boolean @default(true) @map("is_active")
-  note          String?
-
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
-
-  paymentRequests PaymentRequest[]
-
-  @@unique([bankCode, accountNumber], map: "uq_payment_accounts_bank_account")
-  @@index([isActive], map: "idx_payment_accounts_active")
-  @@map("payment_accounts")
-}
-
-model PaymentRequest {
-  id               String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentFeeId     String               @map("student_fee_id") @db.Uuid
-  paymentAccountId String               @map("payment_account_id") @db.Uuid
-  paymentCode      String               @unique(map: "uq_payment_requests_payment_code") @map("payment_code") @db.VarChar(100)
-  requestedAmount  Decimal              @map("requested_amount") @db.Decimal(12, 2)
-  transferContent  String               @map("transfer_content") @db.VarChar(255)
-  expiredAt        DateTime?            @map("expired_at") @db.Timestamptz(6)
-  status           PaymentRequestStatus @default(ACTIVE)
-  note             String?
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  studentFee     StudentFee     @relation(fields: [studentFeeId], references: [id], map: "fk_payment_requests_student_fee")
-  paymentAccount PaymentAccount @relation(fields: [paymentAccountId], references: [id], map: "fk_payment_requests_payment_account")
-
-  qrCode   PaymentQrCode?
-  notices  PaymentNotice[]
-  payments Payment[]
-
-  @@index([studentFeeId], map: "idx_payment_requests_student_fee_id")
-  @@index([paymentAccountId], map: "idx_payment_requests_payment_account_id")
-  @@index([status], map: "idx_payment_requests_status")
-  @@map("payment_requests")
-}
-
-model PaymentQrCode {
-  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentRequestId String          @unique(map: "uq_payment_qr_codes_payment_request_id") @map("payment_request_id") @db.Uuid
-  qrPayload        String          @map("qr_payload")
-  status           PaymentQrStatus @default(ACTIVE)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  paymentRequest PaymentRequest @relation(fields: [paymentRequestId], references: [id], map: "fk_payment_qr_codes_payment_request")
-
-  @@index([status], map: "idx_payment_qr_codes_status")
-  @@map("payment_qr_codes")
-}
-
-model PaymentNotice {
-  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentRequestId String              @map("payment_request_id") @db.Uuid
-  noticeNumber     String              @unique(map: "uq_payment_notices_notice_number") @map("notice_number") @db.VarChar(100)
-  amount           Decimal             @db.Decimal(12, 2)
-  dueDate          DateTime?           @map("due_date") @db.Date
-  pdfUrl           String?             @map("pdf_url")
-  version          Int                 @default(1)
-  isLatest         Boolean             @default(true) @map("is_latest")
-  printedAt        DateTime?           @map("printed_at") @db.Timestamptz(6)
-  sentAt           DateTime?           @map("sent_at") @db.Timestamptz(6)
-  sendMethod       String?             @map("send_method") @db.VarChar(50)
-  status           PaymentNoticeStatus @default(DRAFT)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  paymentRequest PaymentRequest @relation(fields: [paymentRequestId], references: [id], map: "fk_payment_notices_payment_request")
-
-  @@unique([paymentRequestId, version], map: "uq_payment_notices_request_version")
-  @@index([paymentRequestId], map: "idx_payment_notices_payment_request_id")
-  @@index([status], map: "idx_payment_notices_status")
-  @@map("payment_notices")
-}
-
-model BankTransaction {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bankCode        String    @map("bank_code") @db.VarChar(50)
-  transactionId   String    @unique(map: "uq_bank_transactions_transaction_id") @map("transaction_id") @db.VarChar(255)
-  amount          Decimal   @db.Decimal(12, 2)
-  transactionDate DateTime  @map("transaction_date") @db.Timestamptz(6)
-  description     String?
-  referenceCode   String?   @map("reference_code") @db.VarChar(100)
-  rawData         Json?     @map("raw_data")
-  matched         Boolean   @default(false)
-  matchedAt       DateTime? @map("matched_at") @db.Timestamptz(6)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  payments Payment[]
-
-  @@index([bankCode], map: "idx_bank_transactions_bank_code")
-  @@index([referenceCode], map: "idx_bank_transactions_reference_code")
-  @@index([transactionDate], map: "idx_bank_transactions_transaction_date")
-  @@index([matched], map: "idx_bank_transactions_matched")
-  @@map("bank_transactions")
-}
-
-model Payment {
-  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  studentFeeId      String        @map("student_fee_id") @db.Uuid
-  paymentRequestId  String?       @map("payment_request_id") @db.Uuid
-  bankTransactionId String?       @map("bank_transaction_id") @db.Uuid
-  amount            Decimal       @db.Decimal(12, 2)
-  method            PaymentMethod
-  paymentDate       DateTime      @default(dbgenerated("CURRENT_DATE")) @map("payment_date") @db.Date
-  status            PaymentStatus @default(PENDING)
-  notes             String?
-
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  confirmedAt  DateTime? @map("confirmed_at") @db.Timestamptz(6)
-  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  cancelReason String?   @map("cancel_reason")
-
-  studentFee      StudentFee       @relation(fields: [studentFeeId], references: [id], map: "fk_payments_student_fee")
-  paymentRequest  PaymentRequest?  @relation(fields: [paymentRequestId], references: [id], map: "fk_payments_payment_request")
-  bankTransaction BankTransaction? @relation(fields: [bankTransactionId], references: [id], map: "fk_payments_bank_transaction")
-  receipt         Receipt?
-
-  @@index([studentFeeId], map: "idx_payments_student_fee_id")
-  @@index([paymentRequestId], map: "idx_payments_payment_request_id")
-  @@index([bankTransactionId], map: "idx_payments_bank_transaction_id")
-  @@index([paymentDate], map: "idx_payments_payment_date")
-  @@index([method], map: "idx_payments_method")
-  @@index([status], map: "idx_payments_status")
-  @@map("payments")
-}
-
-model Receipt {
-  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentId     String        @unique(map: "uq_receipts_payment_id") @map("payment_id") @db.Uuid
-  receiptNumber String        @unique(map: "uq_receipts_receipt_number") @map("receipt_number") @db.VarChar(100)
-  issueDate     DateTime      @default(dbgenerated("CURRENT_DATE")) @map("issue_date") @db.Date
-  printedAt     DateTime?     @map("printed_at") @db.Timestamptz(6)
-  status        ReceiptStatus @default(ACTIVE)
-
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  cancelReason String?   @map("cancel_reason")
-
-  payment Payment @relation(fields: [paymentId], references: [id], map: "fk_receipts_payment")
-
-  @@index([issueDate], map: "idx_receipts_issue_date")
-  @@index([status], map: "idx_receipts_status")
-  @@map("receipts")
 }
 
 model Expense {
@@ -608,4 +473,380 @@ model AuditLog {
   @@index([createdAt], map: "idx_audit_logs_created_at")
   @@index([tableName, recordId], map: "idx_audit_logs_table_record")
   @@map("audit_logs")
+}
+
+// New one-time tuition/payment domain. These transitional tables are additive;
+// legacy financial tables remain read-only until the migration report is approved.
+model TuitionFee {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  feeNo              String           @unique(map: "uq_tuition_fees_fee_no") @map("fee_no") @db.VarChar(30)
+  studentId          String           @map("student_id") @db.Uuid
+  enrollmentId       String           @map("enrollment_id") @db.Uuid
+  classId            String           @map("class_id") @db.Uuid
+  originalAmount     Decimal          @default(0) @map("original_amount") @db.Decimal(15, 2)
+  discountAmount     Decimal          @default(0) @map("discount_amount") @db.Decimal(15, 2)
+  additionalAmount   Decimal          @default(0) @map("additional_amount") @db.Decimal(15, 2)
+  finalAmount        Decimal          @default(0) @map("final_amount") @db.Decimal(15, 2)
+  dueDate            DateTime?        @map("due_date") @db.Date
+  status             TuitionFeeStatus @default(UNPAID)
+  exemptionReason    String?          @map("exemption_reason")
+  cancellationReason String?          @map("cancellation_reason")
+  note               String?
+  version            Int              @default(1)
+  createdBy          String           @map("created_by") @db.Uuid
+  updatedBy          String           @map("updated_by") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student     Student             @relation("TuitionFeeStudent", fields: [studentId], references: [id])
+  enrollment  ClassStudent        @relation("TuitionFeeEnrollment", fields: [enrollmentId], references: [id])
+  class       Class               @relation("TuitionFeeClass", fields: [classId], references: [id])
+  items       TuitionFeeItem[]
+  adjustments TuitionAdjustment[]
+  payments    TuitionPayment[]
+  paymentAllocations PaymentAllocation[]
+  @@index([studentId], map: "idx_tuition_fees_student_id")
+  @@index([classId], map: "idx_tuition_fees_class_id")
+  @@index([status], map: "idx_tuition_fees_status")
+  @@index([dueDate], map: "idx_tuition_fees_due_date")
+  @@map("tuition_fees")
+}
+
+model TuitionFeeItem {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tuitionFeeId String             @map("tuition_fee_id") @db.Uuid
+  itemType     TuitionFeeItemType @map("item_type")
+  itemName     String             @map("item_name") @db.VarChar(255)
+  quantity     Decimal            @default(1) @db.Decimal(10, 2)
+  unitPrice    Decimal            @default(0) @map("unit_price") @db.Decimal(15, 2)
+  amount       Decimal            @default(0) @db.Decimal(15, 2)
+  displayOrder Int                @default(0) @map("display_order")
+  note         String?
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tuitionFee TuitionFee @relation(fields: [tuitionFeeId], references: [id])
+
+  @@index([tuitionFeeId], map: "idx_tuition_fee_items_fee_id")
+  @@map("tuition_fee_items")
+}
+
+model TuitionAdjustment {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tuitionFeeId   String                @map("tuition_fee_id") @db.Uuid
+  adjustmentType TuitionAdjustmentType @map("adjustment_type")
+  amount         Decimal               @db.Decimal(15, 2)
+  beforeAmount   Decimal               @map("before_amount") @db.Decimal(15, 2)
+  afterAmount    Decimal               @map("after_amount") @db.Decimal(15, 2)
+  reason         String
+  approvedBy     String?               @map("approved_by") @db.Uuid
+  createdBy      String                @map("created_by") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tuitionFee TuitionFee @relation(fields: [tuitionFeeId], references: [id])
+
+  @@index([tuitionFeeId], map: "idx_tuition_adjustments_fee_id")
+  @@map("tuition_adjustments")
+}
+
+model TuitionPayment {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentNo            String               @unique(map: "uq_tuition_payments_payment_no") @map("payment_no") @db.VarChar(30)
+  tuitionFeeId         String               @map("tuition_fee_id") @db.Uuid
+  paymentBatchId       String?              @map("payment_batch_id") @db.Uuid
+  studentId            String               @map("student_id") @db.Uuid
+  paymentDate          DateTime             @default(now()) @map("payment_date") @db.Timestamptz(6)
+  amount               Decimal              @db.Decimal(15, 2)
+  paymentMethod        TuitionPaymentMethod @map("payment_method")
+  paymentStatus        TuitionPaymentStatus @default(PENDING) @map("payment_status")
+  idempotencyKey       String?              @unique(map: "uq_tuition_payments_idempotency_key") @map("idempotency_key") @db.VarChar(150)
+  bankAccountId        String?              @map("bank_account_id") @db.Uuid
+  bankTransactionNo    String?              @map("bank_transaction_no") @db.VarChar(150)
+  transactionReference String?              @map("transaction_reference") @db.VarChar(150)
+  payerName            String?              @map("payer_name") @db.VarChar(255)
+  paymentContent       String?              @map("payment_content") @db.VarChar(500)
+  proofFileUrl         String?              @map("proof_file_url")
+  receivedBy           String?              @map("received_by") @db.Uuid
+  confirmedBy          String?              @map("confirmed_by") @db.Uuid
+  confirmedAt          DateTime?            @map("confirmed_at") @db.Timestamptz(6)
+  failureReason        String?              @map("failure_reason")
+  cancellationReason   String?              @map("cancellation_reason")
+  note                 String?
+  version              Int                  @default(1)
+  createdBy            String               @map("created_by") @db.Uuid
+  updatedBy            String               @map("updated_by") @db.Uuid
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tuitionFee TuitionFee      @relation(fields: [tuitionFeeId], references: [id])
+  paymentBatch PaymentBatch? @relation(fields: [paymentBatchId], references: [id])
+  receipt    TuitionReceipt?
+  refunds    PaymentRefund[]
+
+  @@index([tuitionFeeId], map: "idx_tuition_payments_fee_id")
+  @@index([studentId], map: "idx_tuition_payments_student_id")
+  @@index([paymentStatus], map: "idx_tuition_payments_status")
+  @@map("tuition_payments")
+}
+
+model PaymentBatch {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchNo              String            @unique(map: "uq_payment_batches_batch_no") @map("batch_no") @db.VarChar(40)
+  studentId            String            @map("student_id") @db.Uuid
+  totalAmount          Decimal           @map("total_amount") @db.Decimal(15, 2)
+  paymentMethod        TuitionPaymentMethod @map("payment_method")
+  status               PaymentBatchStatus @default(PENDING)
+  paymentDate          DateTime          @default(now()) @map("payment_date") @db.Timestamptz(6)
+  bankAccountId        String?           @map("bank_account_id") @db.Uuid
+  bankTransactionNo    String?           @map("bank_transaction_no") @db.VarChar(150)
+  transactionReference String?           @map("transaction_reference") @db.VarChar(150)
+  payerName            String?           @map("payer_name") @db.VarChar(255)
+  paymentContent       String?           @map("payment_content") @db.VarChar(500)
+  confirmedBy          String?           @map("confirmed_by") @db.Uuid
+  confirmedAt          DateTime?         @map("confirmed_at") @db.Timestamptz(6)
+  createdBy            String            @map("created_by") @db.Uuid
+  updatedBy            String            @map("updated_by") @db.Uuid
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  student       Student                    @relation(fields: [studentId], references: [id])
+  bankAccount   BankAccount?               @relation(fields: [bankAccountId], references: [id])
+  allocations   PaymentAllocation[]
+  payments      TuitionPayment[]
+  transactions  BankStatementTransaction[]
+  receipt       PaymentBatchReceipt?
+
+  @@index([studentId], map: "idx_payment_batches_student_id")
+  @@index([status], map: "idx_payment_batches_status")
+  @@map("payment_batches")
+}
+
+model PaymentAllocation {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentBatchId String      @map("payment_batch_id") @db.Uuid
+  tuitionFeeId   String      @map("tuition_fee_id") @db.Uuid
+  amount         Decimal     @db.Decimal(15, 2)
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  paymentBatch PaymentBatch @relation(fields: [paymentBatchId], references: [id])
+  tuitionFee   TuitionFee   @relation(fields: [tuitionFeeId], references: [id])
+
+  @@unique([paymentBatchId, tuitionFeeId], map: "uq_payment_allocations_batch_fee")
+  @@index([tuitionFeeId], map: "idx_payment_allocations_fee_id")
+  @@map("payment_allocations")
+}
+
+model PaymentBatchReceipt {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptNo    String   @unique(map: "uq_payment_batch_receipts_receipt_no") @map("receipt_no") @db.VarChar(40)
+  paymentBatchId String @unique(map: "uq_payment_batch_receipts_batch_id") @map("payment_batch_id") @db.Uuid
+  issuedAt     DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedBy     String   @map("issued_by") @db.Uuid
+  receiverName String?  @map("receiver_name") @db.VarChar(255)
+  amount       Decimal  @db.Decimal(15, 2)
+  paymentBatch PaymentBatch @relation(fields: [paymentBatchId], references: [id])
+
+  @@map("payment_batch_receipts")
+}
+
+model PaymentRefund {
+  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  refundNo          String               @unique(map: "uq_payment_refunds_refund_no") @map("refund_no") @db.VarChar(30)
+  paymentId         String               @map("payment_id") @db.Uuid
+  amount            Decimal              @db.Decimal(15, 2)
+  refundMethod      TuitionPaymentMethod @map("refund_method")
+  refundDate        DateTime?            @map("refund_date") @db.Timestamptz(6)
+  bankTransactionNo String?              @map("bank_transaction_no") @db.VarChar(150)
+  reason            String
+  status            TuitionRefundStatus  @default(PENDING)
+  createdBy         String               @map("created_by") @db.Uuid
+  approvedBy        String?              @map("approved_by") @db.Uuid
+  completedAt       DateTime?            @map("completed_at") @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  payment TuitionPayment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId], map: "idx_payment_refunds_payment_id")
+  @@map("payment_refunds")
+}
+
+model TuitionReceipt {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptNo          String        @unique(map: "uq_tuition_receipts_receipt_no") @map("receipt_no") @db.VarChar(30)
+  paymentId          String        @unique(map: "uq_tuition_receipts_payment_id") @map("payment_id") @db.Uuid
+  issuedAt           DateTime      @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedBy           String        @map("issued_by") @db.Uuid
+  receiverName       String?       @map("receiver_name") @db.VarChar(255)
+  amount             Decimal       @db.Decimal(15, 2)
+  amountInWords      String?       @map("amount_in_words")
+  pdfFileUrl         String?       @map("pdf_file_url")
+  emailSentAt        DateTime?     @map("email_sent_at") @db.Timestamptz(6)
+  status             ReceiptStatus @default(ACTIVE)
+  cancellationReason String?       @map("cancellation_reason")
+  cancelledBy        String?       @map("cancelled_by") @db.Uuid
+  cancelledAt        DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  payment TuitionPayment @relation(fields: [paymentId], references: [id])
+
+  @@map("tuition_receipts")
+}
+
+model BankAccount {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankCode     String   @map("bank_code") @db.VarChar(50)
+  bankName     String   @map("bank_name") @db.VarChar(255)
+  accountNo    String   @map("account_no") @db.VarChar(100)
+  accountName  String   @map("account_name") @db.VarChar(255)
+  branchName   String?  @map("branch_name") @db.VarChar(255)
+  currencyCode String   @default("VND") @map("currency_code") @db.VarChar(10)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdBy    String   @map("created_by") @db.Uuid
+  updatedBy    String   @map("updated_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  imports BankStatementImport[]
+  paymentBatches PaymentBatch[]
+
+  @@unique([bankCode, accountNo], map: "uq_bank_accounts_bank_account")
+  @@map("bank_accounts")
+}
+
+model BankCsvMapping {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankCode              String   @map("bank_code") @db.VarChar(50)
+  mappingName           String   @map("mapping_name") @db.VarChar(255)
+  delimiter             String   @db.VarChar(5)
+  encoding              String   @db.VarChar(50)
+  headerRow             Int      @default(1) @map("header_row")
+  dataStartRow          Int      @default(2) @map("data_start_row")
+  dateFormat            String   @map("date_format") @db.VarChar(50)
+  transactionDateColumn String   @map("transaction_date_column") @db.VarChar(100)
+  valueDateColumn       String?  @map("value_date_column") @db.VarChar(100)
+  transactionNoColumn   String?  @map("transaction_no_column") @db.VarChar(100)
+  descriptionColumn     String   @map("description_column") @db.VarChar(100)
+  senderNameColumn      String?  @map("sender_name_column") @db.VarChar(100)
+  senderAccountColumn   String?  @map("sender_account_column") @db.VarChar(100)
+  creditAmountColumn    String   @map("credit_amount_column") @db.VarChar(100)
+  debitAmountColumn     String?  @map("debit_amount_column") @db.VarChar(100)
+  balanceColumn         String?  @map("balance_column") @db.VarChar(100)
+  isDefault             Boolean  @default(false) @map("is_default")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdBy             String   @map("created_by") @db.Uuid
+  updatedBy             String   @map("updated_by") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([bankCode], map: "idx_bank_csv_mappings_bank_code")
+  @@map("bank_csv_mappings")
+}
+
+model BankStatementImport {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankAccountId  String           @map("bank_account_id") @db.Uuid
+  fileName       String           @map("file_name") @db.VarChar(255)
+  fileUrl        String           @map("file_url")
+  fileHash       String           @map("file_hash") @db.VarChar(128)
+  encoding       String           @db.VarChar(50)
+  delimiter      String           @db.VarChar(5)
+  dateFormat     String           @map("date_format") @db.VarChar(50)
+  totalRows      Int              @default(0) @map("total_rows")
+  validRows      Int              @default(0) @map("valid_rows")
+  invalidRows    Int              @default(0) @map("invalid_rows")
+  duplicatedRows Int              @default(0) @map("duplicated_rows")
+  matchedRows    Int              @default(0) @map("matched_rows")
+  unmatchedRows  Int              @default(0) @map("unmatched_rows")
+  importStatus   BankImportStatus @default(UPLOADED) @map("import_status")
+  errorMessage   String?          @map("error_message")
+  importedBy     String           @map("imported_by") @db.Uuid
+  importedAt     DateTime         @default(now()) @map("imported_at") @db.Timestamptz(6)
+  confirmedBy    String?          @map("confirmed_by") @db.Uuid
+  confirmedAt    DateTime?        @map("confirmed_at") @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bankAccount  BankAccount                @relation(fields: [bankAccountId], references: [id])
+  transactions BankStatementTransaction[]
+
+  @@unique([bankAccountId, fileHash], map: "uq_bank_statement_imports_file")
+  @@map("bank_statement_imports")
+}
+
+model BankStatementTransaction {
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statementImportId    String                   @map("statement_import_id") @db.Uuid
+  bankAccountId        String                   @map("bank_account_id") @db.Uuid
+  rowNo                Int                      @map("row_no")
+  bankTransactionNo    String?                  @map("bank_transaction_no") @db.VarChar(255)
+  transactionDate      DateTime                 @map("transaction_date") @db.Timestamptz(6)
+  valueDate            DateTime?                @map("value_date") @db.Timestamptz(6)
+  description          String?
+  senderName           String?                  @map("sender_name") @db.VarChar(255)
+  senderAccountNo      String?                  @map("sender_account_no") @db.VarChar(100)
+  senderBankCode       String?                  @map("sender_bank_code") @db.VarChar(50)
+  creditAmount         Decimal                  @default(0) @map("credit_amount") @db.Decimal(15, 2)
+  debitAmount          Decimal                  @default(0) @map("debit_amount") @db.Decimal(15, 2)
+  balanceAmount        Decimal?                 @map("balance_amount") @db.Decimal(15, 2)
+  currencyCode         String                   @default("VND") @map("currency_code") @db.VarChar(10)
+  transactionHash      String                   @map("transaction_hash") @db.VarChar(128)
+  reconciliationStatus BankReconciliationStatus @default(IMPORTED) @map("reconciliation_status")
+  matchScore           Decimal?                 @map("match_score") @db.Decimal(5, 2)
+  matchMethod          BankMatchMethod?         @map("match_method")
+  matchedStudentId     String?                  @map("matched_student_id") @db.Uuid
+  matchedTuitionFeeId  String?                  @map("matched_tuition_fee_id") @db.Uuid
+  matchedNoticeId      String?                  @map("matched_notice_id") @db.Uuid
+  paymentId            String?                  @map("payment_id") @db.Uuid
+  paymentBatchId       String?                  @map("payment_batch_id") @db.Uuid
+  errorCode            String?                  @map("error_code") @db.VarChar(100)
+  errorMessage         String?                  @map("error_message")
+  confirmedBy          String?                  @map("confirmed_by") @db.Uuid
+  confirmedAt          DateTime?                @map("confirmed_at") @db.Timestamptz(6)
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  statementImport BankStatementImport           @relation(fields: [statementImportId], references: [id])
+  paymentBatch   PaymentBatch?                  @relation(fields: [paymentBatchId], references: [id])
+  candidates      BankStatementMatchCandidate[]
+
+  @@unique([bankAccountId, transactionHash], map: "uq_bank_statement_transactions_hash")
+  @@index([transactionDate], map: "idx_bank_statement_transactions_date")
+  @@index([reconciliationStatus], map: "idx_bank_statement_transactions_status")
+  @@map("bank_statement_transactions")
+}
+
+model BankStatementMatchCandidate {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statementTransactionId String          @map("statement_transaction_id") @db.Uuid
+  studentId              String          @map("student_id") @db.Uuid
+  tuitionFeeId           String          @map("tuition_fee_id") @db.Uuid
+  matchMethod            BankMatchMethod @map("match_method")
+  matchScore             Decimal         @map("match_score") @db.Decimal(5, 2)
+  matchedReference       String?         @map("matched_reference") @db.VarChar(255)
+  amountDifference       Decimal         @default(0) @map("amount_difference") @db.Decimal(15, 2)
+  isSelected             Boolean         @default(false) @map("is_selected")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  statementTransaction BankStatementTransaction @relation(fields: [statementTransactionId], references: [id])
+
+  @@index([statementTransactionId], map: "idx_bank_match_candidates_transaction_id")
+  @@map("bank_statement_match_candidates")
+}
+
+model TuitionAuditLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entityType  String   @map("entity_type") @db.VarChar(100)
+  entityId    String   @map("entity_id") @db.Uuid
+  action      String   @db.VarChar(100)
+  dataBefore  Json?    @map("data_before")
+  dataAfter   Json?    @map("data_after")
+  reason      String?
+  performedBy String   @map("performed_by") @db.Uuid
+  performedAt DateTime @default(now()) @map("performed_at") @db.Timestamptz(6)
+  ipAddress   String?  @map("ip_address") @db.Inet
+  userAgent   String?  @map("user_agent")
+
+  @@index([entityType, entityId], map: "idx_tuition_audit_entity")
+  @@index([action], map: "idx_tuition_audit_action")
+  @@map("tuition_audit_logs")
 }

@@ -6,7 +6,6 @@ const birthdaySchema = z.union([
 ]);
 
 export const studentCreateSchema = z.object({
-  code: z.string().min(1, "Student code is required").max(50),
   fullName: z.string().min(1, "Full name is required").max(100),
   birthday: birthdaySchema.optional(),
   parentName: z.string().optional(),
@@ -16,6 +15,7 @@ export const studentCreateSchema = z.object({
 });
 
 export const studentUpdateSchema = studentCreateSchema.partial().extend({
+  code: z.string().max(50).optional(),
   birthday: birthdaySchema.nullable().optional(),
 });
 

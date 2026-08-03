@@ -1,37 +1,5 @@
-import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiRole } from "@/lib/api-auth";
-import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
+import { prisma } from "@/lib/prisma";
 
-type Params = Promise<{ id: string }>;
-
-export async function GET(request: NextRequest, { params }: { params: Params }) {
-  try {
-    const { id } = await params;
-    const receipt = await ReceiptService.getReceiptById(id);
-
-    if (!receipt) {
-      return apiError("NOT_FOUND", "Receipt not found", 404);
-    }
-
-    return apiSuccess(receipt);
-  } catch (error) {
-    return handleApiError(error, "Failed to fetch receipt");
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: { params: Params }) {
-  try {
-    const user = await requireApiRole(["ADMIN"]);
-    if (user instanceof Response) {
-      return user;
-    }
-
-    const { id } = await params;
-    await ReceiptService.deleteReceipt(id);
-
-    return apiSuccess({ deleted: true });
-  } catch (error) {
-    return handleApiError(error, "Failed to delete receipt");
-  }
-}
+export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) { try { const user = await requireApiRole(["ADMIN", "STAFF"]); if (user instanceof Response) return user; const receipt = await prisma.tuitionReceipt.findUnique({ where: { id: (await params).id }, include: { payment: { include: { tuitionFee: { include: { student: true, class: true, items: true } } } } } }); return receipt ? apiSuccess(receipt) : apiError("NOT_FOUND", "Không tìm thấy biên lai", 404); } catch (error) { return handleApiError(error, "Không thể tải biên lai"); } }

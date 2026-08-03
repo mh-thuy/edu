@@ -218,12 +218,8 @@ export default function AdminPage() {
                   sx={{ flex: "1 0 auto" }}
                 >
                   Quản lý:{" "}
-                  <a href="/admin/student-fees" style={{ color: "#1976d2" }}>
-                    Hóa đơn
-                  </a>
-                  {" | "}
-                  <a href="/admin/payments" style={{ color: "#1976d2" }}>
-                    Thanh toán
+                  <a href="/admin/receipts" style={{ color: "#1976d2" }}>
+                    Biên lai
                   </a>
                   {" | "}
                   <a href="/admin/teacher-payroll" style={{ color: "#1976d2" }}>

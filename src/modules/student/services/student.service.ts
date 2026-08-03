@@ -10,7 +10,7 @@ import type { StudentWithClasses } from "@/types/prisma";
 
 function buildStudentCreateInput(data: StudentCreate): Prisma.StudentCreateInput {
   return {
-    code: data.code,
+    code: "",
     fullName: data.fullName,
     phone: data.phone || null,
     birthday: data.birthday ? new Date(data.birthday) : null,
@@ -18,6 +18,15 @@ function buildStudentCreateInput(data: StudentCreate): Prisma.StudentCreateInput
     address: data.address || null,
     status: data.status,
   };
+}
+
+async function generateStudentCode() {
+  const prefix = `HS-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (!(await prisma.student.findUnique({ where: { code }, select: { id: true } }))) return code;
+  }
+  throw new ConflictError("Không thể tạo mã học viên tự động, vui lòng thử lại");
 }
 
 function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput {
@@ -37,8 +46,9 @@ function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput
 }
 
 export async function createStudent(data: StudentCreate): Promise<Student> {
+  const code = await generateStudentCode();
   return prisma.student.create({
-    data: buildStudentCreateInput(data),
+    data: { ...buildStudentCreateInput(data), code },
   });
 }
 
@@ -99,17 +109,8 @@ export async function deleteStudent(id: string): Promise<Student> {
       _count: {
         select: {
           enrollments: true,
-          fees: true,
+          tuitionFees: true,
         },
-      },
-      fees: {
-        select: {
-          payments: {
-            select: { id: true },
-            take: 1,
-          },
-        },
-        take: 1,
       },
     },
   });
@@ -122,12 +123,8 @@ export async function deleteStudent(id: string): Promise<Student> {
     throw new ConflictError("Cannot delete student with class enrollments");
   }
 
-  if (student._count.fees > 0) {
-    throw new ConflictError("Cannot delete student with student fees");
-  }
-
-  if (student.fees.some((fee) => fee.payments.length > 0)) {
-    throw new ConflictError("Cannot delete student with payments");
+  if (student._count.tuitionFees > 0) {
+    throw new ConflictError("Cannot delete student with tuition fees");
   }
 
   return prisma.student.delete({

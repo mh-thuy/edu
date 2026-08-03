@@ -54,6 +54,15 @@ function buildClassUpdateInput(data: ClassUpdate): Prisma.ClassUncheckedUpdateIn
   };
 }
 
+async function generateTuitionFeeNo(tx: Prisma.TransactionClient) {
+  const prefix = `HP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (!(await tx.tuitionFee.findUnique({ where: { feeNo: candidate }, select: { id: true } }))) return candidate;
+  }
+  throw new ConflictError("Không thể tạo mã học phí tự động, vui lòng thử lại");
+}
+
 export async function createClass(data: ClassCreate): Promise<Class> {
   return prisma.class.create({
     data: buildClassCreateInput(data),
@@ -92,6 +101,7 @@ export async function getClasses(filter: ClassFilter) {
       take: pageSize,
       include: {
         teacher: { include: { user: true } },
+        _count: { select: { students: true, schedules: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -134,6 +144,7 @@ export async function getClassesByTeacherUserId(
       take: pageSize,
       include: {
         teacher: { include: { user: true } },
+        _count: { select: { students: true, schedules: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
@@ -187,7 +198,7 @@ export async function deleteClass(id: string): Promise<Class> {
   const classData = await prisma.class.findUnique({
     where: { id },
     select: {
-      fees: {
+      tuitionFees: {
         take: 1,
       },
     },
@@ -197,7 +208,7 @@ export async function deleteClass(id: string): Promise<Class> {
     throw new NotFoundError("Không tìm thấy lớp học");
   }
 
-  if (classData.fees.length > 0) {
+  if (classData.tuitionFees.length > 0) {
     throw new ConflictError(
       "Không thể xóa lớp học đã phát sinh học phí",
     );
@@ -211,30 +222,76 @@ export async function deleteClass(id: string): Promise<Class> {
 export async function assignStudentToClass(
   classId: string,
   studentId: string,
+  actorId?: string,
 ): Promise<ClassStudentWithRelations> {
-  const existing = await prisma.classStudent.findUnique({
-    where: { classId_studentId: { classId, studentId } },
-    include: { student: true, class: true },
-  });
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.classStudent.findUnique({
+      where: { classId_studentId: { classId, studentId } },
+      include: { student: true, class: true },
+    });
 
-  if (existing) {
-    return existing;
-  }
+    if (existing) {
+      const existingFee = await tx.tuitionFee.findFirst({ where: { enrollmentId: existing.id }, select: { id: true } });
+      if (!existingFee) {
+        const feeNo = await generateTuitionFeeNo(tx);
+        const tuitionAmount = existing.class.tuitionFee;
+        await tx.tuitionFee.create({
+          data: {
+            feeNo,
+            studentId,
+            enrollmentId: existing.id,
+            classId,
+            originalAmount: tuitionAmount,
+            discountAmount: 0,
+            additionalAmount: 0,
+            finalAmount: tuitionAmount,
+            dueDate: existing.class.endDate,
+            createdBy: actorId || studentId,
+            updatedBy: actorId || studentId,
+            items: { create: { itemType: "TUITION", itemName: `Học phí lớp ${existing.class.name}`, quantity: 1, unitPrice: tuitionAmount, amount: tuitionAmount, displayOrder: 0 } },
+          },
+        });
+      }
+      return existing;
+    }
 
-  const classData = await prisma.class.findUnique({
-    where: { id: classId },
-    select: { id: true },
-  });
+    const classData = await tx.class.findUnique({ where: { id: classId } });
+    if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
+    const student = await tx.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new NotFoundError("Không tìm thấy học viên");
 
-  if (!classData) {
-    throw new NotFoundError("Không tìm thấy lớp học");
-  }
-
-  return prisma.classStudent.upsert({
-    where: { classId_studentId: { classId, studentId } },
-    create: { classId, studentId },
-    update: {},
-    include: { student: true, class: true },
+    const enrollment = await tx.classStudent.create({
+      data: { classId, studentId },
+      include: { student: true, class: true },
+    });
+    const feeNo = await generateTuitionFeeNo(tx);
+    const tuitionAmount = classData.tuitionFee;
+    await tx.tuitionFee.create({
+      data: {
+        feeNo,
+        studentId,
+        enrollmentId: enrollment.id,
+        classId,
+        originalAmount: tuitionAmount,
+        discountAmount: 0,
+        additionalAmount: 0,
+        finalAmount: tuitionAmount,
+        dueDate: classData.endDate,
+        createdBy: actorId || studentId,
+        updatedBy: actorId || studentId,
+        items: {
+          create: {
+            itemType: "TUITION",
+            itemName: `Học phí lớp ${classData.name}`,
+            quantity: 1,
+            unitPrice: tuitionAmount,
+            amount: tuitionAmount,
+            displayOrder: 0,
+          },
+        },
+      },
+    });
+    return enrollment;
   });
 }
 
@@ -243,16 +300,14 @@ export async function removeStudentFromClass(
   studentId: string,
   options?: { force?: boolean; isAdmin?: boolean },
 ): Promise<void> {
-  const hasStudentFees = await prisma.studentFee.count({
-    where: { classId, studentId },
-  });
+  const hasTuitionFees = await prisma.tuitionFee.count({ where: { classId, studentId } });
 
   if (
-    hasStudentFees > 0 &&
+    hasTuitionFees > 0 &&
     !(options?.force === true && options?.isAdmin === true)
   ) {
     throw new ConflictError(
-      "Cannot remove student from class with existing student fees",
+      "Cannot remove student from class with existing tuition fees",
     );
   }
 

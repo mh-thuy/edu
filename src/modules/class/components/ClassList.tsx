@@ -9,6 +9,8 @@ import {
   Paper,
   Typography,
   InputAdornment,
+  MenuItem,
+  Select,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
@@ -25,6 +27,7 @@ import { ClassForm } from "./ClassForm";
 import type { ReactElement } from "react";
 import type { z } from "zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
+import Link from "next/link";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -44,6 +47,7 @@ export interface Class {
       fullName?: string | null;
     } | null;
   } | null;
+  _count?: { students: number; schedules: number };
 }
 
 type ClassRow = Class & {
@@ -66,6 +70,29 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
     headerName: "Tên lớp",
     minWidth: 180,
     flex: 1,
+  },
+  {
+    field: "teacher",
+    headerName: "Giáo viên",
+    minWidth: 170,
+    flex: 0.9,
+    valueGetter: (_value, row) => row.teacher?.user?.fullName || "Chưa phân công",
+  },
+  {
+    field: "_count.students",
+    headerName: "Học sinh",
+    minWidth: 95,
+    align: "center",
+    headerAlign: "center",
+    valueGetter: (_value, row) => row._count?.students ?? 0,
+  },
+  {
+    field: "_count.schedules",
+    headerName: "Lịch học",
+    minWidth: 90,
+    align: "center",
+    headerAlign: "center",
+    valueGetter: (_value, row) => row._count?.schedules ?? 0,
   },
   {
     field: "tuitionFee",
@@ -136,7 +163,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 150,
+    minWidth: 220,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -153,6 +180,16 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
           height: "100%",
         }}
       >
+        <Button
+          size="small"
+          component={Link}
+          href={`/admin/classes/${params.row.id}`}
+          variant="outlined"
+          sx={{ minWidth: 64, height: 30, borderRadius: 1.5, textTransform: "none" }}
+        >
+          Chi tiết
+        </Button>
+
         <Button
           size="small"
           variant="contained"
@@ -194,6 +231,7 @@ type ClassListProps = {
 export function ClassList({ role }: ClassListProps): ReactElement {
   const canDelete = role === "ADMIN";
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
 
   const {
     data,
@@ -204,7 +242,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Class>("/api/classes", { pageSize: 10, search });
+  } = useList<Class>("/api/classes", { pageSize: 10, search, status: status || undefined });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
@@ -347,7 +385,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
                 Quản lý lớp học
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Danh sách lớp học, học phí, số buổi và trạng thái
+                Tập trung thông tin lớp, giáo viên, học sinh và lịch học
               </Typography>
             </Box>
           </Box>
@@ -367,7 +405,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
           </Button>
         </Stack>
 
-        <Box sx={{ mt: 2.5 }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mt: 2.5 }}>
           <TextField
             placeholder="Tìm theo mã lớp hoặc tên lớp..."
             value={search}
@@ -382,14 +420,21 @@ export function ClassList({ role }: ClassListProps): ReactElement {
               ),
             }}
             sx={{
-              maxWidth: 420,
+              flex: 1,
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
                 bgcolor: "background.default",
               },
             }}
           />
-        </Box>
+          <Select size="small" value={status} displayEmpty onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: 180 }}>
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
+            <MenuItem value="ACTIVE">Hoạt động</MenuItem>
+            <MenuItem value="DRAFT">Nháp</MenuItem>
+            <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
+            <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+          </Select>
+        </Stack>
       </Paper>
 
       <Paper

@@ -1,7 +1,6 @@
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { toDecimal } from "@/lib/decimal";
-import { PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -11,20 +10,16 @@ export async function GET() {
       return user;
     }
 
-    const [paymentAggregate, studentFeeAggregate, payrollAggregate, activeClasses] =
+    const [paymentAggregate, tuitionFeeAggregate, payrollAggregate, activeClasses] =
       await Promise.all([
-        prisma.payment.aggregate({
-          where: {
-            status: PaymentStatus.CONFIRMED,
-          },
+        prisma.tuitionPayment.aggregate({ where: { paymentStatus: "SUCCESS" },
           _sum: {
             amount: true,
           },
         }),
-        prisma.studentFee.aggregate({
+        prisma.tuitionFee.aggregate({
           _sum: {
-            amount: true,
-            discount: true,
+            finalAmount: true,
           },
         }),
         prisma.teacherPayroll.aggregate({
@@ -40,9 +35,7 @@ export async function GET() {
       ]);
 
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);
-    const totalFeeAmount = toDecimal(studentFeeAggregate._sum.amount).sub(
-      studentFeeAggregate._sum.discount ?? 0,
-    );
+    const totalFeeAmount = tuitionFeeAggregate._sum.finalAmount ?? toDecimal(0);
     const totalPayroll = payrollAggregate._sum.salaryAmount ?? toDecimal(0);
     const totalCollected = totalRevenue;
     const totalDebt = totalFeeAmount.sub(totalCollected);

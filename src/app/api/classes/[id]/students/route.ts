@@ -29,7 +29,8 @@ export async function POST(request: NextRequest, { params }: { params: Params })
     const body: unknown = await request.json();
     const { studentId } = classStudentRequestSchema.parse(body);
 
-    const result = await assignStudentToClass(id, studentId);
+    const session = await getSessionFromCookie();
+    const result = await assignStudentToClass(id, studentId, session?.user?.id);
     return apiSuccess(result, 201);
   } catch (error: unknown) {
     return handleApiError(error, "Failed to assign student to class");

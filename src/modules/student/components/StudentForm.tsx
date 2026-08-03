@@ -35,7 +35,6 @@ export function StudentForm({
   const { control, handleSubmit } = useForm<StudentFormData>({
     resolver: zodResolver(studentCreateSchema),
     defaultValues: {
-      code: defaultValues?.code ?? "",
       fullName: defaultValues?.fullName ?? "",
       birthday: defaultValues?.birthday ?? undefined,
       phone: defaultValues?.phone ?? "",
@@ -48,21 +47,6 @@ export function StudentForm({
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2}>
-        <Controller
-          name="code"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Mã học sinh"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              placeholder="VD: S001"
-            />
-          )}
-        />
-
         <Controller
           name="fullName"
           control={control}

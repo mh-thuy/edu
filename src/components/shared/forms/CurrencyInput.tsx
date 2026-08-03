@@ -13,6 +13,7 @@ interface CurrencyInputProps {
   error?: FieldError;
   disabled?: boolean;
   readOnly?: boolean;
+  helperText?: string;
   sx?: SxProps<Theme>;
 }
 
@@ -23,6 +24,7 @@ export function CurrencyInput({
   error,
   disabled,
   readOnly,
+  helperText,
   sx,
 }: CurrencyInputProps) {
   return (
@@ -41,7 +43,7 @@ export function CurrencyInput({
         onChange?.(raw ? Number(raw) : 0);
       }}
       error={!!error}
-      helperText={error?.message}
+      helperText={error?.message || helperText}
       sx={{
         "& input": {
           textAlign: "right",

@@ -24,12 +24,18 @@ async function cleanup() {
   await prisma.teacherPayroll.deleteMany();
   await prisma.classSalaryRule.deleteMany();
   await prisma.expense.deleteMany();
-  await prisma.paymentNotice.deleteMany();
-  await prisma.receipt.deleteMany();
-  await prisma.payment.deleteMany();
-  await prisma.paymentQrCode.deleteMany();
-  await prisma.paymentAccount.deleteMany();
-  await prisma.studentFee.deleteMany();
+  await prisma.tuitionAuditLog.deleteMany();
+  await prisma.paymentRefund.deleteMany();
+  await prisma.tuitionReceipt.deleteMany();
+  await prisma.tuitionPayment.deleteMany();
+  await prisma.tuitionAdjustment.deleteMany();
+  await prisma.tuitionFeeItem.deleteMany();
+  await prisma.tuitionFee.deleteMany();
+  await prisma.bankStatementMatchCandidate.deleteMany();
+  await prisma.bankStatementTransaction.deleteMany();
+  await prisma.bankStatementImport.deleteMany();
+  await prisma.bankCsvMapping.deleteMany();
+  await prisma.bankAccount.deleteMany();
   await prisma.classSchedule.deleteMany();
   await prisma.classStudent.deleteMany();
   await prisma.class.deleteMany();
@@ -316,28 +322,26 @@ async function seedClasses(
   return { mathClass, englishClass, physicsClass };
 }
 
-async function seedPaymentAccounts() {
-  await prisma.paymentAccount.createMany({
+async function seedBankAccounts(adminUserId: string) {
+  await prisma.bankAccount.createMany({
     data: [
       {
-        code: "VCB",
         bankCode: "VCB",
         bankName: "Ngân hàng Thương mại Cổ phần Ngoại thương Việt Nam",
-        accountNumber: "0191000346776",
+        accountNo: "0191000346776",
         accountName: "MA HONG LAN",
-        isDefault: false,
         isActive: true,
-        note: "Tài khoản nhận học phí mặc định",
+        createdBy: adminUserId,
+        updatedBy: adminUserId,
       },
       {
-        code: "BIDV",
         bankCode: "BIDV",
         bankName: "Ngân hàng Thương mại Cổ phần Đầu tư và Phát triển Việt Nam",
-        accountNumber: "7802866666",
+        accountNo: "7802866666",
         accountName: "MA HONG LAN",
-        isDefault: true,
         isActive: true,
-        note: "Tài khoản dự phòng",
+        createdBy: adminUserId,
+        updatedBy: adminUserId,
       },
     ],
   });
@@ -369,7 +373,7 @@ async function main() {
   const { adminUser, teacherUser } = await seedAuth();
   const { teachers, students } = await seedMasters(teacherUser.id);
   const classes = await seedClasses(teachers, students);
-  await seedPaymentAccounts();
+  await seedBankAccounts(adminUser.id);
 
   await seedAudit(adminUser.id);
 

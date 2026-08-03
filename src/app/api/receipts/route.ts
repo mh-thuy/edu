@@ -1,43 +1,5 @@
-import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { ReceiptService } from "@/modules/finance/receipts/services/receipt.service";
-import {
-  receiptCreateSchema,
-  receiptFilterSchema,
-} from "@/modules/finance/receipts/schemas/receipt.schema";
+import { requireApiRole } from "@/lib/api-auth";
+import { prisma } from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const filter = {
-      page: searchParams.get("page") || "1",
-      pageSize: searchParams.get("pageSize") || "10",
-      search: searchParams.get("search") || undefined,
-      paymentId: searchParams.get("paymentId") || undefined,
-      studentId: searchParams.get("studentId") || undefined,
-      classId: searchParams.get("classId") || undefined,
-      startDate: searchParams.get("startDate") || undefined,
-      endDate: searchParams.get("endDate") || undefined,
-      isPrinted: searchParams.get("isPrinted") || undefined,
-    };
-
-    const validated = receiptFilterSchema.parse(filter);
-    const result = await ReceiptService.getReceipts(validated);
-
-    return apiSuccess(result);
-  } catch (error) {
-    return handleApiError(error, "Failed to fetch receipts");
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const validated = receiptCreateSchema.parse(body);
-    const receipt = await ReceiptService.generateReceipt(validated.paymentId);
-
-    return apiSuccess(receipt, 201);
-  } catch (error) {
-    return handleApiError(error, "Failed to create receipt");
-  }
-}
+export async function GET() { try { const user = await requireApiRole(["ADMIN", "STAFF"]); if (user instanceof Response) return user; return apiSuccess(await prisma.tuitionReceipt.findMany({ include: { payment: { include: { tuitionFee: { include: { student: true, class: true } } } } }, orderBy: { issuedAt: "desc" }, take: 200 })); } catch (error) { return handleApiError(error, "Không thể tải biên lai"); } }

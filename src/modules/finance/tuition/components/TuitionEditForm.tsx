@@ -1,0 +1,15 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Alert, Button, Paper, Stack, TextField, Typography } from "@mui/material";
+import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+
+type Fee = { feeNo: string; originalAmount: number; discountAmount: number; additionalAmount: number; finalAmount: number; dueDate?: string | null; note?: string | null; version: number; status: string };
+export function TuitionEditForm({ id, onSuccess }: { id: string; onSuccess: () => void }) {
+  const [fee, setFee] = useState<Fee | null>(null); const [discount, setDiscount] = useState(0); const [additional, setAdditional] = useState(0); const [dueDate, setDueDate] = useState(""); const [note, setNote] = useState(""); const [reason, setReason] = useState(""); const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
+  useEffect(() => { void fetch(`/api/tuition-fees/${id}`).then(async (r) => r.ok ? unwrapApiResponse<Fee>(r) : null).then((data) => { if (data) { setFee(data); setDiscount(Number(data.discountAmount)); setAdditional(Number(data.additionalAmount)); setDueDate(data.dueDate?.slice(0, 10) || ""); setNote(data.note || ""); } }); }, [id]);
+  async function submit() { if (!fee || !reason.trim()) { setError("Lý do thay đổi là bắt buộc"); return; } setSaving(true); const response = await fetch(`/api/tuition-fees/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discountAmount: discount, additionalAmount: additional, dueDate: dueDate || null, note: note || null, version: fee.version, reason }) }); if (!response.ok) setError(await extractApiErrorMessage(response, "Không thể cập nhật học phí")); else onSuccess(); setSaving(false); }
+  if (!fee) return <Typography>Đang tải học phí...</Typography>; if (fee.status === "PAID") return <Alert severity="warning">Học phí đã thanh toán và không thể sửa.</Alert>;
+  const total = Number(fee.originalAmount) - discount + additional; return <Stack spacing={2} maxWidth={700}><Typography variant="h5">Sửa học phí {fee.feeNo}</Typography>{error && <Alert severity="error">{error}</Alert>}<Paper sx={{ p: 2 }}><Stack spacing={2}><CurrencyInput label="Học phí gốc" value={Number(fee.originalAmount)} readOnly /><CurrencyInput label="Giảm giá / học bổng" value={discount} onChange={setDiscount} /><CurrencyInput label="Phụ phí" value={additional} onChange={setAdditional} /><Typography variant="h6">Tổng mới: {total.toLocaleString("vi-VN")} VND</Typography><TextField type="date" label="Hạn thanh toán" value={dueDate} onChange={(e) => setDueDate(e.target.value)} InputLabelProps={{ shrink: true }} /><TextField label="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} multiline /><TextField label="Lý do thay đổi *" value={reason} onChange={(e) => setReason(e.target.value)} multiline minRows={2} /></Stack></Paper><Button variant="contained" onClick={() => void submit()} disabled={saving}>{saving ? "Đang lưu..." : "Lưu thay đổi"}</Button></Stack>;
+}

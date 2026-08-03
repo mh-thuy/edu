@@ -33,7 +33,6 @@ export function TeacherForm({
     resolver: zodResolver(teacherCreateSchema),
     defaultValues: {
       fullName: defaultValues?.fullName ?? "",
-      code: defaultValues?.code ?? "",
       phone: defaultValues?.phone ?? "",
       bankAccount: defaultValues?.bankAccount ?? "",
       specialty: defaultValues?.specialty ?? "",
@@ -53,22 +52,6 @@ export function TeacherForm({
                 {...field}
                 label="Họ và tên"
                 placeholder="VD: Nguyễn Văn A"
-                error={!!error}
-                helperText={error?.message}
-                fullWidth
-                size="small"
-              />
-            )}
-          />
-
-          <Controller
-            name="code"
-            control={control}
-            render={({ field, fieldState: { error } }) => (
-              <TextField
-                {...field}
-                label="Mã giáo viên"
-                placeholder="VD: GV001"
                 error={!!error}
                 helperText={error?.message}
                 fullWidth

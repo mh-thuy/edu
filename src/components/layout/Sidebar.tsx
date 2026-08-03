@@ -6,10 +6,12 @@ import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
 import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
-import PaymentOutlinedIcon from "@mui/icons-material/PaymentOutlined";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
-import WarningAmberOutlinedIcon from "@mui/icons-material/WarningAmberOutlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 
 import {
   Box,
@@ -59,27 +61,33 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
-    label: "Lịch học",
-    href: "/admin/schedules",
-    icon: <ScheduleOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
-  },
-  {
     label: "Học phí",
-    href: "/admin/student-fees",
-    icon: <ReceiptOutlinedIcon fontSize="small" />,
+    href: "/admin/tuition-fees",
+    icon: <AccountBalanceWalletOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
   },
   {
-    label: "Thanh toán",
-    href: "/admin/payments",
-    icon: <PaymentOutlinedIcon fontSize="small" />,
+    label: "Thu học phí",
+    href: "/admin/tuition-fees/payment",
+    icon: <PaymentsOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
+    label: "Lịch sử thu học phí",
+    href: "/admin/tuition-fees/payment-history",
+    icon: <HistoryOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
   },
   {
     label: "Biên lai",
     href: "/admin/receipts",
     icon: <ReceiptOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
+    label: "Đối soát ngân hàng",
+    href: "/admin/bank-reconciliation",
+    icon: <AccountBalanceOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
   },
   {
@@ -98,12 +106,6 @@ const items: SidebarItem[] = [
     label: "Lương giáo viên",
     href: "/admin/teacher-payroll",
     icon: <AttachMoneyOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
-  },
-  {
-    label: "Công nợ",
-    href: "/admin/debt-tracking",
-    icon: <WarningAmberOutlinedIcon fontSize="small" />,
     roles: ["ADMIN"],
   },
   {

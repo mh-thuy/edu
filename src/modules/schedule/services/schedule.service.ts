@@ -35,7 +35,7 @@ async function assertScheduleRelations(
   const [classData, teacher] = await Promise.all([
     prisma.class.findUnique({
       where: { id: data.classId },
-      select: { id: true },
+      select: { id: true, teacherId: true, status: true },
     }),
     prisma.teacher.findUnique({
       where: { id: data.teacherId },
@@ -46,6 +46,10 @@ async function assertScheduleRelations(
   if (!classData) {
     throw new Error("Không tìm thấy lớp học");
   }
+
+  if (!classData.teacherId) throw new Error("Lớp chưa được phân công giáo viên");
+  if (classData.teacherId !== data.teacherId) throw new Error("Giáo viên lịch học phải là giáo viên chính của lớp");
+  if (classData.status === "CANCELLED" || classData.status === "COMPLETED") throw new Error("Không thể tạo lịch cho lớp đã kết thúc hoặc đã hủy");
 
   if (!teacher) {
     throw new Error("Không tìm thấy giáo viên");
@@ -87,6 +91,7 @@ function toClassScheduleUpdateInput(
 
 export async function getScheduleConflicts(
   data: {
+    classId?: string | null;
     teacherId?: string | null;
     dayOfWeek: number;
     startMinute: number;
@@ -94,9 +99,10 @@ export async function getScheduleConflicts(
   },
   excludeId?: string,
 ): Promise<ScheduleConflict[]> {
-  const conflictTargets: Prisma.ClassScheduleWhereInput[] = data.teacherId
-    ? [{ teacherId: data.teacherId }]
-    : [];
+  const conflictTargets: Prisma.ClassScheduleWhereInput[] = [
+    ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
+    ...(data.classId ? [{ classId: data.classId }] : []),
+  ];
 
   if (conflictTargets.length === 0) return [];
 

@@ -13,12 +13,21 @@ function buildTeacherCreateInput(
 ): Prisma.TeacherCreateInput {
   return {
     fullName: data.fullName,
-    code: data.code,
+    code: "",
     phone: data.phone || null,
     bankAccount: data.bankAccount || null,
     specialty: data.specialty || null,
     status: data.status,
   };
+}
+
+async function generateTeacherCode() {
+  const prefix = `GV-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (!(await prisma.teacher.findUnique({ where: { code }, select: { id: true } }))) return code;
+  }
+  throw new ConflictError("Không thể tạo mã giáo viên tự động, vui lòng thử lại");
 }
 
 function buildTeacherUpdateInput(
@@ -39,8 +48,9 @@ function buildTeacherUpdateInput(
 }
 
 export async function createTeacher(data: TeacherCreate): Promise<Teacher> {
+  const code = await generateTeacherCode();
   return prisma.teacher.create({
-    data: buildTeacherCreateInput(data),
+    data: { ...buildTeacherCreateInput(data), code },
   });
 }
 

@@ -209,6 +209,7 @@ export function ScheduleForm({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            classId,
             teacherId,
             dayOfWeek,
             startMinute: timeToInt(startTime),
@@ -241,6 +242,7 @@ export function ScheduleForm({
       controller.abort();
     };
   }, [
+    classId,
     dayOfWeek,
     endTime,
     onConflictCheck,
