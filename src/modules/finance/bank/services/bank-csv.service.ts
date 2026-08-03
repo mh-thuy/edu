@@ -20,19 +20,58 @@ function parseMoney(value: string): Prisma.Decimal {
 }
 
 function parseDate(value: string): Date {
-  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
   if (!match) throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
   return new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(match[4] || 0), Number(match[5] || 0)));
 }
 
-function parseLine(line: string): string[] {
+type CsvEncoding = "utf-8" | "windows-1252";
+
+function decodeCsvBuffer(buffer: Buffer): { text: string; encoding: CsvEncoding } {
+  try {
+    return {
+      text: new TextDecoder("utf-8", { fatal: true }).decode(buffer).replace(/^\uFEFF/, ""),
+      encoding: "utf-8",
+    };
+  } catch {
+    return {
+      text: new TextDecoder("windows-1252").decode(buffer).replace(/^\uFEFF/, ""),
+      encoding: "windows-1252",
+    };
+  }
+}
+
+type CsvDelimiter = "," | ";" | "\t";
+
+function countDelimiter(line: string, delimiter: CsvDelimiter): number {
+  let count = 0;
+  let quoted = false;
+
+  for (const char of line) {
+    if (char === '"') quoted = !quoted;
+    else if (char === delimiter && !quoted) count += 1;
+  }
+
+  return count;
+}
+
+function detectDelimiter(line: string): CsvDelimiter {
+  const delimiters: CsvDelimiter[] = [",", ";", "\t"];
+  return delimiters.reduce((selected, delimiter) =>
+    countDelimiter(line, delimiter) > countDelimiter(line, selected)
+      ? delimiter
+      : selected,
+  ",");
+}
+
+function parseLine(line: string, delimiter: CsvDelimiter): string[] {
   const result: string[] = [];
   let value = "";
   let quoted = false;
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index];
     if (char === '"') { quoted = !quoted; continue; }
-    if (char === ";" && !quoted) { result.push(value.trim()); value = ""; continue; }
+    if (char === delimiter && !quoted) { result.push(value.trim()); value = ""; continue; }
     value += char;
   }
   result.push(value.trim());
@@ -40,12 +79,13 @@ function parseLine(line: string): string[] {
 }
 
 export function parseBankCsv(buffer: Buffer): ParsedBankRow[] {
-  const text = new TextDecoder("windows-1252").decode(buffer).replace(/^\uFEFF/, "");
+  const { text } = decodeCsvBuffer(buffer);
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) throw new Error("CSV không có dữ liệu giao dịch");
+  const delimiter = detectDelimiter(lines[0]!);
   const rows: ParsedBankRow[] = [];
   for (let index = 1; index < lines.length; index += 1) {
-    const columns = parseLine(lines[index]!);
+    const columns = parseLine(lines[index]!, delimiter);
     if (columns.length < 5) continue;
     const amount = parseMoney(columns[2]!);
     rows.push({ rowNo: index + 1, transactionDate: parseDate(columns[0]!), description: columns[1]!, amount, balance: columns[3] ? parseMoney(columns[3]!) : null, transactionNo: columns[4] || null, raw: lines[index]! });
@@ -68,6 +108,10 @@ function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
 
 export async function importBankCsv(args: { buffer: Buffer; fileName: string; fileUrl: string; bankAccountId: string; actorId: string }) {
   const fileHash = crypto.createHash("sha256").update(args.buffer).digest("hex");
+  const { text, encoding } = decodeCsvBuffer(args.buffer);
+  const firstLine = text.split(/\r?\n/).find((line) => line.trim());
+  if (!firstLine) throw new Error("CSV không có dữ liệu giao dịch");
+  const delimiter = detectDelimiter(firstLine);
   const rows = parseBankCsv(args.buffer);
   const bank = await prisma.bankAccount.findUnique({ where: { id: args.bankAccountId } });
   if (!bank) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
@@ -75,7 +119,7 @@ export async function importBankCsv(args: { buffer: Buffer; fileName: string; fi
   if (existing) throw new ConflictError("File sao kê này đã được import");
 
   return prisma.$transaction(async (tx) => {
-    const statement = await tx.bankStatementImport.create({ data: { bankAccountId: args.bankAccountId, fileName: args.fileName, fileUrl: args.fileUrl, fileHash, encoding: "windows-1252", delimiter: ";", dateFormat: "dd/MM/yyyy HH:mm", totalRows: rows.length, validRows: rows.length, invalidRows: 0, duplicatedRows: 0, importStatus: BankImportStatus.PROCESSING, importedBy: args.actorId } });
+    const statement = await tx.bankStatementImport.create({ data: { bankAccountId: args.bankAccountId, fileName: args.fileName, fileUrl: args.fileUrl, fileHash, encoding, delimiter, dateFormat: "d/M/yyyy HH:mm", totalRows: rows.length, validRows: rows.length, invalidRows: 0, duplicatedRows: 0, importStatus: BankImportStatus.PROCESSING, importedBy: args.actorId } });
     let matchedRows = 0;
     let unmatchedRows = 0;
     let duplicatedRows = 0;
