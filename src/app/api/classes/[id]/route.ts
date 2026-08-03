@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
   }
 }
 
-export async function DELETE({ params }: { params: Params }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Params }) {
   try {
     const user = await requireApiRole(["ADMIN"]);
     if (user instanceof Response) {
