@@ -63,15 +63,6 @@ enum AttendanceStatus {
   @@map("attendance_status")
 }
 
-enum PayrollStatus {
-  DRAFT
-  APPROVED
-  PAID
-  CANCELLED
-
-  @@map("payroll_status")
-}
-
 enum ExpenseStatus {
   DRAFT
   APPROVED
@@ -253,8 +244,6 @@ model Teacher {
   user      User?            @relation(fields: [userId], references: [id], map: "fk_teachers_user")
   classes   Class[]
   schedules ClassSchedule[]
-  payrolls  TeacherPayroll[]
-
   @@map("teachers")
 }
 
@@ -302,9 +291,6 @@ model Class {
   schedules    ClassSchedule[]
   attendances  Attendance[]
   tuitionFees  TuitionFee[]         @relation("TuitionFeeClass")
-  salaryRule   ClassSalaryRule?
-  payrollItems TeacherPayrollItem[]
-
   @@index([teacherId], map: "idx_classes_teacher_id")
   @@index([status], map: "idx_classes_status")
   @@map("classes")
@@ -393,67 +379,6 @@ model Expense {
   @@index([expenseDate], map: "idx_expenses_expense_date")
   @@index([status], map: "idx_expenses_status")
   @@map("expenses")
-}
-
-model ClassSalaryRule {
-  id                     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  classId                String  @unique(map: "uq_class_salary_rules_class_id") @map("class_id") @db.Uuid
-  teacherSharePercentage Decimal @default(0) @map("teacher_share_percentage") @db.Decimal(5, 2)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  class Class @relation(fields: [classId], references: [id], map: "fk_class_salary_rules_class")
-
-  @@map("class_salary_rules")
-}
-
-model TeacherPayroll {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  teacherId    String        @map("teacher_id") @db.Uuid
-  billingYear  Int           @map("billing_year")
-  billingMonth Int           @map("billing_month") @db.SmallInt
-  totalRevenue Decimal       @default(0) @map("total_revenue") @db.Decimal(12, 2)
-  centerFee    Decimal       @default(0) @map("center_fee") @db.Decimal(12, 2)
-  salaryAmount Decimal       @default(0) @map("salary_amount") @db.Decimal(12, 2)
-  status       PayrollStatus @default(DRAFT)
-  approvedAt   DateTime?     @map("approved_at") @db.Timestamptz(6)
-  paidAt       DateTime?     @map("paid_at") @db.Timestamptz(6)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  teacher Teacher              @relation(fields: [teacherId], references: [id], map: "fk_teacher_payrolls_teacher")
-  items   TeacherPayrollItem[]
-
-  @@unique([teacherId, billingYear, billingMonth], map: "uq_teacher_payrolls_teacher_month")
-  @@index([billingYear, billingMonth], map: "idx_teacher_payrolls_billing_month")
-  @@index([status], map: "idx_teacher_payrolls_status")
-  @@map("teacher_payrolls")
-}
-
-model TeacherPayrollItem {
-  id                     String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  payrollId              String  @map("payroll_id") @db.Uuid
-  classId                String  @map("class_id") @db.Uuid
-  classCode              String  @map("class_code") @db.VarChar(50)
-  className              String  @map("class_name") @db.VarChar(255)
-  studentCount           Int     @default(0) @map("student_count")
-  revenue                Decimal @default(0) @db.Decimal(12, 2)
-  teacherSharePercentage Decimal @default(0) @map("teacher_share_percentage") @db.Decimal(5, 2)
-  salary                 Decimal @default(0) @db.Decimal(12, 2)
-  centerFee              Decimal @default(0) @map("center_fee") @db.Decimal(12, 2)
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  payroll TeacherPayroll @relation(fields: [payrollId], references: [id], map: "fk_teacher_payroll_items_payroll")
-  class   Class          @relation(fields: [classId], references: [id], map: "fk_teacher_payroll_items_class")
-
-  @@unique([payrollId, classId], map: "uq_teacher_payroll_items_payroll_class")
-  @@index([payrollId], map: "idx_teacher_payroll_items_payroll_id")
-  @@index([classId], map: "idx_teacher_payroll_items_class_id")
-  @@map("teacher_payroll_items")
 }
 
 model AuditLog {

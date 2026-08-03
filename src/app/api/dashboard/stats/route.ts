@@ -10,7 +10,7 @@ export async function GET() {
       return user;
     }
 
-    const [paymentAggregate, tuitionFeeAggregate, payrollAggregate, activeClasses] =
+    const [paymentAggregate, tuitionFeeAggregate, activeClasses] =
       await Promise.all([
         prisma.tuitionPayment.aggregate({ where: { paymentStatus: "SUCCESS" },
           _sum: {
@@ -22,11 +22,6 @@ export async function GET() {
             finalAmount: true,
           },
         }),
-        prisma.teacherPayroll.aggregate({
-          _sum: {
-            salaryAmount: true,
-          },
-        }),
         prisma.class.count({
           where: {
             status: "ACTIVE",
@@ -36,7 +31,6 @@ export async function GET() {
 
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);
     const totalFeeAmount = tuitionFeeAggregate._sum.finalAmount ?? toDecimal(0);
-    const totalPayroll = payrollAggregate._sum.salaryAmount ?? toDecimal(0);
     const totalCollected = totalRevenue;
     const totalDebt = totalFeeAmount.sub(totalCollected);
 
@@ -45,7 +39,6 @@ export async function GET() {
       totalRevenue,
       totalDebt: totalDebt.greaterThan(0) ? totalDebt : toDecimal(0),
       totalCollected,
-      totalPayroll,
       activeClasses,
     });
   } catch (error) {

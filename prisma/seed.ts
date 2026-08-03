@@ -20,9 +20,6 @@ function timeToMinute(time: string): number {
 
 async function cleanup() {
   await prisma.auditLog.deleteMany();
-  await prisma.teacherPayrollItem.deleteMany();
-  await prisma.teacherPayroll.deleteMany();
-  await prisma.classSalaryRule.deleteMany();
   await prisma.expense.deleteMany();
   await prisma.tuitionAuditLog.deleteMany();
   await prisma.paymentRefund.deleteMany();

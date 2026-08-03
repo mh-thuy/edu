@@ -15,7 +15,6 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import PaymentIcon from "@mui/icons-material/Payment";
 import GroupIcon from "@mui/icons-material/Group";
 import ReceiptIcon from "@mui/icons-material/Receipt";
-import AssignmentIcon from "@mui/icons-material/Assignment";
 import { unwrapApiResponse } from "@/lib/api-client";
 
 interface DashboardStats {
@@ -23,7 +22,6 @@ interface DashboardStats {
   totalRevenue: number;
   totalDebt: number;
   totalCollected: number;
-  totalPayroll: number;
   activeClasses: number;
 }
 
@@ -180,21 +178,6 @@ export default function AdminPage() {
 
         <Box>
           <StatCard
-            icon={<AssignmentIcon />}
-            title="Lương giáo viên"
-            value={
-              stats?.totalPayroll
-                ? `${(stats.totalPayroll / 1000000).toFixed(1)}M`
-                : "0"
-            }
-            subtitle="Tổng chi trả"
-            loading={loading}
-            color="warning"
-          />
-        </Box>
-
-        <Box>
-          <StatCard
             icon={<GroupIcon />}
             title="Lớp hoạt động"
             value={stats?.activeClasses || 0}
@@ -220,14 +203,6 @@ export default function AdminPage() {
                   Quản lý:{" "}
                   <a href="/admin/receipts" style={{ color: "#1976d2" }}>
                     Biên lai
-                  </a>
-                  {" | "}
-                  <a href="/admin/teacher-payroll" style={{ color: "#1976d2" }}>
-                    Lương
-                  </a>
-                  {" | "}
-                  <a href="/admin/reports" style={{ color: "#1976d2" }}>
-                    Báo cáo
                   </a>
                 </Typography>
               </Stack>

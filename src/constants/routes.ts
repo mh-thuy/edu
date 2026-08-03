@@ -13,7 +13,6 @@ export const ROLE_ROUTE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
 ];
 
 export const API_ROLE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
-  { prefix: "/api/reports", roles: ["ADMIN", "STAFF", "TEACHER"] },
   { prefix: "/api/dashboard", roles: ["ADMIN", "STAFF", "TEACHER"] },
   { prefix: "/api/classes", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/payments", roles: ["ADMIN", "STAFF"] },
@@ -28,7 +27,6 @@ export const API_ROLE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
   { prefix: "/api/receipts", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/schedules", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/students", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/teacher-payroll", roles: ["ADMIN"] },
   { prefix: "/api/teacher", roles: ["TEACHER"] },
   { prefix: "/api/teachers", roles: ["ADMIN", "STAFF"] },
 ];

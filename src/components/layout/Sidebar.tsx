@@ -7,10 +7,8 @@ import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
-import AttachMoneyOutlinedIcon from "@mui/icons-material/AttachMoneyOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
-import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 
 import {
@@ -107,18 +105,6 @@ const items: SidebarItem[] = [
     href: "/teacher/schedules",
     icon: <ScheduleOutlinedIcon fontSize="small" />,
     roles: ["TEACHER"],
-  },
-  {
-    label: "Lương giáo viên",
-    href: "/admin/teacher-payroll",
-    icon: <AttachMoneyOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
-  },
-  {
-    label: "Báo cáo tài chính",
-    href: "/admin/reports",
-    icon: <AssessmentOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
   },
 ];
 

@@ -133,7 +133,6 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
       _count: {
         select: {
           classes: true,
-          payrolls: true,
         },
       },
     },
@@ -145,10 +144,6 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
 
   if (teacher._count.classes > 0) {
     throw new ConflictError("Cannot delete teacher with class assignments");
-  }
-
-  if (teacher._count.payrolls > 0) {
-    throw new ConflictError("Cannot delete teacher with payroll records");
   }
 
   return prisma.teacher.delete({
