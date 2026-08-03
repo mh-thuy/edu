@@ -16,6 +16,7 @@ export const API_ROLE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
   { prefix: "/api/dashboard", roles: ["ADMIN", "STAFF", "TEACHER"] },
   { prefix: "/api/classes", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/payments", roles: ["ADMIN", "STAFF"] },
+  { prefix: "/api/payment-batches", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/tuition-fees", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/bank-statement-imports", roles: ["ADMIN", "STAFF"] },
   { prefix: "/api/bank-statement-transactions", roles: ["ADMIN", "STAFF"] },

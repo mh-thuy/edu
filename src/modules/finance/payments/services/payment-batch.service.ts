@@ -70,6 +70,28 @@ export async function listPaymentBatches(params: { studentCode?: string; status?
   return { items, total, page, pageSize, pages: Math.ceil(total / pageSize) };
 }
 
+export async function cancelPaymentBatch(batchId: string, actorId: string, reason: string) {
+  return prisma.$transaction(async (tx) => {
+    const batch = await tx.paymentBatch.findUnique({ where: { id: batchId }, include: { allocations: true } });
+    if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");
+    if (batch.status !== PaymentBatchStatus.PENDING) throw new ConflictError("Chỉ có thể hủy batch đang chờ đối soát");
+
+    const cancelled = await tx.paymentBatch.update({
+      where: { id: batchId },
+      data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
+      include: { allocations: true, student: true },
+    });
+    await tx.bankStatementTransaction.updateMany({
+      where: { paymentBatchId: batchId, paymentId: null },
+      data: { paymentBatchId: null, matchedStudentId: null, matchedTuitionFeeId: null, matchScore: null, matchMethod: null, reconciliationStatus: "UNMATCHED" },
+    });
+    await tx.tuitionAuditLog.create({
+      data: { entityType: "PAYMENT_BATCH", entityId: batchId, action: "CANCEL", reason, dataBefore: batch as unknown as Prisma.InputJsonValue, dataAfter: cancelled as unknown as Prisma.InputJsonValue, performedBy: actorId },
+    });
+    return cancelled;
+  });
+}
+
 export async function getPaymentBatchQr(batchId: string) {
   const batch = await prisma.paymentBatch.findUnique({ where: { id: batchId }, include: { student: true } });
   if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");

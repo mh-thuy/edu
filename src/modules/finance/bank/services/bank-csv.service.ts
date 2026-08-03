@@ -131,6 +131,7 @@ export async function confirmBankTransaction(transactionId: string, tuitionFeeId
     if (!transaction) throw new NotFoundError("Không tìm thấy giao dịch ngân hàng");
     if (transaction.debitAmount.greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
     if (transaction.paymentId) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+    if (!transaction.candidates.some((candidate) => candidate.tuitionFeeId === tuitionFeeId)) throw new ConflictError("Khoản học phí không thuộc danh sách ứng viên của giao dịch");
     const fee = await tx.tuitionFee.findUnique({ where: { id: tuitionFeeId }, include: { payments: { where: { paymentStatus: "SUCCESS" } } } });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
     if (fee.payments.length || fee.status === "PAID") throw new ConflictError("Khoản học phí đã được thanh toán");
@@ -151,7 +152,7 @@ export async function confirmBankBatchTransaction(transactionId: string, batchId
     if (!transaction) throw new NotFoundError("Không tìm thấy giao dịch ngân hàng");
     if (transaction.debitAmount.greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
     if (transaction.paymentId) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
-    if (transaction.paymentBatchId && transaction.paymentBatchId !== batchId) throw new ConflictError("Giao dịch ngân hàng đã được gắn với batch khác");
+    if (transaction.paymentBatchId !== batchId) throw new ConflictError("Batch không thuộc giao dịch ngân hàng này");
     const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");
     if (batch.status !== "PENDING") throw new ConflictError("Batch thanh toán không còn chờ xử lý");

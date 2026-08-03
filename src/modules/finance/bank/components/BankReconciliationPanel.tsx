@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Chip, MenuItem, Paper, Select, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, MenuItem, Paper, Select, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
@@ -22,6 +22,9 @@ export function BankReconciliationPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<Transaction[]>([]);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [message, setMessage] = useState<{ text: string; severity: "success" | "error" | "info" }>({ text: "", severity: "info" });
   const [loading, setLoading] = useState(false);
   const [listLoading, setListLoading] = useState(false);
@@ -31,19 +34,21 @@ export function BankReconciliationPanel() {
     if (!accountId) return;
     setListLoading(true);
     try {
-      const response = await fetch(`/api/bank-statement-transactions?bankAccountId=${encodeURIComponent(accountId)}&status=UNMATCHED,AUTO_MATCHED,AMBIGUOUS,AMOUNT_MISMATCH`);
+      const response = await fetch(`/api/bank-statement-transactions?bankAccountId=${encodeURIComponent(accountId)}&status=UNMATCHED,AUTO_MATCHED,AMBIGUOUS,AMOUNT_MISMATCH&page=${page + 1}&pageSize=${pageSize}`);
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải giao dịch ngân hàng"));
-      setItems(await unwrapApiResponse<Transaction[]>(response));
+      const result = await unwrapApiResponse<{ items: Transaction[]; total: number }>(response);
+      setItems(result.items); setTotal(result.total);
     } catch (reason) {
       setMessage({ text: reason instanceof Error ? reason.message : "Không thể tải giao dịch ngân hàng", severity: "error" });
     } finally {
       setListLoading(false);
     }
-  }, [accountId]);
+  }, [accountId, page, pageSize]);
 
   useEffect(() => {
     void fetch("/api/bank-accounts").then(async (response) => response.ok ? unwrapApiResponse<Account[]>(response) : []).then((data) => { setAccounts(data); setAccountId(data[0]?.id || ""); });
   }, []);
+  useEffect(() => { setPage(0); }, [accountId]);
   useEffect(() => { void load(); }, [load]);
 
   function inspectFile(nextFile: File | null) { setFile(nextFile); if (nextFile) setStep(1); }
@@ -96,7 +101,7 @@ export function BankReconciliationPanel() {
         {item.paymentBatch ? <Box><Typography variant="body2"><strong>{item.paymentBatch.batchNo}</strong> · {item.paymentBatch.student.code} — {item.paymentBatch.student.fullName}</Typography><Typography variant="body2">{item.paymentBatch.allocations.length} khoản · {money(item.paymentBatch.totalAmount)} VND</Typography><Button size="small" variant="outlined" disabled={loading} onClick={() => requestConfirm(item.id, { batchId: item.paymentBatch!.id }, "Xác nhận batch", `Xác nhận thanh toán batch ${item.paymentBatch!.batchNo} và tạo biên lai?`)}>Xác nhận batch</Button></Box> : item.candidates.length ? item.candidates.slice(0, 3).map((candidate) => { const exact = Math.abs(Number(item.creditAmount) - Number(candidate.tuitionFee?.finalAmount || 0)) < 0.001; return <Box key={candidate.tuitionFeeId} sx={{ mb: 1 }}><Typography variant="body2">{candidate.tuitionFee?.student.code} — {candidate.tuitionFee?.student.fullName} · {money(Number(candidate.tuitionFee?.finalAmount || 0))} VND</Typography><Button size="small" variant="outlined" disabled={!exact || loading || candidate.tuitionFee?.status === "PAID"} onClick={() => requestConfirm(item.id, { tuitionFeeId: candidate.tuitionFeeId }, "Xác nhận đối soát", "Xác nhận giao dịch này và tạo thanh toán/biên lai?")}>{exact ? "Xác nhận khớp chính xác" : "Không khớp số tiền"}</Button></Box>; }) : "Chưa có ứng viên"}
       </TableCell></TableRow>)}
       {!listLoading && !items.length && <TableRow><TableCell colSpan={5}><Typography sx={{ p: 3 }} color="text.secondary" textAlign="center">Không có giao dịch chờ đối soát</Typography></TableCell></TableRow>}
-    </TableBody></Table></Paper>
+    </TableBody></Table><TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} /></Paper>
     <ConfirmDialog open={!!pendingConfirmation} title={pendingConfirmation?.title || "Xác nhận đối soát"} message={pendingConfirmation?.message || "Bạn có chắc chắn muốn thực hiện thao tác này không?"} onConfirm={() => void confirm()} onCancel={() => setPendingConfirmation(null)} isLoading={loading} />
   </Stack>;
 }

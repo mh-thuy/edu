@@ -14,7 +14,7 @@ export const tuitionFeeCreateSchema = z.object({
   items: z.array(z.object({
     itemType: z.enum(["TUITION", "MATERIAL", "UNIFORM", "EXAM_FEE", "OTHER_FEE", "DISCOUNT", "SCHOLARSHIP"]),
     itemName: z.string().trim().min(1).max(255),
-    quantity: decimal.default(1),
+  quantity: decimal.gt(0, "Số lượng phải lớn hơn 0").default(1),
     unitPrice: decimal,
     amount: decimal,
     displayOrder: z.number().int().nonnegative().default(0),

@@ -31,6 +31,7 @@ import {
   type StudentItem,
 } from "@/components/shared/dialogs/StudentSelectDialog";
 import { useDisclosure } from "@/hooks/useDisclosure";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 type Batch = {
   id: string;
@@ -77,6 +78,8 @@ export function PaymentBatchHistory() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [cancelTarget, setCancelTarget] = useState<Batch | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const studentDialog = useDisclosure();
 
   const load = useCallback(async () => {
@@ -121,6 +124,21 @@ export function PaymentBatchHistory() {
     setStatus("");
     setPage(0);
     if (shouldReloadImmediately) void load();
+  }
+
+  async function cancelBatch() {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      const response = await fetch(`/api/payment-batches/${cancelTarget.id}/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "Khách hàng chuyển sang thanh toán tiền mặt" }) });
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể hủy batch thanh toán"));
+      setCancelTarget(null);
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể hủy batch thanh toán");
+    } finally {
+      setCancelling(false);
+    }
   }
 
   return (
@@ -277,6 +295,9 @@ export function PaymentBatchHistory() {
                               <Button size="small" variant="contained" startIcon={<PrintOutlinedIcon />} component="a" href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer">
                                 Mở để in
                               </Button>
+                              {batch.status === "PENDING" && <Button size="small" color="error" variant="outlined" onClick={() => setCancelTarget(batch)}>
+                                Hủy batch
+                              </Button>}
                             </Stack>
                           )}
                         </Box>
@@ -317,6 +338,16 @@ export function PaymentBatchHistory() {
           setPage(0);
           studentDialog.onClose();
         }}
+      />
+      <ConfirmDialog
+        open={!!cancelTarget}
+        title="Hủy batch chuyển khoản"
+        message={cancelTarget ? `Hủy batch ${cancelTarget.batchNo}? Các khoản học phí sẽ được giải phóng để thu tiền mặt.` : ""}
+        confirmLabel="Hủy batch"
+        cancelLabel="Quay lại"
+        onConfirm={() => void cancelBatch()}
+        onCancel={() => setCancelTarget(null)}
+        isLoading={cancelling}
       />
     </Stack>
   );

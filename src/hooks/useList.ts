@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { ApiSuccessResponse } from "@/lib/api";
-import type { PaginatedData } from "@/lib/api-client";
+import { extractApiErrorMessage, type PaginatedData } from "@/lib/api-client";
 
 export interface UseListOptions {
   page?: number;
@@ -42,7 +42,7 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
         });
 
         const response = await fetch(`${endpoint}?${params}`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải dữ liệu"));
 
         const result =
           (await response.json()) as ApiSuccessResponse<PaginatedData<T>>;
