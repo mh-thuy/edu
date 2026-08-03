@@ -49,6 +49,15 @@ export class TuitionService {
     const finalAmount = amount(data);
     if (finalAmount.isNegative()) throw new ConflictError("Số tiền cuối phải lớn hơn hoặc bằng 0");
     return prisma.$transaction(async (tx) => {
+      const enrollment = await tx.classStudent.findUnique({
+        where: { id: data.enrollmentId },
+        select: { studentId: true, classId: true },
+      });
+      if (!enrollment) throw new NotFoundError("Không tìm thấy đăng ký lớp học");
+      if (enrollment.studentId !== data.studentId || enrollment.classId !== data.classId) {
+        throw new ConflictError("Đăng ký lớp học không thuộc đúng học viên và lớp học");
+      }
+
       const feeNo = await generateFeeNo(tx);
       const fee = await tx.tuitionFee.create({ data: { ...data, feeNo, dueDate: data.dueDate ? new Date(`${data.dueDate}T00:00:00.000Z`) : undefined, finalAmount, createdBy: actorId, updatedBy: actorId, items: { create: data.items } }, include: feeInclude });
       await tx.tuitionAuditLog.create({ data: { entityType: "TUITION_FEE", entityId: fee.id, action: "CREATE", dataAfter: fee as unknown as Prisma.InputJsonValue, performedBy: actorId } });

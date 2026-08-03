@@ -241,9 +241,10 @@ model Teacher {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  user      User?            @relation(fields: [userId], references: [id], map: "fk_teachers_user")
+  user      User?           @relation(fields: [userId], references: [id], map: "fk_teachers_user")
   classes   Class[]
   schedules ClassSchedule[]
+
   @@map("teachers")
 }
 
@@ -262,9 +263,9 @@ model Student {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  enrollments ClassStudent[]
-  tuitionFees TuitionFee[]   @relation("TuitionFeeStudent")
-  attendances Attendance[]
+  enrollments    ClassStudent[]
+  tuitionFees    TuitionFee[]   @relation("TuitionFeeStudent")
+  attendances    Attendance[]
   paymentBatches PaymentBatch[]
 
   @@map("students")
@@ -286,11 +287,12 @@ model Class {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  teacher      Teacher?             @relation(fields: [teacherId], references: [id], map: "fk_classes_teacher")
-  students     ClassStudent[]
-  schedules    ClassSchedule[]
-  attendances  Attendance[]
-  tuitionFees  TuitionFee[]         @relation("TuitionFeeClass")
+  teacher     Teacher?        @relation(fields: [teacherId], references: [id], map: "fk_classes_teacher")
+  students    ClassStudent[]
+  schedules   ClassSchedule[]
+  attendances Attendance[]
+  tuitionFees TuitionFee[]    @relation("TuitionFeeClass")
+
   @@index([teacherId], map: "idx_classes_teacher_id")
   @@index([status], map: "idx_classes_status")
   @@map("classes")
@@ -423,13 +425,14 @@ model TuitionFee {
   createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  student     Student             @relation("TuitionFeeStudent", fields: [studentId], references: [id])
-  enrollment  ClassStudent        @relation("TuitionFeeEnrollment", fields: [enrollmentId], references: [id])
-  class       Class               @relation("TuitionFeeClass", fields: [classId], references: [id])
-  items       TuitionFeeItem[]
-  adjustments TuitionAdjustment[]
-  payments    TuitionPayment[]
+  student            Student             @relation("TuitionFeeStudent", fields: [studentId], references: [id])
+  enrollment         ClassStudent        @relation("TuitionFeeEnrollment", fields: [enrollmentId], references: [id])
+  class              Class               @relation("TuitionFeeClass", fields: [classId], references: [id])
+  items              TuitionFeeItem[]
+  adjustments        TuitionAdjustment[]
+  payments           TuitionPayment[]
   paymentAllocations PaymentAllocation[]
+
   @@index([studentId], map: "idx_tuition_fees_student_id")
   @@index([classId], map: "idx_tuition_fees_class_id")
   @@index([status], map: "idx_tuition_fees_status")
@@ -503,10 +506,10 @@ model TuitionPayment {
   createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tuitionFee TuitionFee      @relation(fields: [tuitionFeeId], references: [id])
-  paymentBatch PaymentBatch? @relation(fields: [paymentBatchId], references: [id])
-  receipt    TuitionReceipt?
-  refunds    PaymentRefund[]
+  tuitionFee   TuitionFee      @relation(fields: [tuitionFeeId], references: [id])
+  paymentBatch PaymentBatch?   @relation(fields: [paymentBatchId], references: [id])
+  receipt      TuitionReceipt?
+  refunds      PaymentRefund[]
 
   @@index([tuitionFeeId], map: "idx_tuition_payments_fee_id")
   @@index([studentId], map: "idx_tuition_payments_student_id")
@@ -515,31 +518,31 @@ model TuitionPayment {
 }
 
 model PaymentBatch {
-  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  batchNo              String            @unique(map: "uq_payment_batches_batch_no") @map("batch_no") @db.VarChar(40)
-  studentId            String            @map("student_id") @db.Uuid
-  totalAmount          Decimal           @map("total_amount") @db.Decimal(15, 2)
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchNo              String               @unique(map: "uq_payment_batches_batch_no") @map("batch_no") @db.VarChar(40)
+  studentId            String               @map("student_id") @db.Uuid
+  totalAmount          Decimal              @map("total_amount") @db.Decimal(15, 2)
   paymentMethod        TuitionPaymentMethod @map("payment_method")
-  status               PaymentBatchStatus @default(PENDING)
-  paymentDate          DateTime          @default(now()) @map("payment_date") @db.Timestamptz(6)
-  bankAccountId        String?           @map("bank_account_id") @db.Uuid
-  bankTransactionNo    String?           @map("bank_transaction_no") @db.VarChar(150)
-  transactionReference String?           @map("transaction_reference") @db.VarChar(150)
-  payerName            String?           @map("payer_name") @db.VarChar(255)
-  paymentContent       String?           @map("payment_content") @db.VarChar(500)
-  confirmedBy          String?           @map("confirmed_by") @db.Uuid
-  confirmedAt          DateTime?         @map("confirmed_at") @db.Timestamptz(6)
-  createdBy            String            @map("created_by") @db.Uuid
-  updatedBy            String            @map("updated_by") @db.Uuid
-  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  status               PaymentBatchStatus   @default(PENDING)
+  paymentDate          DateTime             @default(now()) @map("payment_date") @db.Timestamptz(6)
+  bankAccountId        String?              @map("bank_account_id") @db.Uuid
+  bankTransactionNo    String?              @map("bank_transaction_no") @db.VarChar(150)
+  transactionReference String?              @map("transaction_reference") @db.VarChar(150)
+  payerName            String?              @map("payer_name") @db.VarChar(255)
+  paymentContent       String?              @map("payment_content") @db.VarChar(500)
+  confirmedBy          String?              @map("confirmed_by") @db.Uuid
+  confirmedAt          DateTime?            @map("confirmed_at") @db.Timestamptz(6)
+  createdBy            String               @map("created_by") @db.Uuid
+  updatedBy            String               @map("updated_by") @db.Uuid
+  createdAt            DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  student       Student                    @relation(fields: [studentId], references: [id])
-  bankAccount   BankAccount?               @relation(fields: [bankAccountId], references: [id])
-  allocations   PaymentAllocation[]
-  payments      TuitionPayment[]
-  transactions  BankStatementTransaction[]
-  receipt       PaymentBatchReceipt?
+  student      Student                    @relation(fields: [studentId], references: [id])
+  bankAccount  BankAccount?               @relation(fields: [bankAccountId], references: [id])
+  allocations  PaymentAllocation[]
+  payments     TuitionPayment[]
+  transactions BankStatementTransaction[]
+  receipt      PaymentBatchReceipt?
 
   @@index([studentId], map: "idx_payment_batches_student_id")
   @@index([status], map: "idx_payment_batches_status")
@@ -547,11 +550,11 @@ model PaymentBatch {
 }
 
 model PaymentAllocation {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  paymentBatchId String      @map("payment_batch_id") @db.Uuid
-  tuitionFeeId   String      @map("tuition_fee_id") @db.Uuid
-  amount         Decimal     @db.Decimal(15, 2)
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentBatchId String   @map("payment_batch_id") @db.Uuid
+  tuitionFeeId   String   @map("tuition_fee_id") @db.Uuid
+  amount         Decimal  @db.Decimal(15, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   paymentBatch PaymentBatch @relation(fields: [paymentBatchId], references: [id])
   tuitionFee   TuitionFee   @relation(fields: [tuitionFeeId], references: [id])
@@ -562,14 +565,14 @@ model PaymentAllocation {
 }
 
 model PaymentBatchReceipt {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  receiptNo    String   @unique(map: "uq_payment_batch_receipts_receipt_no") @map("receipt_no") @db.VarChar(40)
-  paymentBatchId String @unique(map: "uq_payment_batch_receipts_batch_id") @map("payment_batch_id") @db.Uuid
-  issuedAt     DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
-  issuedBy     String   @map("issued_by") @db.Uuid
-  receiverName String?  @map("receiver_name") @db.VarChar(255)
-  amount       Decimal  @db.Decimal(15, 2)
-  paymentBatch PaymentBatch @relation(fields: [paymentBatchId], references: [id])
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  receiptNo      String       @unique(map: "uq_payment_batch_receipts_receipt_no") @map("receipt_no") @db.VarChar(40)
+  paymentBatchId String       @unique(map: "uq_payment_batch_receipts_batch_id") @map("payment_batch_id") @db.Uuid
+  issuedAt       DateTime     @default(now()) @map("issued_at") @db.Timestamptz(6)
+  issuedBy       String       @map("issued_by") @db.Uuid
+  receiverName   String?      @map("receiver_name") @db.VarChar(255)
+  amount         Decimal      @db.Decimal(15, 2)
+  paymentBatch   PaymentBatch @relation(fields: [paymentBatchId], references: [id])
 
   @@map("payment_batch_receipts")
 }
@@ -632,7 +635,7 @@ model BankAccount {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  imports BankStatementImport[]
+  imports        BankStatementImport[]
   paymentBatches PaymentBatch[]
 
   @@unique([bankCode, accountNo], map: "uq_bank_accounts_bank_account")
@@ -731,7 +734,7 @@ model BankStatementTransaction {
   updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   statementImport BankStatementImport           @relation(fields: [statementImportId], references: [id])
-  paymentBatch   PaymentBatch?                  @relation(fields: [paymentBatchId], references: [id])
+  paymentBatch    PaymentBatch?                 @relation(fields: [paymentBatchId], references: [id])
   candidates      BankStatementMatchCandidate[]
 
   @@unique([bankAccountId, transactionHash], map: "uq_bank_statement_transactions_hash")
