@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -190,7 +190,7 @@ export function PaymentBatchHistory() {
           <TableBody>
             {!loading &&
               items.map((batch) => (
-                <>
+                <Fragment key={batch.id}>
                   <TableRow key={batch.id} hover>
                     <TableCell>
                       <strong>{batch.batchNo}</strong>
@@ -283,7 +283,7 @@ export function PaymentBatchHistory() {
                       </Collapse>
                     </TableCell>
                   </TableRow>
-                </>
+                </Fragment>
               ))}
             {!loading && !items.length && (
               <TableRow>

@@ -9,7 +9,9 @@ export async function GET(request: NextRequest) {
   try {
     const user = await requireApiRole(["ADMIN", "STAFF"]); if (user instanceof Response) return user;
     const params = request.nextUrl.searchParams;
-    const result = await TuitionService.listFees({ studentCode: params.get("studentCode") || undefined, classId: params.get("classId") || undefined, status: (params.get("status") as TuitionFeeStatus) || undefined, page: Number(params.get("page") || 1), pageSize: params.get("export") === "csv" ? 10000 : Number(params.get("pageSize") || 50) });
+    const rawStatus = params.get("status");
+    const status = rawStatus && Object.values(TuitionFeeStatus).includes(rawStatus as TuitionFeeStatus) ? rawStatus as TuitionFeeStatus : undefined;
+    const result = await TuitionService.listFees({ studentCode: params.get("studentCode") || undefined, classId: params.get("classId") || undefined, status, page: Number(params.get("page") || 1), pageSize: params.get("export") === "csv" ? 10000 : Number(params.get("pageSize") || 50) });
     if (params.get("export") === "csv") {
       const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
       const rows = [

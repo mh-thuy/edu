@@ -27,16 +27,18 @@ async function generateFeeNo(tx: Prisma.TransactionClient) {
 
 export class TuitionService {
   static async listFees(params: { studentCode?: string; classId?: string; status?: TuitionFeeStatus; page: number; pageSize: number }) {
+    const page = Number.isFinite(params.page) ? Math.max(Math.floor(params.page), 1) : 1;
+    const pageSize = Number.isFinite(params.pageSize) ? Math.min(Math.max(Math.floor(params.pageSize), 1), 10000) : 50;
     const where: Prisma.TuitionFeeWhereInput = {
       ...(params.status ? { status: params.status } : {}),
       ...(params.studentCode ? { student: { code: { equals: params.studentCode, mode: "insensitive" } } } : {}),
       ...(params.classId ? { classId: params.classId } : {}),
     };
     const [items, total] = await Promise.all([
-      prisma.tuitionFee.findMany({ where, include: feeInclude, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }], skip: (params.page - 1) * params.pageSize, take: params.pageSize }),
+      prisma.tuitionFee.findMany({ where, include: feeInclude, orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
       prisma.tuitionFee.count({ where }),
     ]);
-    return { items, total, page: params.page, pageSize: params.pageSize, pages: Math.ceil(total / params.pageSize) };
+    return { items, total, page, pageSize, pages: Math.ceil(total / pageSize) };
   }
 
   static async getFee(id: string) {

@@ -57,15 +57,17 @@ export async function createPaymentBatch(data: PaymentBatchCreate, actorId: stri
 }
 
 export async function listPaymentBatches(params: { studentCode?: string; status?: PaymentBatchStatus; page: number; pageSize: number }) {
+  const page = Number.isFinite(params.page) ? Math.max(Math.floor(params.page), 1) : 1;
+  const pageSize = Number.isFinite(params.pageSize) ? Math.min(Math.max(Math.floor(params.pageSize), 1), 100) : 20;
   const where: Prisma.PaymentBatchWhereInput = {
     ...(params.status ? { status: params.status } : {}),
     ...(params.studentCode ? { student: { code: { contains: params.studentCode, mode: "insensitive" } } } : {}),
   };
   const [items, total] = await Promise.all([
-    prisma.paymentBatch.findMany({ where, include: { student: true, receipt: true, allocations: { include: { tuitionFee: { include: { class: true } } } } }, orderBy: { createdAt: "desc" }, skip: (params.page - 1) * params.pageSize, take: params.pageSize }),
+    prisma.paymentBatch.findMany({ where, include: { student: true, receipt: true, allocations: { include: { tuitionFee: { include: { class: true } } } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.paymentBatch.count({ where }),
   ]);
-  return { items, total, page: params.page, pageSize: params.pageSize, pages: Math.ceil(total / params.pageSize) };
+  return { items, total, page, pageSize, pages: Math.ceil(total / pageSize) };
 }
 
 export async function getPaymentBatchQr(batchId: string) {

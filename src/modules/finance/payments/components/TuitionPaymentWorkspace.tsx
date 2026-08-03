@@ -40,7 +40,7 @@ export function TuitionPaymentWorkspace() {
     if (!studentCode) { setError("Mã học sinh là bắt buộc"); return; }
     setLoading(true); setError(""); setPendingBatch(null); setReceiptId(null);
     try {
-      const response = await fetch(`/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&pageSize=100`);
+      const response = await fetch(`/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&pageSize=10000`);
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải học phí"));
       const result = await unwrapApiResponse<{ items: Fee[] }>(response);
       const unpaid = result.items.filter((fee) => fee.status === "UNPAID" || fee.status === "OVERDUE");

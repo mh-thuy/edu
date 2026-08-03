@@ -12,7 +12,8 @@ export async function GET(request: Request) {
     const page = Math.max(Number(params.get("page") || 1), 1);
     const pageSize = Math.min(Math.max(Number(params.get("pageSize") || 20), 1), 100);
     const search = params.get("search")?.trim();
-    const status = params.get("status") as ReceiptStatus | null;
+    const rawStatus = params.get("status");
+    const status = rawStatus && Object.values(ReceiptStatus).includes(rawStatus as ReceiptStatus) ? rawStatus as ReceiptStatus : undefined;
     const dateFrom = params.get("dateFrom");
     const dateTo = params.get("dateTo");
     const issuedAt: { gte?: Date; lt?: Date } = {};
