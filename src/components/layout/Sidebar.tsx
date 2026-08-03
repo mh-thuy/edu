@@ -91,6 +91,12 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
+    label: "Tài khoản nhận tiền",
+    href: "/admin/bank-accounts",
+    icon: <AccountBalanceOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
     label: "Lớp của tôi",
     href: "/teacher/classes",
     icon: <ClassOutlinedIcon fontSize="small" />,
