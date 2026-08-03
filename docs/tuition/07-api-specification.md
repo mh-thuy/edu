@@ -4,9 +4,7 @@ Root resources:
 
 ```text
 /api/tuition-fees
-/api/payments
-/api/payment-refunds
-/api/tuition-notices
+/api/payment-batches
 /api/receipts
 /api/bank-accounts
 /api/bank-statement-imports
@@ -14,6 +12,6 @@ Root resources:
 /api/bank-reconciliations
 ```
 
-Payment confirm request tối thiểu gồm `tuitionFeeId`, `paymentMethod`, `paymentDate`, `payerName`, `note`, `idempotencyKey`. Backend lấy final_amount; nếu client gửi amount thì chỉ dùng để kiểm tra exact match.
+Thanh toán được tạo qua `POST /api/payment-batches`; backend lấy `finalAmount` của từng khoản học phí và không nhận số tiền tùy ý từ client. Batch chuyển khoản ở trạng thái `PENDING` sẽ được xác nhận qua đối soát ngân hàng hoặc hủy trước khi chuyển sang phương thức thanh toán khác.
 
 Response giữ `{ success, data }` hoặc `{ success: false, error: { code, message, details } }`.

@@ -1,20 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import {
-  Container,
-  Typography,
-  Box,
-  Card,
-  CardContent,
-  Stack,
-  Skeleton,
-  Alert,
-} from "@mui/material";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import PaymentIcon from "@mui/icons-material/Payment";
+import { useCallback, useEffect, useState } from "react";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import AddCardIcon from "@mui/icons-material/AddCard";
 import GroupIcon from "@mui/icons-material/Group";
+import PaymentIcon from "@mui/icons-material/Payment";
 import ReceiptIcon from "@mui/icons-material/Receipt";
+import SchoolIcon from "@mui/icons-material/School";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import { Alert, Box, Button, Card, CardContent, Container, Skeleton, Stack, TextField, Typography } from "@mui/material";
+import Link from "next/link";
 import { unwrapApiResponse } from "@/lib/api-client";
 
 interface DashboardStats {
@@ -23,193 +20,62 @@ interface DashboardStats {
   totalDebt: number;
   totalCollected: number;
   activeClasses: number;
+  activeStudents: number;
+  overdueFees: number;
+  pendingBatches: number;
+  unmatchedTransactions: number;
 }
 
-interface StatCardProps {
-  icon: React.ReactNode;
-  title: string;
-  value: string | number;
-  subtitle?: string;
-  loading?: boolean;
-  color?: string;
+const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
+
+function StatCard({ icon, title, value, subtitle, loading, color = "primary" }: { icon: React.ReactNode; title: string; value: string; subtitle: string; loading: boolean; color?: string }) {
+  return <Card><CardContent><Stack direction="row" spacing={2} alignItems="flex-start"><Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 2, bgcolor: `${color}.light`, color: `${color}.main` }}>{icon}</Box><Box flex={1}><Typography variant="caption" color="text.secondary">{title}</Typography>{loading ? <Skeleton width="80%" height={32} /> : <Typography variant="h6" fontWeight="bold">{value}</Typography>}<Typography variant="caption" color="text.secondary">{subtitle}</Typography></Box></Stack></CardContent></Card>;
 }
 
-function StatCard({
-  icon,
-  title,
-  value,
-  subtitle,
-  loading,
-  color = "primary",
-}: StatCardProps) {
-  return (
-    <Card>
-      <CardContent>
-        <Stack direction="row" spacing={2} alignItems="flex-start">
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 56,
-              height: 56,
-              borderRadius: 2,
-              backgroundColor: `${color}.light`,
-              color: `${color}.main`,
-            }}
-          >
-            {icon}
-          </Box>
-          <Box flex={1}>
-            <Typography variant="caption" color="text.secondary">
-              {title}
-            </Typography>
-            {loading ? (
-              <Skeleton width="80%" height={32} />
-            ) : (
-              <Typography variant="h6" fontWeight="bold">
-                {typeof value === "number" ? value.toLocaleString() : value}
-              </Typography>
-            )}
-            {subtitle && (
-              <Typography variant="caption" color="text.secondary">
-                {subtitle}
-              </Typography>
-            )}
-          </Box>
-        </Stack>
-      </CardContent>
-    </Card>
-  );
+function QuickLink({ href, label, icon }: { href: string; label: string; icon: React.ReactNode }) {
+  return <Button component={Link} href={href} variant="outlined" startIcon={icon}>{label}</Button>;
 }
 
 export default function AdminPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        setLoading(true);
-        const statsRes = await fetch("/api/dashboard/stats");
-        const result = await unwrapApiResponse<DashboardStats>(statsRes);
-        setStats(result);
-      } catch {
-        setError("Lỗi khi tải dữ liệu");
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadStats = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      const response = await fetch(`/api/dashboard/stats?${params}`);
+      if (!response.ok) throw new Error("Không thể tải dữ liệu dashboard");
+      setStats(await unwrapApiResponse<DashboardStats>(response));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể tải dữ liệu dashboard");
+    } finally { setLoading(false); }
+  }, [dateFrom, dateTo]);
 
-    loadStats();
-  }, []);
+  useEffect(() => { void loadStats(); }, [loadStats]);
 
-  return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box mb={4}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Trang chủ quản lý
-        </Typography>
-        <Typography color="text.secondary">
-          Tổng quan thông tin tài chính và hoạt động
-        </Typography>
-      </Box>
-
+  return <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Stack spacing={3}>
+      <Box><Typography variant="h4" component="h1" gutterBottom>Dashboard quản lý</Typography><Typography color="text.secondary">Tổng quan tài chính, học phí và các công việc cần xử lý.</Typography></Box>
+      <Card><CardContent><Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}><Typography fontWeight={700} sx={{ mr: "auto" }}>Bộ lọc doanh thu</Typography><TextField size="small" type="date" label="Từ ngày" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} InputLabelProps={{ shrink: true }} /><TextField size="small" type="date" label="Đến ngày" value={dateTo} onChange={(event) => setDateTo(event.target.value)} InputLabelProps={{ shrink: true }} /><Button variant="contained" onClick={() => void loadStats()}>Áp dụng</Button><Button variant="outlined" onClick={() => { setDateFrom(""); setDateTo(""); }}>Xóa lọc</Button></Stack></CardContent></Card>
       {error && <Alert severity="error">{error}</Alert>}
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "1fr 1fr",
-            md: "1fr 1fr 1fr",
-          },
-          gap: 3,
-          mb: 4,
-        }}
-      >
-        {/* Financial Stats */}
-        <Box>
-          <StatCard
-            icon={<TrendingUpIcon />}
-            title="Tổng doanh thu"
-            value={
-              stats?.totalRevenue
-                ? `${(stats.totalRevenue / 1000000).toFixed(1)}M`
-                : "0"
-            }
-            subtitle="Tổng thanh toán đã thu"
-            loading={loading}
-            color="success"
-          />
-        </Box>
-
-        <Box>
-          <StatCard
-            icon={<PaymentIcon />}
-            title="Nợ học phí"
-            value={
-              stats?.totalDebt
-                ? `${(stats.totalDebt / 1000000).toFixed(1)}M`
-                : "0"
-            }
-            subtitle="Chưa thanh toán"
-            loading={loading}
-            color="error"
-          />
-        </Box>
-
-        <Box>
-          <StatCard
-            icon={<ReceiptIcon />}
-            title="Đã thu"
-            value={
-              stats?.totalFeeAmount
-                ? `${(stats.totalFeeAmount / 1000000).toFixed(1)}M`
-                : "0"
-            }
-            subtitle="Tổng học phí sau giảm giá"
-            loading={loading}
-            color="info"
-          />
-        </Box>
-
-        <Box>
-          <StatCard
-            icon={<GroupIcon />}
-            title="Lớp hoạt động"
-            value={stats?.activeClasses || 0}
-            subtitle="Số lớp đang mở"
-            loading={loading}
-            color="primary"
-          />
-        </Box>
-
-        {/* Quick Links */}
-        <Box sx={{ gridColumn: "1 / -1" }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Mục nhanh
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ flex: "1 0 auto" }}
-                >
-                  Quản lý:{" "}
-                  <a href="/admin/receipts" style={{ color: "#1976d2" }}>
-                    Biên lai
-                  </a>
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Box>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", lg: "repeat(4, 1fr)" }, gap: 2 }}>
+        <StatCard icon={<TrendingUpIcon />} title="Đã thu" value={money(stats?.totalCollected || 0)} subtitle="Payment thành công" loading={loading} color="success" />
+        <StatCard icon={<PaymentIcon />} title="Còn nợ" value={money(stats?.totalDebt || 0)} subtitle="Chưa thanh toán / quá hạn" loading={loading} color="error" />
+        <StatCard icon={<ReceiptIcon />} title="Tổng phải thu" value={money(stats?.totalFeeAmount || 0)} subtitle="Không gồm miễn/hủy" loading={loading} color="info" />
+        <StatCard icon={<SchoolIcon />} title="Lớp hoạt động" value={String(stats?.activeClasses || 0)} subtitle="Số lớp đang mở" loading={loading} color="primary" />
+        <StatCard icon={<GroupIcon />} title="Học viên hoạt động" value={String(stats?.activeStudents || 0)} subtitle="Đang theo học" loading={loading} color="primary" />
+        <StatCard icon={<WarningAmberIcon />} title="Học phí quá hạn" value={String(stats?.overdueFees || 0)} subtitle="Khoản cần nhắc thu" loading={loading} color="warning" />
+        <StatCard icon={<AccountBalanceWalletIcon />} title="Batch chờ đối soát" value={String(stats?.pendingBatches || 0)} subtitle="Chuyển khoản đang chờ" loading={loading} color="warning" />
+        <StatCard icon={<AccountBalanceIcon />} title="Giao dịch chưa khớp" value={String(stats?.unmatchedTransactions || 0)} subtitle="Cần kiểm tra ngân hàng" loading={loading} color="error" />
       </Box>
-    </Container>
-  );
+      <Card><CardContent><Typography variant="h6" gutterBottom>Công việc cần xử lý</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/bank-reconciliation" label={`Đối soát ngân hàng (${stats?.unmatchedTransactions || 0})`} icon={<AccountBalanceIcon />} /><QuickLink href="/admin/tuition-fees/payment-history" label={`Batch chờ xử lý (${stats?.pendingBatches || 0})`} icon={<PaymentIcon />} /><QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees || 0})`} icon={<WarningAmberIcon />} /></Stack></CardContent></Card>
+      <Card><CardContent><Typography variant="h6" gutterBottom>Thao tác nhanh</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/tuition-fees/new" label="Tạo học phí" icon={<AddCardIcon />} /><QuickLink href="/admin/tuition-fees/payment" label="Thu học phí" icon={<PaymentIcon />} /><QuickLink href="/admin/bank-reconciliation" label="Import sao kê" icon={<AccountBalanceIcon />} /><QuickLink href="/admin/receipts" label="Xem biên lai" icon={<ReceiptIcon />} /></Stack></CardContent></Card>
+    </Stack>
+  </Container>;
 }

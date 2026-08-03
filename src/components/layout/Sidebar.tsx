@@ -35,10 +35,10 @@ type SidebarItem = {
 
 const items: SidebarItem[] = [
   {
-    label: "Tổng quan",
-    href: "/",
+    label: "Dashboard",
+    href: "/admin",
     icon: <HomeOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF", "TEACHER"],
+    roles: ["ADMIN", "STAFF"],
   },
   {
     label: "Giáo viên",
@@ -117,7 +117,7 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
 
   const visibleItems = items.filter((item) => item.roles.includes(role));
-  const groupFor = (href: string) => href === "/" ? "Tổng quan"
+  const groupFor = (href: string) => href === "/" || href === "/admin" ? "Tổng quan"
     : href.startsWith("/teacher") ? "Giáo viên"
       : ["/admin/teachers", "/admin/students", "/admin/classes"].includes(href) ? "Đào tạo"
         : "Tài chính";
