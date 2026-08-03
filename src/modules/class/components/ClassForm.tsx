@@ -47,6 +47,7 @@ export function ClassForm({
   onSubmit,
   defaultValues,
 }: ClassFormProps): ReactElement {
+  const isEditing = Boolean(defaultValues?.code);
   const teacherDialog = useDisclosure();
   const [selectedTeacher, setSelectedTeacher] = useState<MasterSelectValue | null>(
     defaultValues?.teacherId
@@ -107,9 +108,15 @@ export function ClassForm({
               {...field}
               label="Mã lớp"
               error={!!error}
-              helperText={error?.message}
+              helperText={
+                error?.message ??
+                (isEditing
+                  ? "Mã lớp được hệ thống tạo tự động"
+                  : "Mã lớp sẽ được hệ thống tạo tự động khi lưu")
+              }
               fullWidth
-              placeholder="VD: C001"
+              placeholder="Tự động tạo khi lưu"
+              disabled
               autoFocus
             />
           )}

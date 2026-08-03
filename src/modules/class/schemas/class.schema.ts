@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const classCreateSchema = z.object({
-  code: z.string().min(1, "Class code is required").max(50),
+  code: z.string().max(50).optional(),
   name: z.string().min(1, "Class name is required").max(100),
   teacherId: z.string().optional().nullable(),
   tuitionFee: z.number().min(0).default(0),

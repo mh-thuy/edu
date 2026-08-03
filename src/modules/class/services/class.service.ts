@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
-import type { Class, Prisma } from "@prisma/client";
+import { Prisma, type Class } from "@prisma/client";
+import { randomInt } from "node:crypto";
 import type {
   ClassCreate,
   ClassFilter,
@@ -22,9 +23,12 @@ function toNullableDate(value?: string): Date | undefined {
   return value ? new Date(value) : undefined;
 }
 
-function buildClassCreateInput(data: ClassCreate): Prisma.ClassUncheckedCreateInput {
+function buildClassCreateInput(
+  data: ClassCreate,
+  code: string,
+): Prisma.ClassUncheckedCreateInput {
   return {
-    code: data.code,
+    code,
     name: data.name,
     teacherId: toNullableString(data.teacherId),
     tuitionFee: data.tuitionFee,
@@ -33,6 +37,11 @@ function buildClassCreateInput(data: ClassCreate): Prisma.ClassUncheckedCreateIn
     endDate: toNullableDate(data.endDate),
     status: data.status,
   };
+}
+
+function generateClassCode(): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `CLS-${date}-${randomInt(1000, 10000)}`;
 }
 
 function buildClassUpdateInput(data: ClassUpdate): Prisma.ClassUncheckedUpdateInput {
@@ -64,9 +73,22 @@ async function generateTuitionFeeNo(tx: Prisma.TransactionClient) {
 }
 
 export async function createClass(data: ClassCreate): Promise<Class> {
-  return prisma.class.create({
-    data: buildClassCreateInput(data),
-  });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      return await prisma.class.create({
+        data: buildClassCreateInput(data, generateClassCode()),
+      });
+    } catch (error: unknown) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2002"
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new ConflictError("Không thể tạo mã lớp tự động, vui lòng thử lại");
 }
 
 export async function getClassById(id: string): Promise<ClassWithRelations | null> {
