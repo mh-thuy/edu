@@ -74,8 +74,23 @@ export function BaseTable<T extends GridValidRowModel>({
         paginationMode="server"
         loading={isLoading}
         disableRowSelectionOnClick
+        localeText={{
+          noRowsLabel: "Không có dữ liệu",
+          noResultsOverlayLabel: "Không tìm thấy kết quả",
+          toolbarDensity: "Mật độ hiển thị",
+          toolbarDensityLabel: "Mật độ hiển thị",
+          toolbarDensityCompact: "Gọn",
+          toolbarDensityStandard: "Tiêu chuẩn",
+          toolbarDensityComfortable: "Thoải mái",
+          columnsManagementSearchTitle: "Tìm cột",
+          columnsManagementShowHideAllText: "Hiện/ẩn tất cả",
+          columnsManagementReset: "Đặt lại",
+          paginationRowsPerPage: "Số dòng/trang",
+          paginationDisplayedRows: ({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`,
+        }}
         sx={{
           border: "none",
+          minHeight: 280,
           "& .MuiDataGrid-cell": {
             borderBottom: "1px solid var(--mui-palette-divider)",
           },

@@ -117,6 +117,10 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
 
   const visibleItems = items.filter((item) => item.roles.includes(role));
+  const groupFor = (href: string) => href === "/" ? "Tổng quan"
+    : href.startsWith("/teacher") ? "Giáo viên"
+      : ["/admin/teachers", "/admin/students", "/admin/classes"].includes(href) ? "Đào tạo"
+        : "Tài chính";
 
   return (
     <Box
@@ -143,34 +147,34 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
 
       {/* Menu */}
       <List sx={{ px: 1.5, py: 2 }}>
-        {visibleItems.map((item) => {
+        {visibleItems.map((item, index) => {
           const selected =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+          const group = groupFor(item.href);
+          const previousGroup = index > 0 ? groupFor(visibleItems[index - 1]!.href) : null;
 
           return (
-            <ListItemButton
-              key={item.href}
-              component={Link}
-              href={item.href}
-              selected={selected}
-              onClick={onNavigate}
-              sx={{
-                borderRadius: 2,
-                mb: 0.5,
-                minHeight: 44,
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-
-              <ListItemText
-                primary={item.label}
-                primaryTypographyProps={{
-                  fontSize: 14,
-                  fontWeight: selected ? 600 : 400,
-                }}
-              />
-            </ListItemButton>
+            <Box key={item.href}>
+              {group !== "Tổng quan" && group !== previousGroup && (
+                <Typography variant="overline" color="text.secondary" sx={{ display: "block", px: 1.5, mt: index === 0 ? 0 : 2, mb: 0.5, fontWeight: 700 }}>
+                  {group}
+                </Typography>
+              )}
+              <ListItemButton
+                component={Link}
+                href={item.href}
+                selected={selected}
+                onClick={onNavigate}
+                sx={{ borderRadius: 2, mb: 0.5, minHeight: 44 }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={item.label}
+                  primaryTypographyProps={{ fontSize: 14, fontWeight: selected ? 600 : 400 }}
+                />
+              </ListItemButton>
+            </Box>
           );
         })}
       </List>

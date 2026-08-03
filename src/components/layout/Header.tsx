@@ -19,6 +19,7 @@ import type { SessionUser } from "@/types/auth";
 type HeaderProps = {
   user: SessionUser;
   onToggleSidebar: () => void;
+  currentTitle?: string;
 };
 
 const roleLabels: Record<SessionUser["role"], string> = {
@@ -27,7 +28,7 @@ const roleLabels: Record<SessionUser["role"], string> = {
   TEACHER: "Giáo viên",
 };
 
-export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
+export function Header({ user, onToggleSidebar, currentTitle = "Tổng quan" }: HeaderProps): ReactElement {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const open = Boolean(anchorEl);
@@ -54,12 +55,17 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
       }}
     >
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <IconButton onClick={onToggleSidebar} aria-label="Toggle sidebar" size="small">
+        <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" size="small">
           <MenuOutlinedIcon />
         </IconButton>
-        <Typography variant="subtitle1" fontWeight={700}>
-          Trung tâm đào tạo
-        </Typography>
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            Trung tâm đào tạo
+          </Typography>
+          <Typography variant="subtitle1" fontWeight={700} lineHeight={1.2}>
+            {currentTitle}
+          </Typography>
+        </Box>
       </Stack>
 
       <Stack direction="row" alignItems="center" spacing={1.5}>

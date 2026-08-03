@@ -110,6 +110,7 @@ export function ClassForm({
               helperText={error?.message}
               fullWidth
               placeholder="VD: C001"
+              autoFocus
             />
           )}
         />

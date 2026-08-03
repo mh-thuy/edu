@@ -5,6 +5,7 @@ import { useState, type ReactElement, type ReactNode } from "react";
 import { Header } from "@/components/layout/Header";
 import { Sidebar } from "@/components/layout/Sidebar";
 import type { SessionUser } from "@/types/auth";
+import { usePathname } from "next/navigation";
 
 type AppLayoutProps = {
   user: SessionUser;
@@ -16,6 +17,19 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
   const isDesktop = useMediaQuery(theme.breakpoints.up("lg"), { noSsr: true });
   const [desktopCollapsed, setDesktopCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+  const currentTitle = pathname.startsWith("/admin/teachers") ? "Quản lý giáo viên"
+    : pathname.startsWith("/admin/students") ? "Quản lý học viên"
+      : pathname.startsWith("/admin/classes") ? "Quản lý lớp học"
+        : pathname.startsWith("/admin/tuition-fees/payment-history") ? "Lịch sử thu học phí"
+          : pathname.startsWith("/admin/tuition-fees/payment") ? "Thu học phí"
+            : pathname.startsWith("/admin/tuition-fees") ? "Quản lý học phí"
+              : pathname.startsWith("/admin/bank-reconciliation") ? "Đối soát ngân hàng"
+                : pathname.startsWith("/admin/bank-accounts") ? "Tài khoản nhận tiền"
+                  : pathname.startsWith("/admin/receipts") ? "Biên lai"
+                    : pathname.startsWith("/teacher/classes") ? "Lớp của tôi"
+                      : pathname.startsWith("/teacher/schedules") ? "Lịch của tôi"
+                        : "Tổng quan";
 
   const toggleSidebar = () => {
     if (isDesktop) {
@@ -58,7 +72,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       
       {/* Main content */}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Header user={user} onToggleSidebar={toggleSidebar} />
+        <Header user={user} onToggleSidebar={toggleSidebar} currentTitle={currentTitle} />
         <Box component="main" sx={{ p: { xs: 2, md: 3 } }}>
           {children}
         </Box>

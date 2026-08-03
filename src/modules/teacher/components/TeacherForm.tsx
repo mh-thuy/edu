@@ -52,6 +52,7 @@ export function TeacherForm({
                 {...field}
                 label="Họ và tên"
                 placeholder="VD: Nguyễn Văn A"
+                autoFocus
                 error={!!error}
                 helperText={error?.message}
                 fullWidth

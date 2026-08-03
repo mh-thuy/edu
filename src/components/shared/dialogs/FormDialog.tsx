@@ -31,11 +31,11 @@ export function FormDialog({
   formId,
   children,
   isLoading = false,
-  submitText = "Save",
-  cancelText = "Cancel",
+  submitText = "Lưu",
+  cancelText = "Hủy",
 }: FormDialogProps): ReactElement {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={isLoading ? undefined : onClose} maxWidth="md" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>{children}</Box>
@@ -51,7 +51,7 @@ export function FormDialog({
           variant="contained"
           disabled={isLoading}
         >
-          {isLoading ? <CircularProgress size={24} /> : submitText}
+          {isLoading ? <CircularProgress size={20} color="inherit" /> : submitText}
         </Button>
       </DialogActions>
     </Dialog>

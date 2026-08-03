@@ -54,6 +54,7 @@ export function StudentForm({
             <TextField
               {...field}
               label="Họ tên"
+              autoFocus
               error={!!error}
               helperText={error?.message}
               fullWidth

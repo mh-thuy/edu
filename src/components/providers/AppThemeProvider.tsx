@@ -37,6 +37,12 @@ const theme = createTheme({
         },
       },
     },
+    MuiTextField: {
+      defaultProps: { variant: "outlined", size: "small" },
+    },
+    MuiFormControl: {
+      defaultProps: { size: "small" },
+    },
     MuiChip: {
       styleOverrides: {
         root: {

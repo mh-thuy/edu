@@ -30,12 +30,12 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   isLoading = false,
-  confirmLabel = "Delete",
-  cancelLabel = "Cancel",
+  confirmLabel = "Xác nhận",
+  cancelLabel = "Hủy",
   confirmColor = "error",
 }: ConfirmDialogProps): ReactElement {
   return (
-    <Dialog open={open} onClose={onCancel}>
+    <Dialog open={open} onClose={isLoading ? undefined : onCancel} maxWidth="xs" fullWidth>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <Typography>{message}</Typography>
