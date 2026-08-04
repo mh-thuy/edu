@@ -39,6 +39,28 @@ enum ClassStatus {
   @@map("class_status")
 }
 
+enum SubjectStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("subject_status")
+}
+
+enum ClassSubjectStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("class_subject_status")
+}
+
+enum EnrollmentSubjectStatus {
+  ACTIVE
+  DROPPED
+  COMPLETED
+
+  @@map("enrollment_subject_status")
+}
+
 enum EnrollmentStatus {
   ACTIVE
   LEFT
@@ -53,23 +75,6 @@ enum ReceiptStatus {
   CANCELLED
 
   @@map("receipt_status")
-}
-
-enum AttendanceStatus {
-  PRESENT
-  ABSENT
-  MAKEUP
-
-  @@map("attendance_status")
-}
-
-enum ExpenseStatus {
-  DRAFT
-  APPROVED
-  PAID
-  CANCELLED
-
-  @@map("expense_status")
 }
 
 enum TuitionFeeStatus {
@@ -92,18 +97,6 @@ enum TuitionFeeItemType {
   SCHOLARSHIP
 
   @@map("tuition_fee_item_type")
-}
-
-enum TuitionAdjustmentType {
-  DISCOUNT
-  SCHOLARSHIP
-  ADD_FEE
-  REDUCE_FEE
-  EXEMPTION
-  CANCELLATION
-  TRANSFER_CLASS
-
-  @@map("tuition_adjustment_type")
 }
 
 enum TuitionPaymentMethod {
@@ -131,16 +124,6 @@ enum PaymentBatchStatus {
   CANCELLED
 
   @@map("payment_batch_status")
-}
-
-enum TuitionRefundStatus {
-  PENDING
-  APPROVED
-  COMPLETED
-  REJECTED
-  CANCELLED
-
-  @@map("tuition_refund_status")
 }
 
 enum BankImportStatus {
@@ -242,7 +225,7 @@ model Teacher {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   user      User?           @relation(fields: [userId], references: [id], map: "fk_teachers_user")
-  classes   Class[]
+  classSubjects ClassSubject[]
   schedules ClassSchedule[]
 
   @@map("teachers")
@@ -265,19 +248,30 @@ model Student {
 
   enrollments    ClassStudent[]
   tuitionFees    TuitionFee[]   @relation("TuitionFeeStudent")
-  attendances    Attendance[]
   paymentBatches PaymentBatch[]
 
   @@map("students")
+}
+
+model Subject {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String        @unique(map: "uq_subjects_code") @db.VarChar(50)
+  name      String        @db.VarChar(255)
+  status    SubjectStatus  @default(ACTIVE)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?     @map("deleted_at") @db.Timestamptz(6)
+
+  classSubjects ClassSubject[]
+
+  @@index([status], map: "idx_subjects_status")
+  @@map("subjects")
 }
 
 model Class {
   id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code          String      @unique(map: "uq_classes_code") @db.VarChar(50)
   name          String      @db.VarChar(255)
-  teacherId     String?     @map("teacher_id") @db.Uuid
-  tuitionFee    Decimal     @default(0) @map("tuition_fee") @db.Decimal(12, 2)
-  totalSessions Int         @default(0) @map("total_sessions")
   startDate     DateTime?   @map("start_date") @db.Date
   endDate       DateTime?   @map("end_date") @db.Date
   status        ClassStatus @default(DRAFT)
@@ -287,13 +281,11 @@ model Class {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  teacher     Teacher?        @relation(fields: [teacherId], references: [id], map: "fk_classes_teacher")
   students    ClassStudent[]
+  classSubjects ClassSubject[]
   schedules   ClassSchedule[]
-  attendances Attendance[]
   tuitionFees TuitionFee[]    @relation("TuitionFeeClass")
 
-  @@index([teacherId], map: "idx_classes_teacher_id")
   @@index([status], map: "idx_classes_status")
   @@map("classes")
 }
@@ -314,6 +306,7 @@ model ClassStudent {
   class       Class        @relation(fields: [classId], references: [id], map: "fk_class_students_class")
   student     Student      @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
   tuitionFees TuitionFee[] @relation("TuitionFeeEnrollment")
+  subjects    EnrollmentSubject[]
 
   @@unique([classId, studentId], map: "uq_class_students_class_student")
   @@index([classId], map: "idx_class_students_class_id")
@@ -321,9 +314,57 @@ model ClassStudent {
   @@map("class_students")
 }
 
+model ClassSubject {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classId       String             @map("class_id") @db.Uuid
+  subjectId     String             @map("subject_id") @db.Uuid
+  teacherId     String?            @map("teacher_id") @db.Uuid
+  tuitionFee    Decimal            @default(0) @map("tuition_fee") @db.Decimal(15, 2)
+  totalSessions Int                @default(0) @map("total_sessions")
+  maxStudents   Int?               @map("max_students")
+  status        ClassSubjectStatus @default(ACTIVE)
+  note          String?
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz(6)
+
+  class         Class              @relation(fields: [classId], references: [id], map: "fk_class_subjects_class")
+  subject       Subject            @relation(fields: [subjectId], references: [id], map: "fk_class_subjects_subject")
+  teacher       Teacher?           @relation(fields: [teacherId], references: [id], map: "fk_class_subjects_teacher")
+  enrollments   EnrollmentSubject[]
+  schedules     ClassSchedule[]
+  tuitionItems  TuitionFeeItem[]
+
+  @@unique([classId, subjectId], map: "uq_class_subjects_class_subject")
+  @@index([classId], map: "idx_class_subjects_class_id")
+  @@index([subjectId], map: "idx_class_subjects_subject_id")
+  @@index([teacherId], map: "idx_class_subjects_teacher_id")
+  @@map("class_subjects")
+}
+
+model EnrollmentSubject {
+  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollmentId        String                  @map("enrollment_id") @db.Uuid
+  classSubjectId      String                  @map("class_subject_id") @db.Uuid
+  tuitionFeeOverride  Decimal?                @map("tuition_fee_override") @db.Decimal(15, 2)
+  status              EnrollmentSubjectStatus @default(ACTIVE)
+  enrolledAt          DateTime                @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  droppedAt           DateTime?               @map("dropped_at") @db.Timestamptz(6)
+  note                String?
+
+  enrollment   ClassStudent @relation(fields: [enrollmentId], references: [id], map: "fk_enrollment_subjects_enrollment")
+  classSubject ClassSubject @relation(fields: [classSubjectId], references: [id], map: "fk_enrollment_subjects_class_subject")
+
+  @@unique([enrollmentId, classSubjectId], map: "uq_enrollment_subjects_enrollment_subject")
+  @@index([enrollmentId], map: "idx_enrollment_subjects_enrollment_id")
+  @@index([classSubjectId], map: "idx_enrollment_subjects_class_subject_id")
+  @@map("enrollment_subjects")
+}
+
 model ClassSchedule {
   id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   classId     String  @map("class_id") @db.Uuid
+  classSubjectId String? @map("class_subject_id") @db.Uuid
   teacherId   String  @map("teacher_id") @db.Uuid
   dayOfWeek   Int     @map("day_of_week") @db.SmallInt
   startMinute Int     @map("start_minute")
@@ -335,71 +376,12 @@ model ClassSchedule {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   class       Class        @relation(fields: [classId], references: [id], map: "fk_class_schedules_class")
+  classSubject ClassSubject? @relation(fields: [classSubjectId], references: [id], map: "fk_class_schedules_class_subject")
   teacher     Teacher      @relation(fields: [teacherId], references: [id], map: "fk_class_schedules_teacher")
-  attendances Attendance[]
-
   @@index([classId], map: "idx_class_schedules_class_id")
+  @@index([classSubjectId], map: "idx_class_schedules_class_subject_id")
   @@index([teacherId, dayOfWeek], map: "idx_class_schedules_teacher_day")
   @@map("class_schedules")
-}
-
-model Attendance {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  classId        String           @map("class_id") @db.Uuid
-  studentId      String           @map("student_id") @db.Uuid
-  scheduleId     String?          @map("schedule_id") @db.Uuid
-  attendanceDate DateTime         @map("attendance_date") @db.Date
-  status         AttendanceStatus @default(PRESENT)
-  note           String?
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  class    Class          @relation(fields: [classId], references: [id], map: "fk_attendances_class")
-  student  Student        @relation(fields: [studentId], references: [id], map: "fk_attendances_student")
-  schedule ClassSchedule? @relation(fields: [scheduleId], references: [id], map: "fk_attendances_schedule")
-
-  @@unique([classId, studentId, attendanceDate], map: "uq_attendances_class_student_date")
-  @@index([classId, attendanceDate], map: "idx_attendances_class_date")
-  @@index([studentId], map: "idx_attendances_student_id")
-  @@map("attendances")
-}
-
-model Expense {
-  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String        @unique(map: "uq_expenses_code") @db.VarChar(50)
-  title       String        @db.VarChar(255)
-  category    String?       @db.VarChar(100)
-  amount      Decimal       @db.Decimal(12, 2)
-  expenseDate DateTime      @map("expense_date") @db.Date
-  status      ExpenseStatus @default(DRAFT)
-  note        String?
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@index([expenseDate], map: "idx_expenses_expense_date")
-  @@index([status], map: "idx_expenses_status")
-  @@map("expenses")
-}
-
-model AuditLog {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @map("user_id") @db.Uuid
-  action    String   @db.VarChar(100)
-  tableName String   @map("table_name") @db.VarChar(100)
-  recordId  String?  @map("record_id") @db.Uuid
-  oldData   Json?    @map("old_data")
-  newData   Json?    @map("new_data")
-  ipAddress String?  @map("ip_address") @db.Inet
-  userAgent String?  @map("user_agent")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  @@index([userId], map: "idx_audit_logs_user_id")
-  @@index([action], map: "idx_audit_logs_action")
-  @@index([createdAt], map: "idx_audit_logs_created_at")
-  @@index([tableName, recordId], map: "idx_audit_logs_table_record")
-  @@map("audit_logs")
 }
 
 // New one-time tuition/payment domain. These transitional tables are additive;
@@ -429,7 +411,6 @@ model TuitionFee {
   enrollment         ClassStudent        @relation("TuitionFeeEnrollment", fields: [enrollmentId], references: [id])
   class              Class               @relation("TuitionFeeClass", fields: [classId], references: [id])
   items              TuitionFeeItem[]
-  adjustments        TuitionAdjustment[]
   payments           TuitionPayment[]
   paymentAllocations PaymentAllocation[]
 
@@ -443,6 +424,7 @@ model TuitionFee {
 model TuitionFeeItem {
   id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tuitionFeeId String             @map("tuition_fee_id") @db.Uuid
+  classSubjectId String?          @map("class_subject_id") @db.Uuid
   itemType     TuitionFeeItemType @map("item_type")
   itemName     String             @map("item_name") @db.VarChar(255)
   quantity     Decimal            @default(1) @db.Decimal(10, 2)
@@ -454,27 +436,11 @@ model TuitionFeeItem {
   updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   tuitionFee TuitionFee @relation(fields: [tuitionFeeId], references: [id])
+  classSubject ClassSubject? @relation(fields: [classSubjectId], references: [id], map: "fk_tuition_fee_items_class_subject")
 
   @@index([tuitionFeeId], map: "idx_tuition_fee_items_fee_id")
+  @@index([classSubjectId], map: "idx_tuition_fee_items_class_subject_id")
   @@map("tuition_fee_items")
-}
-
-model TuitionAdjustment {
-  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tuitionFeeId   String                @map("tuition_fee_id") @db.Uuid
-  adjustmentType TuitionAdjustmentType @map("adjustment_type")
-  amount         Decimal               @db.Decimal(15, 2)
-  beforeAmount   Decimal               @map("before_amount") @db.Decimal(15, 2)
-  afterAmount    Decimal               @map("after_amount") @db.Decimal(15, 2)
-  reason         String
-  approvedBy     String?               @map("approved_by") @db.Uuid
-  createdBy      String                @map("created_by") @db.Uuid
-  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  tuitionFee TuitionFee @relation(fields: [tuitionFeeId], references: [id])
-
-  @@index([tuitionFeeId], map: "idx_tuition_adjustments_fee_id")
-  @@map("tuition_adjustments")
 }
 
 model TuitionPayment {
@@ -509,7 +475,6 @@ model TuitionPayment {
   tuitionFee   TuitionFee      @relation(fields: [tuitionFeeId], references: [id])
   paymentBatch PaymentBatch?   @relation(fields: [paymentBatchId], references: [id])
   receipt      TuitionReceipt?
-  refunds      PaymentRefund[]
 
   @@index([tuitionFeeId], map: "idx_tuition_payments_fee_id")
   @@index([studentId], map: "idx_tuition_payments_student_id")
@@ -577,28 +542,6 @@ model PaymentBatchReceipt {
   @@map("payment_batch_receipts")
 }
 
-model PaymentRefund {
-  id                String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  refundNo          String               @unique(map: "uq_payment_refunds_refund_no") @map("refund_no") @db.VarChar(30)
-  paymentId         String               @map("payment_id") @db.Uuid
-  amount            Decimal              @db.Decimal(15, 2)
-  refundMethod      TuitionPaymentMethod @map("refund_method")
-  refundDate        DateTime?            @map("refund_date") @db.Timestamptz(6)
-  bankTransactionNo String?              @map("bank_transaction_no") @db.VarChar(150)
-  reason            String
-  status            TuitionRefundStatus  @default(PENDING)
-  createdBy         String               @map("created_by") @db.Uuid
-  approvedBy        String?              @map("approved_by") @db.Uuid
-  completedAt       DateTime?            @map("completed_at") @db.Timestamptz(6)
-  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  payment TuitionPayment @relation(fields: [paymentId], references: [id])
-
-  @@index([paymentId], map: "idx_payment_refunds_payment_id")
-  @@map("payment_refunds")
-}
-
 model TuitionReceipt {
   id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   receiptNo          String        @unique(map: "uq_tuition_receipts_receipt_no") @map("receipt_no") @db.VarChar(30)
@@ -640,35 +583,6 @@ model BankAccount {
 
   @@unique([bankCode, accountNo], map: "uq_bank_accounts_bank_account")
   @@map("bank_accounts")
-}
-
-model BankCsvMapping {
-  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bankCode              String   @map("bank_code") @db.VarChar(50)
-  mappingName           String   @map("mapping_name") @db.VarChar(255)
-  delimiter             String   @db.VarChar(5)
-  encoding              String   @db.VarChar(50)
-  headerRow             Int      @default(1) @map("header_row")
-  dataStartRow          Int      @default(2) @map("data_start_row")
-  dateFormat            String   @map("date_format") @db.VarChar(50)
-  transactionDateColumn String   @map("transaction_date_column") @db.VarChar(100)
-  valueDateColumn       String?  @map("value_date_column") @db.VarChar(100)
-  transactionNoColumn   String?  @map("transaction_no_column") @db.VarChar(100)
-  descriptionColumn     String   @map("description_column") @db.VarChar(100)
-  senderNameColumn      String?  @map("sender_name_column") @db.VarChar(100)
-  senderAccountColumn   String?  @map("sender_account_column") @db.VarChar(100)
-  creditAmountColumn    String   @map("credit_amount_column") @db.VarChar(100)
-  debitAmountColumn     String?  @map("debit_amount_column") @db.VarChar(100)
-  balanceColumn         String?  @map("balance_column") @db.VarChar(100)
-  isDefault             Boolean  @default(false) @map("is_default")
-  isActive              Boolean  @default(true) @map("is_active")
-  createdBy             String   @map("created_by") @db.Uuid
-  updatedBy             String   @map("updated_by") @db.Uuid
-  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  @@index([bankCode], map: "idx_bank_csv_mappings_bank_code")
-  @@map("bank_csv_mappings")
 }
 
 model BankStatementImport {

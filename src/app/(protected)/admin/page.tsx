@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import AddCardIcon from "@mui/icons-material/AddCard";
 import GroupIcon from "@mui/icons-material/Group";
 import PaymentIcon from "@mui/icons-material/Payment";
 import ReceiptIcon from "@mui/icons-material/Receipt";
@@ -75,7 +74,7 @@ export default function AdminPage() {
         <StatCard icon={<AccountBalanceIcon />} title="Giao dịch chưa khớp" value={String(stats?.unmatchedTransactions || 0)} subtitle="Cần kiểm tra ngân hàng" loading={loading} color="error" />
       </Box>
       <Card><CardContent><Typography variant="h6" gutterBottom>Công việc cần xử lý</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/bank-reconciliation" label={`Đối soát ngân hàng (${stats?.unmatchedTransactions || 0})`} icon={<AccountBalanceIcon />} /><QuickLink href="/admin/tuition-fees/payment-history" label={`Batch chờ xử lý (${stats?.pendingBatches || 0})`} icon={<PaymentIcon />} /><QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees || 0})`} icon={<WarningAmberIcon />} /></Stack></CardContent></Card>
-      <Card><CardContent><Typography variant="h6" gutterBottom>Thao tác nhanh</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/tuition-fees/new" label="Tạo học phí" icon={<AddCardIcon />} /><QuickLink href="/admin/tuition-fees/payment" label="Thu học phí" icon={<PaymentIcon />} /><QuickLink href="/admin/bank-reconciliation" label="Import sao kê" icon={<AccountBalanceIcon />} /><QuickLink href="/admin/receipts" label="Xem biên lai" icon={<ReceiptIcon />} /></Stack></CardContent></Card>
+      <Card><CardContent><Typography variant="h6" gutterBottom>Thao tác nhanh</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/tuition-fees/payment" label="Thu học phí" icon={<PaymentIcon />} /><QuickLink href="/admin/bank-reconciliation" label="Import sao kê" icon={<AccountBalanceIcon />} /><QuickLink href="/admin/receipts" label="Xem biên lai" icon={<ReceiptIcon />} /></Stack></CardContent></Card>
     </Stack>
   </Container>;
 }

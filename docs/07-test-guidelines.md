@@ -195,9 +195,9 @@ npm run build
 Business test:
 
 ```text
-Không tạo học phí trùng tháng
-Tạo học phí sinh QR
-Tạo học phí sinh bill tạm
+Đăng ký môn tự động tạo học phí
+Đăng ký bổ sung chỉ tạo item còn thiếu
+Không tạo học phí/item trùng môn
 Không thanh toán vượt số tiền còn nợ
 Thanh toán một phần -> PARTIAL
 Thanh toán đủ -> PAID
@@ -346,9 +346,9 @@ Reset
 Khi sửa payment/học phí, bắt buộc test flow:
 
 ```text
-1. Tạo học phí tháng
-2. Sinh QR
-3. Sinh bill tạm
+1. Đăng ký một hoặc nhiều môn trong lớp
+2. Kiểm tra học phí và item được tạo tự động
+3. Mở chi tiết học phí và sinh QR/bill tạm (nếu có)
 4. Ghi nhận thanh toán một phần
 5. Kiểm tra trạng thái PARTIAL
 6. Ghi nhận thanh toán phần còn lại

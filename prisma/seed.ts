@@ -3,14 +3,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const now = new Date();
-
 function date(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
-}
-
-function money(value: number): string {
-  return value.toFixed(2);
 }
 
 function timeToMinute(time: string): number {
@@ -19,20 +13,18 @@ function timeToMinute(time: string): number {
 }
 
 async function cleanup() {
-  await prisma.auditLog.deleteMany();
-  await prisma.expense.deleteMany();
   await prisma.tuitionAuditLog.deleteMany();
-  await prisma.paymentRefund.deleteMany();
   await prisma.tuitionReceipt.deleteMany();
   await prisma.tuitionPayment.deleteMany();
-  await prisma.tuitionAdjustment.deleteMany();
   await prisma.tuitionFeeItem.deleteMany();
   await prisma.tuitionFee.deleteMany();
   await prisma.bankStatementMatchCandidate.deleteMany();
   await prisma.bankStatementTransaction.deleteMany();
   await prisma.bankStatementImport.deleteMany();
-  await prisma.bankCsvMapping.deleteMany();
   await prisma.bankAccount.deleteMany();
+  await prisma.$executeRaw`DELETE FROM enrollment_subjects`;
+  await prisma.$executeRaw`DELETE FROM class_subjects`;
+  await prisma.$executeRaw`DELETE FROM subjects`;
   await prisma.classSchedule.deleteMany();
   await prisma.classStudent.deleteMany();
   await prisma.class.deleteMany();
@@ -203,9 +195,6 @@ async function seedClasses(
     data: {
       code: "CLS-MATH-001",
       name: "Toán tư duy cơ bản",
-      teacherId: teachers[0].id,
-      tuitionFee: money(500000),
-      totalSessions: 12,
       startDate: date("2026-06-01"),
       endDate: date("2026-08-31"),
       status: "ACTIVE",
@@ -217,9 +206,6 @@ async function seedClasses(
     data: {
       code: "CLS-ENG-001",
       name: "Tiếng Anh giao tiếp thiếu nhi",
-      teacherId: teachers[1].id,
-      tuitionFee: money(650000),
-      totalSessions: 16,
       startDate: date("2026-06-05"),
       endDate: date("2026-09-30"),
       status: "ACTIVE",
@@ -231,9 +217,6 @@ async function seedClasses(
     data: {
       code: "CLS-PHY-001",
       name: "Vật lý nâng cao",
-      teacherId: teachers[2].id,
-      tuitionFee: money(700000),
-      totalSessions: 10,
       startDate: date("2026-07-01"),
       endDate: date("2026-09-15"),
       status: "DRAFT",
@@ -316,6 +299,45 @@ async function seedClasses(
     ],
   });
 
+  const subjects = await prisma.$queryRaw<Array<{ id: string; code: string }>>`
+    INSERT INTO subjects (id, code, name, status, created_at, updated_at)
+    VALUES
+      (gen_random_uuid(), 'TOAN', 'Toán', 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), 'VAN', 'Ngữ văn', 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), 'ANH', 'Tiếng Anh', 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), 'LY', 'Vật lý', 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    RETURNING id, code
+  `;
+  const subjectId = (code: string) => subjects.find((subject) => subject.code === code)?.id;
+  const mathSubjectId = subjectId("TOAN");
+  const literatureSubjectId = subjectId("VAN");
+  const englishSubjectId = subjectId("ANH");
+  const physicsSubjectId = subjectId("LY");
+  if (!mathSubjectId || !literatureSubjectId || !englishSubjectId || !physicsSubjectId) {
+    throw new Error("Không thể tạo dữ liệu môn học mẫu");
+  }
+
+  await prisma.$executeRaw`
+    INSERT INTO class_subjects (id, class_id, subject_id, teacher_id, tuition_fee, total_sessions, status, created_at, updated_at)
+    VALUES
+      (gen_random_uuid(), ${mathClass.id}::uuid, ${mathSubjectId}::uuid, ${teachers[0].id}::uuid, 500000, 12, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), ${mathClass.id}::uuid, ${literatureSubjectId}::uuid, ${teachers[1].id}::uuid, 450000, 12, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), ${englishClass.id}::uuid, ${englishSubjectId}::uuid, ${teachers[1].id}::uuid, 650000, 16, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+      (gen_random_uuid(), ${physicsClass.id}::uuid, ${physicsSubjectId}::uuid, ${teachers[2].id}::uuid, 700000, 10, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `;
+  const subjectForClass = await prisma.$queryRaw<Array<{ id: string; class_id: string; subject_id: string }>>`
+    SELECT id, class_id, subject_id FROM class_subjects
+    WHERE class_id IN (${mathClass.id}::uuid, ${englishClass.id}::uuid, ${physicsClass.id}::uuid)
+  `;
+  for (const classSubject of subjectForClass) {
+    await prisma.$executeRaw`
+      INSERT INTO enrollment_subjects (id, enrollment_id, class_subject_id, status, enrolled_at)
+      SELECT gen_random_uuid(), cs.id, ${classSubject.id}::uuid, 'ACTIVE'::enrollment_subject_status, CURRENT_TIMESTAMP
+      FROM class_students cs
+      WHERE cs.class_id = ${classSubject.class_id}::uuid
+    `;
+  }
+
   return { mathClass, englishClass, physicsClass };
 }
 
@@ -344,24 +366,6 @@ async function seedBankAccounts(adminUserId: string) {
   });
 }
 
-async function seedAudit(adminUserId: string) {
-  await prisma.auditLog.create({
-    data: {
-      userId: adminUserId,
-      action: "SEED_DATABASE",
-      tableName: "system",
-      recordId: null,
-      oldData: undefined,
-      newData: {
-        message: "Seed dữ liệu mẫu cho hệ thống quản lý trung tâm",
-        seededAt: now.toISOString(),
-      },
-      ipAddress: "127.0.0.1",
-      userAgent: "prisma-seed",
-    },
-  });
-}
-
 async function main() {
   console.log("Start seeding...");
 
@@ -372,7 +376,6 @@ async function main() {
   const classes = await seedClasses(teachers, students);
   await seedBankAccounts(adminUser.id);
 
-  await seedAudit(adminUser.id);
 
   console.log("Seed completed.");
 }

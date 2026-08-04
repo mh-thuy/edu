@@ -10,6 +10,7 @@ import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalance
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
+import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 
 import {
   Box,
@@ -36,6 +37,12 @@ type SidebarItem = {
 
 const items: SidebarItem[] = [
   {
+    label: "Người dùng",
+    href: "/admin/users",
+    icon: <ManageAccountsOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN"],
+  },
+  {
     label: "Dashboard",
     href: "/admin",
     icon: <HomeOutlinedIcon fontSize="small" />,
@@ -56,6 +63,12 @@ const items: SidebarItem[] = [
   {
     label: "Lớp học",
     href: "/admin/classes",
+    icon: <ClassOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
+    label: "Môn học",
+    href: "/admin/subjects",
     icon: <ClassOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
   },
@@ -118,15 +131,25 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
 
   const visibleItems = items.filter((item) => item.roles.includes(role));
-  const groupFor = (href: string) => href === "/" || href === "/admin" ? "Tổng quan"
-    : href.startsWith("/teacher") ? "Giáo viên"
-      : ["/admin/teachers", "/admin/students", "/admin/classes"].includes(href) ? "Đào tạo"
-        : "Tài chính";
+  const groupFor = (href: string) =>
+    href === "/" || href === "/admin"
+      ? "Tổng quan"
+      : href.startsWith("/teacher")
+        ? "Giáo viên"
+        : [
+              "/admin/teachers",
+              "/admin/students",
+              "/admin/classes",
+              "/admin/subjects",
+              "/admin/users",
+            ].includes(href)
+          ? "Đào tạo"
+          : "Tài chính";
 
   return (
     <Box
       sx={{
-      width: 264,
+        width: 264,
         height: "100%",
         bgcolor: "#ffffff",
         borderRight: "1px solid",
@@ -136,10 +159,33 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
       {/* Logo */}
       <Box sx={{ p: 2.5 }}>
         <Stack direction="row" spacing={1.25} alignItems="center">
-          <Box sx={{ width: 38, height: 38, borderRadius: 2.5, display: "grid", placeItems: "center", color: "white", fontWeight: 800, bgcolor: "primary.main", boxShadow: "0 8px 16px rgba(37,99,235,.22)" }}>E</Box>
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 2.5,
+              display: "grid",
+              placeItems: "center",
+              color: "white",
+              fontWeight: 800,
+              bgcolor: "primary.main",
+              boxShadow: "0 8px 16px rgba(37,99,235,.22)",
+            }}
+          >
+            E
+          </Box>
           <Box>
-            <Typography variant="subtitle1" fontWeight={800} color="text.primary" lineHeight={1.1}>EduCenter</Typography>
-            <Typography variant="caption" color="text.secondary">Quản lý đào tạo</Typography>
+            <Typography
+              variant="subtitle1"
+              fontWeight={800}
+              color="text.primary"
+              lineHeight={1.1}
+            >
+              EduCenter
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Quản lý đào tạo
+            </Typography>
           </Box>
         </Stack>
       </Box>
@@ -151,14 +197,27 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
         {visibleItems.map((item, index) => {
           const selected =
             pathname === item.href ||
-            (item.href !== "/" && item.href !== "/admin" && pathname.startsWith(`${item.href}/`));
+            (item.href !== "/" &&
+              item.href !== "/admin" &&
+              pathname.startsWith(`${item.href}/`));
           const group = groupFor(item.href);
-          const previousGroup = index > 0 ? groupFor(visibleItems[index - 1]!.href) : null;
+          const previousGroup =
+            index > 0 ? groupFor(visibleItems[index - 1]!.href) : null;
 
           return (
             <Box key={item.href}>
               {group !== "Tổng quan" && group !== previousGroup && (
-                <Typography variant="overline" color="text.secondary" sx={{ display: "block", px: 1.5, mt: index === 0 ? 0 : 2, mb: 0.5, fontWeight: 700 }}>
+                <Typography
+                  variant="overline"
+                  color="text.secondary"
+                  sx={{
+                    display: "block",
+                    px: 1.5,
+                    mt: index === 0 ? 0 : 2,
+                    mb: 0.5,
+                    fontWeight: 700,
+                  }}
+                >
                   {group}
                 </Typography>
               )}
@@ -167,12 +226,27 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
                 href={item.href}
                 selected={selected}
                 onClick={onNavigate}
-                sx={{ borderRadius: 2.5, mb: 0.5, minHeight: 44, color: "text.secondary", "& .MuiListItemIcon-root": { color: "inherit" }, "&.Mui-selected": { bgcolor: "#eff6ff", color: "primary.main", "&:hover": { bgcolor: "#dbeafe" } }, "&:hover": { bgcolor: "#f8fafc", color: "text.primary" } }}
+                sx={{
+                  borderRadius: 2.5,
+                  mb: 0.5,
+                  minHeight: 44,
+                  color: "text.secondary",
+                  "& .MuiListItemIcon-root": { color: "inherit" },
+                  "&.Mui-selected": {
+                    bgcolor: "#eff6ff",
+                    color: "primary.main",
+                    "&:hover": { bgcolor: "#dbeafe" },
+                  },
+                  "&:hover": { bgcolor: "#f8fafc", color: "text.primary" },
+                }}
               >
                 <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
                 <ListItemText
                   primary={item.label}
-                  primaryTypographyProps={{ fontSize: 14, fontWeight: selected ? 600 : 400 }}
+                  primaryTypographyProps={{
+                    fontSize: 14,
+                    fontWeight: selected ? 600 : 400,
+                  }}
                 />
               </ListItemButton>
             </Box>

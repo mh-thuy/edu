@@ -117,10 +117,10 @@ export function TuitionDetail({ id }: { id: string }) {
           {canPay && (
             <Button
               component={Link}
-              href="/admin/tuition-fees/payment"
+              href={`/admin/tuition-fees/payment?tuitionFeeId=${id}`}
               variant="contained"
             >
-              Thu học phí
+              Thanh toán học phí
             </Button>
           )}
         </Stack>

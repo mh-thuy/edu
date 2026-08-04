@@ -4,7 +4,7 @@ import { TuitionPaymentWorkspace } from "@/modules/finance/payments/components/T
 
 export const metadata: Metadata = { title: "Thu học phí" };
 
-export default async function TuitionPaymentPage() {
+export default async function TuitionPaymentPage({ searchParams }: { searchParams: Promise<{ tuitionFeeId?: string }> }) {
   await requireRole(["ADMIN", "STAFF"]);
-  return <TuitionPaymentWorkspace />;
+  return <TuitionPaymentWorkspace initialTuitionFeeId={(await searchParams).tuitionFeeId} />;
 }

@@ -834,24 +834,16 @@ FEE_CANCELLED
 
 ---
 
-# 21. Luồng tạo học phí
+# 21. Luồng phát sinh học phí hiện hành
 
 ```text
-1. Chọn tháng
+1. Nhân viên chọn học viên và các môn muốn đăng ký trong lớp.
+2. Backend kiểm tra học viên chưa đăng ký các môn đó.
+3. Tạo enrollment subject cho từng môn hợp lệ.
+4. Tự động tạo học phí và các tuition fee item tương ứng.
+5. Người dùng mở chi tiết học phí để thanh toán hoặc in chứng từ.
 
-2. Lấy học viên đang học
-
-3. Generate student_fee
-
-4. Create payment_request
-
-5. Generate VietQR
-
-6. Generate payment notice
-
-7. Export PDF
-
-8. Send parent
+Không tạo học phí độc lập ngoài enrollment; mọi khoản học phí phải truy được về lớp, học viên và môn học.
 ```
 
 ---

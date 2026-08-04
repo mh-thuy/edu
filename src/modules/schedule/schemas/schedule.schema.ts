@@ -4,6 +4,7 @@ const minuteSchema = z.number().int().min(0).max(1439);
 
 const requiredClassScheduleSchema = z.object({
   classId: z.string().min(1, "Lớp học là bắt buộc"),
+  classSubjectId: z.string().uuid().optional(),
   teacherId: z.string().min(1, "Giáo viên là bắt buộc"),
   dayOfWeek: z.number().int().min(0).max(6),
   startMinute: minuteSchema,
@@ -33,6 +34,7 @@ export const classScheduleUpdateSchema = requiredClassScheduleSchema
 
 export const scheduleFilterSchema = z.object({
   classId: z.string().optional(),
+  classSubjectId: z.string().uuid().optional(),
   dayOfWeek: z.number().optional(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(20),

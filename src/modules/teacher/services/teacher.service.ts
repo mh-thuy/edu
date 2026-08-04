@@ -132,7 +132,7 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
     select: {
       _count: {
         select: {
-          classes: true,
+          classSubjects: true,
         },
       },
     },
@@ -142,7 +142,7 @@ export async function deleteTeacher(id: string): Promise<Teacher> {
     throw new NotFoundError("Không tìm thấy giáo viên");
   }
 
-  if (teacher._count.classes > 0) {
+  if (teacher._count.classSubjects > 0) {
     throw new ConflictError("Cannot delete teacher with class assignments");
   }
 

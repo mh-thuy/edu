@@ -3,12 +3,11 @@ import { z } from "zod";
 export const classCreateSchema = z.object({
   code: z.string().max(50).optional(),
   name: z.string().min(1, "Class name is required").max(100),
-  teacherId: z.string().optional().nullable(),
-  tuitionFee: z.number().min(0).default(0),
-  totalSessions: z.number().min(0).default(0),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  status: z.enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"]).default("DRAFT"),
+  status: z
+    .enum(["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"])
+    .default("DRAFT"),
 });
 
 export const classUpdateSchema = classCreateSchema.partial();

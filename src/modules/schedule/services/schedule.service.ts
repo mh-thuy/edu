@@ -11,6 +11,7 @@ type ClassScheduleWithRelations = Prisma.ClassScheduleGetPayload<{
   include: {
     class: true;
     teacher: true;
+    classSubject: { include: { subject: true } };
   };
 }>;
 
@@ -29,31 +30,36 @@ export class ScheduleConflictError extends Error {
 async function assertScheduleRelations(
   data: {
     classId: string;
+    classSubjectId?: string;
     teacherId: string;
   },
 ): Promise<void> {
-  const [classData, teacher] = await Promise.all([
+  const [classData, teacher, classSubject] = await Promise.all([
     prisma.class.findUnique({
       where: { id: data.classId },
-      select: { id: true, teacherId: true, status: true },
+      select: { id: true, status: true },
     }),
     prisma.teacher.findUnique({
       where: { id: data.teacherId },
-      select: { id: true },
+      select: { id: true, status: true },
     }),
+    data.classSubjectId
+      ? prisma.classSubject.findFirst({ where: { id: data.classSubjectId, classId: data.classId, status: "ACTIVE" }, select: { id: true, teacherId: true } })
+      : Promise.resolve(null),
   ]);
 
   if (!classData) {
     throw new Error("Không tìm thấy lớp học");
   }
 
-  if (!classData.teacherId) throw new Error("Lớp chưa được phân công giáo viên");
-  if (classData.teacherId !== data.teacherId) throw new Error("Giáo viên lịch học phải là giáo viên chính của lớp");
   if (classData.status === "CANCELLED" || classData.status === "COMPLETED") throw new Error("Không thể tạo lịch cho lớp đã kết thúc hoặc đã hủy");
 
   if (!teacher) {
     throw new Error("Không tìm thấy giáo viên");
   }
+  if (teacher.status !== "ACTIVE") throw new Error("Giáo viên đã ngừng hoạt động");
+  if (data.classSubjectId && !classSubject) throw new Error("Môn học không thuộc lớp hoặc đã ngừng mở");
+  if (classSubject?.teacherId && classSubject.teacherId !== data.teacherId) throw new Error("Giáo viên không đúng với môn học");
 }
 
 function hasTimeConflict(
@@ -70,6 +76,7 @@ function toClassScheduleCreateInput(
 ): Prisma.ClassScheduleUncheckedCreateInput {
   return {
     classId: data.classId,
+    classSubjectId: data.classSubjectId,
     teacherId: data.teacherId,
     dayOfWeek: data.dayOfWeek,
     startMinute: data.startMinute,
@@ -82,6 +89,7 @@ function toClassScheduleUpdateInput(
 ): Prisma.ClassScheduleUncheckedUpdateInput {
   return {
     ...(data.classId !== undefined && { classId: data.classId }),
+    ...(data.classSubjectId !== undefined && { classSubjectId: data.classSubjectId }),
     ...(data.teacherId !== undefined && { teacherId: data.teacherId }),
     ...(data.dayOfWeek !== undefined && { dayOfWeek: data.dayOfWeek }),
     ...(data.startMinute !== undefined && { startMinute: data.startMinute }),
@@ -119,6 +127,7 @@ export async function getScheduleConflicts(
     include: {
       class: true,
       teacher: true,
+      classSubject: { include: { subject: true } },
     },
   });
 
@@ -148,6 +157,7 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
     include: {
       class: true,
       teacher: true,
+      classSubject: { include: { subject: true } },
     },
   });
 
@@ -165,6 +175,7 @@ export async function getClassScheduleById(
     include: {
       class: true,
       teacher: true,
+      classSubject: { include: { subject: true } },
     },
   });
 }
@@ -176,6 +187,7 @@ export async function getSchedules(filter: ScheduleFilter) {
 
   const where: Prisma.ClassScheduleWhereInput = {
     ...(filter.classId && { classId: filter.classId }),
+    ...(filter.classSubjectId && { classSubjectId: filter.classSubjectId }),
     ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
   };
 
@@ -187,6 +199,7 @@ export async function getSchedules(filter: ScheduleFilter) {
       include: {
         class: true,
         teacher: true,
+        classSubject: { include: { subject: true } },
       },
       orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
     }),
@@ -215,6 +228,7 @@ export async function getSchedulesByTeacherUserId(
       userId,
     },
     ...(filter.classId && { classId: filter.classId }),
+    ...(filter.classSubjectId && { classSubjectId: filter.classSubjectId }),
     ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
   };
 
@@ -226,6 +240,7 @@ export async function getSchedulesByTeacherUserId(
       include: {
         class: true,
         teacher: true,
+        classSubject: { include: { subject: true } },
       },
       orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
     }),
@@ -258,6 +273,7 @@ export async function updateClassSchedule(
 
   const merged = {
     classId: data.classId ?? current.classId,
+    classSubjectId: data.classSubjectId ?? current.classSubjectId ?? undefined,
     teacherId: data.teacherId ?? current.teacherId,
     dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
     startMinute: data.startMinute ?? current.startMinute,
@@ -277,6 +293,7 @@ export async function updateClassSchedule(
     include: {
       class: true,
       teacher: true,
+      classSubject: { include: { subject: true } },
     },
   });
 

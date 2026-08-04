@@ -35,18 +35,9 @@ export interface Class {
   id: string;
   code: string;
   name: string;
-  teacherId?: string | null;
-  tuitionFee: number;
-  totalSessions: number;
   startDate?: string | null;
   endDate?: string | null;
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
-  teacher?: {
-    code?: string;
-    user?: {
-      fullName?: string | null;
-    } | null;
-  } | null;
   _count?: { students: number; schedules: number };
 }
 
@@ -54,9 +45,6 @@ type ClassRow = Class & {
   _onEdit?: (cls: Class) => void;
   _onDelete?: (cls: Class) => void;
 };
-
-const formatCurrency = (value?: number | null): string =>
-  new Intl.NumberFormat("vi-VN").format(value ?? 0);
 
 const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
   {
@@ -70,13 +58,6 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
     headerName: "Tên lớp",
     minWidth: 180,
     flex: 1,
-  },
-  {
-    field: "teacher",
-    headerName: "Giáo viên",
-    minWidth: 170,
-    flex: 0.9,
-    valueGetter: (_value, row) => row.teacher?.user?.fullName || "Chưa phân công",
   },
   {
     field: "_count.students",
@@ -93,21 +74,6 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
     align: "center",
     headerAlign: "center",
     valueGetter: (_value, row) => row._count?.schedules ?? 0,
-  },
-  {
-    field: "tuitionFee",
-    headerName: "Học phí",
-    minWidth: 130,
-    align: "right",
-    headerAlign: "right",
-    valueFormatter: (value) => `${formatCurrency(Number(value))} đ`,
-  },
-  {
-    field: "totalSessions",
-    headerName: "Số buổi",
-    minWidth: 100,
-    align: "center",
-    headerAlign: "center",
   },
   {
     field: "status",
@@ -185,7 +151,12 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
           component={Link}
           href={`/admin/classes/${params.row.id}`}
           variant="outlined"
-          sx={{ minWidth: 64, height: 30, borderRadius: 1.5, textTransform: "none" }}
+          sx={{
+            minWidth: 64,
+            height: 30,
+            borderRadius: 1.5,
+            textTransform: "none",
+          }}
         >
           Chi tiết
         </Button>
@@ -242,7 +213,11 @@ export function ClassList({ role }: ClassListProps): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Class>("/api/classes", { pageSize: 10, search, status: status || undefined });
+  } = useList<Class>("/api/classes", {
+    pageSize: 10,
+    search,
+    status: status || undefined,
+  });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
@@ -340,8 +315,6 @@ export function ClassList({ role }: ClassListProps): ReactElement {
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
-    tuitionFee: row.tuitionFee ?? 0,
-    totalSessions: row.totalSessions ?? 0,
     _onEdit: handleEdit,
     _onDelete: handleDelete,
   }));
@@ -405,7 +378,11 @@ export function ClassList({ role }: ClassListProps): ReactElement {
           </Button>
         </Stack>
 
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ mt: 2.5 }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.5}
+          sx={{ mt: 2.5 }}
+        >
           <TextField
             placeholder="Tìm theo mã lớp hoặc tên lớp..."
             value={search}
@@ -427,7 +404,13 @@ export function ClassList({ role }: ClassListProps): ReactElement {
               },
             }}
           />
-          <Select size="small" value={status} displayEmpty onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: 180 }}>
+          <Select
+            size="small"
+            value={status}
+            displayEmpty
+            onChange={(event) => setStatus(event.target.value)}
+            sx={{ minWidth: 180 }}
+          >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="ACTIVE">Hoạt động</MenuItem>
             <MenuItem value="DRAFT">Nháp</MenuItem>
@@ -476,14 +459,9 @@ export function ClassList({ role }: ClassListProps): ReactElement {
               ? {
                   code: editingClass.code ?? "",
                   name: editingClass.name ?? "",
-                  tuitionFee: editingClass.tuitionFee ?? 0,
-                  totalSessions: editingClass.totalSessions ?? 0,
-                  teacherId: editingClass.teacherId ?? null,
                   startDate: editingClass.startDate ?? undefined,
                   endDate: editingClass.endDate ?? undefined,
                   status: editingClass.status ?? "DRAFT",
-                  teacherCode: editingClass.teacher?.code ?? "",
-                  teacherName: editingClass.teacher?.user?.fullName ?? "",
                 }
               : undefined
           }

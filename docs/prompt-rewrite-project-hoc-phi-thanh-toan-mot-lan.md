@@ -2148,3 +2148,6 @@ Không triển khai nhiều payment thành công cho một học phí.
 Không triển khai payment allocation.
 
 Mọi khoản học phí phải được thanh toán toàn bộ trong đúng một giao dịch thành công.
+# Tài liệu lịch sử - không còn là đặc tả triển khai
+
+Tài liệu này lưu prompt/đặc tả cũ để tham khảo. Các đoạn mô tả tạo học phí thủ công, notice, refund hoặc module đã cleanup không áp dụng cho code hiện hành. Xem [11-current-system.md](./11-current-system.md) và các tài liệu business rules mới.

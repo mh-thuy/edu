@@ -8,31 +8,37 @@ import {
   ScheduleConflictError,
 } from "@/modules/schedule/services/schedule.service";
 
-type Params = Promise<{
-  id: string;
-}>;
+type Params = Promise<{ id: string }>;
+
+async function getScheduleId(context: { params?: Params }) {
+  const routeParams = await context.params;
+  if (!routeParams?.id) throw new Error("SCHEDULE_ID_REQUIRED");
+  return routeParams.id;
+}
 
 export async function GET(
-  { params }: { params: Params },
+  _request: NextRequest,
+  context: { params?: Params },
 ) {
   try {
-    const { id } = await params;
+    const id = await getScheduleId(context);
     const schedule = await getClassScheduleById(id);
     if (!schedule) {
       return apiError("NOT_FOUND", "Schedule not found", 404);
     }
     return apiSuccess(schedule);
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === "SCHEDULE_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lịch học", 400);
     return handleApiError(error, "Failed to fetch schedule");
   }
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Params },
+  context: { params?: Params },
 ) {
   try {
-    const { id } = await params;
+    const id = await getScheduleId(context);
     const existingSchedule = await getClassScheduleById(id);
     if (!existingSchedule) {
       return apiError("NOT_FOUND", "Không tìm thấy lịch học", 404);
@@ -44,6 +50,7 @@ export async function PATCH(
     const { schedule } = await updateClassSchedule(id, data);
     return apiSuccess(schedule);
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === "SCHEDULE_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lịch học", 400);
     if (error instanceof ScheduleConflictError) {
       return apiError("CONFLICT", error.message, 409, {
         conflicts: error.conflicts,
@@ -55,13 +62,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  { params }: { params: Params },
+  _request: NextRequest,
+  context: { params?: Params },
 ) {
   try {
-    const { id } = await params;
+    const id = await getScheduleId(context);
     const schedule = await deleteClassSchedule(id);
     return apiSuccess(schedule);
   } catch (error: unknown) {
+    if (error instanceof Error && error.message === "SCHEDULE_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lịch học", 400);
     return handleApiError(error, "Failed to delete schedule");
   }
 }

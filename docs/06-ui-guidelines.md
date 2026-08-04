@@ -706,42 +706,18 @@ In bill tạm
 Ghi nhận thanh toán
 ```
 
-## 20.3 Form tạo học phí
+## 20.3 Học phí phát sinh từ đăng ký
 
 ```text
-Tháng
-Lớp
-Học viên
-Số tiền
-Giảm giá
-Hạn đóng
-Ghi chú
-```
-
-## 20.4 Bulk create
-
-Màn hình tạo học phí hàng loạt:
-
-```text
-Chọn tháng
-Chọn lớp
-Preview danh sách học viên
-Tạo học phí
-Sinh QR
-Sinh bill tạm
-```
-
-Confirm trước khi tạo:
-
-```text
-Bạn có chắc muốn tạo học phí tháng 2026-06 cho lớp ENG001?
-Hệ thống sẽ sinh học phí, QR code và bill tạm cho toàn bộ học viên trong lớp.
+Không có form tạo học phí thủ công. Sau khi đăng ký môn, UI hiển thị kết quả phát sinh học phí và liên kết đến chi tiết học phí.
 ```
 
 Rule:
 
-- Không tạo học phí trùng student + class + month.
-- Sau khi tạo học phí thành công, hiển thị in bill tạm.
+- Chỉ tạo phí từ thao tác đăng ký môn.
+- Một học viên có thể học một phần môn trong lớp.
+- Không tạo trùng tuition fee item cho cùng một môn.
+- Chi tiết học phí có nút “Thanh toán học phí”.
 
 ---
 
@@ -944,7 +920,7 @@ Thông báo thành công:
 ```text
 Đã lưu thành công
 Đã xóa thành công
-Đã tạo học phí thành công
+Đã đăng ký môn và tạo học phí thành công
 Đã ghi nhận thanh toán
 Đã in bill tạm
 Đã tạo biên lai
@@ -957,7 +933,7 @@ Không thể lưu dữ liệu
 Dữ liệu đã tồn tại
 Có lỗi xảy ra, vui lòng thử lại
 Không thể thanh toán vượt số tiền còn nợ
-Không thể tạo học phí trùng tháng
+Học viên đã đăng ký các môn học được chọn
 ```
 
 Không hiển thị lỗi kỹ thuật raw cho người dùng cuối.
@@ -970,7 +946,7 @@ Các action bắt buộc confirm:
 
 - Xóa dữ liệu
 - Hủy lớp
-- Tạo học phí hàng loạt
+- Đăng ký môn và tự động phát sinh học phí
 - Ghi nhận thanh toán
 - Tạo biên lai
 - Duyệt bảng lương

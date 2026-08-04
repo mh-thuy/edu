@@ -3,7 +3,7 @@
 ## Đã thực hiện
 
 - Thêm route `/admin/tuition-fees` và `TuitionList` với filter mã học sinh/trạng thái, bảng tổng tiền và trạng thái chuẩn.
-- Thêm tạo học phí, chi tiết học phí và form sửa học phí có optimistic calculation, version/reason validation và khóa sửa sau PAID.
+- Giữ danh sách/chi tiết/sửa học phí với optimistic calculation, version/reason validation và khóa sửa sau PAID; loại bỏ form tạo học phí thủ công.
 - Viết lại `PaymentForm`: một học phí cho mỗi payment, amount read-only, phương thức động, dialog xác nhận và PDF receipt.
 - Thêm issue notice/replacement notice, xem notice trên tuition detail và refund toàn bộ payment cho ADMIN.
 - Nâng cấp import sao kê thành flow upload/config/preview/import và chỉ bật đối soát khi amount khớp chính xác.

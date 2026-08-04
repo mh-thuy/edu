@@ -8,12 +8,6 @@ export interface ClassItem {
   id: string;
   code: string;
   name: string;
-  tuitionFee?: number;
-  teacher?: {
-    user?: {
-      fullName?: string | null;
-    } | null;
-  } | null;
   status?: string;
 }
 
@@ -31,13 +25,6 @@ export function ClassSelectDialog({
   const columns: GridColDef<ClassItem>[] = [
     { field: "code", headerName: "Mã lớp", width: 120 },
     { field: "name", headerName: "Tên lớp", flex: 1, minWidth: 200 },
-    { field: "tuitionFee", headerName: "Học phí", width: 140, valueFormatter: (value) => `${Number(value || 0).toLocaleString("vi-VN")} VND` },
-    {
-      field: "teacher",
-      headerName: "Giáo viên",
-      width: 200,
-      renderCell: (params) => params.row.teacher?.user?.fullName ?? "-",
-    },
     {
       field: "status",
       headerName: "Trạng thái",

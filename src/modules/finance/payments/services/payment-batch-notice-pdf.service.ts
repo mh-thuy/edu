@@ -14,7 +14,20 @@ export async function generatePaymentBatchNoticePdf(batchId: string) {
     where: { id: batchId },
     include: {
       student: true,
-      allocations: { include: { tuitionFee: { include: { class: true } } } },
+      allocations: {
+        include: {
+          tuitionFee: {
+            include: {
+              class: true,
+              items: {
+                where: { classSubjectId: { not: null } },
+                include: { classSubject: { include: { subject: true } } },
+                orderBy: { displayOrder: "asc" },
+              },
+            },
+          },
+        },
+      },
     },
   });
   if (!batch) throw new NotFoundError("Không tìm thấy batch thanh toán");
@@ -56,9 +69,13 @@ export async function generatePaymentBatchNoticePdf(batchId: string) {
 
   let y = 515;
   for (const allocation of batch.allocations) {
+    const subjects = allocation.tuitionFee.items
+      .map((item) => item.classSubject?.subject.name)
+      .filter((name): name is string => Boolean(name));
     draw(`${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "Chưa có lớp"}`, 75, y);
+    draw(`Môn đã đăng ký: ${subjects.length ? subjects.join(", ") : "-"}`, 90, y - 15, 9, muted);
     draw(`${money(Number(allocation.amount))} VND`, 390, y);
-    y -= 24;
+    y -= 38;
   }
   page.drawLine({ start: { x: 55, y: y - 5 }, end: { x: 540, y: y - 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
   draw("TỔNG CẦN THANH TOÁN", 75, y - 35, 13);

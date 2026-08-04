@@ -54,6 +54,10 @@ export async function GET(request: Request) {
                   feeNo: true,
                   student: { select: { code: true, fullName: true } },
                   class: { select: { name: true } },
+                  items: {
+                    where: { classSubjectId: { not: null } },
+                    select: { classSubject: { select: { subject: { select: { name: true } } } } },
+                  },
                 },
               },
             },

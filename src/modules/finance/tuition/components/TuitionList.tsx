@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Chip, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
 import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
@@ -56,7 +55,7 @@ export function TuitionList() {
   return <Stack spacing={2}>
     <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1}>
       <BoxTitle />
-      <Stack direction="row" spacing={1}><Button component={Link} href="/admin/tuition-fees/new" variant="contained" startIcon={<AddIcon />}>Tạo học phí</Button><Button variant="outlined" onClick={() => void exportCsv()} disabled={exporting}>{exporting ? "Đang xuất..." : "Xuất CSV"}</Button><Button variant="outlined" onClick={() => void load()}>Làm mới</Button></Stack>
+      <Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => void exportCsv()} disabled={exporting}>{exporting ? "Đang xuất..." : "Xuất CSV"}</Button><Button variant="outlined" onClick={() => void load()}>Làm mới</Button></Stack>
     </Stack>
     <Paper sx={{ p: 2 }}><Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
       <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: 260 }} />

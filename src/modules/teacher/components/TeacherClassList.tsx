@@ -20,13 +20,10 @@ type TeacherClass = {
   id: string;
   code: string;
   name: string;
-  tuitionFee: number;
-  totalSessions: number;
+  subjectCount: number;
+  subjectNames: string[];
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
 };
-
-const formatCurrency = (value: number): string =>
-  `${new Intl.NumberFormat("vi-VN").format(value)} đ`;
 
 const statusLabel: Record<TeacherClass["status"], string> = {
   ACTIVE: "Hoạt động",
@@ -67,17 +64,16 @@ export function TeacherClassList(): ReactElement {
       { field: "code", headerName: "Mã lớp", minWidth: 120, flex: 0.7 },
       { field: "name", headerName: "Tên lớp", minWidth: 220, flex: 1 },
       {
-        field: "tuitionFee",
-        headerName: "Học phí",
-        minWidth: 140,
-        align: "right",
-        headerAlign: "right",
-        valueFormatter: (value) => formatCurrency(Number(value)),
+        field: "subjectNames",
+        headerName: "Môn được phân công",
+        minWidth: 220,
+        flex: 1,
+        valueGetter: (_value, row) => row.subjectNames.join(", "),
       },
       {
-        field: "totalSessions",
-        headerName: "Số buổi",
-        minWidth: 110,
+        field: "subjectCount",
+        headerName: "Số môn",
+        minWidth: 100,
         align: "center",
         headerAlign: "center",
       },

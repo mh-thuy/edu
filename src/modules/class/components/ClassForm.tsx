@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Box,
   TextField,
   Stack,
   Select,
@@ -14,27 +13,11 @@ import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
-import { useState, type ReactElement } from "react";
-import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
-import {
-  MasterSelectField,
-  type MasterSelectValue,
-} from "@/components/shared/forms/MasterSelectField";
-import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
-import { useDisclosure } from "@/hooks/useDisclosure";
+import { type ReactElement } from "react";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
-type ClassFormDefaultValues = Partial<ClassFormData> & {
-  teacherCode?: string;
-  teacherName?: string;
-};
-
-type TeacherSelectData = {
-  id: string;
-  code: string;
-  name: string;
-};
+type ClassFormDefaultValues = Partial<ClassFormData> & {};
 
 export interface ClassFormProps {
   formId?: string;
@@ -48,39 +31,17 @@ export function ClassForm({
   defaultValues,
 }: ClassFormProps): ReactElement {
   const isEditing = Boolean(defaultValues?.code);
-  const teacherDialog = useDisclosure();
-  const [selectedTeacher, setSelectedTeacher] = useState<MasterSelectValue | null>(
-    defaultValues?.teacherId
-      ? {
-          id: defaultValues.teacherId,
-          code: defaultValues.teacherCode ?? "",
-          name: defaultValues.teacherName ?? "",
-        }
-      : null,
-  );
 
-  const { control, handleSubmit, setValue } = useForm<ClassFormData>({
+  const { control, handleSubmit } = useForm<ClassFormData>({
     resolver: zodResolver(classCreateSchema),
     defaultValues: {
       code: defaultValues?.code ?? "",
       name: defaultValues?.name ?? "",
-      teacherId: defaultValues?.teacherId ?? null,
-      tuitionFee: defaultValues?.tuitionFee ?? 0,
-      totalSessions: defaultValues?.totalSessions ?? 0,
       startDate: defaultValues?.startDate ?? undefined,
       endDate: defaultValues?.endDate ?? undefined,
       status: defaultValues?.status ?? "DRAFT",
     },
   });
-
-  const handleTeacherSelect = (teacher: TeacherSelectData) => {
-    setValue("teacherId", teacher.id, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-    setSelectedTeacher(teacher);
-    teacherDialog.onClose();
-  };
 
   const toInputDateValue = (value?: string) => value?.slice(0, 10) ?? "";
 
@@ -90,16 +51,6 @@ export function ClassForm({
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2}>
-        <Box>
-          <MasterSelectField
-            label="Giáo viên"
-            value={selectedTeacher}
-            onOpen={teacherDialog.onOpen}
-            codeLabel="Mã giáo viên"
-            nameLabel="Thông tin hiển thị"
-          />
-        </Box>
-
         <Controller
           name="code"
           control={control}
@@ -178,37 +129,6 @@ export function ClassForm({
         </Stack>
 
         <Controller
-          name="tuitionFee"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <CurrencyInput
-              label="Học phí"
-              value={field.value}
-              onChange={field.onChange}
-              error={error}
-            />
-          )}
-        />
-
-        <Controller
-          name="totalSessions"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <TextField
-              {...field}
-              label="Tổng số buổi"
-              type="number"
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              onChange={(event) => {
-                field.onChange(Number(event.target.value || 0));
-              }}
-            />
-          )}
-        />
-
-        <Controller
           name="status"
           control={control}
           render={({ field, fieldState: { error } }) => (
@@ -225,13 +145,6 @@ export function ClassForm({
           )}
         />
       </Stack>
-
-      <TeacherSelectDialog
-        open={teacherDialog.open}
-        onClose={teacherDialog.onClose}
-        onSelect={handleTeacherSelect}
-      />
-
     </form>
   );
 }

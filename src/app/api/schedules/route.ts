@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const filter = scheduleFilterSchema.parse({
       classId: searchParams.get("classId") || undefined,
+      classSubjectId: searchParams.get("classSubjectId") || undefined,
       dayOfWeek: searchParams.get("dayOfWeek") ? parseInt(searchParams.get("dayOfWeek")!) : undefined,
       page: parseInt(searchParams.get("page") || "1"),
       pageSize: parseInt(searchParams.get("pageSize") || "20"),

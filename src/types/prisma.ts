@@ -2,11 +2,6 @@ import type { Prisma } from "@prisma/client";
 
 export type ClassWithRelations = Prisma.ClassGetPayload<{
   include: {
-    teacher: {
-      include: {
-        user: true;
-      };
-    };
     students: {
       include: {
         student: true;
@@ -18,11 +13,6 @@ export type ClassWithRelations = Prisma.ClassGetPayload<{
 
 export type ClassListItem = Prisma.ClassGetPayload<{
   include: {
-    teacher: {
-      include: {
-        user: true;
-      };
-    };
     _count: {
       select: {
         students: true;

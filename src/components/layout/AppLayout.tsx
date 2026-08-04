@@ -21,6 +21,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
   const currentTitle = pathname.startsWith("/admin/teachers") ? "Quản lý giáo viên"
     : pathname.startsWith("/admin/students") ? "Quản lý học viên"
       : pathname.startsWith("/admin/classes") ? "Quản lý lớp học"
+        : pathname.startsWith("/admin/subjects") ? "Quản lý môn học"
         : pathname.startsWith("/admin/tuition-fees/payment-history") ? "Lịch sử thu học phí"
           : pathname.startsWith("/admin/tuition-fees/payment") ? "Thu học phí"
             : pathname.startsWith("/admin/tuition-fees") ? "Quản lý học phí"

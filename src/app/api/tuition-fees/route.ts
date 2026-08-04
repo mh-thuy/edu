@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiRole } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
-import { tuitionFeeCreateSchema } from "@/modules/finance/tuition/schemas/tuition.schema";
 import { TuitionFeeStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -22,11 +21,4 @@ export async function GET(request: NextRequest) {
     }
     return apiSuccess(result);
   } catch (error) { return handleApiError(error, "Không thể tải học phí"); }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]); if (user instanceof Response) return user;
-    return apiSuccess(await TuitionService.createFee(tuitionFeeCreateSchema.parse(await request.json()), user.id), 201);
-  } catch (error) { return handleApiError(error, "Không thể tạo học phí"); }
 }

@@ -2,7 +2,7 @@
 
 ## Tuition
 
-Enrollment -> tạo items -> tính final amount -> issue notice -> print/send -> payment.
+Chọn lớp -> chọn các môn -> đăng ký enrollment subject -> tự động tạo tuition fee items -> tính final amount -> mở chi tiết học phí -> thanh toán.
 
 ## Cash/bank/VietQR payment
 
