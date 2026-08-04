@@ -41,7 +41,7 @@ export function ConfirmDialog({
         <Typography>{message}</Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onCancel} disabled={isLoading}>
+        <Button onClick={onCancel} variant="outlined" disabled={isLoading}>
           {cancelLabel}
         </Button>
         <Button

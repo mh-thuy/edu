@@ -14,6 +14,7 @@ import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import Link from "next/link";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 
 type Fee = {
   feeNo: string;
@@ -25,6 +26,7 @@ type Fee = {
   note?: string | null;
   version: number;
   status: string;
+  paymentAllocations?: Array<{ paymentBatch: { batchNo: string; status: string } }>;
 };
 export function TuitionEditForm({
   id,
@@ -84,6 +86,15 @@ export function TuitionEditForm({
     return (
       <Alert severity="warning">Học phí đã thanh toán và không thể sửa.</Alert>
     );
+  const pendingBatch = fee.paymentAllocations?.find(
+    (allocation) => allocation.paymentBatch.status === "PENDING",
+  )?.paymentBatch;
+  if (pendingBatch)
+    return (
+      <Alert severity="warning">
+        Khoản phí đang chờ thanh toán trong đợt {pendingBatch.batchNo} và không thể sửa.
+      </Alert>
+    );
   const total = Number(fee.originalAmount) - discount + additional;
   return (
     <Stack spacing={2} maxWidth={760}>
@@ -134,12 +145,10 @@ export function TuitionEditForm({
           <Typography variant="h6" color="primary.main">
             Tổng mới: {total.toLocaleString("vi-VN")} VND
           </Typography>
-          <TextField
-            type="date"
+          <DatePickerField
             label="Hạn thanh toán"
             value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
+            onChange={setDueDate}
           />
           <TextField
             label="Ghi chú"

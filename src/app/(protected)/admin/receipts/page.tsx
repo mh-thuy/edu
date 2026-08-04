@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { ReceiptList } from "@/modules/finance/receipts/ReceiptList";
 
 export const metadata: Metadata = {
-  title: "Receipts | Classroom Rental",
+  title: "Biên lai học phí",
 };
 
 export default async function ReceiptsPage() {

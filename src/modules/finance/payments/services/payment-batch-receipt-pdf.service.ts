@@ -37,9 +37,10 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  const page = pdf.addPage([595, 842]);
+  let page = pdf.addPage([595, 842]);
   const color = rgb(0.12, 0.16, 0.24);
-  const draw = (text: string, x: number, y: number, size = 11) => page.drawText(text, { x, y, size, font, color });
+  const draw = (text: string, x: number, y: number, size = 11) =>
+    page.drawText(text, { x, y, size, font, color });
 
   draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 770, 17);
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
@@ -52,19 +53,56 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
 
   let y = 515;
   for (const allocation of receipt.paymentBatch.allocations) {
-    const subjects = allocation.tuitionFee.items
-      .map((item) => item.classSubject?.subject.name)
-      .filter((name): name is string => Boolean(name));
-    draw(`${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "Chưa có lớp"}`, 75, y);
-    draw(`Môn đã đăng ký: ${subjects.length ? subjects.join(", ") : "-"}`, 90, y - 15, 9);
+    if (y < 260) {
+      page = pdf.addPage([595, 842]);
+      draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
+      draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
+      y = 725;
+    }
+    draw(
+      `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "Chưa có lớp"}`,
+      75,
+      y,
+    );
     draw(`${money(Number(allocation.amount))} VND`, 390, y);
-    y -= 38;
+    let itemY = y - 17;
+    for (const item of allocation.tuitionFee.items) {
+      if (itemY < 220) {
+        page = pdf.addPage([595, 842]);
+        draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
+        draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
+        itemY = 725;
+      }
+      const subjectName = item.classSubject?.subject.name || item.itemName;
+      draw(`- ${subjectName}`, 90, itemY, 9);
+      draw(`${money(Number(item.amount))} VND`, 390, itemY, 9);
+      itemY -= 17;
+    }
+    y = itemY - 10;
   }
-  page.drawLine({ start: { x: 55, y: y - 5 }, end: { x: 540, y: y - 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
+  page.drawLine({
+    start: { x: 55, y: y - 5 },
+    end: { x: 540, y: y - 5 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
   draw("TỔNG CỘNG", 75, y - 35, 13);
   draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13);
   draw(`Phương thức: ${receipt.paymentBatch.paymentMethod}`, 75, y - 75);
-  if (receipt.paymentBatch.transactionReference) draw(`Mã giao dịch: ${receipt.paymentBatch.transactionReference}`, 75, y - 97);
-  draw("Biên lai tổng hợp được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
-  return { pdf: Buffer.from(await pdf.save()), batchNo: receipt.paymentBatch.batchNo };
+  if (receipt.paymentBatch.transactionReference)
+    draw(
+      `Mã giao dịch: ${receipt.paymentBatch.transactionReference}`,
+      75,
+      y - 97,
+    );
+  draw(
+    "Biên lai tổng hợp được phát hành từ hệ thống quản lý học phí.",
+    75,
+    90,
+    9,
+  );
+  return {
+    pdf: Buffer.from(await pdf.save()),
+    batchNo: receipt.paymentBatch.batchNo,
+  };
 }

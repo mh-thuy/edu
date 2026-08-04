@@ -102,6 +102,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
   const [registeredSubjectIds, setRegisteredSubjectIds] = useState<string[]>([]);
   const [addingStudent, setAddingStudent] = useState(false);
+  const [exportingNotice, setExportingNotice] = useState(false);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -280,6 +281,31 @@ export function ClassDetailPanel({ id }: { id: string }) {
     }
   }
 
+  async function exportTuitionNotice() {
+    setExportingNotice(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/classes/${id}/tuition-notice/pdf`);
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể xuất thông báo học phí"),
+        );
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `thong-bao-hoc-phi-${classData?.code || "lop"}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Không thể xuất thông báo học phí",
+      );
+    } finally {
+      setExportingNotice(false);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -300,9 +326,18 @@ export function ClassDetailPanel({ id }: { id: string }) {
             Quản lý môn học, đăng ký và học phí theo từng môn
           </Typography>
         </Stack>
-        <Button component={Link} href="/admin/classes" variant="outlined">
-          Quay lại
-        </Button>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button
+            variant="outlined"
+            onClick={() => void exportTuitionNotice()}
+            disabled={exportingNotice}
+          >
+            {exportingNotice ? "Đang tạo thanh toán..." : "Tạo thanh toán và xuất thông báo"}
+          </Button>
+          <Button component={Link} href="/admin/classes" variant="outlined">
+            Quay lại
+          </Button>
+        </Stack>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       <Paper>
@@ -371,6 +406,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
                   <TableCell align="right">
                     <Button
                       size="small"
+                      variant="outlined"
                       onClick={() => openEditSubjectDialog(item)}
                       disabled={addingStudent}
                     >
@@ -379,6 +415,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
                     <Button
                       size="small"
                       color="error"
+                      variant="outlined"
                       onClick={() => void removeSubject(item)}
                       disabled={addingStudent}
                     >
@@ -412,7 +449,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
           <Table>
             <TableHead><TableRow><TableCell>Mã học viên</TableCell><TableCell>Họ tên</TableCell><TableCell>Môn đang học</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
             <TableBody>
-              {classStudents.map((item) => <TableRow key={item.id}><TableCell>{item.student.code}</TableCell><TableCell>{item.student.fullName}</TableCell><TableCell>{item.subjects.map((entry) => classData.classSubjects.find((subject) => subject.id === entry.classSubjectId)?.subject.name).filter(Boolean).join(", ") || "-"}</TableCell><TableCell align="right"><Button size="small" onClick={() => void chooseStudent({ id: item.studentId, code: item.student.code, fullName: item.student.fullName })}>Thêm môn</Button></TableCell></TableRow>)}
+              {classStudents.map((item) => <TableRow key={item.id}><TableCell>{item.student.code}</TableCell><TableCell>{item.student.fullName}</TableCell><TableCell>{item.subjects.map((entry) => classData.classSubjects.find((subject) => subject.id === entry.classSubjectId)?.subject.name).filter(Boolean).join(", ") || "-"}</TableCell><TableCell align="right"><Button size="small" variant="outlined" onClick={() => void chooseStudent({ id: item.studentId, code: item.student.code, fullName: item.student.fullName })}>Thêm môn</Button></TableCell></TableRow>)}
               {!classStudents.length && <TableRow><TableCell colSpan={4}><Typography sx={{ p: 3 }} textAlign="center" color="text.secondary">Chưa có học viên</Typography></TableCell></TableRow>}
             </TableBody>
           </Table>
@@ -493,6 +530,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         </DialogContent>
         <DialogActions>
           <Button
+            variant="outlined"
             onClick={() => {
               setManageSubjectDialogOpen(false);
               setEditingSubject(null);
@@ -554,6 +592,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         </DialogContent>
         <DialogActions>
           <Button
+            variant="outlined"
             onClick={() => setSubjectDialogOpen(false)}
             disabled={addingStudent}
           >

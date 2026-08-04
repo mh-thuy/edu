@@ -41,7 +41,7 @@ export function FormDialog({
         <Box sx={{ pt: 2 }}>{children}</Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isLoading}>
+        <Button onClick={onClose} variant="outlined" disabled={isLoading}>
           {cancelText}
         </Button>
         <Button

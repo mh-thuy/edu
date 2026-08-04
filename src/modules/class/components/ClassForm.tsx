@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
 import { type ReactElement } from "react";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -42,8 +43,6 @@ export function ClassForm({
       status: defaultValues?.status ?? "DRAFT",
     },
   });
-
-  const toInputDateValue = (value?: string) => value?.slice(0, 10) ?? "";
 
   const toIsoDateTime = (value: string) =>
     value ? new Date(`${value}T00:00:00.000Z`).toISOString() : undefined;
@@ -93,17 +92,11 @@ export function ClassForm({
             name="startDate"
             control={control}
             render={({ field, fieldState: { error } }) => (
-              <TextField
+              <DatePickerField
                 label="Ngày bắt đầu"
-                type="date"
-                value={toInputDateValue(field.value)}
-                error={!!error}
-                helperText={error?.message}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                onChange={(event) => {
-                  field.onChange(toIsoDateTime(event.target.value));
-                }}
+                value={field.value}
+                onChange={(value) => field.onChange(toIsoDateTime(value))}
+                textFieldProps={{ error: !!error, helperText: error?.message }}
               />
             )}
           />
@@ -112,17 +105,11 @@ export function ClassForm({
             name="endDate"
             control={control}
             render={({ field, fieldState: { error } }) => (
-              <TextField
+              <DatePickerField
                 label="Ngày kết thúc"
-                type="date"
-                value={toInputDateValue(field.value)}
-                error={!!error}
-                helperText={error?.message}
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-                onChange={(event) => {
-                  field.onChange(toIsoDateTime(event.target.value));
-                }}
+                value={field.value}
+                onChange={(value) => field.onChange(toIsoDateTime(value))}
+                textFieldProps={{ error: !!error, helperText: error?.message }}
               />
             )}
           />

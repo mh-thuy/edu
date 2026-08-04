@@ -8,14 +8,41 @@ const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 
 export async function generateTuitionReceiptPdf(receiptId: string) {
-  const receipt = await prisma.tuitionReceipt.findUnique({ where: { id: receiptId }, include: { payment: { include: { tuitionFee: { include: { student: true, class: true, items: { orderBy: { displayOrder: "asc" }, include: { classSubject: { include: { subject: true } } } } } } } } } });
+  const receipt = await prisma.tuitionReceipt.findUnique({
+    where: { id: receiptId },
+    include: {
+      payment: {
+        include: {
+          tuitionFee: {
+            include: {
+              student: true,
+              class: true,
+              items: {
+                orderBy: { displayOrder: "asc" },
+                include: { classSubject: { include: { subject: true } } },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
   if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  const page = pdf.addPage([595, 842]);
+  let page = pdf.addPage([595, 842]);
   const color = rgb(0.12, 0.16, 0.24);
-  const draw = (text: string, x: number, y: number, size = 11, bold = false) => { void bold; page.drawText(text, { x, y, size, font, color }); };
+  const draw = (
+    text: string,
+    x: number,
+    y: number,
+    size = 11,
+    bold = false,
+  ) => {
+    void bold;
+    page.drawText(text, { x, y, size, font, color });
+  };
   draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
   draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
   draw(`Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN")}`, 55, 708);
@@ -27,13 +54,29 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
   draw("NỘI DUNG THU", 55, 525, 13, true);
   let y = 495;
   for (const item of receipt.payment.tuitionFee.items) {
+    if (y < 130) {
+      page = pdf.addPage([595, 842]);
+      draw("PHIẾU THU HỌC PHÍ", 190, 790, 16, true);
+      draw("NỘI DUNG THU (tiếp theo)", 55, 755, 13, true);
+      y = 725;
+    }
     const subjectName = item.classSubject?.subject.name;
-    draw(`${subjectName ? `Môn đã đăng ký: ${subjectName}` : item.itemName} x ${item.quantity.toString()}`, 75, y);
+    draw(
+      `${subjectName ? `Học phí môn: ${subjectName}` : item.itemName} x ${item.quantity.toString()}`,
+      75,
+      y,
+    );
     draw(`${money(Number(item.amount))} VND`, 400, y);
     y -= 24;
   }
-  page.drawLine({ start: { x: 55, y: y - 5 }, end: { x: 540, y: y - 5 }, thickness: 1, color: rgb(0.8, 0.8, 0.8) });
-  draw("TỔNG CỘNG", 75, y - 35, 13, true); draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13, true);
+  page.drawLine({
+    start: { x: 55, y: y - 5 },
+    end: { x: 540, y: y - 5 },
+    thickness: 1,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  draw("TỔNG CỘNG", 75, y - 35, 13, true);
+  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13, true);
   draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
   draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
   return Buffer.from(await pdf.save());

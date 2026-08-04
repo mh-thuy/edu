@@ -73,7 +73,7 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
-    label: "Học phí",
+    label: "Các khoản học phí",
     href: "/admin/tuition-fees",
     icon: <AccountBalanceWalletOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
@@ -85,7 +85,7 @@ const items: SidebarItem[] = [
     roles: ["ADMIN", "STAFF"],
   },
   {
-    label: "Lịch sử thu học phí",
+    label: "Giao dịch thu học phí",
     href: "/admin/tuition-fees/payment-history",
     icon: <HistoryOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],

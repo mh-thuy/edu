@@ -122,7 +122,7 @@ export function TuitionPaymentWorkspace({
           fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
         if (pendingBatchNo)
           throw new Error(
-            `Khoản học phí đang chờ thanh toán trong batch ${pendingBatchNo}`,
+            `Khoản học phí đang chờ thanh toán trong đợt ${pendingBatchNo}`,
           );
         setStudent({
           id: fee.student.id,
@@ -335,6 +335,7 @@ export function TuitionPaymentWorkspace({
                 </Box>
                 <Button
                   size="small"
+                  variant="outlined"
                   startIcon={<ArrowBackIcon />}
                   onClick={() => setStep(0)}
                 >
@@ -342,8 +343,10 @@ export function TuitionPaymentWorkspace({
                 </Button>
               </Stack>
               <Alert severity="info">
-                Đã tìm thấy {fees.length} khoản cần thanh toán. Khoản đang chờ
-                đối soát hoặc đã thanh toán sẽ bị khóa.
+                Có{" "}
+                {fees.filter((fee) => !fee.paymentAllocations?.length).length}{" "}
+                khoản có thể chọn trong tổng số {fees.length} khoản. Khoản đang
+                chờ đối soát hoặc đã thanh toán sẽ bị khóa.
               </Alert>
               <Stack>
                 {fees.map((fee) => {
@@ -387,7 +390,7 @@ export function TuitionPaymentWorkspace({
                               color={locked ? "warning.main" : "text.secondary"}
                             >
                               {locked
-                                ? `Đang chờ thanh toán trong batch ${batchNo}`
+                                ? `Đang chờ thanh toán trong đợt ${batchNo}`
                                 : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN")}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
                             </Typography>
                           </Box>
@@ -499,6 +502,7 @@ export function TuitionPaymentWorkspace({
               />
               <Stack direction="row" justifyContent="space-between">
                 <Button
+                  variant="outlined"
                   startIcon={<ArrowBackIcon />}
                   onClick={() => setStep(1)}
                 >
@@ -533,13 +537,13 @@ export function TuitionPaymentWorkspace({
               />
               <Typography variant="h6">
                 {pendingBatch
-                  ? `Mã batch: ${pendingBatch.batchNo}`
+                  ? `Mã đợt thanh toán: ${pendingBatch.batchNo}`
                   : "Đã ghi nhận toàn bộ khoản đã chọn"}
               </Typography>
               {pendingBatch && (
                 <>
                   <Alert severity="info">
-                    Nội dung chuyển khoản cần có mã batch{" "}
+                    Nội dung chuyển khoản cần có mã đợt thanh toán{" "}
                     <strong>{pendingBatch.batchNo}</strong>.
                   </Alert>
                   <Box
@@ -580,7 +584,7 @@ export function TuitionPaymentWorkspace({
                   Xuất biên lai tổng
                 </Button>
               )}
-              <Button onClick={reset}>Thu học phí cho học sinh khác</Button>
+              <Button variant="outlined" onClick={reset}>Thu học phí cho học sinh khác</Button>
             </Stack>
           </CardContent>
         </Card>

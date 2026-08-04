@@ -57,6 +57,7 @@ export function StudentSelectDialog({
       columns={columns}
       searchPlaceholder="Nhập mã hoặc tên học sinh"
       maxWidth="lg"
+      query={{ status: "ACTIVE" }}
     />
   );
 }

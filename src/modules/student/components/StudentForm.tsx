@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { studentCreateSchema } from "@/modules/student/schemas/student.schema";
 import type { z } from "zod";
 import type { ReactElement } from "react";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 
 type StudentFormData = z.infer<typeof studentCreateSchema>;
 
@@ -28,7 +29,6 @@ export function StudentForm({
   onSubmit,
   defaultValues,
 }: StudentFormProps): ReactElement {
-  const toInputDateValue = (value?: string) => value?.slice(0, 10) ?? "";
   const toIsoDateTime = (value: string) =>
     value ? new Date(`${value}T00:00:00.000Z`).toISOString() : undefined;
 
@@ -66,21 +66,11 @@ export function StudentForm({
           name="birthday"
           control={control}
           render={({ field, fieldState: { error } }) => (
-            <TextField
+            <DatePickerField
               label="Ngày sinh"
-              type="date"
-              value={toInputDateValue(field.value)}
-              error={!!error}
-              helperText={error?.message}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-              onChange={(event) => {
-                field.onChange(
-                  event.target.value
-                    ? toIsoDateTime(event.target.value)
-                    : null,
-                );
-              }}
+              value={field.value}
+              onChange={(value) => field.onChange(value ? toIsoDateTime(value) : null)}
+              textFieldProps={{ error: !!error, helperText: error?.message }}
             />
           )}
         />

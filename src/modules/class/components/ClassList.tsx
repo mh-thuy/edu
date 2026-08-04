@@ -163,7 +163,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
 
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
             minWidth: 56,
@@ -177,7 +177,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
 
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
           disabled={!canDelete}
@@ -417,6 +417,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
             <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </Select>
+          <Button variant="text" onClick={() => { setSearch(""); setStatus(""); }} disabled={!search && !status}>Xóa bộ lọc</Button>
         </Stack>
       </Paper>
 

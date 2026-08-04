@@ -316,25 +316,40 @@ export async function assignStudentToClass(
           WHERE enrollment_id = ${existing.id}::uuid AND status = 'ACTIVE'::enrollment_subject_status
         `
       : [];
-    const existingSubjectIds = new Set(existingSubjectRows.map((row) => row.classSubjectId));
-    const newClassSubjects = classSubjects.filter((classSubject) => !existingSubjectIds.has(classSubject.id));
+    const existingSubjectIds = new Set(
+      existingSubjectRows.map((row) => row.classSubjectId),
+    );
+    const newClassSubjects = classSubjects.filter(
+      (classSubject) => !existingSubjectIds.has(classSubject.id),
+    );
     const billedItems = existing
       ? await tx.tuitionFeeItem.findMany({
-          where: { tuitionFee: { enrollmentId: existing.id }, classSubjectId: { in: classSubjectIds } },
+          where: {
+            tuitionFee: { enrollmentId: existing.id },
+            classSubjectId: { in: classSubjectIds },
+          },
           select: { classSubjectId: true },
           distinct: ["classSubjectId"],
         })
       : [];
-    const billedSubjectIds = new Set(billedItems.map((row) => row.classSubjectId).filter((value): value is string => Boolean(value)));
-    const subjectsToBill = classSubjects.filter((classSubject) => !billedSubjectIds.has(classSubject.id));
+    const billedSubjectIds = new Set(
+      billedItems
+        .map((row) => row.classSubjectId)
+        .filter((value): value is string => Boolean(value)),
+    );
+    const subjectsToBill = classSubjects.filter(
+      (classSubject) => !billedSubjectIds.has(classSubject.id),
+    );
     if (newClassSubjects.length === 0 && subjectsToBill.length === 0) {
       throw new ConflictError("Học viên đã đăng ký các môn học được chọn");
     }
 
-    const enrollment = existing ?? await tx.classStudent.create({
-      data: { classId, studentId },
-      include: { student: true, class: true },
-    });
+    const enrollment =
+      existing ??
+      (await tx.classStudent.create({
+        data: { classId, studentId },
+        include: { student: true, class: true },
+      }));
     for (const classSubject of newClassSubjects) {
       if (classSubject.maxStudents !== null) {
         const countRows = await tx.$queryRaw<Array<{ count: bigint }>>`
@@ -383,12 +398,52 @@ export async function assignStudentToClass(
            ${`Học phí môn ${classSubject.subject.name}`}, 1, ${classSubject.tuitionFee}, ${classSubject.tuitionFee}, ${index}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `;
     }
+    const performedBy = actorId || studentId;
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "ENROLLMENT",
+        entityId: enrollment.id,
+        action: "SUBJECTS_REGISTERED",
+        dataBefore: { classSubjectIds: [...existingSubjectIds] },
+        dataAfter: {
+          classId,
+          studentId,
+          classSubjectIds: classSubjects.map((item) => item.id),
+          newClassSubjectIds: newClassSubjects.map((item) => item.id),
+          tuitionFeeId: fee.id,
+        },
+        performedBy,
+      },
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "TUITION_FEE",
+        entityId: fee.id,
+        action: "AUTO_CREATED_FROM_ENROLLMENT",
+        dataAfter: {
+          enrollmentId: enrollment.id,
+          classId,
+          studentId,
+          classSubjectIds: subjectsToBill.map((item) => item.id),
+          originalAmount: originalAmount.toString(),
+          finalAmount: originalAmount.toString(),
+        },
+        performedBy,
+      },
+    });
     return enrollment;
   });
 }
 
 export async function getSubjects(search?: string, includeInactive = false) {
-  return prisma.$queryRaw<Array<{ id: string; code: string; name: string; status: "ACTIVE" | "INACTIVE" }>>`
+  return prisma.$queryRaw<
+    Array<{
+      id: string;
+      code: string;
+      name: string;
+      status: "ACTIVE" | "INACTIVE";
+    }>
+  >`
     SELECT id, code, name, status FROM subjects
     WHERE ${includeInactive ? Prisma.sql`TRUE` : Prisma.sql`status = 'ACTIVE'::subject_status`}
       ${search ? Prisma.sql`AND name ILIKE ${`%${search}%`}` : Prisma.empty}
@@ -541,12 +596,19 @@ export async function removeStudentFromClass(
 
 export async function getClassStudents(
   classId: string,
-): Promise<Array<ClassStudentWithStudent & { subjects: Array<{ classSubjectId: string }> }>> {
+): Promise<
+  Array<
+    ClassStudentWithStudent & { subjects: Array<{ classSubjectId: string }> }
+  >
+> {
   return prisma.classStudent.findMany({
     where: { classId },
     include: {
       student: true,
-      subjects: { where: { status: "ACTIVE" }, select: { classSubjectId: true } },
+      subjects: {
+        where: { status: "ACTIVE" },
+        select: { classSubjectId: true },
+      },
     },
   });
 }

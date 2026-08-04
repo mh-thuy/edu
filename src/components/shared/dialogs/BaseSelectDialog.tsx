@@ -215,7 +215,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={handleClose} color="inherit">
+        <Button onClick={handleClose} color="inherit" variant="outlined">
           Đóng
         </Button>
       </DialogActions>

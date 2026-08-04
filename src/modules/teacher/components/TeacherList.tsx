@@ -119,7 +119,7 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
       >
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
             minWidth: 56,
@@ -133,7 +133,7 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
 
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
           disabled={!canDelete}
@@ -328,7 +328,7 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
           </Button>
         </Stack>
 
-        <Box sx={{ mt: 2.5 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }} sx={{ mt: 2.5 }}>
           <TextField
             placeholder="Tìm theo mã hoặc số điện thoại..."
             value={search}
@@ -343,6 +343,7 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
               ),
             }}
             sx={{
+              flex: 1,
               maxWidth: 460,
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
@@ -350,7 +351,8 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
               },
             }}
           />
-        </Box>
+          <Button variant="text" onClick={() => setSearch("")} disabled={!search}>Xóa tìm kiếm</Button>
+        </Stack>
       </Paper>
 
       <Paper

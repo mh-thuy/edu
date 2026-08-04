@@ -99,6 +99,12 @@ export async function updateUser(id: string, data: UserUpdate, actorId: string) 
         fullName: data.fullName,
         passwordHash,
         status: data.status,
+        deletedAt:
+          data.status === "ACTIVE"
+            ? null
+            : data.status === "INACTIVE"
+              ? new Date()
+              : undefined,
         roles: { create: roleIds.map((roleId) => ({ roleId })) },
       },
       include: safeUserInclude,

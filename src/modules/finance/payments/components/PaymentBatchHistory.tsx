@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import {
   MasterSelectField,
@@ -52,7 +53,7 @@ type Batch = {
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 const statusLabels: Record<string, string> = {
-  PENDING: "Chờ đối soát",
+  PENDING: "Chờ chuyển khoản / đối soát",
   SUCCESS: "Đã thanh toán",
   FAILED: "Thất bại",
   CANCELLED: "Đã hủy",
@@ -80,12 +81,17 @@ export function PaymentBatchHistory() {
   const [error, setError] = useState("");
   const [cancelTarget, setCancelTarget] = useState<Batch | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [cashTarget, setCashTarget] = useState<Batch | null>(null);
+  const [convertingCash, setConvertingCash] = useState(false);
   const studentDialog = useDisclosure();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
-    const params = new URLSearchParams({ page: String(page + 1), pageSize: String(pageSize) });
+    const params = new URLSearchParams({
+      page: String(page + 1),
+      pageSize: String(pageSize),
+    });
     if (studentCode.trim()) params.set("studentCode", studentCode.trim());
     if (status) params.set("status", status);
 
@@ -99,7 +105,9 @@ export function PaymentBatchHistory() {
           ),
         );
       }
-      const result = await unwrapApiResponse<{ items: Batch[]; total: number }>(response);
+      const result = await unwrapApiResponse<{ items: Batch[]; total: number }>(
+        response,
+      );
       setItems(result.items);
       setTotal(result.total);
     } catch (reason) {
@@ -130,14 +138,56 @@ export function PaymentBatchHistory() {
     if (!cancelTarget) return;
     setCancelling(true);
     try {
-      const response = await fetch(`/api/payment-batches/${cancelTarget.id}/cancel`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "Khách hàng chuyển sang thanh toán tiền mặt" }) });
-      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể hủy batch thanh toán"));
+      const response = await fetch(
+        `/api/payment-batches/${cancelTarget.id}/cancel`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reason: "Khách hàng chuyển sang thanh toán tiền mặt",
+          }),
+        },
+      );
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể hủy đợt thanh toán",
+          ),
+        );
       setCancelTarget(null);
       await load();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể hủy batch thanh toán");
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Không thể hủy đợt thanh toán",
+      );
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function convertToCash() {
+    if (!cashTarget) return;
+    setConvertingCash(true);
+    try {
+      const response = await fetch(`/api/payment-batches/${cashTarget.id}/cash`, {
+        method: "POST",
+      });
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể chuyển sang tiền mặt"),
+        );
+      setCashTarget(null);
+      setExpanded(null);
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
+      );
+    } finally {
+      setConvertingCash(false);
     }
   }
 
@@ -145,18 +195,21 @@ export function PaymentBatchHistory() {
     <Stack spacing={2}>
       <Box>
         <Typography variant="h4" fontWeight={700}>
-          Lịch sử thu học phí
+          Giao dịch thu học phí
         </Typography>
         <Typography color="text.secondary">
-          Tra cứu các lần thanh toán gộp và biên lai tổng.
+          Theo dõi các đợt thanh toán, đối soát chuyển khoản và biên lai.
         </Typography>
       </Box>
 
       <Paper sx={{ p: 2 }}>
+        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+          Bộ lọc tra cứu
+        </Typography>
         <Stack
-          direction={{ xs: "column", md: "row" }}
+          direction={{ xs: "column", sm: "row" }}
           spacing={1}
-          alignItems="center"
+          alignItems={{ xs: "stretch", sm: "center" }}
         >
           <MasterSelectField
             label="Học viên"
@@ -172,18 +225,26 @@ export function PaymentBatchHistory() {
             select
             label="Trạng thái"
             value={status}
-            onChange={(event) => { setStatus(event.target.value); setPage(0); }}
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPage(0);
+            }}
             sx={{ minWidth: 180 }}
           >
-            <MenuItem value="">Tất cả</MenuItem>
+            <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="SUCCESS">Đã thanh toán</MenuItem>
-            <MenuItem value="PENDING">Chờ đối soát</MenuItem>
+            <MenuItem value="PENDING">Chờ chuyển khoản / đối soát</MenuItem>
+            <MenuItem value="FAILED">Thất bại</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </TextField>
           <Button variant="contained" onClick={() => void load()}>
             Tìm kiếm
           </Button>
-          <Button variant="outlined" onClick={clearSearch}>
+          <Button
+            variant="text"
+            onClick={clearSearch}
+            disabled={!studentCode && !status}
+          >
             Xóa tìm kiếm
           </Button>
         </Stack>
@@ -191,17 +252,17 @@ export function PaymentBatchHistory() {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Paper sx={{ overflow: "hidden" }}>
-        <Table sx={{ minWidth: 900 }} size="small">
+      <Paper sx={{ overflowX: "auto" }}>
+        <Table sx={{ minWidth: 1040 }} size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Mã batch</TableCell>
-              <TableCell>Học sinh</TableCell>
-              <TableCell>Số khoản</TableCell>
-              <TableCell align="right">Tổng tiền</TableCell>
+              <TableCell>Mã đợt thanh toán</TableCell>
+              <TableCell>Học viên</TableCell>
+              <TableCell align="center">Số khoản</TableCell>
+              <TableCell align="right">Số tiền</TableCell>
               <TableCell>Phương thức</TableCell>
-              <TableCell>Ngày tạo</TableCell>
               <TableCell>Trạng thái</TableCell>
+              <TableCell>Ngày tạo</TableCell>
               <TableCell />
             </TableRow>
           </TableHead>
@@ -209,20 +270,41 @@ export function PaymentBatchHistory() {
             {!loading &&
               items.map((batch) => (
                 <Fragment key={batch.id}>
-                  <TableRow key={batch.id} hover>
+                  <TableRow
+                    key={batch.id}
+                    hover
+                    sx={{
+                      bgcolor:
+                        batch.status === "PENDING"
+                          ? "warning.light"
+                          : batch.status === "SUCCESS"
+                            ? "success.light"
+                            : undefined,
+                    }}
+                  >
                     <TableCell>
-                      <strong>{batch.batchNo}</strong>
+                      <Button
+                        component={Link}
+                        href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                        size="small"
+                        variant="outlined"
+                      >
+                        {batch.batchNo}
+                      </Button>
                     </TableCell>
                     <TableCell>
-                      {batch.student.code}
-                      <br />
-                      <Typography variant="caption">
+                      <Typography fontWeight={600}>
                         {batch.student.fullName}
                       </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {batch.student.code}
+                      </Typography>
                     </TableCell>
-                    <TableCell>{batch.allocations.length}</TableCell>
+                    <TableCell align="center">{batch.allocations.length}</TableCell>
                     <TableCell align="right">
-                      {money(Number(batch.totalAmount))}
+                      <Typography fontWeight={700}>
+                        {money(Number(batch.totalAmount))}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       {batch.paymentMethod === "BANK_TRANSFER"
@@ -232,9 +314,6 @@ export function PaymentBatchHistory() {
                           : "Khác"}
                     </TableCell>
                     <TableCell>
-                      {new Date(batch.createdAt).toLocaleDateString("vi-VN")}
-                    </TableCell>
-                    <TableCell>
                       <Chip
                         size="small"
                         color={statusColors[batch.status] || "default"}
@@ -242,16 +321,25 @@ export function PaymentBatchHistory() {
                       />
                     </TableCell>
                     <TableCell>
+                      <Typography variant="body2">
+                        {new Date(batch.createdAt).toLocaleDateString("vi-VN")}
+                      </Typography>
+                      {batch.paymentDate && (
+                        <Typography variant="caption" color="text.secondary">
+                          Thu: {new Date(batch.paymentDate).toLocaleDateString("vi-VN")}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Button
                         size="small"
+                        variant="outlined"
                         startIcon={<ExpandMoreIcon />}
                         onClick={() =>
-                          setExpanded(
-                            expanded === batch.id ? null : batch.id,
-                          )
+                          setExpanded(expanded === batch.id ? null : batch.id)
                         }
                       >
-                        Chi tiết
+                        {expanded === batch.id ? "Thu gọn" : "Xem khoản phí"}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -259,9 +347,19 @@ export function PaymentBatchHistory() {
                     <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
                       <Collapse in={expanded === batch.id}>
                         <Box sx={{ p: 2, bgcolor: "action.hover" }}>
-                          <Typography variant="subtitle2">
-                            Các khoản trong batch
-                          </Typography>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            justifyContent="space-between"
+                            gap={1}
+                            sx={{ mb: 1 }}
+                          >
+                            <Typography variant="subtitle2">
+                              Các khoản học phí trong đợt
+                            </Typography>
+                            <Typography variant="subtitle2" color="primary.main">
+                              Tổng: {money(Number(batch.totalAmount))}
+                            </Typography>
+                          </Stack>
                           {batch.allocations.map((allocation) => (
                             <Stack
                               key={allocation.tuitionFee.feeNo}
@@ -285,18 +383,47 @@ export function PaymentBatchHistory() {
                               variant="outlined"
                               href={`/api/payment-batch-receipts/${batch.receipt.id}/pdf`}
                             >
-                              Xuất biên lai tổng
+                              Xuất biên lai
                             </Button>
                           ) : batch.status === "PENDING" ? (
-                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1 }}>
-                              <Button size="small" variant="outlined" href={`/api/payment-batches/${batch.id}/notice/pdf`}>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1}
+                              sx={{ mt: 1 }}
+                            >
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                href={`/api/payment-batches/${batch.id}/notice/pdf`}
+                              >
                                 Tải thông báo PDF
                               </Button>
-                              <Button size="small" variant="contained" startIcon={<PrintOutlinedIcon />} component="a" href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<PrintOutlinedIcon />}
+                                component="a"
+                                href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 Mở để in
                               </Button>
-                              <Button size="small" color="error" variant="outlined" onClick={() => setCancelTarget(batch)}>
-                                Hủy batch
+                              <Button
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                onClick={() => setCashTarget(batch)}
+                              >
+                                Chuyển sang tiền mặt
+                              </Button>
+                              <Button
+                                size="small"
+                                color="error"
+                                variant="outlined"
+                                onClick={() => setCancelTarget(batch)}
+                              >
+                                Hủy đợt thanh toán
                               </Button>
                             </Stack>
                           ) : null}
@@ -326,7 +453,22 @@ export function PaymentBatchHistory() {
             )}
           </TableBody>
         </Table>
-        <TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} />
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          rowsPerPage={pageSize}
+          onPageChange={(_, nextPage) => setPage(nextPage)}
+          onRowsPerPageChange={(event) => {
+            setPageSize(Number(event.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 20, 50, 100]}
+          labelRowsPerPage="Số dòng/trang"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`
+          }
+        />
       </Paper>
 
       <StudentSelectDialog
@@ -341,13 +483,31 @@ export function PaymentBatchHistory() {
       />
       <ConfirmDialog
         open={!!cancelTarget}
-        title="Hủy batch chuyển khoản"
-        message={cancelTarget ? `Hủy batch ${cancelTarget.batchNo}? Các khoản học phí sẽ được giải phóng để thu tiền mặt.` : ""}
-        confirmLabel="Hủy batch"
+        title="Hủy đợt chuyển khoản"
+        message={
+          cancelTarget
+            ? `Hủy đợt ${cancelTarget.batchNo}? Các khoản học phí sẽ được giải phóng để thu tiền mặt.`
+            : ""
+        }
+        confirmLabel="Hủy đợt thanh toán"
         cancelLabel="Quay lại"
         onConfirm={() => void cancelBatch()}
         onCancel={() => setCancelTarget(null)}
         isLoading={cancelling}
+      />
+      <ConfirmDialog
+        open={!!cashTarget}
+        title="Chuyển sang thanh toán tiền mặt"
+        message={
+          cashTarget
+            ? `Xác nhận đã nhận ${money(Number(cashTarget.totalAmount))} tiền mặt từ ${cashTarget.student.fullName}? Hệ thống sẽ hoàn tất thanh toán và phát hành biên lai.`
+            : ""
+        }
+        confirmLabel="Xác nhận tiền mặt"
+        cancelLabel="Quay lại"
+        onConfirm={() => void convertToCash()}
+        onCancel={() => setCashTarget(null)}
+        isLoading={convertingCash}
       />
     </Stack>
   );

@@ -55,6 +55,12 @@ const theme = createTheme({
           textTransform: "none",
           fontWeight: 600,
           minHeight: 38,
+          padding: "8px 14px",
+        },
+        sizeSmall: {
+          minHeight: 32,
+          padding: "5px 10px",
+          fontSize: "0.8125rem",
         },
       },
     },
@@ -97,11 +103,35 @@ const theme = createTheme({
     },
     MuiTableCell: {
       styleOverrides: {
+        root: {
+          borderColor: "#e2e8f0",
+          padding: "12px 16px",
+        },
         head: {
           backgroundColor: "#f8fafc",
           color: "#475569",
           fontWeight: 700,
           whiteSpace: "nowrap",
+        },
+      },
+    },
+    MuiTable: {
+      defaultProps: {
+        size: "small",
+      },
+      styleOverrides: {
+        root: {
+          minWidth: 720,
+        },
+      },
+    },
+    MuiTablePagination: {
+      styleOverrides: {
+        root: {
+          borderTop: "1px solid #e2e8f0",
+        },
+        toolbar: {
+          minHeight: 52,
         },
       },
     },

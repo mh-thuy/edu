@@ -119,7 +119,7 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
       >
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
             minWidth: 56,
@@ -133,7 +133,7 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
 
         <Button
           size="small"
-          variant="contained"
+          variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
           disabled={!canDelete}
@@ -356,24 +356,40 @@ export function StudentList({ role }: StudentListProps): ReactElement {
                     body: form,
                   });
                   if (!response.ok) {
-                    throw new Error(await extractApiErrorMessage(response, "Import học viên thất bại"));
+                    throw new Error(
+                      await extractApiErrorMessage(
+                        response,
+                        "Import học viên thất bại",
+                      ),
+                    );
                   }
 
-                  const result = await response.json() as {
+                  const result = (await response.json()) as {
                     success: boolean;
-                    data?: { importedRows: number; skippedRows: number; errors: Array<{ rowNo: number; message: string }> };
+                    data?: {
+                      importedRows: number;
+                      skippedRows: number;
+                      errors: Array<{ rowNo: number; message: string }>;
+                    };
                   };
                   if (!result.success || !result.data) {
                     throw new Error("Import học viên thất bại");
                   }
 
-                  const errorMessage = result.data.errors.length > 0
-                    ? ` Có ${result.data.errors.length} dòng lỗi.`
-                    : "";
-                  showSuccess(`Đã import ${result.data.importedRows} học viên, bỏ qua ${result.data.skippedRows} dòng.${errorMessage}`);
+                  const errorMessage =
+                    result.data.errors.length > 0
+                      ? ` Có ${result.data.errors.length} dòng lỗi.`
+                      : "";
+                  showSuccess(
+                    `Đã import ${result.data.importedRows} học viên, bỏ qua ${result.data.skippedRows} dòng.${errorMessage}`,
+                  );
                   await refresh();
                 } catch (error) {
-                  showError(error instanceof Error ? error.message : "Import học viên thất bại");
+                  showError(
+                    error instanceof Error
+                      ? error.message
+                      : "Import học viên thất bại",
+                  );
                 } finally {
                   setIsSubmitting(false);
                 }
@@ -382,7 +398,12 @@ export function StudentList({ role }: StudentListProps): ReactElement {
           </Button>
         </Stack>
 
-        <Box sx={{ mt: 2.5 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          alignItems={{ sm: "center" }}
+          sx={{ mt: 2.5 }}
+        >
           <TextField
             placeholder="Tìm theo mã học sinh, họ tên hoặc số điện thoại..."
             value={search}
@@ -397,6 +418,7 @@ export function StudentList({ role }: StudentListProps): ReactElement {
               ),
             }}
             sx={{
+              flex: 1,
               maxWidth: 520,
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
@@ -404,7 +426,14 @@ export function StudentList({ role }: StudentListProps): ReactElement {
               },
             }}
           />
-        </Box>
+          <Button
+            variant="text"
+            onClick={() => setSearch("")}
+            disabled={!search}
+          >
+            Xóa tìm kiếm
+          </Button>
+        </Stack>
       </Paper>
 
       <Paper

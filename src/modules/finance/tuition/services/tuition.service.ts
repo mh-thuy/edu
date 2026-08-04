@@ -81,6 +81,10 @@ export class TuitionService {
         where: { id },
         include: {
           payments: { where: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
+          paymentAllocations: {
+            where: { paymentBatch: { status: PaymentBatchStatus.PENDING } },
+            select: { paymentBatch: { select: { batchNo: true } } },
+          },
         },
       });
       if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
@@ -88,6 +92,10 @@ export class TuitionService {
         throw new ConflictError("Khoản học phí đã thay đổi, vui lòng tải lại");
       if (current.payments.length)
         throw new ConflictError("Không thể sửa khoản học phí đã thanh toán");
+      if (current.paymentAllocations.length)
+        throw new ConflictError(
+          `Không thể sửa khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
+        );
       const finalAmount = current.originalAmount
         .sub(data.discountAmount ?? current.discountAmount)
         .add(data.additionalAmount ?? current.additionalAmount);
@@ -153,7 +161,7 @@ export class TuitionService {
       const pendingBatch = fee.paymentAllocations[0]?.paymentBatch.batchNo;
       if (pendingBatch)
         throw new ConflictError(
-          `Khoản học phí đang chờ thanh toán trong batch ${pendingBatch}`,
+          `Khoản học phí đang chờ thanh toán trong đợt ${pendingBatch}`,
         );
       const payment = await tx.tuitionPayment.create({
         data: {

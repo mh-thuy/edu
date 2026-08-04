@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Alert,
   Button,
+  Box,
   Chip,
   Divider,
   Paper,
@@ -30,6 +31,7 @@ type Fee = {
   student: { code: string; fullName: string; phone?: string | null };
   class: { code: string; name: string };
   items: Array<{ itemName: string; quantity: number; amount: number }>;
+  paymentAllocations?: Array<{ paymentBatch: { id: string; batchNo: string; status: string } }>;
   payments: Array<{
     id: string;
     paymentNo: string;
@@ -80,93 +82,144 @@ export function TuitionDetail({ id }: { id: string }) {
   if (error || !fee)
     return <Alert severity="error">{error || "Không tìm thấy học phí"}</Alert>;
   const paid = fee.status === "PAID";
+  const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
   const canPay =
-    !paid && fee.status !== "EXEMPTED" && fee.status !== "CANCELLED";
+    !paid &&
+    fee.status !== "EXEMPTED" &&
+    fee.status !== "CANCELLED" &&
+    !fee.paymentAllocations?.length;
   return (
     <Stack spacing={2}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-      >
-        <Stack>
-          <Typography variant="h5" fontWeight={700}>
-            Chi tiết học phí {fee.feeNo}
-          </Typography>
-          <Typography color="text.secondary">
-            Thông tin học viên, khoản phí và trạng thái thanh toán
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={1}>
-          <Button
-            component={Link}
-            href="/admin/tuition-fees"
-            variant="outlined"
+      <Paper sx={{ p: { xs: 2, md: 3 } }}>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            justifyContent="space-between"
+            gap={2}
           >
-            Quay lại
-          </Button>
-          {!paid && (
-            <Button
-              component={Link}
-              href={`/admin/tuition-fees/${id}/edit`}
-              variant="outlined"
-              startIcon={<EditOutlinedIcon />}
+            <Stack spacing={0.75}>
+              <Typography variant="h5" fontWeight={700}>
+                Chi tiết học phí
+              </Typography>
+              <Typography color="text.secondary">{fee.feeNo}</Typography>
+              <Chip
+                sx={{ alignSelf: "flex-start" }}
+                color={
+                  fee.status === "PAID"
+                    ? "success"
+                    : fee.status === "OVERDUE"
+                      ? "error"
+                      : "warning"
+                }
+                label={labels[fee.status]}
+              />
+            </Stack>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ alignItems: { xs: "stretch", sm: "center" }, flexWrap: "wrap" }}
             >
-              Chỉnh sửa
-            </Button>
+              {canPay && (
+                <Button
+                  component={Link}
+                  href={`/admin/tuition-fees/payment?tuitionFeeId=${id}`}
+                  variant="contained"
+                >
+                  Thanh toán học phí
+                </Button>
+              )}
+              {pendingBatch && (
+                <Button
+                  component="a"
+                  href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`}
+                  variant="outlined"
+                >
+                  Xuất thông báo
+                </Button>
+              )}
+              {!paid && !pendingBatch && (
+                <Button
+                  component={Link}
+                  href={`/admin/tuition-fees/${id}/edit`}
+                  variant="outlined"
+                  startIcon={<EditOutlinedIcon />}
+                >
+                  Chỉnh sửa
+                </Button>
+              )}
+              <Button component={Link} href="/admin/tuition-fees" variant="outlined">
+                Quay lại
+              </Button>
+            </Stack>
+          </Stack>
+          {pendingBatch && (
+            <Alert severity="warning">
+              Khoản phí đang chờ thanh toán trong đợt {pendingBatch.batchNo}. Không thể chỉnh sửa hoặc tạo thanh toán khác.
+            </Alert>
           )}
-          {canPay && (
-            <Button
-              component={Link}
-              href={`/admin/tuition-fees/payment?tuitionFeeId=${id}`}
-              variant="contained"
-            >
-              Thanh toán học phí
-            </Button>
-          )}
-        </Stack>
-      </Stack>
-      <Paper sx={{ p: 2 }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={4}>
-          <Info title="Học viên">
-            <Typography>
-              {fee.student.code} — {fee.student.fullName}
-            </Typography>
-            <Typography variant="body2">
-              SĐT: {fee.student.phone || "-"}
-            </Typography>
-          </Info>
-          <Info title="Lớp học">
-            {fee.class.code} — {fee.class.name}
-          </Info>
-          <Info title="Trạng thái">
-            <Chip
-              color={
-                fee.status === "PAID"
-                  ? "success"
-                  : fee.status === "OVERDUE"
-                    ? "error"
-                    : "warning"
-              }
-              label={labels[fee.status]}
-            />
-          </Info>
         </Stack>
       </Paper>
-      <Paper sx={{ p: 2, overflow: "auto" }}>
-        <Typography variant="h6">Chi tiết khoản phí</Typography>
+
+      <Paper sx={{ p: { xs: 2, md: 3 } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          gap={3}
+        >
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={4}>
+            <Info title="Học viên">
+              <Typography fontWeight={600}>
+                {fee.student.code} — {fee.student.fullName}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                SĐT: {fee.student.phone || "-"}
+              </Typography>
+            </Info>
+            <Info title="Lớp học">
+              <Typography fontWeight={600}>{fee.class.code}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {fee.class.name}
+              </Typography>
+            </Info>
+            <Info title="Hạn thanh toán">
+              <Typography fontWeight={600}>
+                {fee.dueDate
+                  ? new Date(fee.dueDate).toLocaleDateString("vi-VN")
+                  : "Chưa xác định"}
+              </Typography>
+            </Info>
+          </Stack>
+          <Box sx={{ minWidth: 220, textAlign: { xs: "left", md: "right" } }}>
+            <Typography variant="body2" color="text.secondary">
+              Tổng phải thanh toán
+            </Typography>
+            <Typography variant="h5" fontWeight={800} color="primary.main">
+              {Number(fee.finalAmount).toLocaleString("vi-VN")} VND
+            </Typography>
+          </Box>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: { xs: 2, md: 3 }, overflow: "auto" }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Chi tiết từng môn và khoản phí
+        </Typography>
         <Table size="small">
           <TableBody>
             {fee.items.map((item, index) => (
               <TableRow key={index}>
                 <TableCell>
-                  {item.itemName} × {Number(item.quantity)}
+                  {item.itemName}
+                  <Typography component="span" variant="body2" color="text.secondary">
+                    {` × ${Number(item.quantity)}`}
+                  </Typography>
                 </TableCell>
                 <TableCell align="right">
                   {Number(item.amount).toLocaleString("vi-VN")} VND
                 </TableCell>
               </TableRow>
             ))}
-            <TableRow>
+            <TableRow sx={{ "& td": { borderTop: 1, borderColor: "divider" } }}>
               <TableCell>Học phí gốc</TableCell>
               <TableCell align="right">
                 {Number(fee.originalAmount).toLocaleString("vi-VN")} VND
@@ -197,15 +250,9 @@ export function TuitionDetail({ id }: { id: string }) {
           </TableBody>
         </Table>
         <Divider sx={{ my: 2 }} />
-        <Typography>
-          Hạn thanh toán:{" "}
-          {fee.dueDate
-            ? new Date(fee.dueDate).toLocaleDateString("vi-VN")
-            : "Chưa xác định"}
-        </Typography>
       </Paper>
       <Paper sx={{ p: 2 }}>
-        <Typography variant="h6">Thông tin thanh toán</Typography>
+        <Typography variant="h6" sx={{ mb: 1 }}>Lịch sử thanh toán</Typography>
         {fee.payments.length ? (
           fee.payments.map((payment) => (
             <Stack
@@ -223,6 +270,7 @@ export function TuitionDetail({ id }: { id: string }) {
                 {payment.receipt && (
                   <Button
                     size="small"
+                    variant="outlined"
                     href={`/api/tuition-receipts/${payment.receipt.id}/pdf`}
                   >
                     Xuất biên lai

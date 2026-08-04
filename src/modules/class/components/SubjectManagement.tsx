@@ -122,6 +122,7 @@ export function SubjectManagement() {
             onChange={(event) => setSearch(event.target.value)}
             sx={{ minWidth: 280 }}
           />
+          <Button variant="text" onClick={() => setSearch("")} disabled={!search}>Xóa tìm kiếm</Button>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -160,6 +161,7 @@ export function SubjectManagement() {
                 <TableCell align="right">
                   <Button
                     size="small"
+                    variant="outlined"
                     startIcon={<EditOutlinedIcon />}
                     onClick={() => openEdit(item)}
                   >
@@ -225,7 +227,7 @@ export function SubjectManagement() {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
+          <Button variant="outlined" onClick={() => setDialogOpen(false)} disabled={saving}>
             Hủy
           </Button>
           <Button

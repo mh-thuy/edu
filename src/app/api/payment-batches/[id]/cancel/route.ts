@@ -13,6 +13,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const data = schema.parse(await request.json());
     return apiSuccess(await cancelPaymentBatch((await params).id, user.id, data.reason));
   } catch (error) {
-    return handleApiError(error, "Không thể hủy batch thanh toán");
+    return handleApiError(error, "Không thể hủy đợt thanh toán");
   }
 }

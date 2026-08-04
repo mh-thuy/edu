@@ -6,7 +6,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   try {
     const user = await requireApiRole(["ADMIN", "STAFF"]);
     if (user instanceof Response) return user;
-    const result = await generatePaymentBatchNoticePdf((await params).id);
+    const result = await generatePaymentBatchNoticePdf((await params).id, user.fullName);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `${inline ? "inline" : "attachment"}; filename=thong-bao-${result.batchNo}.pdf`, "Cache-Control": "no-store" } });
   } catch (error) {
