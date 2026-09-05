@@ -35,6 +35,7 @@ export interface Teacher {
   phone?: string;
   bankAccount?: string;
   specialty?: string;
+  commissionPercent: number;
   status: TeacherFormData["status"];
 }
 
@@ -61,6 +62,14 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
     headerName: "Chuyên môn",
     minWidth: 150,
     flex: 0.8,
+  },
+  {
+    field: "commissionPercent",
+    headerName: "Tỷ lệ trích",
+    minWidth: 110,
+    align: "right",
+    headerAlign: "right",
+    valueFormatter: (value) => `${Number(value ?? 0)}%`,
   },
   {
     field: "status",

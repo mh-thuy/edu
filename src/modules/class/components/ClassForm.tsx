@@ -61,12 +61,13 @@ export function ClassForm({
               helperText={
                 error?.message ??
                 (isEditing
-                  ? "Mã lớp được hệ thống tạo tự động"
-                  : "Mã lớp sẽ được hệ thống tạo tự động khi lưu")
+                  ? "Mã lớp không thể thay đổi khi chỉnh sửa"
+                  : "Nhập mã lớp duy nhất, ví dụ: ENG001")
               }
               fullWidth
-              placeholder="Tự động tạo khi lưu"
-              disabled
+              required={!isEditing}
+              placeholder="VD: ENG001"
+              disabled={isEditing}
               autoFocus
             />
           )}

@@ -17,6 +17,7 @@ function buildTeacherCreateInput(
     phone: data.phone || null,
     bankAccount: data.bankAccount || null,
     specialty: data.specialty || null,
+    commissionPercent: data.commissionPercent,
     status: data.status,
   };
 }
@@ -42,6 +43,9 @@ function buildTeacherUpdateInput(
     }),
     ...(data.specialty !== undefined && {
       specialty: data.specialty || null,
+    }),
+    ...(data.commissionPercent !== undefined && {
+      commissionPercent: data.commissionPercent,
     }),
     ...(data.status !== undefined && { status: data.status }),
   };

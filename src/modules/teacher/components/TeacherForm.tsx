@@ -36,6 +36,7 @@ export function TeacherForm({
       phone: defaultValues?.phone ?? "",
       bankAccount: defaultValues?.bankAccount ?? "",
       specialty: defaultValues?.specialty ?? "",
+      commissionPercent: defaultValues?.commissionPercent ?? 0,
       status: defaultValues?.status ?? "ACTIVE",
     },
   });
@@ -111,6 +112,24 @@ export function TeacherForm({
             )}
           />
         </Stack>
+
+        <Controller
+          name="commissionPercent"
+          control={control}
+          render={({ field, fieldState: { error } }) => (
+            <TextField
+              {...field}
+              label="Tỷ lệ trích (%)"
+              type="number"
+              inputProps={{ min: 0, max: 100, step: 0.01 }}
+              error={!!error}
+              helperText={error?.message ?? "Tỷ lệ dùng khi tính báo cáo tiền đã thu"}
+              fullWidth
+              size="small"
+              onChange={(event) => field.onChange(Number(event.target.value))}
+            />
+          )}
+        />
 
         <Controller
           name="status"

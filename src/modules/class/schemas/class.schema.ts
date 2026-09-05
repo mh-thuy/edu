@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const classCreateSchema = z.object({
-  code: z.string().max(50).optional(),
+  code: z.string().trim().min(1, "Mã lớp là bắt buộc").max(50),
   name: z.string().min(1, "Class name is required").max(100),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),

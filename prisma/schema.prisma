@@ -217,6 +217,7 @@ model Teacher {
   phone       String?       @db.VarChar(50)
   bankAccount String?       @map("bank_account") @db.VarChar(100)
   specialty   String?       @db.VarChar(255)
+  commissionPercent Decimal  @default(0) @map("commission_percent") @db.Decimal(5, 2)
   status      TeacherStatus @default(ACTIVE)
   note        String?
 
@@ -224,9 +225,9 @@ model Teacher {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  user      User?           @relation(fields: [userId], references: [id], map: "fk_teachers_user")
+  user          User?           @relation(fields: [userId], references: [id], map: "fk_teachers_user")
   classSubjects ClassSubject[]
-  schedules ClassSchedule[]
+  schedules     ClassSchedule[]
 
   @@map("teachers")
 }
@@ -257,7 +258,7 @@ model Subject {
   id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code      String        @unique(map: "uq_subjects_code") @db.VarChar(50)
   name      String        @db.VarChar(255)
-  status    SubjectStatus  @default(ACTIVE)
+  status    SubjectStatus @default(ACTIVE)
   createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime?     @map("deleted_at") @db.Timestamptz(6)
@@ -269,22 +270,22 @@ model Subject {
 }
 
 model Class {
-  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code          String      @unique(map: "uq_classes_code") @db.VarChar(50)
-  name          String      @db.VarChar(255)
-  startDate     DateTime?   @map("start_date") @db.Date
-  endDate       DateTime?   @map("end_date") @db.Date
-  status        ClassStatus @default(DRAFT)
-  note          String?
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String      @unique(map: "uq_classes_code") @db.VarChar(50)
+  name      String      @db.VarChar(255)
+  startDate DateTime?   @map("start_date") @db.Date
+  endDate   DateTime?   @map("end_date") @db.Date
+  status    ClassStatus @default(DRAFT)
+  note      String?
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  students    ClassStudent[]
+  students      ClassStudent[]
   classSubjects ClassSubject[]
-  schedules   ClassSchedule[]
-  tuitionFees TuitionFee[]    @relation("TuitionFeeClass")
+  schedules     ClassSchedule[]
+  tuitionFees   TuitionFee[]    @relation("TuitionFeeClass")
 
   @@index([status], map: "idx_classes_status")
   @@map("classes")
@@ -303,9 +304,9 @@ model ClassStudent {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  class       Class        @relation(fields: [classId], references: [id], map: "fk_class_students_class")
-  student     Student      @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
-  tuitionFees TuitionFee[] @relation("TuitionFeeEnrollment")
+  class       Class               @relation(fields: [classId], references: [id], map: "fk_class_students_class")
+  student     Student             @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
+  tuitionFees TuitionFee[]        @relation("TuitionFeeEnrollment")
   subjects    EnrollmentSubject[]
 
   @@unique([classId, studentId], map: "uq_class_students_class_student")
@@ -328,12 +329,12 @@ model ClassSubject {
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt     DateTime?          @map("deleted_at") @db.Timestamptz(6)
 
-  class         Class              @relation(fields: [classId], references: [id], map: "fk_class_subjects_class")
-  subject       Subject            @relation(fields: [subjectId], references: [id], map: "fk_class_subjects_subject")
-  teacher       Teacher?           @relation(fields: [teacherId], references: [id], map: "fk_class_subjects_teacher")
-  enrollments   EnrollmentSubject[]
-  schedules     ClassSchedule[]
-  tuitionItems  TuitionFeeItem[]
+  class        Class               @relation(fields: [classId], references: [id], map: "fk_class_subjects_class")
+  subject      Subject             @relation(fields: [subjectId], references: [id], map: "fk_class_subjects_subject")
+  teacher      Teacher?            @relation(fields: [teacherId], references: [id], map: "fk_class_subjects_teacher")
+  enrollments  EnrollmentSubject[]
+  schedules    ClassSchedule[]
+  tuitionItems TuitionFeeItem[]
 
   @@unique([classId, subjectId], map: "uq_class_subjects_class_subject")
   @@index([classId], map: "idx_class_subjects_class_id")
@@ -343,14 +344,14 @@ model ClassSubject {
 }
 
 model EnrollmentSubject {
-  id                  String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  enrollmentId        String                  @map("enrollment_id") @db.Uuid
-  classSubjectId      String                  @map("class_subject_id") @db.Uuid
-  tuitionFeeOverride  Decimal?                @map("tuition_fee_override") @db.Decimal(15, 2)
-  status              EnrollmentSubjectStatus @default(ACTIVE)
-  enrolledAt          DateTime                @default(now()) @map("enrolled_at") @db.Timestamptz(6)
-  droppedAt           DateTime?               @map("dropped_at") @db.Timestamptz(6)
-  note                String?
+  id                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollmentId       String                  @map("enrollment_id") @db.Uuid
+  classSubjectId     String                  @map("class_subject_id") @db.Uuid
+  tuitionFeeOverride Decimal?                @map("tuition_fee_override") @db.Decimal(15, 2)
+  status             EnrollmentSubjectStatus @default(ACTIVE)
+  enrolledAt         DateTime                @default(now()) @map("enrolled_at") @db.Timestamptz(6)
+  droppedAt          DateTime?               @map("dropped_at") @db.Timestamptz(6)
+  note               String?
 
   enrollment   ClassStudent @relation(fields: [enrollmentId], references: [id], map: "fk_enrollment_subjects_enrollment")
   classSubject ClassSubject @relation(fields: [classSubjectId], references: [id], map: "fk_enrollment_subjects_class_subject")
@@ -362,22 +363,23 @@ model EnrollmentSubject {
 }
 
 model ClassSchedule {
-  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  classId     String  @map("class_id") @db.Uuid
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classId        String  @map("class_id") @db.Uuid
   classSubjectId String? @map("class_subject_id") @db.Uuid
-  teacherId   String  @map("teacher_id") @db.Uuid
-  dayOfWeek   Int     @map("day_of_week") @db.SmallInt
-  startMinute Int     @map("start_minute")
-  endMinute   Int     @map("end_minute")
-  note        String?
+  teacherId      String  @map("teacher_id") @db.Uuid
+  dayOfWeek      Int     @map("day_of_week") @db.SmallInt
+  startMinute    Int     @map("start_minute")
+  endMinute      Int     @map("end_minute")
+  note           String?
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  class       Class        @relation(fields: [classId], references: [id], map: "fk_class_schedules_class")
+  class        Class         @relation(fields: [classId], references: [id], map: "fk_class_schedules_class")
   classSubject ClassSubject? @relation(fields: [classSubjectId], references: [id], map: "fk_class_schedules_class_subject")
-  teacher     Teacher      @relation(fields: [teacherId], references: [id], map: "fk_class_schedules_teacher")
+  teacher      Teacher       @relation(fields: [teacherId], references: [id], map: "fk_class_schedules_teacher")
+
   @@index([classId], map: "idx_class_schedules_class_id")
   @@index([classSubjectId], map: "idx_class_schedules_class_subject_id")
   @@index([teacherId, dayOfWeek], map: "idx_class_schedules_teacher_day")
@@ -422,20 +424,20 @@ model TuitionFee {
 }
 
 model TuitionFeeItem {
-  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tuitionFeeId String             @map("tuition_fee_id") @db.Uuid
-  classSubjectId String?          @map("class_subject_id") @db.Uuid
-  itemType     TuitionFeeItemType @map("item_type")
-  itemName     String             @map("item_name") @db.VarChar(255)
-  quantity     Decimal            @default(1) @db.Decimal(10, 2)
-  unitPrice    Decimal            @default(0) @map("unit_price") @db.Decimal(15, 2)
-  amount       Decimal            @default(0) @db.Decimal(15, 2)
-  displayOrder Int                @default(0) @map("display_order")
-  note         String?
-  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tuitionFeeId   String             @map("tuition_fee_id") @db.Uuid
+  classSubjectId String?            @map("class_subject_id") @db.Uuid
+  itemType       TuitionFeeItemType @map("item_type")
+  itemName       String             @map("item_name") @db.VarChar(255)
+  quantity       Decimal            @default(1) @db.Decimal(10, 2)
+  unitPrice      Decimal            @default(0) @map("unit_price") @db.Decimal(15, 2)
+  amount         Decimal            @default(0) @db.Decimal(15, 2)
+  displayOrder   Int                @default(0) @map("display_order")
+  note           String?
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tuitionFee TuitionFee @relation(fields: [tuitionFeeId], references: [id])
+  tuitionFee   TuitionFee    @relation(fields: [tuitionFeeId], references: [id])
   classSubject ClassSubject? @relation(fields: [classSubjectId], references: [id], map: "fk_tuition_fee_items_class_subject")
 
   @@index([tuitionFeeId], map: "idx_tuition_fee_items_fee_id")

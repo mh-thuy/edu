@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { Prisma, type Class } from "@prisma/client";
-import { randomInt } from "node:crypto";
 import type {
   ClassCreate,
   ClassFilter,
@@ -25,20 +24,14 @@ function toNullableDate(value?: string): Date | undefined {
 
 function buildClassCreateInput(
   data: ClassCreate,
-  code: string,
 ): Prisma.ClassUncheckedCreateInput {
   return {
-    code,
+    code: data.code,
     name: data.name,
     startDate: toNullableDate(data.startDate),
     endDate: toNullableDate(data.endDate),
     status: data.status,
   };
-}
-
-function generateClassCode(): string {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  return `CLS-${date}-${randomInt(1000, 10000)}`;
 }
 
 function buildClassUpdateInput(
@@ -104,22 +97,20 @@ async function queryClassSubjects(
 }
 
 export async function createClass(data: ClassCreate): Promise<Class> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      return await prisma.class.create({
-        data: buildClassCreateInput(data, generateClassCode()),
-      });
-    } catch (error: unknown) {
-      if (
-        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-        error.code !== "P2002"
-      ) {
-        throw error;
-      }
+  try {
+    return await prisma.class.create({
+      data: buildClassCreateInput(data),
+    });
+  } catch (error: unknown) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new ConflictError("Mã lớp đã tồn tại");
     }
-  }
 
-  throw new ConflictError("Không thể tạo mã lớp tự động, vui lòng thử lại");
+    throw error;
+  }
 }
 
 export async function getClassById(

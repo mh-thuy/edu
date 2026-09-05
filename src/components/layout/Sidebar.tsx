@@ -11,6 +11,7 @@ import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 
 import {
   Box,
@@ -100,6 +101,12 @@ const items: SidebarItem[] = [
     label: "Đối soát ngân hàng",
     href: "/admin/bank-reconciliation",
     icon: <AccountBalanceOutlinedIcon fontSize="small" />,
+    roles: ["ADMIN", "STAFF"],
+  },
+  {
+    label: "Báo cáo",
+    href: "/admin/reports",
+    icon: <AssessmentOutlinedIcon fontSize="small" />,
     roles: ["ADMIN", "STAFF"],
   },
   {

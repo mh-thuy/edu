@@ -5,6 +5,11 @@ export const teacherCreateSchema = z.object({
   phone: z.string().optional(),
   bankAccount: z.string().optional(),
   specialty: z.string().optional(),
+  commissionPercent: z
+    .number()
+    .min(0, "Tỷ lệ không được âm")
+    .max(100, "Tỷ lệ không được vượt quá 100")
+    .default(0),
   status: z.enum(["ACTIVE", "INACTIVE"]).default("ACTIVE"),
 });
 
