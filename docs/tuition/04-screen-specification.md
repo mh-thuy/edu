@@ -5,6 +5,6 @@
 - Payment workspace: chọn fee từ chi tiết học phí, số tiền mặc định theo số còn nợ và read-only theo nghiệp vụ.
 - Receipt preview/print/cancel: một receipt cho payment, immutable snapshot.
 - Refund create/detail: full refund, approval/status.
-- Bank account, Excel sao kê BIDV/Techcombank phân tích tạm thời, candidates và xác nhận đối soát; không có lịch sử import chưa xác nhận.
+- Bank account, Excel sao kê BIDV/Techcombank phân tích tạm thời, đối soát theo mã đợt thanh toán và xác nhận; không có lịch sử import chưa xác nhận.
 
 Mọi màn hình cần loading, empty, error, permission, confirmation, chống double submit và pagination stable.

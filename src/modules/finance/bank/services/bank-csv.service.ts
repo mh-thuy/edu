@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import ExcelJS from "exceljs";
-import { Prisma, PaymentBatchStatus, TuitionFeeStatus, TuitionPaymentStatus } from "@prisma/client";
+import { Prisma, PaymentBatchStatus, TuitionPaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { completePaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
@@ -15,21 +15,7 @@ export type ParsedBankRow = {
   raw: string;
 };
 
-type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "AMBIGUOUS" | "IGNORED" | "DUPLICATED";
-type MatchMethod = "STUDENT_CODE" | "STUDENT_NAME" | "AMOUNT" | "PAYMENT_REFERENCE";
-
-type CandidateRecord = {
-  tuitionFeeId: string;
-  matchScore: number;
-  amountDifference: Prisma.Decimal;
-  tuitionFee: {
-    feeNo: string;
-    finalAmount: Prisma.Decimal;
-    status: TuitionFeeStatus;
-    student: { code: string; fullName: string };
-    class: { name: string };
-  };
-};
+type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "IGNORED" | "DUPLICATED";
 
 type ReconciliationTokenPayload = {
   version: 1;
@@ -43,7 +29,6 @@ type ReconciliationTokenPayload = {
   creditAmount: string;
   debitAmount: string;
   balanceAmount: string | null;
-  candidateTuitionFeeIds: string[];
   paymentBatchId: string | null;
 };
 
@@ -57,9 +42,6 @@ export type BankImportItem = {
   debitAmount: Prisma.Decimal;
   balanceAmount: Prisma.Decimal | null;
   reconciliationStatus: ReconciliationStatus;
-  matchScore: number | null;
-  matchMethod: MatchMethod | null;
-  candidates: CandidateRecord[];
   paymentBatch: {
     id: string;
     batchNo: string;
@@ -362,8 +344,6 @@ function verifyConfirmationToken(token: string): ReconciliationTokenPayload {
     typeof decoded.creditAmount !== "string" ||
     typeof decoded.debitAmount !== "string" ||
     (decoded.balanceAmount !== null && typeof decoded.balanceAmount !== "string") ||
-    !Array.isArray(decoded.candidateTuitionFeeIds) ||
-    !decoded.candidateTuitionFeeIds.every((id): id is string => typeof id === "string") ||
     (decoded.paymentBatchId !== null && typeof decoded.paymentBatchId !== "string")
   ) throw new ConflictError("Token đối soát không hợp lệ");
   return decoded as ReconciliationTokenPayload;
@@ -373,7 +353,6 @@ function createTokenPayload(
   bankAccountId: string,
   transactionHash: string,
   row: ParsedBankRow,
-  candidateTuitionFeeIds: string[],
   paymentBatchId: string | null,
 ): ReconciliationTokenPayload {
   return {
@@ -388,7 +367,6 @@ function createTokenPayload(
     creditAmount: row.amount.toString(),
     debitAmount: row.amount.isNegative() ? row.amount.abs().toString() : "0",
     balanceAmount: row.balance?.toString() ?? null,
-    candidateTuitionFeeIds,
     paymentBatchId,
   };
 }
@@ -430,23 +408,6 @@ export async function importBankStatement(args: {
   const amounts = [...new Set(creditRows.map((row) => row.amount.toString()))].map(
     (amount) => new Prisma.Decimal(amount),
   );
-  const fees = amounts.length
-    ? await prisma.tuitionFee.findMany({
-        where: {
-          status: { in: [TuitionFeeStatus.UNPAID, TuitionFeeStatus.OVERDUE] },
-          finalAmount: { in: amounts },
-        },
-        include: { student: true, class: true },
-      })
-    : [];
-  const feesByAmount = new Map<string, typeof fees>();
-  for (const fee of fees) {
-    const key = fee.finalAmount.toString();
-    const amountFees = feesByAmount.get(key) || [];
-    amountFees.push(fee);
-    feesByAmount.set(key, amountFees);
-  }
-
   const pendingBatches = amounts.length
     ? await prisma.paymentBatch.findMany({
         where: { status: PaymentBatchStatus.PENDING, totalAmount: { in: amounts } },
@@ -485,9 +446,6 @@ export async function importBankStatement(args: {
       debitAmount: isCredit ? new Prisma.Decimal(0) : row.amount.abs(),
       balanceAmount: row.balance,
       reconciliationStatus: (isCredit ? "UNMATCHED" : "IGNORED") as ReconciliationStatus,
-      matchScore: null,
-      matchMethod: null,
-      candidates: [] as CandidateRecord[],
       paymentBatch: null as BankImportItem["paymentBatch"],
     };
 
@@ -505,11 +463,9 @@ export async function importBankStatement(args: {
       items.push({
         ...baseItem,
         confirmationToken: createConfirmationToken(
-          createTokenPayload(args.bankAccountId, transactionHash, row, [], batch.id),
+          createTokenPayload(args.bankAccountId, transactionHash, row, batch.id),
         ),
         reconciliationStatus: "AUTO_MATCHED",
-        matchScore: 100,
-        matchMethod: "PAYMENT_REFERENCE",
         paymentBatch: {
           id: batch.id,
           batchNo: batch.batchNo,
@@ -524,52 +480,13 @@ export async function importBankStatement(args: {
       });
       continue;
     }
-
-    const candidates = (feesByAmount.get(row.amount.toString()) || [])
-      .map((fee) => {
-        const code = normalize(fee.student.code);
-        const name = normalize(fee.student.fullName);
-        const codeMatch = Boolean(code) && description.includes(code);
-        const nameMatch = Boolean(name) && description.includes(name);
-        const score = codeMatch && nameMatch ? 100 : codeMatch ? 90 : nameMatch ? 80 : 50;
-        return {
-          tuitionFeeId: fee.id,
-          matchScore: score,
-          amountDifference: new Prisma.Decimal(0),
-          tuitionFee: fee,
-          matchMethod: codeMatch ? ("STUDENT_CODE" as const) : nameMatch ? ("STUDENT_NAME" as const) : ("AMOUNT" as const),
-        };
-      })
-      .sort((left, right) => right.matchScore - left.matchScore)
-      .slice(0, 5);
-    const selected = candidates[0];
-    const status: ReconciliationStatus =
-      selected && selected.matchScore >= 80
-        ? candidates.length === 1 ? "AUTO_MATCHED" : "AMBIGUOUS"
-        : "UNMATCHED";
-    if (status === "AUTO_MATCHED") matchedRows += 1;
-    else unmatchedRows += 1;
+    unmatchedRows += 1;
 
     items.push({
       ...baseItem,
       confirmationToken: createConfirmationToken(
-        createTokenPayload(
-          args.bankAccountId,
-          transactionHash,
-          row,
-          candidates.map((candidate) => candidate.tuitionFeeId),
-          null,
-        ),
+        createTokenPayload(args.bankAccountId, transactionHash, row, null),
       ),
-      reconciliationStatus: status,
-      matchScore: selected?.matchScore ?? null,
-      matchMethod: selected?.matchMethod ?? null,
-      candidates: candidates.map((candidate) => ({
-        tuitionFeeId: candidate.tuitionFeeId,
-        matchScore: candidate.matchScore,
-        amountDifference: candidate.amountDifference,
-        tuitionFee: candidate.tuitionFee,
-      })),
     });
   }
 
@@ -584,108 +501,6 @@ export async function importBankStatement(args: {
     ignoredRows,
     items,
   };
-}
-
-function getDuplicatePaymentWhere(payload: ReconciliationTokenPayload): Prisma.TuitionPaymentWhereInput {
-  return {
-    paymentStatus: TuitionPaymentStatus.SUCCESS,
-    bankAccountId: payload.bankAccountId,
-    OR: [
-      { transactionReference: payload.transactionHash },
-      ...(payload.bankTransactionNo ? [{ bankTransactionNo: payload.bankTransactionNo }] : []),
-    ],
-  };
-}
-
-async function confirmSingleFee(
-  payload: ReconciliationTokenPayload,
-  tuitionFeeId: string,
-  actorId: string,
-) {
-  if (!payload.candidateTuitionFeeIds.includes(tuitionFeeId)) {
-    throw new ConflictError("Khoản học phí không thuộc danh sách ứng viên của giao dịch");
-  }
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`);
-    const existingPayment = await tx.tuitionPayment.findFirst({
-      where: getDuplicatePaymentWhere(payload),
-      include: { receipt: true },
-    });
-    if (existingPayment) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
-
-    const fee = await tx.tuitionFee.findUnique({
-      where: { id: tuitionFeeId },
-      include: {
-        student: true,
-        payments: { where: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
-      },
-    });
-    if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
-    if (fee.status === TuitionFeeStatus.CANCELLED) throw new ConflictError("TUITION_CANCELLED");
-    if (fee.status === TuitionFeeStatus.EXEMPTED) throw new ConflictError("TUITION_EXEMPTED");
-    if (fee.payments.length || fee.status === TuitionFeeStatus.PAID) throw new ConflictError("TUITION_ALREADY_PAID");
-    if (!new Prisma.Decimal(payload.creditAmount).equals(fee.finalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
-
-    const uniqueToken = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-    const payment = await tx.tuitionPayment.create({
-      data: {
-        paymentNo: `PAY-BANK-${uniqueToken}`,
-        tuitionFeeId: fee.id,
-        studentId: fee.studentId,
-        paymentDate: new Date(payload.transactionDate),
-        amount: fee.finalAmount,
-        paymentMethod: "BANK_TRANSFER",
-        paymentStatus: TuitionPaymentStatus.SUCCESS,
-        bankAccountId: payload.bankAccountId,
-        bankTransactionNo: payload.bankTransactionNo,
-        transactionReference: payload.transactionHash,
-        paymentContent: payload.description,
-        receivedBy: actorId,
-        confirmedBy: actorId,
-        confirmedAt: new Date(),
-        createdBy: actorId,
-        updatedBy: actorId,
-      },
-    });
-    const receipt = await tx.tuitionReceipt.create({
-      data: {
-        receiptNo: `REC-BANK-${uniqueToken}`,
-        paymentId: payment.id,
-        issuedBy: actorId,
-        receiverName: fee.student.fullName,
-        amount: fee.finalAmount,
-      },
-    });
-    await tx.tuitionFee.update({
-      where: { id: fee.id },
-      data: { status: TuitionFeeStatus.PAID, version: { increment: 1 }, updatedBy: actorId },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "TUITION_PAYMENT",
-        entityId: payment.id,
-        action: "SUCCESS",
-        dataAfter: {
-          paymentId: payment.id,
-          tuitionFeeId: fee.id,
-          amount: fee.finalAmount.toString(),
-          receiptId: receipt.id,
-          bankTransactionHash: payload.transactionHash,
-        },
-        performedBy: actorId,
-      },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "TUITION_FEE",
-        entityId: fee.id,
-        action: "PAID",
-        dataAfter: { paymentId: payment.id, status: TuitionFeeStatus.PAID },
-        performedBy: actorId,
-      },
-    });
-    return { payment, receipt };
-  });
 }
 
 async function confirmPaymentBatch(
@@ -721,15 +536,10 @@ async function confirmPaymentBatch(
 
 export async function confirmBankReconciliation(args: {
   confirmationToken: string;
-  tuitionFeeId?: string;
-  batchId?: string;
+  batchId: string;
   actorId: string;
 }) {
-  if ((args.tuitionFeeId ? 1 : 0) + (args.batchId ? 1 : 0) !== 1) {
-    throw new ConflictError("Chọn đúng một khoản học phí hoặc một đợt thanh toán");
-  }
   const payload = verifyConfirmationToken(args.confirmationToken);
   if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
-  if (args.batchId) return confirmPaymentBatch(payload, args.batchId, args.actorId);
-  return confirmSingleFee(payload, args.tuitionFeeId!, args.actorId);
+  return confirmPaymentBatch(payload, args.batchId, args.actorId);
 }

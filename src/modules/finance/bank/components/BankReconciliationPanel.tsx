@@ -29,18 +29,6 @@ type Account = {
   accountNo: string;
   accountName: string;
 };
-type Candidate = {
-  tuitionFeeId: string;
-  matchScore: number;
-  amountDifference: number;
-  tuitionFee?: {
-    feeNo: string;
-    finalAmount: number;
-    status: string;
-    student: { code: string; fullName: string };
-    class: { name: string };
-  };
-};
 type Batch = {
   id: string;
   batchNo: string;
@@ -61,7 +49,6 @@ type Transaction = {
   creditAmount: number;
   debitAmount: number;
   reconciliationStatus: string;
-  candidates: Candidate[];
   paymentBatch?: Batch | null;
 };
 type ImportResult = {
@@ -75,7 +62,7 @@ type ImportResult = {
   items: Transaction[];
 };
 type PendingConfirmation = {
-  body: { confirmationToken: string; tuitionFeeId?: string; batchId?: string };
+  body: { confirmationToken: string; batchId: string };
   title: string;
   message: string;
 };
@@ -86,12 +73,10 @@ const steps = ["Chọn tài khoản và file", "Phân tích", "Đối soát"];
 const reconciliationLabels: Record<string, string> = {
   AUTO_MATCHED: "Tự động khớp",
   UNMATCHED: "Chưa khớp",
-  AMBIGUOUS: "Khớp nhiều ứng viên",
 };
 const reconciliationColors: Record<string, "default" | "warning" | "info"> = {
   AUTO_MATCHED: "info",
   UNMATCHED: "warning",
-  AMBIGUOUS: "warning",
 };
 
 export function BankReconciliationPanel() {
@@ -168,7 +153,7 @@ export function BankReconciliationPanel() {
 
   function requestConfirm(
     item: Transaction,
-    selection: { tuitionFeeId?: string; batchId?: string },
+    selection: { batchId: string },
     title: string,
     message: string,
   ) {
@@ -349,38 +334,8 @@ export function BankReconciliationPanel() {
                         Xác nhận đợt thanh toán
                       </Button>
                     </Box>
-                  ) : item.candidates.length ? (
-                    item.candidates.map((candidate) => (
-                      <Box key={candidate.tuitionFeeId} sx={{ mb: 1 }}>
-                        <Typography variant="body2">
-                          {candidate.tuitionFee?.student.code} —{" "}
-                          {candidate.tuitionFee?.student.fullName} ·{" "}
-                          {money(
-                            Number(candidate.tuitionFee?.finalAmount || 0),
-                          )}{" "}
-                          VND
-                        </Typography>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={
-                            loading || candidate.tuitionFee?.status === "PAID"
-                          }
-                          onClick={() =>
-                            requestConfirm(
-                              item,
-                              { tuitionFeeId: candidate.tuitionFeeId },
-                              "Xác nhận đối soát",
-                              "Xác nhận giao dịch này và tạo thanh toán/biên lai?",
-                            )
-                          }
-                        >
-                          Xác nhận khớp chính xác
-                        </Button>
-                      </Box>
-                    ))
                   ) : (
-                    "Chưa có ứng viên"
+                    "Không tìm thấy mã đợt thanh toán trong nội dung chuyển khoản"
                   )}
                 </TableCell>
               </TableRow>
