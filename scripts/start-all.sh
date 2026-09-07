@@ -1,4 +1,3 @@
-```bash
 #!/bin/bash
 set -e
 
@@ -33,14 +32,8 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v git >/dev/null 2>&1; then
-  echo "ERROR: git not found"
-  exit 1
-fi
-
 echo "Node: $(node -v)"
 echo "NPM : $(npm -v)"
-echo "Git : $(git --version)"
 
 # Không cho chạy trùng
 if [ -f "$PID_FILE" ]; then
@@ -56,19 +49,12 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo ""
-echo "Pulling latest source..."
-git pull
-
-echo ""
 echo "Installing dependencies..."
 npm install
 
-echo ""
 echo "Building Edu..."
 npm run build
 
-echo ""
 echo "Starting Edu in background..."
 
 nohup npm run start >> "$LOG_FILE" 2>&1 </dev/null &
@@ -76,6 +62,7 @@ nohup npm run start >> "$LOG_FILE" 2>&1 </dev/null &
 APP_PID=$!
 echo "$APP_PID" > "$PID_FILE"
 
+# Kiểm tra process có chết ngay sau khi start không
 sleep 2
 
 if ! kill -0 "$APP_PID" >/dev/null 2>&1; then
@@ -96,4 +83,3 @@ echo "Log: $LOG_FILE"
 echo ""
 echo "View log:"
 echo "tail -f $LOG_FILE"
-```
