@@ -377,8 +377,8 @@ async function main() {
   await cleanup();
 
   const { adminUser, teacherUser } = await seedAuth();
-  const { teachers, students } = await seedMasters(teacherUser.id);
-  const classes = await seedClasses(teachers, students);
+  // const { teachers, students } = await seedMasters(teacherUser.id);
+  // const classes = await seedClasses(teachers, students);
   await seedBankAccounts(adminUser.id);
 
   console.log("Seed completed.");
