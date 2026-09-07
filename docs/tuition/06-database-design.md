@@ -2,7 +2,9 @@
 
 Các aggregate mới:
 
-`tuition_fees`, `tuition_fee_items`, `tuition_adjustments`, `payments`, `payment_refunds`, `receipts`, `tuition_notices`, `tuition_notice_items`, `tuition_notice_deliveries`, `bank_accounts`, `bank_csv_mappings`, `bank_statement_imports`, `bank_statement_transactions`, `bank_statement_match_candidates`, `audit_logs`.
+`tuition_fees`, `tuition_fee_items`, `tuition_adjustments`, `payments`, `payment_refunds`, `receipts`, `tuition_notices`, `tuition_notice_items`, `tuition_notice_deliveries`, `bank_accounts`, `audit_logs`.
+
+Sao kê CSV và ứng viên đối soát là dữ liệu tạm trong bộ nhớ, không có bảng lưu trữ riêng. Thông tin ngân hàng của giao dịch chỉ được lưu trên payment/payment batch sau khi xác nhận thành công.
 
 `payments` cần partial unique index:
 

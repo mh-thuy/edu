@@ -1,3 +1,3 @@
 # Statement import
 
-Import cần wizard upload → cấu hình → mapping → preview → validation → import → result. Preview phải có credit/debit, duplicate, invalid và danh sách lỗi tải xuống. Debit không được tạo payment.
+Import gồm upload → phân tích trong bộ nhớ → hiển thị candidates → xác nhận đối soát. Không lưu file, import record hoặc transaction chưa xác nhận. Debit không được tạo payment.

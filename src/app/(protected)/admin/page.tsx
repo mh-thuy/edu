@@ -23,7 +23,6 @@ interface DashboardStats {
   activeStudents: number;
   overdueFees: number;
   pendingBatches: number;
-  unmatchedTransactions: number;
 }
 
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
@@ -72,9 +71,8 @@ export default function AdminPage() {
         <StatCard icon={<GroupIcon />} title="Học viên hoạt động" value={String(stats?.activeStudents || 0)} subtitle="Đang theo học" loading={loading} color="primary" />
         <StatCard icon={<WarningAmberIcon />} title="Học phí quá hạn" value={String(stats?.overdueFees || 0)} subtitle="Khoản cần nhắc thu" loading={loading} color="warning" />
         <StatCard icon={<AccountBalanceWalletIcon />} title="Đợt thanh toán chờ đối soát" value={String(stats?.pendingBatches || 0)} subtitle="Chuyển khoản đang chờ" loading={loading} color="warning" />
-        <StatCard icon={<AccountBalanceIcon />} title="Giao dịch chưa khớp" value={String(stats?.unmatchedTransactions || 0)} subtitle="Cần kiểm tra ngân hàng" loading={loading} color="error" />
       </Box>
-      <Card><CardContent><Typography variant="h6" gutterBottom>Công việc cần xử lý</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/bank-reconciliation" label={`Đối soát ngân hàng (${stats?.unmatchedTransactions || 0})`} icon={<AccountBalanceIcon />} /><QuickLink href="/admin/tuition-fees/payment-history" label={`Đợt thanh toán chờ xử lý (${stats?.pendingBatches || 0})`} icon={<PaymentIcon />} /><QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees || 0})`} icon={<WarningAmberIcon />} /></Stack></CardContent></Card>
+      <Card><CardContent><Typography variant="h6" gutterBottom>Công việc cần xử lý</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/bank-reconciliation" label="Đối soát ngân hàng" icon={<AccountBalanceIcon />} /><QuickLink href="/admin/tuition-fees/payment-history" label={`Đợt thanh toán chờ xử lý (${stats?.pendingBatches || 0})`} icon={<PaymentIcon />} /><QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees || 0})`} icon={<WarningAmberIcon />} /></Stack></CardContent></Card>
       <Card><CardContent><Typography variant="h6" gutterBottom>Thao tác nhanh</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap><QuickLink href="/admin/tuition-fees/payment" label="Thu học phí" icon={<PaymentIcon />} /><QuickLink href="/admin/bank-reconciliation" label="Import sao kê" icon={<AccountBalanceIcon />} /><QuickLink href="/admin/receipts" label="Xem biên lai" icon={<ReceiptIcon />} /></Stack></CardContent></Card>
     </Stack>
   </Container>;

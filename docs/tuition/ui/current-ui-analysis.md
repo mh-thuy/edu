@@ -21,7 +21,7 @@
 - Nút xác nhận còn mơ hồ và thiếu dialog xác nhận nghiệp vụ.
 - UI cũ chưa có danh sách học phí độc lập với bộ lọc trạng thái chuẩn.
 - Trạng thái được hiển thị trực tiếp bằng mã máy, chưa có nhãn và màu/ý nghĩa nhất quán.
-- Import/đối soát hiện là panel một bước; cần tiếp tục tách wizard/preview/validation.
+- Import/đối soát phân tích trong bộ nhớ; chỉ giữ kết quả tạm trong phiên làm việc và chỉ lưu payment/receipt sau xác nhận.
 
 ## Logic không còn sử dụng
 

@@ -334,7 +334,6 @@ export async function getPaymentBatchDetail(batchId: string) {
         include: { receipt: true },
         orderBy: { paymentDate: "asc" },
       },
-      transactions: true,
     },
   });
   if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
@@ -399,17 +398,6 @@ export async function cancelPaymentBatch(
       where: { id: batchId },
       data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
       include: { allocations: true, student: true },
-    });
-    await tx.bankStatementTransaction.updateMany({
-      where: { paymentBatchId: batchId, paymentId: null },
-      data: {
-        paymentBatchId: null,
-        matchedStudentId: null,
-        matchedTuitionFeeId: null,
-        matchScore: null,
-        matchMethod: null,
-        reconciliationStatus: "UNMATCHED",
-      },
     });
     await tx.tuitionAuditLog.create({
       data: {

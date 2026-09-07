@@ -126,48 +126,6 @@ enum PaymentBatchStatus {
   @@map("payment_batch_status")
 }
 
-enum BankImportStatus {
-  UPLOADED
-  VALIDATING
-  VALIDATED
-  PROCESSING
-  COMPLETED
-  PARTIALLY_COMPLETED
-  FAILED
-  CANCELLED
-
-  @@map("bank_import_status")
-}
-
-enum BankReconciliationStatus {
-  IMPORTED
-  AUTO_MATCHED
-  MANUAL_MATCHED
-  CONFIRMED
-  UNMATCHED
-  AMBIGUOUS
-  DUPLICATED
-  AMOUNT_MISMATCH
-  IGNORED
-  REVERSED
-  ERROR
-
-  @@map("bank_reconciliation_status")
-}
-
-enum BankMatchMethod {
-  TUITION_FEE_NO
-  STUDENT_CODE
-  PAYMENT_REFERENCE
-  PHONE_NUMBER
-  STUDENT_NAME
-  PARENT_NAME
-  AMOUNT
-  MANUAL
-
-  @@map("bank_match_method")
-}
-
 model User {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email        String     @unique(map: "uq_users_email") @db.VarChar(255)
@@ -508,7 +466,6 @@ model PaymentBatch {
   bankAccount  BankAccount?               @relation(fields: [bankAccountId], references: [id])
   allocations  PaymentAllocation[]
   payments     TuitionPayment[]
-  transactions BankStatementTransaction[]
   receipt      PaymentBatchReceipt?
 
   @@index([studentId], map: "idx_payment_batches_student_id")
@@ -580,101 +537,10 @@ model BankAccount {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  imports        BankStatementImport[]
   paymentBatches PaymentBatch[]
 
   @@unique([bankCode, accountNo], map: "uq_bank_accounts_bank_account")
   @@map("bank_accounts")
-}
-
-model BankStatementImport {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bankAccountId  String           @map("bank_account_id") @db.Uuid
-  fileName       String           @map("file_name") @db.VarChar(255)
-  fileUrl        String           @map("file_url")
-  fileHash       String           @map("file_hash") @db.VarChar(128)
-  encoding       String           @db.VarChar(50)
-  delimiter      String           @db.VarChar(5)
-  dateFormat     String           @map("date_format") @db.VarChar(50)
-  totalRows      Int              @default(0) @map("total_rows")
-  validRows      Int              @default(0) @map("valid_rows")
-  invalidRows    Int              @default(0) @map("invalid_rows")
-  duplicatedRows Int              @default(0) @map("duplicated_rows")
-  matchedRows    Int              @default(0) @map("matched_rows")
-  unmatchedRows  Int              @default(0) @map("unmatched_rows")
-  importStatus   BankImportStatus @default(UPLOADED) @map("import_status")
-  errorMessage   String?          @map("error_message")
-  importedBy     String           @map("imported_by") @db.Uuid
-  importedAt     DateTime         @default(now()) @map("imported_at") @db.Timestamptz(6)
-  confirmedBy    String?          @map("confirmed_by") @db.Uuid
-  confirmedAt    DateTime?        @map("confirmed_at") @db.Timestamptz(6)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  bankAccount  BankAccount                @relation(fields: [bankAccountId], references: [id])
-  transactions BankStatementTransaction[]
-
-  @@unique([bankAccountId, fileHash], map: "uq_bank_statement_imports_file")
-  @@map("bank_statement_imports")
-}
-
-model BankStatementTransaction {
-  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  statementImportId    String                   @map("statement_import_id") @db.Uuid
-  bankAccountId        String                   @map("bank_account_id") @db.Uuid
-  rowNo                Int                      @map("row_no")
-  bankTransactionNo    String?                  @map("bank_transaction_no") @db.VarChar(255)
-  transactionDate      DateTime                 @map("transaction_date") @db.Timestamptz(6)
-  valueDate            DateTime?                @map("value_date") @db.Timestamptz(6)
-  description          String?
-  senderName           String?                  @map("sender_name") @db.VarChar(255)
-  senderAccountNo      String?                  @map("sender_account_no") @db.VarChar(100)
-  senderBankCode       String?                  @map("sender_bank_code") @db.VarChar(50)
-  creditAmount         Decimal                  @default(0) @map("credit_amount") @db.Decimal(15, 2)
-  debitAmount          Decimal                  @default(0) @map("debit_amount") @db.Decimal(15, 2)
-  balanceAmount        Decimal?                 @map("balance_amount") @db.Decimal(15, 2)
-  currencyCode         String                   @default("VND") @map("currency_code") @db.VarChar(10)
-  transactionHash      String                   @map("transaction_hash") @db.VarChar(128)
-  reconciliationStatus BankReconciliationStatus @default(IMPORTED) @map("reconciliation_status")
-  matchScore           Decimal?                 @map("match_score") @db.Decimal(5, 2)
-  matchMethod          BankMatchMethod?         @map("match_method")
-  matchedStudentId     String?                  @map("matched_student_id") @db.Uuid
-  matchedTuitionFeeId  String?                  @map("matched_tuition_fee_id") @db.Uuid
-  matchedNoticeId      String?                  @map("matched_notice_id") @db.Uuid
-  paymentId            String?                  @map("payment_id") @db.Uuid
-  paymentBatchId       String?                  @map("payment_batch_id") @db.Uuid
-  errorCode            String?                  @map("error_code") @db.VarChar(100)
-  errorMessage         String?                  @map("error_message")
-  confirmedBy          String?                  @map("confirmed_by") @db.Uuid
-  confirmedAt          DateTime?                @map("confirmed_at") @db.Timestamptz(6)
-  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  statementImport BankStatementImport           @relation(fields: [statementImportId], references: [id])
-  paymentBatch    PaymentBatch?                 @relation(fields: [paymentBatchId], references: [id])
-  candidates      BankStatementMatchCandidate[]
-
-  @@unique([bankAccountId, transactionHash], map: "uq_bank_statement_transactions_hash")
-  @@index([transactionDate], map: "idx_bank_statement_transactions_date")
-  @@index([reconciliationStatus], map: "idx_bank_statement_transactions_status")
-  @@map("bank_statement_transactions")
-}
-
-model BankStatementMatchCandidate {
-  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  statementTransactionId String          @map("statement_transaction_id") @db.Uuid
-  studentId              String          @map("student_id") @db.Uuid
-  tuitionFeeId           String          @map("tuition_fee_id") @db.Uuid
-  matchMethod            BankMatchMethod @map("match_method")
-  matchScore             Decimal         @map("match_score") @db.Decimal(5, 2)
-  matchedReference       String?         @map("matched_reference") @db.VarChar(255)
-  amountDifference       Decimal         @default(0) @map("amount_difference") @db.Decimal(15, 2)
-  isSelected             Boolean         @default(false) @map("is_selected")
-  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  statementTransaction BankStatementTransaction @relation(fields: [statementTransactionId], references: [id])
-
-  @@index([statementTransactionId], map: "idx_bank_match_candidates_transaction_id")
-  @@map("bank_statement_match_candidates")
 }
 
 model TuitionAuditLog {

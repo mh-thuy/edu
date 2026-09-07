@@ -1,10 +1,6 @@
 import crypto from "node:crypto";
-import {
-  Prisma,
-  BankImportStatus,
-  BankReconciliationStatus,
-  BankMatchMethod,
-} from "@prisma/client";
+import ExcelJS from "exceljs";
+import { Prisma, PaymentBatchStatus, TuitionFeeStatus, TuitionPaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { completePaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
@@ -19,390 +15,631 @@ export type ParsedBankRow = {
   raw: string;
 };
 
+type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "AMBIGUOUS" | "IGNORED" | "DUPLICATED";
+type MatchMethod = "STUDENT_CODE" | "STUDENT_NAME" | "AMOUNT" | "PAYMENT_REFERENCE";
+
+type CandidateRecord = {
+  tuitionFeeId: string;
+  matchScore: number;
+  amountDifference: Prisma.Decimal;
+  tuitionFee: {
+    feeNo: string;
+    finalAmount: Prisma.Decimal;
+    status: TuitionFeeStatus;
+    student: { code: string; fullName: string };
+    class: { name: string };
+  };
+};
+
+type ReconciliationTokenPayload = {
+  version: 1;
+  expiresAt: number;
+  bankAccountId: string;
+  transactionHash: string;
+  rowNo: number;
+  transactionDate: string;
+  bankTransactionNo: string | null;
+  description: string;
+  creditAmount: string;
+  debitAmount: string;
+  balanceAmount: string | null;
+  candidateTuitionFeeIds: string[];
+  paymentBatchId: string | null;
+};
+
+export type BankImportItem = {
+  confirmationToken: string;
+  rowNo: number;
+  transactionDate: Date;
+  bankTransactionNo: string | null;
+  description: string;
+  creditAmount: Prisma.Decimal;
+  debitAmount: Prisma.Decimal;
+  balanceAmount: Prisma.Decimal | null;
+  reconciliationStatus: ReconciliationStatus;
+  matchScore: number | null;
+  matchMethod: MatchMethod | null;
+  candidates: CandidateRecord[];
+  paymentBatch: {
+    id: string;
+    batchNo: string;
+    totalAmount: Prisma.Decimal;
+    student: { code: string; fullName: string };
+    allocations: Array<{
+      tuitionFeeId: string;
+      amount: Prisma.Decimal;
+      tuitionFee: { feeNo: string };
+    }>;
+  } | null;
+};
+
+export type BankImportResult = {
+  fileName: string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  duplicatedRows: number;
+  matchedRows: number;
+  unmatchedRows: number;
+  ignoredRows: number;
+  items: BankImportItem[];
+};
+
 function parseMoney(value: string): Prisma.Decimal {
-  const normalized = value
-    .replace(/VND/gi, "")
-    .replace(/\s/g, "")
-    .replace(/,/g, "");
-  return new Prisma.Decimal(normalized || "0");
+  const normalized = value.replace(/VND/gi, "").replace(/\s/g, "").trim();
+  if (!normalized) return new Prisma.Decimal(0);
+
+  const lastComma = normalized.lastIndexOf(",");
+  const lastDot = normalized.lastIndexOf(".");
+  let numberValue = normalized;
+  if (lastComma >= 0 && lastDot >= 0) {
+    numberValue = lastComma > lastDot
+      ? normalized.replace(/\./g, "").replace(",", ".")
+      : normalized.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    const fractionLength = normalized.length - lastComma - 1;
+    numberValue = fractionLength <= 2 ? normalized.replace(",", ".") : normalized.replace(/,/g, "");
+  } else if ((normalized.match(/\./g) || []).length > 1) {
+    numberValue = normalized.replace(/\./g, "");
+  } else if (lastDot >= 0) {
+    const fractionLength = normalized.length - lastDot - 1;
+    numberValue = fractionLength <= 2 ? normalized : normalized.replace(/\./g, "");
+  }
+
+  try {
+    return new Prisma.Decimal(numberValue);
+  } catch {
+    throw new Error(`Số tiền không hợp lệ: ${value}`);
+  }
 }
 
 function parseDate(value: string): Date {
-  const match = value
-    .trim()
-    .match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (!match) throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
-  return new Date(
-    Date.UTC(
-      Number(match[3]),
-      Number(match[2]) - 1,
-      Number(match[1]),
-      Number(match[4] || 0),
-      Number(match[5] || 0),
-    ),
-  );
-}
-
-type CsvEncoding = "utf-8" | "windows-1252";
-
-function decodeCsvBuffer(buffer: Buffer): {
-  text: string;
-  encoding: CsvEncoding;
-} {
-  try {
-    return {
-      text: new TextDecoder("utf-8", { fatal: true })
-        .decode(buffer)
-        .replace(/^\uFEFF/, ""),
-      encoding: "utf-8",
-    };
-  } catch {
-    return {
-      text: new TextDecoder("windows-1252")
-        .decode(buffer)
-        .replace(/^\uFEFF/, ""),
-      encoding: "windows-1252",
-    };
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const hour = Number(match[4] || 0);
+  const minute = Number(match[5] || 0);
+  const second = Number(match[6] || 0);
+  const result = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (
+    result.getUTCFullYear() !== year ||
+    result.getUTCMonth() !== month - 1 ||
+    result.getUTCDate() !== day ||
+    result.getUTCHours() !== hour ||
+    result.getUTCMinutes() !== minute ||
+    result.getUTCSeconds() !== second
+  ) {
+    throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
   }
-}
-
-type CsvDelimiter = "," | ";" | "\t";
-
-function countDelimiter(line: string, delimiter: CsvDelimiter): number {
-  let count = 0;
-  let quoted = false;
-
-  for (const char of line) {
-    if (char === '"') quoted = !quoted;
-    else if (char === delimiter && !quoted) count += 1;
-  }
-
-  return count;
-}
-
-function detectDelimiter(line: string): CsvDelimiter {
-  const delimiters: CsvDelimiter[] = [",", ";", "\t"];
-  return delimiters.reduce(
-    (selected, delimiter) =>
-      countDelimiter(line, delimiter) > countDelimiter(line, selected)
-        ? delimiter
-        : selected,
-    ",",
-  );
-}
-
-function parseLine(line: string, delimiter: CsvDelimiter): string[] {
-  const result: string[] = [];
-  let value = "";
-  let quoted = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    if (char === '"') {
-      quoted = !quoted;
-      continue;
-    }
-    if (char === delimiter && !quoted) {
-      result.push(value.trim());
-      value = "";
-      continue;
-    }
-    value += char;
-  }
-  result.push(value.trim());
   return result;
 }
 
-export function parseBankCsv(buffer: Buffer): ParsedBankRow[] {
-  const { text } = decodeCsvBuffer(buffer);
-  const lines = text.split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) throw new Error("CSV không có dữ liệu giao dịch");
-  const delimiter = detectDelimiter(lines[0]!);
-  const rows: ParsedBankRow[] = [];
-  for (let index = 1; index < lines.length; index += 1) {
-    const columns = parseLine(lines[index]!, delimiter);
-    if (columns.length < 5) continue;
-    const amount = parseMoney(columns[2]!);
-    rows.push({
-      rowNo: index + 1,
-      transactionDate: parseDate(columns[0]!),
-      description: columns[1]!,
-      amount,
-      balance: columns[3] ? parseMoney(columns[3]!) : null,
-      transactionNo: columns[4] || null,
-      raw: lines[index]!,
-    });
+type BidvTableColumns = {
+  date: number;
+  description: number;
+  amount: number;
+  balance: number;
+  transactionNo: number;
+};
+
+type TechcombankTableColumns = {
+  date: number;
+  description: number;
+  detail: number;
+  debit: number;
+  credit: number;
+  balance: number;
+};
+
+function findBidvTableHeader(worksheet: ExcelJS.Worksheet) {
+  let header: { rowNumber: number; columns: BidvTableColumns } | null = null;
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (header) return;
+    const cells = Array.from({ length: Math.max(row.cellCount, 5) }, (_, index) =>
+      normalize(row.getCell(index + 1).text),
+    );
+    const findColumn = (name: string) => cells.findIndex((cell) => cell === name) + 1;
+    const columns = {
+      date: findColumn("ngay giao dich"),
+      description: findColumn("noi dung giao dich"),
+      amount: findColumn("so tien"),
+      balance: findColumn("so du"),
+      transactionNo: findColumn("ma giao dich"),
+    };
+    if (Object.values(columns).every((column) => column > 0)) {
+      header = { rowNumber, columns };
+    }
+  });
+  return header;
+}
+
+function parseExcelDate(value: unknown, text: string): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Date(value.getTime());
   }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(text)) return parseDate(text);
+  const result = new Date(text);
+  if (Number.isNaN(result.getTime())) throw new Error(`Ngày giao dịch không hợp lệ: ${text}`);
+  return result;
+}
+
+function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: number; columns: BidvTableColumns }) {
+  const rows: ParsedBankRow[] = [];
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber <= header.rowNumber) return;
+    const dateCell = row.getCell(header.columns.date);
+    const dateText = dateCell.text.trim();
+    if (!dateText) return;
+    const amountText = row.getCell(header.columns.amount).text.trim();
+    if (!amountText) return;
+    rows.push({
+      rowNo: rowNumber,
+      transactionDate: parseExcelDate(dateCell.value, dateText),
+      description: row.getCell(header.columns.description).text.trim(),
+      amount: parseMoney(amountText),
+      balance: parseMoney(row.getCell(header.columns.balance).text),
+      transactionNo: row.getCell(header.columns.transactionNo).text.trim() || null,
+      raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
+    });
+  });
+  if (!rows.length) throw new Error("File Excel BIDV không có dữ liệu giao dịch");
   return rows;
 }
 
+function findTechcombankTableHeader(worksheet: ExcelJS.Worksheet) {
+  let header: { rowNumber: number; columns: TechcombankTableColumns } | null = null;
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (header) return;
+    const cells = Array.from({ length: Math.max(row.cellCount, 6) }, (_, index) =>
+      normalize(row.getCell(index + 1).text),
+    );
+    const findColumn = (name: string) => cells.findIndex((cell) => cell === name) + 1;
+    const columns = {
+      date: findColumn("ngay"),
+      description: findColumn("dien giai"),
+      detail: findColumn("chi tiet"),
+      debit: findColumn("no"),
+      credit: findColumn("co"),
+      balance: findColumn("so du"),
+    };
+    if (Object.values(columns).every((column) => column > 0)) {
+      header = { rowNumber, columns };
+    }
+  });
+  return header;
+}
+
+function parseTechcombankTable(
+  worksheet: ExcelJS.Worksheet,
+  header: { rowNumber: number; columns: TechcombankTableColumns },
+) {
+  const rows: ParsedBankRow[] = [];
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    if (rowNumber <= header.rowNumber) return;
+    const dateCell = row.getCell(header.columns.date);
+    const dateText = dateCell.text.trim();
+    if (!dateText) return;
+
+    const debitText = row.getCell(header.columns.debit).text.trim();
+    const creditText = row.getCell(header.columns.credit).text.trim();
+    if (!debitText && !creditText) return;
+    const debit = debitText ? parseMoney(debitText) : new Prisma.Decimal(0);
+    const credit = creditText ? parseMoney(creditText) : new Prisma.Decimal(0);
+    if (debit.greaterThan(0) && credit.greaterThan(0)) {
+      throw new Error(`Dòng ${rowNumber} trong file Techcombank có cả ghi nợ và ghi có`);
+    }
+    const detail = row.getCell(header.columns.detail).text.trim();
+    const description = [row.getCell(header.columns.description).text.trim(), detail]
+      .filter(Boolean)
+      .join(" | ");
+    rows.push({
+      rowNo: rowNumber,
+      transactionDate: parseExcelDate(dateCell.value, dateText),
+      description,
+      amount: credit.greaterThan(0) ? credit : debit.mul(-1),
+      balance: parseMoney(row.getCell(header.columns.balance).text),
+      transactionNo: detail || null,
+      raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
+    });
+  });
+  if (!rows.length) throw new Error("File Excel Techcombank không có dữ liệu giao dịch");
+  return rows;
+}
+
+export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRow[]> {
+  const workbook = new ExcelJS.Workbook();
+  const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
+  await workbook.xlsx.load(excelBuffer);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error("File Excel BIDV không có worksheet");
+
+  const tableHeader = findBidvTableHeader(worksheet);
+  if (!tableHeader) throw new Error("File Excel BIDV không đúng format bảng hiện tại");
+  return parseBidvTable(worksheet, tableHeader);
+}
+
+export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankRow[]> {
+  const workbook = new ExcelJS.Workbook();
+  const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
+  await workbook.xlsx.load(excelBuffer);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error("File Excel Techcombank không có worksheet");
+  const tableHeader = findTechcombankTableHeader(worksheet);
+  if (!tableHeader) throw new Error("Không tìm thấy bảng giao dịch trong file Excel Techcombank");
+  return parseTechcombankTable(worksheet, tableHeader);
+}
+
+async function parseBankStatement(buffer: Buffer, bankCode: string) {
+  switch (bankCode.trim().toUpperCase()) {
+    case "BIDV":
+      return parseBidvExcel(buffer);
+    case "TCB":
+    case "TECHCOMBANK":
+      return parseTechcombankExcel(buffer);
+    default:
+      throw new ConflictError(`Chưa hỗ trợ định dạng sao kê của ngân hàng ${bankCode}`);
+  }
+}
+
 function normalize(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
-  const legacyHash = crypto
-    .createHash("sha256")
-    .update(`${bankAccountId}:${row.raw}`)
-    .digest("hex");
   const identity = row.transactionNo?.trim()
     ? `${bankAccountId}:transaction-no:${row.transactionNo.trim()}`
     : `${bankAccountId}:row:${row.raw}`;
-  const transactionHash = crypto
-    .createHash("sha256")
-    .update(identity)
-    .digest("hex");
-  return { transactionHash, legacyHash };
+  const transactionHash = crypto.createHash("sha256").update(identity).digest("hex");
+  return { transactionHash };
 }
 
-export async function importBankCsv(args: {
+function getTokenSecret() {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 32) throw new Error("SESSION_SECRET must be set and at least 32 characters");
+  return secret;
+}
+
+function createConfirmationToken(payload: ReconciliationTokenPayload) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", getTokenSecret()).update(encodedPayload).digest("base64url");
+  return `${encodedPayload}.${signature}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function verifyConfirmationToken(token: string): ReconciliationTokenPayload {
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) throw new ConflictError("Token đối soát không hợp lệ");
+  const expected = crypto.createHmac("sha256", getTokenSecret()).update(encodedPayload).digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  ) throw new ConflictError("Token đối soát không hợp lệ");
+
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    throw new ConflictError("Token đối soát không hợp lệ");
+  }
+  if (
+    !isRecord(decoded) ||
+    decoded.version !== 1 ||
+    typeof decoded.expiresAt !== "number" ||
+    decoded.expiresAt < Date.now() ||
+    typeof decoded.bankAccountId !== "string" ||
+    typeof decoded.transactionHash !== "string" ||
+    typeof decoded.rowNo !== "number" ||
+    typeof decoded.transactionDate !== "string" ||
+    (decoded.bankTransactionNo !== null && typeof decoded.bankTransactionNo !== "string") ||
+    typeof decoded.description !== "string" ||
+    typeof decoded.creditAmount !== "string" ||
+    typeof decoded.debitAmount !== "string" ||
+    (decoded.balanceAmount !== null && typeof decoded.balanceAmount !== "string") ||
+    !Array.isArray(decoded.candidateTuitionFeeIds) ||
+    !decoded.candidateTuitionFeeIds.every((id): id is string => typeof id === "string") ||
+    (decoded.paymentBatchId !== null && typeof decoded.paymentBatchId !== "string")
+  ) throw new ConflictError("Token đối soát không hợp lệ");
+  return decoded as ReconciliationTokenPayload;
+}
+
+function createTokenPayload(
+  bankAccountId: string,
+  transactionHash: string,
+  row: ParsedBankRow,
+  candidateTuitionFeeIds: string[],
+  paymentBatchId: string | null,
+): ReconciliationTokenPayload {
+  return {
+    version: 1,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    bankAccountId,
+    transactionHash,
+    rowNo: row.rowNo,
+    transactionDate: row.transactionDate.toISOString(),
+    bankTransactionNo: row.transactionNo,
+    description: row.description,
+    creditAmount: row.amount.toString(),
+    debitAmount: row.amount.isNegative() ? row.amount.abs().toString() : "0",
+    balanceAmount: row.balance?.toString() ?? null,
+    candidateTuitionFeeIds,
+    paymentBatchId,
+  };
+}
+
+export async function importBankStatement(args: {
   buffer: Buffer;
   fileName: string;
-  fileUrl: string;
   bankAccountId: string;
-  actorId: string;
-}) {
-  const fileHash = crypto
-    .createHash("sha256")
-    .update(args.buffer)
-    .digest("hex");
-  const { text, encoding } = decodeCsvBuffer(args.buffer);
-  const firstLine = text.split(/\r?\n/).find((line) => line.trim());
-  if (!firstLine) throw new Error("CSV không có dữ liệu giao dịch");
-  const delimiter = detectDelimiter(firstLine);
-  const rows = parseBankCsv(args.buffer);
+}): Promise<BankImportResult> {
   const bank = await prisma.bankAccount.findUnique({
     where: { id: args.bankAccountId },
+    select: { id: true, isActive: true, bankCode: true },
   });
   if (!bank) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
-  const existing = await prisma.bankStatementImport.findUnique({
-    where: {
-      bankAccountId_fileHash: { bankAccountId: args.bankAccountId, fileHash },
-    },
-  });
-  if (existing) throw new ConflictError("File sao kê này đã được import");
+  if (!bank.isActive) throw new ConflictError("Tài khoản ngân hàng đã ngừng hoạt động");
+  const rows = await parseBankStatement(args.buffer, bank.bankCode);
 
-  return prisma.$transaction(async (tx) => {
-    const statement = await tx.bankStatementImport.create({
-      data: {
-        bankAccountId: args.bankAccountId,
-        fileName: args.fileName,
-        fileUrl: args.fileUrl,
-        fileHash,
-        encoding,
-        delimiter,
-        dateFormat: "d/M/yyyy HH:mm",
-        totalRows: rows.length,
-        validRows: rows.length,
-        invalidRows: 0,
-        duplicatedRows: 0,
-        importStatus: BankImportStatus.PROCESSING,
-        importedBy: args.actorId,
-      },
-    });
-    let matchedRows = 0;
-    let unmatchedRows = 0;
-    let duplicatedRows = 0;
-    const importedHashes = new Set<string>();
-    for (const row of rows) {
-      const { transactionHash, legacyHash } = getTransactionHashes(
-        args.bankAccountId,
-        row,
-      );
-      if (
-        importedHashes.has(transactionHash) ||
-        (await tx.bankStatementTransaction.findFirst({
-          where: {
-            bankAccountId: args.bankAccountId,
-            OR: [{ transactionHash }, { transactionHash: legacyHash }],
-          },
-          select: { id: true },
-        }))
-      ) {
-        duplicatedRows += 1;
-        continue;
-      }
-      importedHashes.add(transactionHash);
-      const isCredit = row.amount.greaterThan(0);
-      const fees = isCredit
-        ? await tx.tuitionFee.findMany({
-            where: {
-              status: { in: ["UNPAID", "OVERDUE"] },
-              finalAmount: row.amount,
-            },
-            include: { student: true },
-          })
-        : [];
-      const description = normalize(row.description);
-      const batches = isCredit
-        ? await tx.paymentBatch.findMany({
-            where: { status: "PENDING", totalAmount: row.amount },
-            include: {
-              allocations: { include: { tuitionFee: true } },
-              student: true,
-            },
-          })
-        : [];
-      const batch = batches.find((candidate) =>
-        description.includes(normalize(candidate.batchNo)),
-      );
-      if (batch) {
-        matchedRows += 1;
-        await tx.bankStatementTransaction.create({
-          data: {
-            statementImportId: statement.id,
-            bankAccountId: args.bankAccountId,
-            rowNo: row.rowNo,
-            bankTransactionNo: row.transactionNo,
-            transactionDate: row.transactionDate,
-            description: row.description,
-            creditAmount: row.amount,
-            debitAmount: 0,
-            balanceAmount: row.balance,
-            transactionHash,
-            reconciliationStatus: BankReconciliationStatus.AUTO_MATCHED,
-            matchScore: 100,
-            matchMethod: BankMatchMethod.PAYMENT_REFERENCE,
-            matchedStudentId: batch.studentId,
-            matchedTuitionFeeId: batch.allocations[0]?.tuitionFeeId,
-            paymentBatchId: batch.id,
-          },
-        });
-        continue;
-      }
-      const candidates = fees
-        .map((fee) => {
-          const code = normalize(fee.student.code);
-          const name = normalize(fee.student.fullName);
-          const codeMatch = description.includes(code);
-          const nameMatch = description.includes(name);
-          const score =
-            codeMatch && nameMatch ? 100 : codeMatch ? 90 : nameMatch ? 80 : 50;
-          return {
-            fee,
-            score,
-            method: codeMatch
-              ? BankMatchMethod.STUDENT_CODE
-              : nameMatch
-                ? BankMatchMethod.STUDENT_NAME
-                : BankMatchMethod.AMOUNT,
-          };
-        })
-        .sort((a, b) => b.score - a.score);
-      const selected = candidates[0];
-      const status = !isCredit
-        ? BankReconciliationStatus.IGNORED
-        : selected && selected.score >= 80
-          ? candidates.length === 1
-            ? BankReconciliationStatus.AUTO_MATCHED
-            : BankReconciliationStatus.AMBIGUOUS
-          : BankReconciliationStatus.UNMATCHED;
-      const selectedFee = selected?.fee;
-      if (status === BankReconciliationStatus.AUTO_MATCHED) matchedRows += 1;
-      else if (isCredit) unmatchedRows += 1;
-      const transaction = await tx.bankStatementTransaction.create({
-        data: {
-          statementImportId: statement.id,
-          bankAccountId: args.bankAccountId,
-          rowNo: row.rowNo,
-          bankTransactionNo: row.transactionNo,
-          transactionDate: row.transactionDate,
-          description: row.description,
-          creditAmount: isCredit ? row.amount : 0,
-          debitAmount: isCredit ? 0 : row.amount.abs(),
-          balanceAmount: row.balance,
-          transactionHash,
-          reconciliationStatus: status,
-          matchScore: selected?.score,
-          matchMethod: selected?.method,
-          matchedStudentId:
-            status === BankReconciliationStatus.AUTO_MATCHED && selectedFee
-              ? selectedFee.studentId
-              : undefined,
-          matchedTuitionFeeId:
-            status === BankReconciliationStatus.AUTO_MATCHED && selectedFee
-              ? selectedFee.id
-              : undefined,
+  const rowHashes = rows.map((row) => getTransactionHashes(args.bankAccountId, row));
+  const transactionHashes = rowHashes.map(({ transactionHash }) => transactionHash);
+  const transactionNumbers = rows
+    .map((row) => row.transactionNo?.trim())
+    .filter((value): value is string => Boolean(value));
+  const existingPayments = await prisma.tuitionPayment.findMany({
+    where: {
+      paymentStatus: TuitionPaymentStatus.SUCCESS,
+      bankAccountId: args.bankAccountId,
+      OR: [
+        { transactionReference: { in: transactionHashes } },
+        ...(transactionNumbers.length ? [{ bankTransactionNo: { in: transactionNumbers } }] : []),
+      ],
+    },
+    select: { transactionReference: true, bankTransactionNo: true },
+  });
+  const existingReferences = new Set(
+    existingPayments.flatMap((payment) => [payment.transactionReference, payment.bankTransactionNo]),
+  );
+
+  const creditRows = rows.filter((row) => row.amount.greaterThan(0));
+  const amounts = [...new Set(creditRows.map((row) => row.amount.toString()))].map(
+    (amount) => new Prisma.Decimal(amount),
+  );
+  const fees = amounts.length
+    ? await prisma.tuitionFee.findMany({
+        where: {
+          status: { in: [TuitionFeeStatus.UNPAID, TuitionFeeStatus.OVERDUE] },
+          finalAmount: { in: amounts },
+        },
+        include: { student: true, class: true },
+      })
+    : [];
+  const feesByAmount = new Map<string, typeof fees>();
+  for (const fee of fees) {
+    const key = fee.finalAmount.toString();
+    const amountFees = feesByAmount.get(key) || [];
+    amountFees.push(fee);
+    feesByAmount.set(key, amountFees);
+  }
+
+  const pendingBatches = amounts.length
+    ? await prisma.paymentBatch.findMany({
+        where: { status: PaymentBatchStatus.PENDING, totalAmount: { in: amounts } },
+        include: { student: true, allocations: { include: { tuitionFee: true } } },
+      })
+    : [];
+
+  const importedHashes = new Set<string>();
+  const items: BankImportItem[] = [];
+  let duplicatedRows = 0;
+  let matchedRows = 0;
+  let unmatchedRows = 0;
+  let ignoredRows = 0;
+
+  for (const [index, row] of rows.entries()) {
+    const { transactionHash } = rowHashes[index]!;
+    const transactionNumber = row.transactionNo?.trim() || null;
+    if (
+      importedHashes.has(transactionHash) ||
+      existingReferences.has(transactionHash) ||
+      (transactionNumber !== null && existingReferences.has(transactionNumber))
+    ) {
+      duplicatedRows += 1;
+      continue;
+    }
+    importedHashes.add(transactionHash);
+
+    const isCredit = row.amount.greaterThan(0);
+    const baseItem = {
+      confirmationToken: "",
+      rowNo: row.rowNo,
+      transactionDate: row.transactionDate,
+      bankTransactionNo: transactionNumber,
+      description: row.description,
+      creditAmount: isCredit ? row.amount : new Prisma.Decimal(0),
+      debitAmount: isCredit ? new Prisma.Decimal(0) : row.amount.abs(),
+      balanceAmount: row.balance,
+      reconciliationStatus: (isCredit ? "UNMATCHED" : "IGNORED") as ReconciliationStatus,
+      matchScore: null,
+      matchMethod: null,
+      candidates: [] as CandidateRecord[],
+      paymentBatch: null as BankImportItem["paymentBatch"],
+    };
+
+    if (!isCredit) {
+      ignoredRows += 1;
+      continue;
+    }
+
+    const description = normalize(row.description);
+    const batch = pendingBatches.find(
+      (candidate) => candidate.totalAmount.equals(row.amount) && description.includes(normalize(candidate.batchNo)),
+    );
+    if (batch) {
+      matchedRows += 1;
+      items.push({
+        ...baseItem,
+        confirmationToken: createConfirmationToken(
+          createTokenPayload(args.bankAccountId, transactionHash, row, [], batch.id),
+        ),
+        reconciliationStatus: "AUTO_MATCHED",
+        matchScore: 100,
+        matchMethod: "PAYMENT_REFERENCE",
+        paymentBatch: {
+          id: batch.id,
+          batchNo: batch.batchNo,
+          totalAmount: batch.totalAmount,
+          student: batch.student,
+          allocations: batch.allocations.map((allocation) => ({
+            tuitionFeeId: allocation.tuitionFeeId,
+            amount: allocation.amount,
+            tuitionFee: { feeNo: allocation.tuitionFee.feeNo },
+          })),
         },
       });
-      for (const candidate of candidates.slice(0, 5))
-        await tx.bankStatementMatchCandidate.create({
-          data: {
-            statementTransactionId: transaction.id,
-            studentId: candidate.fee.studentId,
-            tuitionFeeId: candidate.fee.id,
-            matchMethod: candidate.method,
-            matchScore: candidate.score,
-            amountDifference: 0,
-            isSelected:
-              status === BankReconciliationStatus.AUTO_MATCHED && selectedFee
-                ? candidate.fee.id === selectedFee.id
-                : false,
-          },
-        });
+      continue;
     }
-    return tx.bankStatementImport.update({
-      where: { id: statement.id },
-      data: {
-        matchedRows,
-        unmatchedRows,
-        duplicatedRows,
-        importStatus: BankImportStatus.COMPLETED,
-      },
-      include: { transactions: true },
+
+    const candidates = (feesByAmount.get(row.amount.toString()) || [])
+      .map((fee) => {
+        const code = normalize(fee.student.code);
+        const name = normalize(fee.student.fullName);
+        const codeMatch = Boolean(code) && description.includes(code);
+        const nameMatch = Boolean(name) && description.includes(name);
+        const score = codeMatch && nameMatch ? 100 : codeMatch ? 90 : nameMatch ? 80 : 50;
+        return {
+          tuitionFeeId: fee.id,
+          matchScore: score,
+          amountDifference: new Prisma.Decimal(0),
+          tuitionFee: fee,
+          matchMethod: codeMatch ? ("STUDENT_CODE" as const) : nameMatch ? ("STUDENT_NAME" as const) : ("AMOUNT" as const),
+        };
+      })
+      .sort((left, right) => right.matchScore - left.matchScore)
+      .slice(0, 5);
+    const selected = candidates[0];
+    const status: ReconciliationStatus =
+      selected && selected.matchScore >= 80
+        ? candidates.length === 1 ? "AUTO_MATCHED" : "AMBIGUOUS"
+        : "UNMATCHED";
+    if (status === "AUTO_MATCHED") matchedRows += 1;
+    else unmatchedRows += 1;
+
+    items.push({
+      ...baseItem,
+      confirmationToken: createConfirmationToken(
+        createTokenPayload(
+          args.bankAccountId,
+          transactionHash,
+          row,
+          candidates.map((candidate) => candidate.tuitionFeeId),
+          null,
+        ),
+      ),
+      reconciliationStatus: status,
+      matchScore: selected?.matchScore ?? null,
+      matchMethod: selected?.matchMethod ?? null,
+      candidates: candidates.map((candidate) => ({
+        tuitionFeeId: candidate.tuitionFeeId,
+        matchScore: candidate.matchScore,
+        amountDifference: candidate.amountDifference,
+        tuitionFee: candidate.tuitionFee,
+      })),
     });
-  });
+  }
+
+  return {
+    fileName: args.fileName,
+    totalRows: rows.length,
+    validRows: rows.length,
+    invalidRows: 0,
+    duplicatedRows,
+    matchedRows,
+    unmatchedRows,
+    ignoredRows,
+    items,
+  };
 }
 
-export async function confirmBankTransaction(
-  transactionId: string,
+function getDuplicatePaymentWhere(payload: ReconciliationTokenPayload): Prisma.TuitionPaymentWhereInput {
+  return {
+    paymentStatus: TuitionPaymentStatus.SUCCESS,
+    bankAccountId: payload.bankAccountId,
+    OR: [
+      { transactionReference: payload.transactionHash },
+      ...(payload.bankTransactionNo ? [{ bankTransactionNo: payload.bankTransactionNo }] : []),
+    ],
+  };
+}
+
+async function confirmSingleFee(
+  payload: ReconciliationTokenPayload,
   tuitionFeeId: string,
   actorId: string,
 ) {
+  if (!payload.candidateTuitionFeeIds.includes(tuitionFeeId)) {
+    throw new ConflictError("Khoản học phí không thuộc danh sách ứng viên của giao dịch");
+  }
   return prisma.$transaction(async (tx) => {
-    const transaction = await tx.bankStatementTransaction.findUnique({
-      where: { id: transactionId },
-      include: { candidates: true },
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`);
+    const existingPayment = await tx.tuitionPayment.findFirst({
+      where: getDuplicatePaymentWhere(payload),
+      include: { receipt: true },
     });
-    if (!transaction)
-      throw new NotFoundError("Không tìm thấy giao dịch ngân hàng");
-    if (transaction.debitAmount.greaterThan(0))
-      throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
-    if (transaction.paymentId)
-      throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
-    if (
-      !transaction.candidates.some(
-        (candidate) => candidate.tuitionFeeId === tuitionFeeId,
-      )
-    )
-      throw new ConflictError(
-        "Khoản học phí không thuộc danh sách ứng viên của giao dịch",
-      );
+    if (existingPayment) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+
     const fee = await tx.tuitionFee.findUnique({
       where: { id: tuitionFeeId },
-      include: { payments: { where: { paymentStatus: "SUCCESS" } } },
+      include: {
+        student: true,
+        payments: { where: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
+      },
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
-    if (fee.payments.length || fee.status === "PAID")
-      throw new ConflictError("Khoản học phí đã được thanh toán");
-    if (!transaction.creditAmount.equals(fee.finalAmount))
-      throw new ConflictError("Số tiền sao kê không khớp số tiền học phí");
+    if (fee.status === TuitionFeeStatus.CANCELLED) throw new ConflictError("TUITION_CANCELLED");
+    if (fee.status === TuitionFeeStatus.EXEMPTED) throw new ConflictError("TUITION_EXEMPTED");
+    if (fee.payments.length || fee.status === TuitionFeeStatus.PAID) throw new ConflictError("TUITION_ALREADY_PAID");
+    if (!new Prisma.Decimal(payload.creditAmount).equals(fee.finalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
+
     const uniqueToken = `${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     const payment = await tx.tuitionPayment.create({
       data: {
         paymentNo: `PAY-BANK-${uniqueToken}`,
         tuitionFeeId: fee.id,
         studentId: fee.studentId,
-        paymentDate: transaction.transactionDate,
+        paymentDate: new Date(payload.transactionDate),
         amount: fee.finalAmount,
         paymentMethod: "BANK_TRANSFER",
-        paymentStatus: "SUCCESS",
-        bankAccountId: transaction.bankAccountId,
-        bankTransactionNo: transaction.bankTransactionNo,
-        transactionReference: transaction.transactionHash,
-        paymentContent: transaction.description,
+        paymentStatus: TuitionPaymentStatus.SUCCESS,
+        bankAccountId: payload.bankAccountId,
+        bankTransactionNo: payload.bankTransactionNo,
+        transactionReference: payload.transactionHash,
+        paymentContent: payload.description,
         receivedBy: actorId,
         confirmedBy: actorId,
         confirmedAt: new Date(),
@@ -415,13 +652,13 @@ export async function confirmBankTransaction(
         receiptNo: `REC-BANK-${uniqueToken}`,
         paymentId: payment.id,
         issuedBy: actorId,
-        receiverName: fee.studentId,
+        receiverName: fee.student.fullName,
         amount: fee.finalAmount,
       },
     });
     await tx.tuitionFee.update({
       where: { id: fee.id },
-      data: { status: "PAID", version: { increment: 1 }, updatedBy: actorId },
+      data: { status: TuitionFeeStatus.PAID, version: { increment: 1 }, updatedBy: actorId },
     });
     await tx.tuitionAuditLog.create({
       data: {
@@ -433,7 +670,7 @@ export async function confirmBankTransaction(
           tuitionFeeId: fee.id,
           amount: fee.finalAmount.toString(),
           receiptId: receipt.id,
-          bankTransactionId: transactionId,
+          bankTransactionHash: payload.transactionHash,
         },
         performedBy: actorId,
       },
@@ -443,84 +680,56 @@ export async function confirmBankTransaction(
         entityType: "TUITION_FEE",
         entityId: fee.id,
         action: "PAID",
-        dataAfter: {
-          paymentId: payment.id,
-          status: "PAID",
-          bankTransactionId: transactionId,
-        },
+        dataAfter: { paymentId: payment.id, status: TuitionFeeStatus.PAID },
         performedBy: actorId,
       },
     });
-    const updated = await tx.bankStatementTransaction.update({
-      where: { id: transactionId },
-      data: {
-        matchedStudentId: fee.studentId,
-        matchedTuitionFeeId: fee.id,
-        paymentId: payment.id,
-        reconciliationStatus: "CONFIRMED",
-        confirmedBy: actorId,
-        confirmedAt: new Date(),
-        matchMethod: "MANUAL",
-      },
-      include: { statementImport: true },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "BANK_STATEMENT_TRANSACTION",
-        entityId: transactionId,
-        action: "CONFIRM",
-        dataAfter: { paymentId: payment.id, tuitionFeeId: fee.id },
-        performedBy: actorId,
-      },
-    });
-    return { transaction: updated, payment, receipt };
+    return { payment, receipt };
   });
 }
 
-export async function confirmBankBatchTransaction(
-  transactionId: string,
+async function confirmPaymentBatch(
+  payload: ReconciliationTokenPayload,
   batchId: string,
   actorId: string,
 ) {
+  if (payload.paymentBatchId !== batchId) throw new ConflictError("Đợt thanh toán không thuộc giao dịch ngân hàng này");
   return prisma.$transaction(async (tx) => {
-    const transaction = await tx.bankStatementTransaction.findUnique({
-      where: { id: transactionId },
+    await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`);
+    const existingBatch = await tx.paymentBatch.findFirst({
+      where: {
+        status: PaymentBatchStatus.SUCCESS,
+        bankAccountId: payload.bankAccountId,
+        transactionReference: payload.transactionHash,
+      },
     });
-    if (!transaction)
-      throw new NotFoundError("Không tìm thấy giao dịch ngân hàng");
-    if (transaction.debitAmount.greaterThan(0))
-      throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
-    if (transaction.paymentId)
-      throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
-    if (transaction.paymentBatchId !== batchId)
-      throw new ConflictError("Đợt thanh toán không thuộc giao dịch ngân hàng này");
+    if (existingBatch) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+
     const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
-    if (batch.status !== "PENDING")
-      throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
-    if (!transaction.creditAmount.equals(batch.totalAmount))
-      throw new ConflictError(
-        "Số tiền sao kê không khớp tổng đợt thanh toán",
-      );
-    const result = await completePaymentBatch(tx, batchId, actorId, {
-      paymentDate: transaction.transactionDate,
-      bankAccountId: transaction.bankAccountId,
-      bankTransactionNo: transaction.bankTransactionNo || undefined,
-      transactionReference: transaction.transactionHash || undefined,
-      paymentContent: transaction.description || undefined,
+    if (batch.status !== PaymentBatchStatus.PENDING) throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
+    if (!new Prisma.Decimal(payload.creditAmount).equals(batch.totalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
+    return completePaymentBatch(tx, batchId, actorId, {
+      paymentDate: new Date(payload.transactionDate),
+      bankAccountId: payload.bankAccountId,
+      bankTransactionNo: payload.bankTransactionNo || undefined,
+      transactionReference: payload.transactionHash,
+      paymentContent: payload.description,
     });
-    const updated = await tx.bankStatementTransaction.update({
-      where: { id: transactionId },
-      data: {
-        paymentBatchId: batchId,
-        matchedStudentId: batch.studentId,
-        reconciliationStatus: "CONFIRMED",
-        confirmedBy: actorId,
-        confirmedAt: new Date(),
-        matchMethod: "PAYMENT_REFERENCE",
-      },
-      include: { statementImport: true },
-    });
-    return { transaction: updated, batch: result };
   });
+}
+
+export async function confirmBankReconciliation(args: {
+  confirmationToken: string;
+  tuitionFeeId?: string;
+  batchId?: string;
+  actorId: string;
+}) {
+  if ((args.tuitionFeeId ? 1 : 0) + (args.batchId ? 1 : 0) !== 1) {
+    throw new ConflictError("Chọn đúng một khoản học phí hoặc một đợt thanh toán");
+  }
+  const payload = verifyConfirmationToken(args.confirmationToken);
+  if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
+  if (args.batchId) return confirmPaymentBatch(payload, args.batchId, args.actorId);
+  return confirmSingleFee(payload, args.tuitionFeeId!, args.actorId);
 }

@@ -12,6 +12,6 @@ Mở fee -> backend lấy final_amount -> tạo payment attempt PENDING -> nhậ
 
 Chọn payment SUCCESS -> tạo refund PENDING -> approve -> complete toàn bộ -> payment REFUNDED -> fee UNPAID/OVERDUE -> xử lý receipt/audit.
 
-## CSV reconciliation
+## Excel bank reconciliation
 
-Upload -> hash/deduplicate -> map/validate -> import transactions -> candidates -> auto/manual match -> exact amount validation -> confirm payment transactionally.
+Upload -> parse trong bộ nhớ -> loại trùng với payment đã xác nhận -> candidates -> auto/manual match -> exact amount validation -> confirm payment transactionally. Chỉ payment/payment batch, receipt và audit sau xác nhận được lưu.

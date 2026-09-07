@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       nextDay.setUTCDate(nextDay.getUTCDate() + 1);
       paymentDate.lt = nextDay;
     }
-    const [paymentAggregate, tuitionFeeAggregate, debtAggregate, overdueFees, activeClasses, activeStudents, pendingBatches, unmatchedTransactions] =
+    const [paymentAggregate, tuitionFeeAggregate, debtAggregate, overdueFees, activeClasses, activeStudents, pendingBatches] =
       await Promise.all([
         prisma.tuitionPayment.aggregate({ where: { paymentStatus: "SUCCESS", ...(Object.keys(paymentDate).length ? { paymentDate } : {}) },
           _sum: {
@@ -42,9 +42,7 @@ export async function GET(request: Request) {
         }),
         prisma.student.count({ where: { status: "ACTIVE" } }),
         prisma.paymentBatch.count({ where: { status: "PENDING" } }),
-        prisma.bankStatementTransaction.count({ where: { reconciliationStatus: { in: ["UNMATCHED", "AMBIGUOUS", "AMOUNT_MISMATCH"] } } }),
       ]);
-
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);
     const totalFeeAmount = tuitionFeeAggregate._sum.finalAmount ?? toDecimal(0);
     const totalCollected = totalRevenue;
@@ -59,7 +57,6 @@ export async function GET(request: Request) {
       activeStudents,
       overdueFees,
       pendingBatches,
-      unmatchedTransactions,
       dateFrom: dateFrom || null,
       dateTo: dateTo || null,
     });

@@ -1,12 +1,11 @@
-# CSV import design
+# Excel bank statement import design
 
-Import có file hash, bank account, mapping, encoding (UTF-8/BOM/Windows-1258/Shift-JIS), delimiter comma/semicolon/tab, date/number format, preview và error export.
+Import xử lý file trong bộ nhớ, không lưu file, import record, transaction tạm hoặc candidate vào database. Kết quả phân tích được trả về giao diện cùng token đối soát có chữ ký và thời hạn.
 
-Trạng thái: `UPLOADED`, `VALIDATING`, `VALIDATED`, `PROCESSING`, `COMPLETED`, `PARTIALLY_COMPLETED`, `FAILED`, `CANCELLED`. Chặn file trùng bằng `(bank_account_id, file_hash)` và giao dịch trùng bằng transaction hash. Sanitize formula khi export CSV.
-# CSV import implementation
+Hiện hỗ trợ file Excel `.xlsx` theo format BIDV và Techcombank. BIDV hỗ trợ bảng cột `Ngày giao dịch`, `Nội dung giao dịch`, `Số tiền`, `Số dư`, `Mã giao dịch`. Techcombank hỗ trợ bảng `NGAY`, `DIEN GIAI`, `CHI TIET`, `NO`, `CO`, `SO DU`. Mỗi ngân hàng có parser riêng; các ngân hàng chưa có parser sẽ bị từ chối. Giao dịch ghi nợ bị bỏ qua; giao dịch ghi có tạo candidates theo số tiền, mã học sinh hoặc tên học sinh.
 
-Đã hỗ trợ sao kê ngân hàng dạng `;`, encoding Windows-1252, ngày `dd/MM/yyyy HH:mm`, tiền có hậu tố `VND` và số tiền âm/dương. File được hash SHA-256 để chống import trùng. Giao dịch ghi nợ không tham gia đối soát học phí; giao dịch ghi có tạo candidates theo số tiền, mã học sinh hoặc tên học sinh.
+Chống trùng dựa trên transaction hash/mã giao dịch của các payment hoặc payment batch đã xác nhận. Chỉ khi người dùng xác nhận, hệ thống mới tạo payment, receipt và audit log.
 
-CLI: `npm run bank:import -- "/path/to/sao ke.csv" [bank-account-id]`.
+CLI: `npm run bank:import -- "/path/to/sao ke.xlsx" [bank-account-id]` (hiện hỗ trợ BIDV và Techcombank).
 
-API: `POST /api/bank-statement-imports` với multipart fields `file` và `bankAccountId`; xem kết quả qua `GET /api/bank-statement-transactions`.
+API: `POST /api/bank-statement-imports` với multipart fields `file` và `bankAccountId`; xác nhận qua `POST /api/bank-reconciliations`.

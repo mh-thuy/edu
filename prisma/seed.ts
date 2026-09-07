@@ -18,9 +18,6 @@ async function cleanup() {
   await prisma.tuitionPayment.deleteMany();
   await prisma.tuitionFeeItem.deleteMany();
   await prisma.tuitionFee.deleteMany();
-  await prisma.bankStatementMatchCandidate.deleteMany();
-  await prisma.bankStatementTransaction.deleteMany();
-  await prisma.bankStatementImport.deleteMany();
   await prisma.bankAccount.deleteMany();
   await prisma.$executeRaw`DELETE FROM enrollment_subjects`;
   await prisma.$executeRaw`DELETE FROM class_subjects`;
@@ -308,12 +305,18 @@ async function seedClasses(
       (gen_random_uuid(), 'LY', 'Vật lý', 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id, code
   `;
-  const subjectId = (code: string) => subjects.find((subject) => subject.code === code)?.id;
+  const subjectId = (code: string) =>
+    subjects.find((subject) => subject.code === code)?.id;
   const mathSubjectId = subjectId("TOAN");
   const literatureSubjectId = subjectId("VAN");
   const englishSubjectId = subjectId("ANH");
   const physicsSubjectId = subjectId("LY");
-  if (!mathSubjectId || !literatureSubjectId || !englishSubjectId || !physicsSubjectId) {
+  if (
+    !mathSubjectId ||
+    !literatureSubjectId ||
+    !englishSubjectId ||
+    !physicsSubjectId
+  ) {
     throw new Error("Không thể tạo dữ liệu môn học mẫu");
   }
 
@@ -325,7 +328,9 @@ async function seedClasses(
       (gen_random_uuid(), ${englishClass.id}::uuid, ${englishSubjectId}::uuid, ${teachers[1].id}::uuid, 650000, 16, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
       (gen_random_uuid(), ${physicsClass.id}::uuid, ${physicsSubjectId}::uuid, ${teachers[2].id}::uuid, 700000, 10, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
   `;
-  const subjectForClass = await prisma.$queryRaw<Array<{ id: string; class_id: string; subject_id: string }>>`
+  const subjectForClass = await prisma.$queryRaw<
+    Array<{ id: string; class_id: string; subject_id: string }>
+  >`
     SELECT id, class_id, subject_id FROM class_subjects
     WHERE class_id IN (${mathClass.id}::uuid, ${englishClass.id}::uuid, ${physicsClass.id}::uuid)
   `;
@@ -345,10 +350,10 @@ async function seedBankAccounts(adminUserId: string) {
   await prisma.bankAccount.createMany({
     data: [
       {
-        bankCode: "VCB",
-        bankName: "Ngân hàng Thương mại Cổ phần Ngoại thương Việt Nam",
-        accountNo: "0191000346776",
-        accountName: "MA HONG LAN",
+        bankCode: "TCB",
+        bankName: "Ngân hàng TMCP Kỹ Thương Việt Nam",
+        accountNo: "19070479681014",
+        accountName: "NGUYEN DO HUAN",
         isActive: true,
         createdBy: adminUserId,
         updatedBy: adminUserId,
@@ -375,7 +380,6 @@ async function main() {
   const { teachers, students } = await seedMasters(teacherUser.id);
   const classes = await seedClasses(teachers, students);
   await seedBankAccounts(adminUser.id);
-
 
   console.log("Seed completed.");
 }
