@@ -104,14 +104,15 @@ function parseDate(value: string): Date {
   const hour = Number(match[4] || 0);
   const minute = Number(match[5] || 0);
   const second = Number(match[6] || 0);
-  const result = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  const result = new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second));
+  const vietnamDate = new Date(result.getTime() + 7 * 60 * 60 * 1000);
   if (
-    result.getUTCFullYear() !== year ||
-    result.getUTCMonth() !== month - 1 ||
-    result.getUTCDate() !== day ||
-    result.getUTCHours() !== hour ||
-    result.getUTCMinutes() !== minute ||
-    result.getUTCSeconds() !== second
+    vietnamDate.getUTCFullYear() !== year ||
+    vietnamDate.getUTCMonth() !== month - 1 ||
+    vietnamDate.getUTCDate() !== day ||
+    vietnamDate.getUTCHours() !== hour ||
+    vietnamDate.getUTCMinutes() !== minute ||
+    vietnamDate.getUTCSeconds() !== second
   ) {
     throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
   }
@@ -425,19 +426,11 @@ export async function importBankStatement(args: {
   for (const [index, row] of rows.entries()) {
     const { transactionHash } = rowHashes[index]!;
     const transactionNumber = row.transactionNo?.trim() || null;
-    if (
-      importedHashes.has(transactionHash) ||
-      existingReferences.has(transactionHash) ||
-      (transactionNumber !== null && existingReferences.has(transactionNumber))
-    ) {
-      duplicatedRows += 1;
-      continue;
-    }
-    importedHashes.add(transactionHash);
-
     const isCredit = row.amount.greaterThan(0);
     const baseItem = {
-      confirmationToken: "",
+      confirmationToken: createConfirmationToken(
+        createTokenPayload(args.bankAccountId, transactionHash, row, null),
+      ),
       rowNo: row.rowNo,
       transactionDate: row.transactionDate,
       bankTransactionNo: transactionNumber,
@@ -448,9 +441,20 @@ export async function importBankStatement(args: {
       reconciliationStatus: (isCredit ? "UNMATCHED" : "IGNORED") as ReconciliationStatus,
       paymentBatch: null as BankImportItem["paymentBatch"],
     };
+    if (
+      importedHashes.has(transactionHash) ||
+      existingReferences.has(transactionHash) ||
+      (transactionNumber !== null && existingReferences.has(transactionNumber))
+    ) {
+      duplicatedRows += 1;
+      items.push({ ...baseItem, reconciliationStatus: "DUPLICATED" });
+      continue;
+    }
+    importedHashes.add(transactionHash);
 
     if (!isCredit) {
       ignoredRows += 1;
+      items.push(baseItem);
       continue;
     }
 
@@ -484,9 +488,6 @@ export async function importBankStatement(args: {
 
     items.push({
       ...baseItem,
-      confirmationToken: createConfirmationToken(
-        createTokenPayload(args.bankAccountId, transactionHash, row, null),
-      ),
     });
   }
 

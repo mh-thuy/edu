@@ -73,6 +73,8 @@ const steps = ["Chọn tài khoản và file", "Phân tích", "Đối soát"];
 const reconciliationLabels: Record<string, string> = {
   AUTO_MATCHED: "Tự động khớp",
   UNMATCHED: "Chưa khớp",
+  IGNORED: "Bỏ qua",
+  DUPLICATED: "Trùng giao dịch",
 };
 const reconciliationColors: Record<string, "default" | "warning" | "info"> = {
   AUTO_MATCHED: "info",
@@ -287,7 +289,9 @@ export function BankReconciliationPanel() {
               <TableRow key={item.confirmationToken}>
                 <TableCell>{item.rowNo}</TableCell>
                 <TableCell>
-                  {new Date(item.transactionDate).toLocaleString("vi-VN")}
+                  {new Date(item.transactionDate).toLocaleString("vi-VN", {
+                    timeZone: "Asia/Ho_Chi_Minh",
+                  })}
                 </TableCell>
                 <TableCell sx={{ minWidth: 300 }}>{item.description}</TableCell>
                 <TableCell align="right">
@@ -335,7 +339,11 @@ export function BankReconciliationPanel() {
                       </Button>
                     </Box>
                   ) : (
-                    "Không tìm thấy mã đợt thanh toán trong nội dung chuyển khoản"
+                    item.reconciliationStatus === "IGNORED"
+                      ? "Giao dịch ghi nợ, không đối soát"
+                      : item.reconciliationStatus === "DUPLICATED"
+                        ? "Giao dịch đã được xác nhận trước đó"
+                        : "Không tìm thấy mã đợt thanh toán trong nội dung chuyển khoản"
                   )}
                 </TableCell>
               </TableRow>
