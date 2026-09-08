@@ -69,6 +69,23 @@ type PendingConfirmation = {
 
 const money = (value: number) =>
   new Intl.NumberFormat("vi-VN").format(Number(value));
+const formatTransactionDate = (value: string) => {
+  const date = new Date(value);
+  const datePart = date.toLocaleDateString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const timePart = date.toLocaleTimeString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ${timePart}`;
+};
 const steps = ["Chọn tài khoản và file", "Phân tích", "Đối soát"];
 const reconciliationLabels: Record<string, string> = {
   AUTO_MATCHED: "Tự động khớp",
@@ -289,9 +306,7 @@ export function BankReconciliationPanel() {
               <TableRow key={item.confirmationToken}>
                 <TableCell>{item.rowNo}</TableCell>
                 <TableCell>
-                  {new Date(item.transactionDate).toLocaleString("vi-VN", {
-                    timeZone: "Asia/Ho_Chi_Minh",
-                  })}
+                  {formatTransactionDate(item.transactionDate)}
                 </TableCell>
                 <TableCell sx={{ minWidth: 300 }}>{item.description}</TableCell>
                 <TableCell align="right">
