@@ -6,6 +6,8 @@ import { NotFoundError } from "@/lib/errors";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
+const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
+const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
 export async function generatePaymentBatchReceiptPdf(receiptId: string) {
   const receipt = await prisma.paymentBatchReceipt.findUnique({
@@ -37,10 +39,16 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  let page = pdf.addPage([595, 842]);
+  let page = pdf.addPage(A5_PAGE_SIZE);
   const color = rgb(0.12, 0.16, 0.24);
   const draw = (text: string, x: number, y: number, size = 11) =>
-    page.drawText(text, { x, y, size, font, color });
+    page.drawText(text, {
+      x: x * A5_SCALE,
+      y: y * A5_SCALE,
+      size: size * A5_SCALE,
+      font,
+      color,
+    });
 
   draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 770, 17);
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
@@ -54,7 +62,7 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
   let y = 515;
   for (const allocation of receipt.paymentBatch.allocations) {
     if (y < 260) {
-      page = pdf.addPage([595, 842]);
+      page = pdf.addPage(A5_PAGE_SIZE);
       draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
       draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
       y = 725;
@@ -81,9 +89,9 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
     y = itemY - 10;
   }
   page.drawLine({
-    start: { x: 55, y: y - 5 },
-    end: { x: 540, y: y - 5 },
-    thickness: 1,
+    start: { x: 55 * A5_SCALE, y: (y - 5) * A5_SCALE },
+    end: { x: 540 * A5_SCALE, y: (y - 5) * A5_SCALE },
+    thickness: A5_SCALE,
     color: rgb(0.8, 0.8, 0.8),
   });
   draw("TỔNG CỘNG", 75, y - 35, 13);

@@ -6,6 +6,8 @@ import { NotFoundError } from "@/lib/errors";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
+const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
+const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
 export async function generateTuitionReceiptPdf(receiptId: string) {
   const receipt = await prisma.tuitionReceipt.findUnique({
@@ -31,7 +33,7 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  let page = pdf.addPage([595, 842]);
+  let page = pdf.addPage(A5_PAGE_SIZE);
   const color = rgb(0.12, 0.16, 0.24);
   const draw = (
     text: string,
@@ -41,7 +43,13 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
     bold = false,
   ) => {
     void bold;
-    page.drawText(text, { x, y, size, font, color });
+    page.drawText(text, {
+      x: x * A5_SCALE,
+      y: y * A5_SCALE,
+      size: size * A5_SCALE,
+      font,
+      color,
+    });
   };
   draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
   draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
@@ -55,7 +63,7 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
   let y = 495;
   for (const item of receipt.payment.tuitionFee.items) {
     if (y < 130) {
-      page = pdf.addPage([595, 842]);
+      page = pdf.addPage(A5_PAGE_SIZE);
       draw("PHIẾU THU HỌC PHÍ", 190, 790, 16, true);
       draw("NỘI DUNG THU (tiếp theo)", 55, 755, 13, true);
       y = 725;
@@ -70,9 +78,9 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
     y -= 24;
   }
   page.drawLine({
-    start: { x: 55, y: y - 5 },
-    end: { x: 540, y: y - 5 },
-    thickness: 1,
+    start: { x: 55 * A5_SCALE, y: (y - 5) * A5_SCALE },
+    end: { x: 540 * A5_SCALE, y: (y - 5) * A5_SCALE },
+    thickness: A5_SCALE,
     color: rgb(0.8, 0.8, 0.8),
   });
   draw("TỔNG CỘNG", 75, y - 35, 13, true);
