@@ -24,7 +24,7 @@ type SubjectOption = {
   id: string;
   subject: { name: string };
   teacherId: string | null;
-  teacher?: { user?: { fullName?: string | null } | null } | null;
+  teacher?: { fullName?: string | null } | null;
 };
 type Schedule = {
   id: string;
@@ -32,7 +32,7 @@ type Schedule = {
   dayOfWeek: number;
   startMinute: number;
   endMinute: number;
-  teacher?: { user?: { fullName?: string | null } | null } | null;
+  teacher?: { fullName?: string | null } | null;
   classSubject?: { subject: { name: string } } | null;
 };
 const days = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
@@ -168,7 +168,7 @@ export function ClassSchedulePanel({
               {classSubjects.map((subject) => (
                 <MenuItem key={subject.id} value={subject.id}>
                   {subject.subject.name} —{" "}
-                  {subject.teacher?.user?.fullName || "Chưa phân công"}
+                  {subject.teacher?.fullName || "Chưa phân công"}
                 </MenuItem>
               ))}
             </Select>
@@ -229,7 +229,7 @@ export function ClassSchedulePanel({
                 <TableCell>
                   {toTime(item.startMinute)} - {toTime(item.endMinute)}
                 </TableCell>
-                <TableCell>{item.teacher?.user?.fullName || "-"}</TableCell>
+                <TableCell>{item.teacher?.fullName || "-"}</TableCell>
                 <TableCell align="right">
                   <Button
                     color="error"

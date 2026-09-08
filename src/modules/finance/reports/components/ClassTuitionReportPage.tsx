@@ -22,7 +22,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 type ClassSubject = {
   id: string;
   subject: { id: string; code: string; name: string };
-  teacher: { id: string; code: string; user?: { fullName?: string | null } | null } | null;
+  teacher: { id: string; code: string; fullName: string } | null;
 };
 
 type ClassDetail = {
@@ -49,7 +49,7 @@ export function ClassTuitionReportPage() {
     ? {
         id: selectedSubject.teacher.id,
         code: selectedSubject.teacher.code,
-        name: selectedSubject.teacher.user?.fullName ?? selectedSubject.teacher.code,
+        name: selectedSubject.teacher.fullName,
       }
     : null;
 

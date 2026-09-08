@@ -10,9 +10,7 @@ import {
 export interface TeacherItem extends SelectableItem {
   id: string;
   code: string;
-  user?: {
-    fullName: string;
-  } | null;
+  fullName: string;
   phone?: string;
   specialty?: string;
   status?: string;
@@ -20,7 +18,7 @@ export interface TeacherItem extends SelectableItem {
 
 /**
  * The value returned to the parent after selection.
- * `name` is populated from teacher full name, then code.
+ * `name` is populated from the teacher profile full name.
  */
 export interface TeacherSelectValue {
   id: string;
@@ -46,7 +44,7 @@ export function TeacherSelectDialog({
       field: "fullName",
       headerName: "Họ tên",
       width: 220,
-      valueGetter: (_value, row) => row.user?.fullName ?? "-",
+      valueGetter: (_value, row) => row.fullName,
     },
     {
       field: "phone",
@@ -68,8 +66,9 @@ export function TeacherSelectDialog({
         const map: Record<string, string> = {
           ACTIVE: "Hoạt động",
           INACTIVE: "Không hoạt động",
+          ON_LEAVE: "Tạm nghỉ",
         };
-        return map[params.value as string] ?? params.value ?? "-";
+        return map[params.value as string] ?? "-";
       },
     },
   ];
@@ -78,7 +77,7 @@ export function TeacherSelectDialog({
     onSelect({
       id: item.id,
       code: item.code,
-      name: item.user?.fullName ?? item.code,
+      name: item.fullName,
     });
   };
 

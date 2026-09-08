@@ -54,7 +54,7 @@ type ClassSubject = {
   teacher?: {
     id: string;
     code: string;
-    user?: { fullName?: string | null } | null;
+    fullName: string;
   } | null;
 };
 
@@ -249,7 +249,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         ? {
             id: subject.teacher.id,
             code: subject.teacher.code,
-            name: subject.teacher.user?.fullName || subject.teacher.code,
+            name: subject.teacher.fullName,
           }
         : null,
     );
@@ -397,7 +397,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
                   <TableCell>{item.subject.code}</TableCell>
                   <TableCell>{item.subject.name}</TableCell>
                   <TableCell>
-                    {item.teacher?.user?.fullName || "Chưa phân công"}
+                    {item.teacher?.fullName || "Chưa phân công"}
                   </TableCell>
                   <TableCell align="right">
                     {Number(item.tuitionFee).toLocaleString("vi-VN")} VND

@@ -72,7 +72,7 @@ export type ClassSubjectView = {
   totalSessions: number;
   maxStudents: number | null;
   subject: { id: string; code: string; name: string };
-  teacher: { user: { fullName: string } | null } | null;
+  teacher: { id: string; code: string; fullName: string } | null;
 };
 
 async function queryClassSubjects(
@@ -84,13 +84,11 @@ async function queryClassSubjects(
            cs.max_students AS "maxStudents",
            json_build_object('id', s.id, 'code', s.code, 'name', s.name) AS subject,
            CASE WHEN t.id IS NULL THEN NULL ELSE json_build_object(
-             'id', t.id, 'code', t.code,
-             'user', CASE WHEN u.id IS NULL THEN NULL ELSE json_build_object('fullName', u.full_name) END
+             'id', t.id, 'code', t.code, 'fullName', t.full_name
            ) END AS teacher
     FROM class_subjects cs
     JOIN subjects s ON s.id = cs.subject_id
     LEFT JOIN teachers t ON t.id = cs.teacher_id
-    LEFT JOIN users u ON u.id = t.user_id
     WHERE cs.class_id = ${classId}::uuid AND cs.status = 'ACTIVE'::class_subject_status
     ORDER BY cs.created_at ASC
   `;
