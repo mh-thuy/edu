@@ -317,6 +317,10 @@ function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
+function normalizeBatchReference(value: string) {
+  return normalize(value).replace(/[^a-z0-9]/g, "");
+}
+
 function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
   const identity = row.transactionNo?.trim()
     ? `${bankAccountId}:transaction-no:${row.transactionNo.trim()}`
@@ -485,9 +489,11 @@ export async function importBankStatement(args: {
       continue;
     }
 
-    const description = normalize(row.description);
+    const description = normalizeBatchReference(row.description);
     const batch = pendingBatches.find(
-      (candidate) => candidate.totalAmount.equals(row.amount) && description.includes(normalize(candidate.batchNo)),
+      (candidate) =>
+        candidate.totalAmount.equals(row.amount) &&
+        description.includes(normalizeBatchReference(candidate.batchNo)),
     );
     if (batch) {
       matchedRows += 1;
