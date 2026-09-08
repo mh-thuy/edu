@@ -95,16 +95,19 @@ function parseMoney(value: string): Prisma.Decimal {
   }
 }
 
-function parseDate(value: string): Date {
-  const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
-  if (!match) throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const hour = Number(match[4] || 0);
-  const minute = Number(match[5] || 0);
-  const second = Number(match[6] || 0);
-  const result = new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second));
+function createVietnamDate(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0,
+  second = 0,
+  millisecond = 0,
+): Date {
+  // ExcelJS exposes an Excel date as a JS Date whose UTC components represent
+  // the wall-clock values displayed in the workbook. Convert that Vietnamese
+  // local time to the UTC instant used by the API/database.
+  const result = new Date(Date.UTC(year, month - 1, day, hour - 7, minute, second, millisecond));
   const vietnamDate = new Date(result.getTime() + 7 * 60 * 60 * 1000);
   if (
     vietnamDate.getUTCFullYear() !== year ||
@@ -112,11 +115,30 @@ function parseDate(value: string): Date {
     vietnamDate.getUTCDate() !== day ||
     vietnamDate.getUTCHours() !== hour ||
     vietnamDate.getUTCMinutes() !== minute ||
-    vietnamDate.getUTCSeconds() !== second
+    vietnamDate.getUTCSeconds() !== second ||
+    vietnamDate.getUTCMilliseconds() !== millisecond
   ) {
-    throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
+    throw new Error("Ngày giao dịch không hợp lệ");
   }
   return result;
+}
+
+function parseDate(value: string): Date {
+  const text = value.trim();
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!match) throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const yearValue = Number(match[3]);
+  const year = yearValue < 100 ? 2000 + yearValue : yearValue;
+  const hour = Number(match[4] || 0);
+  const minute = Number(match[5] || 0);
+  const second = Number(match[6] || 0);
+  try {
+    return createVietnamDate(year, month, day, hour, minute, second);
+  } catch {
+    throw new Error(`Ngày giao dịch không hợp lệ: ${value}`);
+  }
 }
 
 type BidvTableColumns = {
@@ -160,12 +182,17 @@ function findBidvTableHeader(worksheet: ExcelJS.Worksheet) {
 
 function parseExcelDate(value: unknown, text: string): Date {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return new Date(value.getTime());
+    return createVietnamDate(
+      value.getUTCFullYear(),
+      value.getUTCMonth() + 1,
+      value.getUTCDate(),
+      value.getUTCHours(),
+      value.getUTCMinutes(),
+      value.getUTCSeconds(),
+      value.getUTCMilliseconds(),
+    );
   }
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(text)) return parseDate(text);
-  const result = new Date(text);
-  if (Number.isNaN(result.getTime())) throw new Error(`Ngày giao dịch không hợp lệ: ${text}`);
-  return result;
+  return parseDate(text);
 }
 
 function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: number; columns: BidvTableColumns }) {
