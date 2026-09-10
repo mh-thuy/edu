@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { getSessionFromCookie } from "@/lib/session";
+import { requireApiRole } from "@/lib/api-auth";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents } from "@/modules/class/services/class.service";
 
 const assignStudentRequestSchema = z.object({
@@ -26,6 +26,8 @@ async function getClassId(context: { params?: Params }) {
 
 export async function GET(_request: NextRequest, context: { params?: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) return user;
     const id = await getClassId(context);
     const students = await getClassStudents(id);
     return apiSuccess(students);
@@ -37,12 +39,13 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
 
 export async function POST(request: NextRequest, context: { params?: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) return user;
     const id = await getClassId(context);
     const body: unknown = await request.json();
     const { studentId, classSubjectIds } = assignStudentRequestSchema.parse(body);
 
-    const session = await getSessionFromCookie();
-    const result = await assignStudentToClass(id, studentId, classSubjectIds, session?.user?.id);
+    const result = await assignStudentToClass(id, studentId, classSubjectIds, user.id);
     return apiSuccess(result, 201);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);
@@ -52,14 +55,15 @@ export async function POST(request: NextRequest, context: { params?: Params }) {
 
 export async function DELETE(request: NextRequest, context: { params?: Params }) {
   try {
+    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    if (user instanceof Response) return user;
     const id = await getClassId(context);
     const body: unknown = await request.json();
     const { studentId, force } = removeStudentRequestSchema.parse(body);
-    const session = await getSessionFromCookie();
 
     await removeStudentFromClass(id, studentId, {
       force,
-      isAdmin: session?.user?.role === "ADMIN",
+      isAdmin: user.role === "ADMIN",
     });
     return apiSuccess({ deleted: true });
   } catch (error: unknown) {

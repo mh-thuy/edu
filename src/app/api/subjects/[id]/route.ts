@@ -11,7 +11,7 @@ export async function PATCH(request: NextRequest, context: { params?: Params }) 
     const user = await requireApiRole(["ADMIN", "STAFF"]);
     if (user instanceof Response) return user;
     const params = await context.params;
-    if (!params?.id) return apiError("BAD_REQUEST", "Thiếu mã môn học", 400);
+    if (!params?.id) return apiError("BAD_REQUEST", "Thiếu môn học", 400);
     return apiSuccess(await updateSubject(params.id, subjectUpdateSchema.parse(await request.json())));
   } catch (error: unknown) {
     return handleApiError(error, "Không thể cập nhật môn học");

@@ -12,9 +12,10 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 
 ## Học phí
 
-- Đăng ký môn là điểm phát sinh học phí duy nhất.
-- Khi đăng ký bổ sung môn, hệ thống chỉ tạo item học phí cho môn chưa được lập phí.
-- Không còn API, trang hoặc component tạo học phí thủ công.
+- Đăng ký môn và tạo học phí là hai thao tác độc lập.
+- Khi đăng ký môn, hệ thống chỉ tạo enrollment subject; chưa tạo học phí.
+- Thao tác `Tạo thanh toán và xuất thông báo` chỉ tạo item cho các môn chưa được lập phí trước khi tạo payment batch.
+- Không tạo học phí độc lập ngoài enrollment.
 - Thanh toán bắt đầu từ chi tiết học phí bằng nút `Thanh toán học phí`.
 - Thông báo thanh toán, biên lai tổng hợp và phiếu thu đều hiển thị các môn đã đăng ký của học viên.
 

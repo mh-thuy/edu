@@ -840,10 +840,12 @@ FEE_CANCELLED
 1. Nhân viên chọn học viên và các môn muốn đăng ký trong lớp.
 2. Backend kiểm tra học viên chưa đăng ký các môn đó.
 3. Tạo enrollment subject cho từng môn hợp lệ.
-4. Tự động tạo học phí và các tuition fee item tương ứng.
-5. Người dùng mở chi tiết học phí để thanh toán hoặc in chứng từ.
+4. Hoàn tất đăng ký; chưa tạo học phí ở bước này.
+5. Nhân viên chọn `Tạo thanh toán và xuất thông báo` cho lớp.
+6. Backend tạo tuition fee và các tuition fee item cho những môn chưa được lập phí, sau đó tạo payment batch.
+7. Người dùng mở chi tiết học phí hoặc thông báo để thanh toán/in chứng từ.
 
-Không tạo học phí độc lập ngoài enrollment; mọi khoản học phí phải truy được về lớp, học viên và môn học.
+Không tạo học phí độc lập ngoài enrollment; mọi khoản học phí phải truy được về lớp, học viên và môn học. Đăng ký và tạo học phí là hai thao tác độc lập.
 ```
 
 ---

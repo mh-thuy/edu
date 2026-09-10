@@ -28,6 +28,21 @@ const feeInclude = {
   },
 };
 
+async function generateTuitionFeeNo(tx: Prisma.TransactionClient) {
+  const prefix = `HP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (
+      !(await tx.tuitionFee.findUnique({
+        where: { feeNo: candidate },
+        select: { id: true },
+      }))
+    )
+      return candidate;
+  }
+  throw new ConflictError("Không thể tạo mã học phí tự động, vui lòng thử lại");
+}
+
 export class TuitionService {
   static async listFees(params: {
     studentCode?: string;
@@ -73,6 +88,131 @@ export class TuitionService {
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
     return fee;
+  }
+
+  static async createFromEnrollment(
+    data: { classId: string; studentId: string },
+    actorId: string,
+  ) {
+    return prisma.$transaction(async (tx) => {
+      const enrollment = await tx.classStudent.findUnique({
+        where: {
+          classId_studentId: {
+            classId: data.classId,
+            studentId: data.studentId,
+          },
+        },
+        include: {
+          class: true,
+          subjects: {
+            where: { status: "ACTIVE" },
+            include: { classSubject: { include: { subject: true } } },
+          },
+        },
+      });
+      if (!enrollment) {
+        throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
+      }
+      if (enrollment.subjects.length === 0) {
+        throw new ConflictError("Học viên chưa đăng ký môn học nào");
+      }
+
+      const classSubjectIds = enrollment.subjects.map(
+        (subject) => subject.classSubjectId,
+      );
+      const billedItems = await tx.tuitionFeeItem.findMany({
+        where: {
+          tuitionFee: { enrollmentId: enrollment.id },
+          classSubjectId: { in: classSubjectIds },
+        },
+        select: { classSubjectId: true },
+        distinct: ["classSubjectId"],
+      });
+      const billedSubjectIds = new Set(
+        billedItems
+          .map((item) => item.classSubjectId)
+          .filter((value): value is string => Boolean(value)),
+      );
+      const subjectsToBill = enrollment.subjects.filter(
+        (subject) => !billedSubjectIds.has(subject.classSubjectId),
+      );
+      if (subjectsToBill.length === 0) {
+        throw new ConflictError("Các môn học của học viên đã được tạo học phí");
+      }
+
+      const originalAmount = subjectsToBill.reduce(
+        (total, subject) => total.add(subject.classSubject.tuitionFee),
+        new Prisma.Decimal(0),
+      );
+      const fee = await tx.tuitionFee.create({
+        data: {
+          feeNo: await generateTuitionFeeNo(tx),
+          studentId: data.studentId,
+          enrollmentId: enrollment.id,
+          classId: data.classId,
+          originalAmount,
+          discountAmount: 0,
+          additionalAmount: 0,
+          finalAmount: originalAmount,
+          dueDate: enrollment.class.endDate,
+          createdBy: actorId,
+          updatedBy: actorId,
+        },
+      });
+      await tx.tuitionFeeItem.createMany({
+        data: subjectsToBill.map((subject, index) => ({
+          tuitionFeeId: fee.id,
+          classSubjectId: subject.classSubjectId,
+          itemType: "TUITION" as const,
+          itemName: `Học phí môn ${subject.classSubject.subject.name}`,
+          quantity: 1,
+          unitPrice: subject.classSubject.tuitionFee,
+          amount: subject.classSubject.tuitionFee,
+          displayOrder: index,
+        })),
+      });
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "ENROLLMENT",
+          entityId: enrollment.id,
+          action: "TUITION_FEE_CREATED",
+          dataAfter: {
+            classId: data.classId,
+            studentId: data.studentId,
+            classSubjectIds: subjectsToBill.map(
+              (subject) => subject.classSubjectId,
+            ),
+            tuitionFeeId: fee.id,
+          },
+          performedBy: actorId,
+        },
+      });
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "TUITION_FEE",
+          entityId: fee.id,
+          action: "CREATED_FROM_ENROLLMENT",
+          dataAfter: {
+            enrollmentId: enrollment.id,
+            classId: data.classId,
+            studentId: data.studentId,
+            classSubjectIds: subjectsToBill.map(
+              (subject) => subject.classSubjectId,
+            ),
+            originalAmount: originalAmount.toString(),
+            finalAmount: originalAmount.toString(),
+          },
+          performedBy: actorId,
+        },
+      });
+
+      const result = await tx.tuitionFee.findUnique({
+        where: { id: fee.id },
+        include: feeInclude,
+      });
+      if (!result) throw new NotFoundError("Không tìm thấy khoản học phí");
+      return result;
+    });
   }
 
   static async updateFee(id: string, data: TuitionFeeUpdate, actorId: string) {

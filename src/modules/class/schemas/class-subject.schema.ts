@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 export const subjectCreateSchema = z.object({
-  code: z.string().trim().min(1, "Mã môn học là bắt buộc").max(50),
   name: z.string().trim().min(1, "Tên môn học là bắt buộc").max(255),
 });
 
-export const subjectUpdateSchema = subjectCreateSchema.extend({
+export const subjectUpdateSchema = z.object({
+  name: z.string().trim().min(1, "Tên môn học là bắt buộc").max(255),
   status: z.enum(["ACTIVE", "INACTIVE"]),
 });
 

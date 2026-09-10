@@ -13,7 +13,6 @@ export type ClassTuitionReportRow = {
 export type ClassTuitionReport = {
   classCode: string;
   className: string;
-  subjectCode: string;
   subjectName: string;
   teacherCode: string;
   teacherName: string;
@@ -51,7 +50,7 @@ export async function getClassTuitionReport(
     },
     include: {
       class: { select: { code: true, name: true } },
-      subject: { select: { code: true, name: true } },
+      subject: { select: { name: true } },
       teacher: {
         select: {
           id: true,
@@ -115,7 +114,6 @@ export async function getClassTuitionReport(
   return {
     classCode: classSubject.class.code,
     className: classSubject.class.name,
-    subjectCode: classSubject.subject.code,
     subjectName: classSubject.subject.name,
     teacherCode: classSubject.teacher.code,
     teacherName: classSubject.teacher.fullName,

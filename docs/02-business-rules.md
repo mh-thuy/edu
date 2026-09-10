@@ -360,6 +360,23 @@ Trừ khi:
 ADMIN force cancel
 ```
 
+Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; enrollment có thể được kích hoạt lại khi đăng ký lại môn phù hợp.
+
+## 7.4 Enrollment và Student Fee độc lập
+
+Đăng ký học viên vào lớp hoặc môn học không tự động tạo `student_fee`.
+
+Học phí chỉ được tạo bởi thao tác riêng sau khi enrollment đã tồn tại. Một thao tác tạo học phí phải:
+
+```text
+Chỉ lấy các môn đang ACTIVE của enrollment
+Không tạo trùng tuition_fee_item cho cùng môn
+Ghi audit log
+Thực hiện trong transaction
+```
+
+Nếu học viên đăng ký thêm môn sau khi đã tạo học phí, thao tác tạo học phí lần tiếp theo chỉ tạo phí cho các môn mới chưa được lập phí.
+
 ---
 
 # 8. Schedule Rules
@@ -498,6 +515,12 @@ Không cho lưu:
 ```text
 actual_amount < 0
 ```
+
+## 9.5 Student Fee Generation
+
+Không tự động tạo học phí khi enrollment được tạo hoặc đăng ký thêm môn.
+
+Học phí được tạo qua thao tác riêng và phải tham chiếu đến enrollment hiện có. Enrollment không có học phí vẫn là enrollment hợp lệ.
 
 ---
 
@@ -873,6 +896,8 @@ Student fee generated
 QR regenerated
 Bill regenerated
 ```
+
+Đăng ký học viên và tạo học phí là hai audit event riêng biệt.
 
 Thông tin cần lưu:
 

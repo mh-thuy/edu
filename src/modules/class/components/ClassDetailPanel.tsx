@@ -34,6 +34,7 @@ import {
   StudentSelectDialog,
   type StudentItem,
 } from "@/components/shared/dialogs/StudentSelectDialog";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import {
   TeacherSelectDialog,
   type TeacherSelectValue,
@@ -44,13 +45,14 @@ import {
 } from "@/components/shared/forms/MasterSelectField";
 import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { useSnackbar } from "@/hooks/useSnackbar";
 
 type ClassSubject = {
   id: string;
   teacherId: string | null;
   tuitionFee: number;
   totalSessions: number;
-  subject: { id: string; code: string; name: string };
+  subject: { id: string; name: string };
   teacher?: {
     id: string;
     code: string;
@@ -73,9 +75,14 @@ type ClassStudent = {
   studentId: string;
   student: { code: string; fullName: string; phone?: string | null };
   subjects: Array<{ classSubjectId: string }>;
+  tuitionFees: Array<{
+    id: string;
+    status: string;
+    items: Array<{ classSubjectId: string | null }>;
+  }>;
 };
 
-type SubjectOption = { id: string; code: string; name: string };
+type SubjectOption = { id: string; name: string };
 
 export function ClassDetailPanel({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
@@ -100,10 +107,17 @@ export function ClassDetailPanel({ id }: { id: string }) {
     null,
   );
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
-  const [registeredSubjectIds, setRegisteredSubjectIds] = useState<string[]>([]);
+  const [registeredSubjectIds, setRegisteredSubjectIds] = useState<string[]>(
+    [],
+  );
   const [addingStudent, setAddingStudent] = useState(false);
+  const [studentToRemove, setStudentToRemove] = useState<ClassStudent | null>(
+    null,
+  );
+  const [removingStudent, setRemovingStudent] = useState(false);
   const [exportingNotice, setExportingNotice] = useState(false);
   const [error, setError] = useState("");
+  const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
     const response = await fetch(`/api/classes/${id}`);
@@ -115,7 +129,9 @@ export function ClassDetailPanel({ id }: { id: string }) {
     setClassData(data);
     const studentsResponse = await fetch(`/api/classes/${id}/students`);
     if (studentsResponse.ok) {
-      setClassStudents(await unwrapApiResponse<ClassStudent[]>(studentsResponse));
+      setClassStudents(
+        await unwrapApiResponse<ClassStudent[]>(studentsResponse),
+      );
     }
     const subjectsResponse = await fetch("/api/subjects");
     if (subjectsResponse.ok) {
@@ -137,8 +153,12 @@ export function ClassDetailPanel({ id }: { id: string }) {
       fetch(`/api/tuition-fees?classId=${id}&status=UNPAID&page=1&pageSize=1`),
       fetch(`/api/tuition-fees?classId=${id}&status=OVERDUE&page=1&pageSize=1`),
     ]);
-    const unpaid = unpaidResponse.ok ? await unwrapApiResponse<{ total: number }>(unpaidResponse) : { total: 0 };
-    const overdue = overdueResponse.ok ? await unwrapApiResponse<{ total: number }>(overdueResponse) : { total: 0 };
+    const unpaid = unpaidResponse.ok
+      ? await unwrapApiResponse<{ total: number }>(unpaidResponse)
+      : { total: 0 };
+    const overdue = overdueResponse.ok
+      ? await unwrapApiResponse<{ total: number }>(overdueResponse)
+      : { total: 0 };
     setOutstandingFeeTotal(unpaid.total + overdue.total);
   }, [id]);
 
@@ -148,8 +168,16 @@ export function ClassDetailPanel({ id }: { id: string }) {
     try {
       const response = await fetch(`/api/classes/${id}/students`);
       if (response.ok) {
-        const enrolled = await unwrapApiResponse<Array<{ studentId: string; subjects: Array<{ classSubjectId: string }> }>>(response);
-        const registered = enrolled.find((entry) => entry.studentId === student.id)?.subjects.map((subject) => subject.classSubjectId) || [];
+        const enrolled = await unwrapApiResponse<
+          Array<{
+            studentId: string;
+            subjects: Array<{ classSubjectId: string }>;
+          }>
+        >(response);
+        const registered =
+          enrolled
+            .find((entry) => entry.studentId === student.id)
+            ?.subjects.map((subject) => subject.classSubjectId) || [];
         setRegisteredSubjectIds(registered);
         setSelectedSubjectIds(registered);
       } else {
@@ -183,6 +211,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
       setSubjectDialogOpen(false);
       setPendingStudent(null);
       await load();
+      showSuccess("Đã đăng ký học viên vào lớp");
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Không thể đăng ký học sinh",
@@ -229,6 +258,37 @@ export function ClassDetailPanel({ id }: { id: string }) {
       );
     } finally {
       setAddingStudent(false);
+    }
+  }
+
+  async function removeStudent() {
+    if (!studentToRemove) return;
+    setRemovingStudent(true);
+    try {
+      const response = await fetch(`/api/classes/${id}/students`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ studentId: studentToRemove.studentId }),
+      });
+      if (!response.ok) {
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể xóa học viên khỏi lớp",
+          ),
+        );
+      }
+      setStudentToRemove(null);
+      await load();
+      showSuccess("Đã xóa học viên khỏi lớp");
+    } catch (reason) {
+      showError(
+        reason instanceof Error
+          ? reason.message
+          : "Không thể xóa học viên khỏi lớp",
+      );
+    } finally {
+      setRemovingStudent(false);
     }
   }
 
@@ -288,7 +348,10 @@ export function ClassDetailPanel({ id }: { id: string }) {
       const response = await fetch(`/api/classes/${id}/tuition-notice/pdf`);
       if (!response.ok)
         throw new Error(
-          await extractApiErrorMessage(response, "Không thể xuất thông báo học phí"),
+          await extractApiErrorMessage(
+            response,
+            "Không thể xuất thông báo học phí",
+          ),
         );
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -297,9 +360,13 @@ export function ClassDetailPanel({ id }: { id: string }) {
       anchor.download = `thong-bao-hoc-phi-${classData?.code || "lop"}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
+      await load();
+      showSuccess("Đã tạo học phí, thanh toán và xuất thông báo");
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "Không thể xuất thông báo học phí",
+        reason instanceof Error
+          ? reason.message
+          : "Không thể xuất thông báo học phí",
       );
     } finally {
       setExportingNotice(false);
@@ -332,7 +399,9 @@ export function ClassDetailPanel({ id }: { id: string }) {
             onClick={() => void exportTuitionNotice()}
             disabled={exportingNotice}
           >
-            {exportingNotice ? "Đang tạo thanh toán..." : "Tạo thanh toán và xuất thông báo"}
+            {exportingNotice
+              ? "Đang tạo học phí và thông báo..."
+              : "Tạo thanh toán và xuất thông báo"}
           </Button>
           <Button component={Link} href="/admin/classes" variant="outlined">
             Quay lại
@@ -361,8 +430,12 @@ export function ClassDetailPanel({ id }: { id: string }) {
             ["Khoản chưa thu", outstandingFeeTotal],
           ].map(([label, value]) => (
             <Paper key={String(label)} sx={{ p: 2, flex: 1 }}>
-              <Typography variant="body2" color="text.secondary">{label}</Typography>
-              <Typography variant="h5" fontWeight={700}>{value}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {label}
+              </Typography>
+              <Typography variant="h5" fontWeight={700}>
+                {value}
+              </Typography>
             </Paper>
           ))}
         </Stack>
@@ -383,7 +456,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Mã môn</TableCell>
                 <TableCell>Môn học</TableCell>
                 <TableCell>Giáo viên</TableCell>
                 <TableCell align="right">Học phí</TableCell>
@@ -394,7 +466,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
             <TableBody>
               {classData.classSubjects.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.subject.code}</TableCell>
                   <TableCell>{item.subject.name}</TableCell>
                   <TableCell>
                     {item.teacher?.fullName || "Chưa phân công"}
@@ -426,7 +497,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
               ))}
               {!classData.classSubjects.length && (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={5}>
                     <Typography sx={{ p: 3 }} color="text.secondary">
                       Lớp chưa có môn học
                     </Typography>
@@ -439,18 +510,130 @@ export function ClassDetailPanel({ id }: { id: string }) {
       )}
       {tab === 2 && (
         <Paper sx={{ overflow: "auto" }}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} spacing={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ xs: "stretch", sm: "center" }}
+            spacing={1}
+            sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}
+          >
             <Stack>
               <Typography variant="h6">Học viên trong lớp</Typography>
-              <Typography variant="body2" color="text.secondary">Mỗi học viên có thể đăng ký một hoặc nhiều môn trong lớp</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Mỗi học viên có thể đăng ký một hoặc nhiều môn trong lớp
+              </Typography>
             </Stack>
-            <Button variant="contained" startIcon={<PersonAddAlt1Icon />} onClick={() => setStudentDialogOpen(true)} disabled={addingStudent || !classData.classSubjects.length}>Đăng ký học viên</Button>
+            <Button
+              variant="contained"
+              startIcon={<PersonAddAlt1Icon />}
+              onClick={() => setStudentDialogOpen(true)}
+              disabled={addingStudent || !classData.classSubjects.length}
+            >
+              Đăng ký học viên
+            </Button>
           </Stack>
           <Table>
-            <TableHead><TableRow><TableCell>Mã học viên</TableCell><TableCell>Họ tên</TableCell><TableCell>Môn đang học</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+            <TableHead>
+              <TableRow>
+                <TableCell>Mã học viên</TableCell>
+                <TableCell>Họ tên</TableCell>
+                <TableCell>Môn đang học</TableCell>
+                <TableCell>Học phí</TableCell>
+                <TableCell align="right">Thao tác</TableCell>
+              </TableRow>
+            </TableHead>
             <TableBody>
-              {classStudents.map((item) => <TableRow key={item.id}><TableCell>{item.student.code}</TableCell><TableCell>{item.student.fullName}</TableCell><TableCell>{item.subjects.map((entry) => classData.classSubjects.find((subject) => subject.id === entry.classSubjectId)?.subject.name).filter(Boolean).join(", ") || "-"}</TableCell><TableCell align="right"><Button size="small" variant="outlined" onClick={() => void chooseStudent({ id: item.studentId, code: item.student.code, fullName: item.student.fullName })}>Thêm môn</Button></TableCell></TableRow>)}
-              {!classStudents.length && <TableRow><TableCell colSpan={4}><Typography sx={{ p: 3 }} textAlign="center" color="text.secondary">Chưa có học viên</Typography></TableCell></TableRow>}
+              {classStudents.map((item) => {
+                const billedSubjectIds = new Set(
+                  item.tuitionFees.flatMap((fee) =>
+                    fee.items
+                      .map((feeItem) => feeItem.classSubjectId)
+                      .filter((value): value is string => Boolean(value)),
+                  ),
+                );
+                const hasUnbilledSubjects = item.subjects.some(
+                  (subject) => !billedSubjectIds.has(subject.classSubjectId),
+                );
+                const hasTuitionFee = item.tuitionFees.length > 0;
+                const isBusy = removingStudent || exportingNotice;
+
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.student.code}</TableCell>
+                    <TableCell>{item.student.fullName}</TableCell>
+                    <TableCell>
+                      {item.subjects
+                        .map(
+                          (entry) =>
+                            classData.classSubjects.find(
+                              (subject) => subject.id === entry.classSubjectId,
+                            )?.subject.name,
+                        )
+                        .filter(Boolean)
+                        .join(", ") || "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Typography
+                        variant="body2"
+                        color={
+                          hasUnbilledSubjects ? "warning.main" : "success.main"
+                        }
+                      >
+                        {hasUnbilledSubjects
+                          ? hasTuitionFee
+                            ? "Còn môn chưa tạo phí"
+                            : "Chưa tạo học phí"
+                          : "Đã tạo học phí"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" gap={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() =>
+                            void chooseStudent({
+                              id: item.studentId,
+                              code: item.student.code,
+                              fullName: item.student.fullName,
+                            })
+                          }
+                          disabled={isBusy}
+                        >
+                          Thêm môn
+                        </Button>
+                      <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => setStudentToRemove(item)}
+                          disabled={isBusy || hasTuitionFee}
+                          title={
+                            hasTuitionFee
+                              ? "Không thể xóa vì đã phát sinh học phí"
+                              : undefined
+                          }
+                        >
+                          Xóa
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {!classStudents.length && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography
+                      sx={{ p: 3 }}
+                      textAlign="center"
+                      color="text.secondary"
+                    >
+                      Chưa có học viên
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </Paper>
@@ -494,12 +677,12 @@ export function ClassDetailPanel({ id }: { id: string }) {
                     (option) =>
                       editingSubject?.subject.id === option.id ||
                       !classData.classSubjects.some(
-                        (item) => item.subject.code === option.code,
+                        (item) => item.subject.id === option.id,
                       ),
                   )
                   .map((option) => (
                     <MenuItem key={option.id} value={option.id}>
-                      {option.code} — {option.name}
+                      {option.name}
                     </MenuItem>
                   ))}
               </Select>
@@ -603,10 +786,20 @@ export function ClassDetailPanel({ id }: { id: string }) {
             onClick={() => void addStudent()}
             disabled={addingStudent || selectedSubjectIds.length === 0}
           >
-            {addingStudent ? "Đang đăng ký..." : "Đăng ký và tạo học phí"}
+            {addingStudent ? "Đang đăng ký..." : "Đăng ký"}
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={Boolean(studentToRemove)}
+        title="Xóa học viên khỏi lớp"
+        message={`Bạn có chắc muốn xóa ${studentToRemove?.student.fullName ?? "học viên này"} khỏi lớp? Nếu đã phát sinh học phí, hệ thống sẽ không cho phép xóa.`}
+        onConfirm={() => void removeStudent()}
+        onCancel={() => setStudentToRemove(null)}
+        isLoading={removingStudent}
+        confirmLabel="Xóa"
+      />
+      {Snackbar}
     </Stack>
   );
 }

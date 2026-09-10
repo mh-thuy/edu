@@ -50,28 +50,13 @@ function buildClassUpdateInput(
   };
 }
 
-async function generateTuitionFeeNo(tx: Prisma.TransactionClient) {
-  const prefix = `HP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const candidate = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
-    if (
-      !(await tx.tuitionFee.findUnique({
-        where: { feeNo: candidate },
-        select: { id: true },
-      }))
-    )
-      return candidate;
-  }
-  throw new ConflictError("Không thể tạo mã học phí tự động, vui lòng thử lại");
-}
-
 export type ClassSubjectView = {
   id: string;
   teacherId: string | null;
   tuitionFee: Prisma.Decimal;
   totalSessions: number;
   maxStudents: number | null;
-  subject: { id: string; code: string; name: string };
+  subject: { id: string; name: string };
   teacher: { id: string; code: string; fullName: string } | null;
 };
 
@@ -82,7 +67,7 @@ async function queryClassSubjects(
   return client.$queryRaw<ClassSubjectView[]>`
     SELECT cs.id, cs.teacher_id AS "teacherId", cs.tuition_fee AS "tuitionFee", cs.total_sessions AS "totalSessions",
            cs.max_students AS "maxStudents",
-           json_build_object('id', s.id, 'code', s.code, 'name', s.name) AS subject,
+           json_build_object('id', s.id, 'name', s.name) AS subject,
            CASE WHEN t.id IS NULL THEN NULL ELSE json_build_object(
              'id', t.id, 'code', t.code, 'fullName', t.full_name
            ) END AS teacher
@@ -299,46 +284,36 @@ export async function assignStudentToClass(
     if (!student) throw new NotFoundError("Không tìm thấy học viên");
 
     const existingSubjectRows = existing
-      ? await tx.$queryRaw<Array<{ classSubjectId: string }>>`
-          SELECT class_subject_id AS "classSubjectId"
+      ? await tx.$queryRaw<
+          Array<{ id: string; classSubjectId: string; status: string }>
+        >`
+          SELECT id, class_subject_id AS "classSubjectId", status::text AS status
           FROM enrollment_subjects
-          WHERE enrollment_id = ${existing.id}::uuid AND status = 'ACTIVE'::enrollment_subject_status
+          WHERE enrollment_id = ${existing.id}::uuid
         `
       : [];
     const existingSubjectIds = new Set(
-      existingSubjectRows.map((row) => row.classSubjectId),
+      existingSubjectRows
+        .filter((row) => row.status === "ACTIVE")
+        .map((row) => row.classSubjectId),
     );
     const newClassSubjects = classSubjects.filter(
       (classSubject) => !existingSubjectIds.has(classSubject.id),
     );
-    const billedItems = existing
-      ? await tx.tuitionFeeItem.findMany({
-          where: {
-            tuitionFee: { enrollmentId: existing.id },
-            classSubjectId: { in: classSubjectIds },
-          },
-          select: { classSubjectId: true },
-          distinct: ["classSubjectId"],
-        })
-      : [];
-    const billedSubjectIds = new Set(
-      billedItems
-        .map((row) => row.classSubjectId)
-        .filter((value): value is string => Boolean(value)),
-    );
-    const subjectsToBill = classSubjects.filter(
-      (classSubject) => !billedSubjectIds.has(classSubject.id),
-    );
-    if (newClassSubjects.length === 0 && subjectsToBill.length === 0) {
+    if (newClassSubjects.length === 0) {
       throw new ConflictError("Học viên đã đăng ký các môn học được chọn");
     }
 
-    const enrollment =
-      existing ??
-      (await tx.classStudent.create({
-        data: { classId, studentId },
-        include: { student: true, class: true },
-      }));
+    const enrollment = existing
+      ? await tx.classStudent.update({
+          where: { id: existing.id },
+          data: { status: "ACTIVE", leftAt: null, deletedAt: null },
+          include: { student: true, class: true },
+        })
+      : await tx.classStudent.create({
+          data: { classId, studentId },
+          include: { student: true, class: true },
+        });
     for (const classSubject of newClassSubjects) {
       if (classSubject.maxStudents !== null) {
         const countRows = await tx.$queryRaw<Array<{ count: bigint }>>`
@@ -352,41 +327,22 @@ export async function assignStudentToClass(
           );
         }
       }
-      await tx.$executeRaw`
-        INSERT INTO enrollment_subjects (enrollment_id, class_subject_id, enrolled_at)
-        VALUES (${enrollment.id}::uuid, ${classSubject.id}::uuid, CURRENT_TIMESTAMP)
-      `;
+      const previousSubject = existingSubjectRows.find(
+        (row) => row.classSubjectId === classSubject.id,
+      );
+      if (previousSubject) {
+        await tx.enrollmentSubject.update({
+          where: { id: previousSubject.id },
+          data: { status: "ACTIVE", droppedAt: null, enrolledAt: new Date() },
+        });
+      } else {
+        await tx.$executeRaw`
+          INSERT INTO enrollment_subjects (enrollment_id, class_subject_id, enrolled_at)
+          VALUES (${enrollment.id}::uuid, ${classSubject.id}::uuid, CURRENT_TIMESTAMP)
+        `;
+      }
     }
 
-    const feeNo = await generateTuitionFeeNo(tx);
-    const originalAmount = subjectsToBill.reduce(
-      (total, classSubject) => total.add(classSubject.tuitionFee),
-      new Prisma.Decimal(0),
-    );
-    const fee = await tx.tuitionFee.create({
-      data: {
-        feeNo,
-        studentId,
-        enrollmentId: enrollment.id,
-        classId,
-        originalAmount,
-        discountAmount: 0,
-        additionalAmount: 0,
-        finalAmount: originalAmount,
-        dueDate: classData.endDate,
-        createdBy: actorId || studentId,
-        updatedBy: actorId || studentId,
-      },
-    });
-    for (const [index, classSubject] of subjectsToBill.entries()) {
-      await tx.$executeRaw`
-        INSERT INTO tuition_fee_items
-          (id, tuition_fee_id, class_subject_id, item_type, item_name, quantity, unit_price, amount, display_order, created_at, updated_at)
-        VALUES
-          (gen_random_uuid(), ${fee.id}::uuid, ${classSubject.id}::uuid, 'TUITION'::tuition_fee_item_type,
-           ${`Học phí môn ${classSubject.subject.name}`}, 1, ${classSubject.tuitionFee}, ${classSubject.tuitionFee}, ${index}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `;
-    }
     const performedBy = actorId || studentId;
     await tx.tuitionAuditLog.create({
       data: {
@@ -397,25 +353,7 @@ export async function assignStudentToClass(
         dataAfter: {
           classId,
           studentId,
-          classSubjectIds: classSubjects.map((item) => item.id),
-          newClassSubjectIds: newClassSubjects.map((item) => item.id),
-          tuitionFeeId: fee.id,
-        },
-        performedBy,
-      },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "TUITION_FEE",
-        entityId: fee.id,
-        action: "AUTO_CREATED_FROM_ENROLLMENT",
-        dataAfter: {
-          enrollmentId: enrollment.id,
-          classId,
-          studentId,
-          classSubjectIds: subjectsToBill.map((item) => item.id),
-          originalAmount: originalAmount.toString(),
-          finalAmount: originalAmount.toString(),
+          classSubjectIds: newClassSubjects.map((item) => item.id),
         },
         performedBy,
       },
@@ -428,38 +366,57 @@ export async function getSubjects(search?: string, includeInactive = false) {
   return prisma.$queryRaw<
     Array<{
       id: string;
-      code: string;
       name: string;
       status: "ACTIVE" | "INACTIVE";
     }>
   >`
-    SELECT id, code, name, status FROM subjects
+    SELECT id, name, status FROM subjects
     WHERE ${includeInactive ? Prisma.sql`TRUE` : Prisma.sql`status = 'ACTIVE'::subject_status`}
       ${search ? Prisma.sql`AND name ILIKE ${`%${search}%`}` : Prisma.empty}
     ORDER BY name ASC
   `;
 }
 
+async function generateSubjectCode() {
+  const prefix = `MH-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+    if (!(await prisma.subject.findUnique({ where: { code }, select: { id: true } }))) {
+      return code;
+    }
+  }
+  throw new ConflictError("Không thể tạo mã môn học tự động, vui lòng thử lại");
+}
+
 export async function createSubject(data: SubjectCreate) {
-  const rows = await prisma.$queryRaw<
-    Array<{ id: string; code: string; name: string }>
-  >`
-    INSERT INTO subjects (id, code, name, status, created_at, updated_at)
-    VALUES (gen_random_uuid(), ${data.code.toUpperCase()}, ${data.name}, 'ACTIVE'::subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    RETURNING id, code, name
-  `;
-  return rows[0];
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = await generateSubjectCode();
+    try {
+      return await prisma.subject.create({
+        data: { code, name: data.name, status: "ACTIVE" },
+        select: { id: true, name: true, status: true },
+      });
+    } catch (error: unknown) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2002"
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw new ConflictError("Không thể tạo mã môn học tự động, vui lòng thử lại");
 }
 
 export async function updateSubject(id: string, data: SubjectUpdate) {
   const rows = await prisma.$queryRaw<
-    Array<{ id: string; code: string; name: string; status: string }>
+    Array<{ id: string; name: string; status: string }>
   >`
     UPDATE subjects
-    SET code = ${data.code.toUpperCase()}, name = ${data.name}, status = ${data.status}::subject_status,
+    SET name = ${data.name}, status = ${data.status}::subject_status,
         updated_at = CURRENT_TIMESTAMP, deleted_at = CASE WHEN ${data.status} = 'INACTIVE' THEN COALESCE(deleted_at, CURRENT_TIMESTAMP) ELSE NULL END
     WHERE id = ${id}::uuid
-    RETURNING id, code, name, status
+    RETURNING id, name, status
   `;
   if (!rows[0]) throw new NotFoundError("Không tìm thấy môn học");
   return rows[0];
@@ -565,21 +522,32 @@ export async function removeStudentFromClass(
   studentId: string,
   options?: { force?: boolean; isAdmin?: boolean },
 ): Promise<void> {
-  const hasTuitionFees = await prisma.tuitionFee.count({
-    where: { classId, studentId },
-  });
+  await prisma.$transaction(async (tx) => {
+    const enrollment = await tx.classStudent.findUnique({
+      where: { classId_studentId: { classId, studentId } },
+      include: { tuitionFees: { select: { id: true } } },
+    });
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy học viên đang đăng ký trong lớp");
+    }
 
-  if (
-    hasTuitionFees > 0 &&
-    !(options?.force === true && options?.isAdmin === true)
-  ) {
-    throw new ConflictError(
-      "Cannot remove student from class with existing tuition fees",
-    );
-  }
+    if (
+      enrollment.tuitionFees.length > 0 &&
+      !(options?.force === true && options?.isAdmin === true)
+    ) {
+      throw new ConflictError(
+        "Không thể xóa học viên đã phát sinh học phí",
+      );
+    }
 
-  await prisma.classStudent.delete({
-    where: { classId_studentId: { classId, studentId } },
+    await tx.enrollmentSubject.updateMany({
+      where: { enrollmentId: enrollment.id, status: "ACTIVE" },
+      data: { status: "DROPPED", droppedAt: new Date() },
+    });
+    await tx.classStudent.update({
+      where: { id: enrollment.id },
+      data: { status: "LEFT", leftAt: new Date(), deletedAt: new Date() },
+    });
   });
 }
 
@@ -587,16 +555,30 @@ export async function getClassStudents(
   classId: string,
 ): Promise<
   Array<
-    ClassStudentWithStudent & { subjects: Array<{ classSubjectId: string }> }
+    ClassStudentWithStudent & {
+      subjects: Array<{ classSubjectId: string }>;
+      tuitionFees: Array<{
+        id: string;
+        status: string;
+        items: Array<{ classSubjectId: string | null }>;
+      }>;
+    }
   >
 > {
   return prisma.classStudent.findMany({
-    where: { classId },
+    where: { classId, status: "ACTIVE" },
     include: {
       student: true,
       subjects: {
         where: { status: "ACTIVE" },
         select: { classSubjectId: true },
+      },
+      tuitionFees: {
+        select: {
+          id: true,
+          status: true,
+          items: { select: { classSubjectId: true } },
+        },
       },
     },
   });

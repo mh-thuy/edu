@@ -5,11 +5,47 @@ import { PaymentBatchStatus } from "@prisma/client";
 import { TuitionFeeStatus } from "@prisma/client";
 import { generatePaymentBatchNoticePdf } from "@/modules/finance/payments/services/payment-batch-notice-pdf.service";
 import { createPaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
+import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
 
 export async function createClassPaymentBatches(
   classId: string,
   actorId: string,
 ) {
+  const enrollments = await prisma.classStudent.findMany({
+    where: { classId, status: "ACTIVE" },
+    select: {
+      studentId: true,
+      subjects: {
+        where: { status: "ACTIVE" },
+        select: { classSubjectId: true },
+      },
+      tuitionFees: {
+        select: {
+          items: { select: { classSubjectId: true } },
+        },
+      },
+    },
+  });
+
+  for (const enrollment of enrollments) {
+    const billedSubjectIds = new Set(
+      enrollment.tuitionFees.flatMap((fee) =>
+        fee.items
+          .map((item) => item.classSubjectId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const hasUnbilledSubjects = enrollment.subjects.some(
+      (subject) => !billedSubjectIds.has(subject.classSubjectId),
+    );
+    if (hasUnbilledSubjects) {
+      await TuitionService.createFromEnrollment(
+        { classId, studentId: enrollment.studentId },
+        actorId,
+      );
+    }
+  }
+
   const fees = await prisma.tuitionFee.findMany({
     where: {
       classId,

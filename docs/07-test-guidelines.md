@@ -195,8 +195,9 @@ npm run build
 Business test:
 
 ```text
-Đăng ký môn tự động tạo học phí
-Đăng ký bổ sung chỉ tạo item còn thiếu
+Đăng ký môn không tự động tạo học phí
+Tạo thanh toán và xuất thông báo tạo học phí cho item còn thiếu
+Tạo học phí không tạo item trùng
 Không tạo học phí/item trùng môn
 Không thanh toán vượt số tiền còn nợ
 Thanh toán một phần -> PARTIAL

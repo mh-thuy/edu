@@ -25,7 +25,6 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type Subject = {
   id: string;
-  code: string;
   name: string;
   status: "ACTIVE" | "INACTIVE";
 };
@@ -35,7 +34,6 @@ export function SubjectManagement() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Subject | null>(null);
-  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [status, setStatus] = useState<Subject["status"]>("ACTIVE");
   const [error, setError] = useState("");
@@ -61,7 +59,6 @@ export function SubjectManagement() {
 
   function openCreate() {
     setEditing(null);
-    setCode("");
     setName("");
     setStatus("ACTIVE");
     setError("");
@@ -69,7 +66,6 @@ export function SubjectManagement() {
   }
   function openEdit(item: Subject) {
     setEditing(item);
-    setCode(item.code);
     setName(item.name);
     setStatus(item.status);
     setError("");
@@ -77,7 +73,7 @@ export function SubjectManagement() {
   }
 
   async function save() {
-    if (!code.trim() || !name.trim()) return;
+    if (!name.trim()) return;
     setSaving(true);
     setError("");
     try {
@@ -86,9 +82,7 @@ export function SubjectManagement() {
         {
           method: editing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            editing ? { code, name, status } : { code, name },
-          ),
+          body: JSON.stringify(editing ? { name, status } : { name }),
         },
       );
       if (!response.ok)
@@ -136,7 +130,6 @@ export function SubjectManagement() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Mã môn</TableCell>
               <TableCell>Tên môn học</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell align="right">Thao tác</TableCell>
@@ -145,7 +138,6 @@ export function SubjectManagement() {
           <TableBody>
             {items.map((item) => (
               <TableRow key={item.id}>
-                <TableCell>{item.code}</TableCell>
                 <TableCell>{item.name}</TableCell>
                 <TableCell>
                   <Chip
@@ -172,7 +164,7 @@ export function SubjectManagement() {
             ))}
             {!items.length && (
               <TableRow>
-                <TableCell colSpan={4}>
+                <TableCell colSpan={3}>
                   <Typography
                     sx={{ p: 3 }}
                     textAlign="center"
@@ -195,13 +187,6 @@ export function SubjectManagement() {
         <DialogTitle>{editing ? "Sửa môn học" : "Thêm môn học"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Mã môn"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              required
-              disabled={saving}
-            />
             <TextField
               label="Tên môn học"
               value={name}
@@ -233,7 +218,7 @@ export function SubjectManagement() {
           <Button
             variant="contained"
             onClick={() => void save()}
-            disabled={saving || !code.trim() || !name.trim()}
+            disabled={saving || !name.trim()}
           >
             Lưu
           </Button>

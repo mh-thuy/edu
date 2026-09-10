@@ -21,7 +21,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type ClassSubject = {
   id: string;
-  subject: { id: string; code: string; name: string };
+  subject: { id: string; name: string };
   teacher: { id: string; code: string; fullName: string } | null;
 };
 
@@ -132,7 +132,7 @@ export function ClassTuitionReportPage() {
               <MenuItem value=""><em>Chọn môn học</em></MenuItem>
               {subjects.map((subject) => (
                 <MenuItem key={subject.id} value={subject.id}>
-                  {subject.subject.code} — {subject.subject.name}
+                  {subject.subject.name}
                 </MenuItem>
               ))}
             </Select>

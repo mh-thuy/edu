@@ -641,6 +641,9 @@ Rule:
 - Chọn học viên qua StudentSelectDialog.
 - Không cho thêm trùng học viên.
 - Hiển thị danh sách học viên hiện tại của lớp.
+- Đăng ký học viên không tự động tạo học phí.
+- Thao tác `Tạo thanh toán và xuất thông báo` của lớp sẽ tạo học phí cho các môn chưa được lập phí trước khi tạo payment batch.
+- Hiển thị trạng thái `Chưa tạo học phí`, `Còn môn chưa tạo phí` hoặc `Đã tạo học phí`.
 
 ---
 
@@ -709,12 +712,14 @@ Ghi nhận thanh toán
 ## 20.3 Học phí phát sinh từ đăng ký
 
 ```text
-Không có form tạo học phí thủ công. Sau khi đăng ký môn, UI hiển thị kết quả phát sinh học phí và liên kết đến chi tiết học phí.
+Không có form tạo học phí độc lập. Sau khi đăng ký môn, UI hiển thị trạng thái chưa tạo phí; thao tác `Tạo thanh toán và xuất thông báo` của lớp sẽ tạo phí trước khi tạo payment batch.
 ```
 
 Rule:
 
-- Chỉ tạo phí từ thao tác đăng ký môn.
+- Chỉ tạo phí từ enrollment đã tồn tại.
+- Tạo phí là thao tác riêng, không chạy tự động khi đăng ký môn.
+- Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo thanh toán và xuất thông báo`.
 - Một học viên có thể học một phần môn trong lớp.
 - Không tạo trùng tuition fee item cho cùng một môn.
 - Chi tiết học phí có nút “Thanh toán học phí”.
@@ -920,7 +925,8 @@ Thông báo thành công:
 ```text
 Đã lưu thành công
 Đã xóa thành công
-Đã đăng ký môn và tạo học phí thành công
+Đã đăng ký môn thành công
+Đã tạo học phí thành công
 Đã ghi nhận thanh toán
 Đã in bill tạm
 Đã tạo biên lai
@@ -946,7 +952,8 @@ Các action bắt buộc confirm:
 
 - Xóa dữ liệu
 - Hủy lớp
-- Đăng ký môn và tự động phát sinh học phí
+- Đăng ký môn không tự động phát sinh học phí
+- Tạo học phí riêng từ enrollment
 - Ghi nhận thanh toán
 - Tạo biên lai
 - Duyệt bảng lương

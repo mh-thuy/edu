@@ -594,6 +594,52 @@ await prisma.$transaction(async (tx) => {})
 
 ---
 
+# 19.1 Enrollment và tạo học phí tách rời
+
+## 19.1.1 Đăng ký học viên
+
+```http
+POST /api/classes/{classId}/students
+```
+
+Body:
+
+```json
+{
+  "studentId": "uuid",
+  "classSubjectIds": ["uuid"]
+}
+```
+
+API này chỉ tạo hoặc bổ sung enrollment subject. API không tạo `tuition_fee`.
+
+## 19.1.2 Tạo học phí từ enrollment
+
+```http
+POST /api/classes/{classId}/students/{studentId}/tuition-fee
+```
+
+API yêu cầu role `ADMIN` hoặc `STAFF`, không cần body. Backend sẽ:
+
+```text
+Tìm enrollment của học viên trong lớp
+Lấy các môn ACTIVE chưa có tuition fee item
+Tạo tuition_fee và tuition_fee_items trong một transaction
+Ghi audit log
+```
+
+Nếu tất cả môn đã được lập phí, API trả `409 Conflict`. Enrollment không có học phí vẫn hợp lệ và có thể bị xóa theo Enrollment Remove Rules.
+
+## 19.1.3 Tạo học phí khi tạo thông báo theo lớp
+
+```http
+GET /api/classes/{classId}/tuition-notice/pdf
+```
+
+Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với các môn chưa có tuition fee item. Nếu học phí đã tồn tại, chỉ dùng lại học phí hiện có và không tạo trùng item.
+
+---
+
 # 20. API Naming Rules
 
 Database:
