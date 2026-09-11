@@ -87,6 +87,13 @@ enum TuitionFeeStatus {
   @@map("tuition_fee_status")
 }
 
+enum TuitionFeeBillingType {
+  LEGACY_ONE_TIME
+  MONTHLY
+
+  @@map("tuition_fee_billing_type")
+}
+
 enum TuitionFeeItemType {
   TUITION
   MATERIAL
@@ -266,11 +273,28 @@ model ClassStudent {
   student     Student             @relation(fields: [studentId], references: [id], map: "fk_class_students_student")
   tuitionFees TuitionFee[]        @relation("TuitionFeeEnrollment")
   subjects    EnrollmentSubject[]
+  pauses      EnrollmentPause[]
 
   @@unique([classId, studentId], map: "uq_class_students_class_student")
   @@index([classId], map: "idx_class_students_class_id")
   @@index([studentId], map: "idx_class_students_student_id")
   @@map("class_students")
+}
+
+model EnrollmentPause {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollmentId String   @map("enrollment_id") @db.Uuid
+  startMonth   DateTime @map("start_month") @db.Date
+  endMonth     DateTime @map("end_month") @db.Date
+  reason       String?
+  createdBy    String   @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  enrollment ClassStudent @relation(fields: [enrollmentId], references: [id], map: "fk_enrollment_pauses_enrollment")
+
+  @@index([enrollmentId, startMonth, endMonth], map: "idx_enrollment_pauses_period")
+  @@map("enrollment_pauses")
 }
 
 model ClassSubject {
@@ -344,14 +368,16 @@ model ClassSchedule {
   @@map("class_schedules")
 }
 
-// New one-time tuition/payment domain. These transitional tables are additive;
-// legacy financial tables remain read-only until the migration report is approved.
+// Monthly tuition/payment domain. Legacy one-time fees remain identifiable during the migration period.
 model TuitionFee {
   id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   feeNo              String           @unique(map: "uq_tuition_fees_fee_no") @map("fee_no") @db.VarChar(30)
   studentId          String           @map("student_id") @db.Uuid
   enrollmentId       String           @map("enrollment_id") @db.Uuid
   classId            String           @map("class_id") @db.Uuid
+  billingYear        Int              @map("billing_year")
+  billingMonth       Int              @map("billing_month") @db.SmallInt
+  billingType        TuitionFeeBillingType @default(LEGACY_ONE_TIME) @map("billing_type")
   originalAmount     Decimal          @default(0) @map("original_amount") @db.Decimal(15, 2)
   discountAmount     Decimal          @default(0) @map("discount_amount") @db.Decimal(15, 2)
   additionalAmount   Decimal          @default(0) @map("additional_amount") @db.Decimal(15, 2)
@@ -376,6 +402,8 @@ model TuitionFee {
 
   @@index([studentId], map: "idx_tuition_fees_student_id")
   @@index([classId], map: "idx_tuition_fees_class_id")
+  @@index([billingYear, billingMonth], map: "idx_tuition_fees_billing_month")
+  @@index([studentId, classId, billingYear, billingMonth], map: "idx_tuition_fees_student_class_month")
   @@index([status], map: "idx_tuition_fees_status")
   @@index([dueDate], map: "idx_tuition_fees_due_date")
   @@map("tuition_fees")

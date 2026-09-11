@@ -14,8 +14,11 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 
 - Đăng ký môn và tạo học phí là hai thao tác độc lập.
 - Khi đăng ký môn, hệ thống chỉ tạo enrollment subject; chưa tạo học phí.
-- Thao tác `Tạo thanh toán và xuất thông báo` chỉ tạo item cho các môn chưa được lập phí trước khi tạo payment batch.
+- Chi tiết lớp chỉ hiển thị tổng quan; nghiệp vụ học viên nằm ở `/admin/classes/{classId}/students` và học phí nằm ở `/admin/classes/{classId}/tuition`.
+- Trang học phí nhận một kỳ `YYYY-MM`; `Tạo học phí tháng` tạo phí riêng, còn `Tạo thanh toán & xuất thông báo` tạo payment batch và PDF.
 - Không tạo học phí độc lập ngoài enrollment.
+- Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng dù không có điểm danh; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
+- Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
 - Thanh toán bắt đầu từ chi tiết học phí bằng nút `Thanh toán học phí`.
 - Thông báo thanh toán, biên lai tổng hợp và phiếu thu đều hiển thị các môn đã đăng ký của học viên.
 

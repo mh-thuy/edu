@@ -401,7 +401,9 @@ Field:
 id
 student_id
 class_id
-month
+billing_year
+billing_month
+enrollment_id
 amount
 discount
 final_amount
@@ -426,7 +428,7 @@ CANCELLED
 Rule:
 
 ```text
-(student_id,class_id,month) unique
+(student_id,class_id,billing_year,billing_month) unique cho học phí MONTHLY
 
 final_amount = amount - discount
 
@@ -434,6 +436,14 @@ remaining_amount = final_amount - paid_amount
 
 Không cho overpayment
 ```
+
+Học phí theo tháng được tính trọn tháng theo từng môn:
+
+```text
+phí môn = phí tháng chuẩn
+```
+
+Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học phí; enrollment còn `ACTIVE` phát sinh đủ phí tháng dù học viên vắng, đăng ký giữa tháng hoặc không có điểm danh.
 
 ---
 

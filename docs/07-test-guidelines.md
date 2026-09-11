@@ -198,6 +198,9 @@ Business test:
 Đăng ký môn không tự động tạo học phí
 Tạo thanh toán và xuất thông báo tạo học phí cho item còn thiếu
 Tạo học phí không tạo item trùng
+Tính phí tháng trọn tháng theo mức phí của từng môn
+Enrollment tạm nghỉ không phát sinh học phí tháng
+Enrollment ACTIVE nhưng vắng không làm giảm học phí tháng
 Không tạo học phí/item trùng môn
 Không thanh toán vượt số tiền còn nợ
 Thanh toán một phần -> PARTIAL

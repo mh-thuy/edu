@@ -1,5 +1,6 @@
 import { requireApiRole } from "@/lib/api-auth";
-import { handleApiError } from "@/lib/api";
+import { apiError, handleApiError } from "@/lib/api";
+import { z } from "zod";
 import { createClassPaymentBatches, generateClassTuitionNoticePdf } from "@/modules/finance/tuition/services/class-tuition-notice-pdf.service";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -7,8 +8,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const user = await requireApiRole(["ADMIN", "STAFF"]);
     if (user instanceof Response) return user;
     const classId = (await params).id;
-    await createClassPaymentBatches(classId, user.id);
-    const result = await generateClassTuitionNoticePdf(classId, user.fullName);
+    const rawMonth = new URL(request.url).searchParams.get("month");
+    const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "month phải có định dạng YYYY-MM").safeParse(rawMonth);
+    if (!month.success) {
+      return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);
+    }
+    const billingYear = Number(month.data.slice(0, 4));
+    const billingMonth = Number(month.data.slice(5, 7));
+    const period = { billingYear, billingMonth };
+    await createClassPaymentBatches(classId, user.id, period);
+    const result = await generateClassTuitionNoticePdf(classId, user.fullName, period);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, {
       headers: {

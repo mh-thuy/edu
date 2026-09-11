@@ -619,7 +619,7 @@ API này chỉ tạo hoặc bổ sung enrollment subject. API không tạo `tuit
 POST /api/classes/{classId}/students/{studentId}/tuition-fee
 ```
 
-API yêu cầu role `ADMIN` hoặc `STAFF`, không cần body. Backend sẽ:
+API yêu cầu role `ADMIN` hoặc `STAFF`, query bắt buộc `month=YYYY-MM`, không cần body. Backend sẽ:
 
 ```text
 Tìm enrollment của học viên trong lớp
@@ -630,13 +630,51 @@ Ghi audit log
 
 Nếu tất cả môn đã được lập phí, API trả `409 Conflict`. Enrollment không có học phí vẫn hợp lệ và có thể bị xóa theo Enrollment Remove Rules.
 
-## 19.1.3 Tạo học phí khi tạo thông báo theo lớp
+## 19.1.3 Quản lý môn và tạm nghỉ
+
+```http
+DELETE /api/classes/{classId}/students/{studentId}/subjects/{classSubjectId}
+```
+
+Bỏ một môn khỏi enrollment. Nếu kỳ hiện tại đã có học phí, khoản đã phát sinh được giữ nguyên; môn bị bỏ không được tính cho các kỳ sau.
+
+```http
+POST /api/classes/{classId}/students/{studentId}/pause
+```
+
+Body:
+
+```json
+{
+  "startMonth": "2026-09",
+  "endMonth": "2026-09",
+  "reason": "Nghỉ phép"
+}
+```
+
+Trong khoảng tạm nghỉ, học viên không phát sinh học phí tháng.
+
+## 19.1.4 Tạo học phí tháng theo lớp
+
+```http
+POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
+```
+
+API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông báo. Mỗi môn ACTIVE được tính trọn mức `ClassSubject.tuitionFee` của tháng; enrollment được tạm nghỉ trong kỳ sẽ được bỏ qua.
+
+## 19.1.5 Tạo học phí khi tạo thông báo theo lớp
 
 ```http
 GET /api/classes/{classId}/tuition-notice/pdf
 ```
 
-Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với các môn chưa có tuition fee item. Nếu học phí đã tồn tại, chỉ dùng lại học phí hiện có và không tạo trùng item.
+Query bắt buộc:
+
+```text
+month=YYYY-MM
+```
+
+Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với kỳ đã chọn và các môn chưa có tuition fee item. Phí từng môn được tính trọn theo mức học phí tháng, không phụ thuộc số buổi hoặc điểm danh. Nếu học phí đã tồn tại, chỉ bổ sung môn chưa có item và không tạo trùng item.
 
 ---
 

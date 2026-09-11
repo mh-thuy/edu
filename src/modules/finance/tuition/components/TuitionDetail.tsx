@@ -22,6 +22,8 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 type Fee = {
   id: string;
   feeNo: string;
+  billingYear: number;
+  billingMonth: number;
   originalAmount: number;
   discountAmount: number;
   additionalAmount: number;
@@ -102,6 +104,9 @@ export function TuitionDetail({ id }: { id: string }) {
                 Chi tiết học phí
               </Typography>
               <Typography color="text.secondary">{fee.feeNo}</Typography>
+              <Typography color="text.secondary">
+                Kỳ học phí: {fee.billingYear}-{String(fee.billingMonth).padStart(2, "0")}
+              </Typography>
               <Chip
                 sx={{ alignSelf: "flex-start" }}
                 color={

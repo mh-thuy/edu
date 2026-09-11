@@ -362,6 +362,107 @@ export async function assignStudentToClass(
   });
 }
 
+export async function removeSubjectFromEnrollment(
+  classId: string,
+  studentId: string,
+  classSubjectId: string,
+  actorId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const enrollment = await tx.classStudent.findUnique({
+      where: { classId_studentId: { classId, studentId } },
+      include: { student: true },
+    });
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    const subject = await tx.enrollmentSubject.findUnique({
+      where: {
+        enrollmentId_classSubjectId: { enrollmentId: enrollment.id, classSubjectId },
+      },
+      include: { classSubject: { include: { subject: true } } },
+    });
+    if (!subject || subject.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy môn học đang đăng ký");
+    }
+    const feeItem = await tx.tuitionFeeItem.findFirst({
+      where: {
+        classSubjectId,
+        tuitionFee: {
+          enrollmentId: enrollment.id,
+          billingType: "MONTHLY",
+        },
+      },
+      select: { id: true },
+    });
+    await tx.enrollmentSubject.update({
+      where: { id: subject.id },
+      data: { status: "DROPPED", droppedAt: new Date() },
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "ENROLLMENT",
+        entityId: enrollment.id,
+        action: "SUBJECT_DROPPED",
+        dataAfter: {
+          classId,
+          studentId,
+          classSubjectId,
+          subjectName: subject.classSubject.subject.name,
+          feeAlreadyCreated: Boolean(feeItem),
+        },
+        performedBy: actorId,
+      },
+    });
+    return { dropped: true, feeAlreadyCreated: Boolean(feeItem) };
+  });
+}
+
+function parseBillingMonth(value: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
+  if (!match) throw new ConflictError("Kỳ tạm nghỉ phải có định dạng YYYY-MM");
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1));
+}
+
+export async function pauseStudentEnrollment(
+  classId: string,
+  studentId: string,
+  data: { startMonth: string; endMonth: string; reason?: string },
+  actorId: string,
+) {
+  const startMonth = parseBillingMonth(data.startMonth);
+  const endMonth = parseBillingMonth(data.endMonth);
+  if (startMonth > endMonth) {
+    throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
+  }
+  return prisma.$transaction(async (tx) => {
+    const enrollment = await tx.classStudent.findUnique({
+      where: { classId_studentId: { classId, studentId } },
+    });
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    const overlap = await tx.enrollmentPause.findFirst({
+      where: {
+        enrollmentId: enrollment.id,
+        startMonth: { lte: endMonth },
+        endMonth: { gte: startMonth },
+      },
+      select: { id: true },
+    });
+    if (overlap) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
+    return tx.enrollmentPause.create({
+      data: {
+        enrollmentId: enrollment.id,
+        startMonth,
+        endMonth,
+        reason: data.reason?.trim() || null,
+        createdBy: actorId,
+      },
+    });
+  });
+}
+
 export async function getSubjects(search?: string, includeInactive = false) {
   return prisma.$queryRaw<
     Array<{
@@ -560,7 +661,16 @@ export async function getClassStudents(
       tuitionFees: Array<{
         id: string;
         status: string;
+        billingYear: number;
+        billingMonth: number;
+        billingType: string;
         items: Array<{ classSubjectId: string | null }>;
+      }>;
+      pauses: Array<{
+        id: string;
+        startMonth: Date;
+        endMonth: Date;
+        reason: string | null;
       }>;
     }
   >
@@ -577,8 +687,14 @@ export async function getClassStudents(
         select: {
           id: true,
           status: true,
+          billingYear: true,
+          billingMonth: true,
+          billingType: true,
           items: { select: { classSubjectId: true } },
         },
+      },
+      pauses: {
+        select: { id: true, startMonth: true, endMonth: true, reason: true },
       },
     },
   });

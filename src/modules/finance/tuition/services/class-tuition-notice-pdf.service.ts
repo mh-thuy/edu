@@ -3,52 +3,27 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { PaymentBatchStatus } from "@prisma/client";
 import { TuitionFeeStatus } from "@prisma/client";
+import { TuitionFeeBillingType } from "@prisma/client";
 import { generatePaymentBatchNoticePdf } from "@/modules/finance/payments/services/payment-batch-notice-pdf.service";
 import { createPaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
-import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
+import {
+  TuitionService,
+  type TuitionBillingPeriod,
+} from "@/modules/finance/tuition/services/tuition.service";
 
 export async function createClassPaymentBatches(
   classId: string,
   actorId: string,
+  period: TuitionBillingPeriod,
 ) {
-  const enrollments = await prisma.classStudent.findMany({
-    where: { classId, status: "ACTIVE" },
-    select: {
-      studentId: true,
-      subjects: {
-        where: { status: "ACTIVE" },
-        select: { classSubjectId: true },
-      },
-      tuitionFees: {
-        select: {
-          items: { select: { classSubjectId: true } },
-        },
-      },
-    },
-  });
-
-  for (const enrollment of enrollments) {
-    const billedSubjectIds = new Set(
-      enrollment.tuitionFees.flatMap((fee) =>
-        fee.items
-          .map((item) => item.classSubjectId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    const hasUnbilledSubjects = enrollment.subjects.some(
-      (subject) => !billedSubjectIds.has(subject.classSubjectId),
-    );
-    if (hasUnbilledSubjects) {
-      await TuitionService.createFromEnrollment(
-        { classId, studentId: enrollment.studentId },
-        actorId,
-      );
-    }
-  }
+  await TuitionService.createClassTuitionFees(classId, period, actorId);
 
   const fees = await prisma.tuitionFee.findMany({
     where: {
       classId,
+      billingYear: period.billingYear,
+      billingMonth: period.billingMonth,
+      billingType: TuitionFeeBillingType.MONTHLY,
       status: { in: [TuitionFeeStatus.UNPAID, TuitionFeeStatus.OVERDUE] },
     },
     select: {
@@ -86,6 +61,7 @@ export async function createClassPaymentBatches(
 export async function generateClassTuitionNoticePdf(
   classId: string,
   exportedByName: string,
+  period: TuitionBillingPeriod,
 ) {
   const classData = await prisma.class.findUnique({
     where: { id: classId },
@@ -96,7 +72,16 @@ export async function generateClassTuitionNoticePdf(
   const batches = await prisma.paymentBatch.findMany({
     where: {
       status: PaymentBatchStatus.PENDING,
-      allocations: { some: { tuitionFee: { classId } } },
+      allocations: {
+        some: {
+          tuitionFee: {
+            classId,
+            billingYear: period.billingYear,
+            billingMonth: period.billingMonth,
+            billingType: TuitionFeeBillingType.MONTHLY,
+          },
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
     select: { id: true },

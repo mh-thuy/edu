@@ -522,6 +522,22 @@ Không tự động tạo học phí khi enrollment được tạo hoặc đăng
 
 Học phí được tạo qua thao tác riêng và phải tham chiếu đến enrollment hiện có. Enrollment không có học phí vẫn là enrollment hợp lệ.
 
+## 9.6 Monthly Full-Month Tuition
+
+Mức `ClassSubject.tuitionFee` là học phí chuẩn của một tháng. Khi tạo phí tháng, backend tính trọn mức phí cho từng môn đang đăng ký; không chia theo số buổi, số ngày, ngày đăng ký hoặc điểm danh.
+
+```text
+phí môn = phí tháng chuẩn
+```
+
+Quy tắc nghỉ:
+
+```text
+Enrollment ACTIVE nhưng không đi học -> vẫn tính đủ tháng
+Enrollment có khoảng tạm nghỉ bao phủ tháng -> không tạo phí
+Đăng ký giữa tháng -> vẫn tính đủ tháng
+```
+
 ---
 
 # 10. QR Payment Rules

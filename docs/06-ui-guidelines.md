@@ -629,11 +629,9 @@ Trạng thái
 Màn hình nên có:
 
 ```text
-Chọn lớp
-Thông tin lớp
-Danh sách học viên trong lớp
-Nút thêm học viên
-Nút xóa học viên khỏi lớp
+Chi tiết lớp
+Trang quản lý học viên
+Trang học phí tháng
 ```
 
 Rule:
@@ -642,8 +640,11 @@ Rule:
 - Không cho thêm trùng học viên.
 - Hiển thị danh sách học viên hiện tại của lớp.
 - Đăng ký học viên không tự động tạo học phí.
-- Thao tác `Tạo thanh toán và xuất thông báo` của lớp sẽ tạo học phí cho các môn chưa được lập phí trước khi tạo payment batch.
-- Hiển thị trạng thái `Chưa tạo học phí`, `Còn môn chưa tạo phí` hoặc `Đã tạo học phí`.
+- Trang chi tiết lớp chỉ hiển thị thống kê và liên kết đến nghiệp vụ chuyên biệt.
+- Trang quản lý học viên có bộ lọc mã/tên, trạng thái, môn học và kỳ học phí.
+- Bảng học viên có thao tác xem chi tiết, quản lý môn, tạm nghỉ và xóa khỏi lớp.
+- Bỏ môn là thao tác riêng, không xóa toàn bộ học viên khỏi lớp.
+- Tạm nghỉ phải chọn khoảng tháng bắt đầu/kết thúc và lý do.
 
 ---
 
@@ -687,6 +688,23 @@ Giáo viên đã có lớp khác trong cùng khung giờ.
 
 # 20. Module Học phí
 
+Học phí theo lớp được quản lý tại:
+
+```text
+/admin/classes/{classId}/tuition
+```
+
+Màn hình có bộ chọn kỳ `YYYY-MM`, thống kê số khoản phí, tổng phải thu, đã thanh toán và còn phải thu.
+
+Các thao tác được tách riêng:
+
+```text
+Tạo học phí tháng
+Tạo thanh toán & xuất thông báo
+```
+
+Tạo học phí không tạo payment batch. Tạo thanh toán sẽ bổ sung các khoản còn thiếu, tạo payment batch và xuất PDF thông báo.
+
 ## 20.1 List columns
 
 ```text
@@ -712,7 +730,7 @@ Ghi nhận thanh toán
 ## 20.3 Học phí phát sinh từ đăng ký
 
 ```text
-Không có form tạo học phí độc lập. Sau khi đăng ký môn, UI hiển thị trạng thái chưa tạo phí; thao tác `Tạo thanh toán và xuất thông báo` của lớp sẽ tạo phí trước khi tạo payment batch.
+Không có form tạo học phí độc lập theo từng khoản. Sau khi đăng ký môn, UI hiển thị trạng thái chưa tạo phí; thao tác `Tạo học phí tháng` của lớp sẽ tạo phí trước khi tạo payment batch.
 ```
 
 Rule:
@@ -720,6 +738,8 @@ Rule:
 - Chỉ tạo phí từ enrollment đã tồn tại.
 - Tạo phí là thao tác riêng, không chạy tự động khi đăng ký môn.
 - Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo thanh toán và xuất thông báo`.
+- Học phí được tính trọn tháng theo mức phí của từng môn, không theo số buổi hoặc điểm danh.
+- Chi tiết học phí hiển thị kỳ học phí và thông tin tính trọn tháng trong từng item.
 - Một học viên có thể học một phần môn trong lớp.
 - Không tạo trùng tuition fee item cho cùng một môn.
 - Chi tiết học phí có nút “Thanh toán học phí”.

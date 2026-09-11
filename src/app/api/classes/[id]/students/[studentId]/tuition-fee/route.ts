@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiRole } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
@@ -20,9 +21,21 @@ export async function POST(
     if (!routeParams?.id || !routeParams.studentId) {
       return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc học viên", 400);
     }
+    const rawMonth = new URL(_request.url).searchParams.get("month");
+    const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).safeParse(rawMonth);
+    if (!month.success) {
+      return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);
+    }
+    const billingYear = Number(month.data.slice(0, 4));
+    const billingMonth = Number(month.data.slice(5, 7));
 
     const fee = await TuitionService.createFromEnrollment(
-      { classId: routeParams.id, studentId: routeParams.studentId },
+      {
+        classId: routeParams.id,
+        studentId: routeParams.studentId,
+        billingYear,
+        billingMonth,
+      },
       user.id,
     );
     return apiSuccess(fee, 201);

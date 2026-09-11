@@ -78,6 +78,9 @@ type ClassStudent = {
   tuitionFees: Array<{
     id: string;
     status: string;
+    billingYear: number;
+    billingMonth: number;
+    billingType: string;
     items: Array<{ classSubjectId: string | null }>;
   }>;
 };
@@ -91,6 +94,10 @@ export function ClassDetailPanel({ id }: { id: string }) {
   const [feeTotal, setFeeTotal] = useState(0);
   const [outstandingFeeTotal, setOutstandingFeeTotal] = useState(0);
   const [tab, setTab] = useState(0);
+  const billingMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  })();
   const [studentDialogOpen, setStudentDialogOpen] = useState(false);
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
   const [teacherDialogOpen, setTeacherDialogOpen] = useState(false);
@@ -115,7 +122,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
     null,
   );
   const [removingStudent, setRemovingStudent] = useState(false);
-  const [exportingNotice, setExportingNotice] = useState(false);
   const [error, setError] = useState("");
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
@@ -140,7 +146,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
       );
     }
     const feeResponse = await fetch(
-      `/api/tuition-fees?classId=${id}&page=1&pageSize=1`,
+      `/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&page=1&pageSize=1`,
     );
     if (feeResponse.ok) {
       const feeResult = await unwrapApiResponse<{
@@ -150,8 +156,8 @@ export function ClassDetailPanel({ id }: { id: string }) {
       setFeeTotal(feeResult.total);
     }
     const [unpaidResponse, overdueResponse] = await Promise.all([
-      fetch(`/api/tuition-fees?classId=${id}&status=UNPAID&page=1&pageSize=1`),
-      fetch(`/api/tuition-fees?classId=${id}&status=OVERDUE&page=1&pageSize=1`),
+      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&status=UNPAID&page=1&pageSize=1`),
+      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&status=OVERDUE&page=1&pageSize=1`),
     ]);
     const unpaid = unpaidResponse.ok
       ? await unwrapApiResponse<{ total: number }>(unpaidResponse)
@@ -160,7 +166,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
       ? await unwrapApiResponse<{ total: number }>(overdueResponse)
       : { total: 0 };
     setOutstandingFeeTotal(unpaid.total + overdue.total);
-  }, [id]);
+  }, [billingMonth, id]);
 
   async function chooseStudent(student: StudentItem) {
     setStudentDialogOpen(false);
@@ -341,38 +347,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
     }
   }
 
-  async function exportTuitionNotice() {
-    setExportingNotice(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/classes/${id}/tuition-notice/pdf`);
-      if (!response.ok)
-        throw new Error(
-          await extractApiErrorMessage(
-            response,
-            "Không thể xuất thông báo học phí",
-          ),
-        );
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `thong-bao-hoc-phi-${classData?.code || "lop"}.pdf`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      await load();
-      showSuccess("Đã tạo học phí, thanh toán và xuất thông báo");
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Không thể xuất thông báo học phí",
-      );
-    } finally {
-      setExportingNotice(false);
-    }
-  }
-
   useEffect(() => {
     void load();
   }, [load]);
@@ -394,14 +368,11 @@ export function ClassDetailPanel({ id }: { id: string }) {
           </Typography>
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={() => void exportTuitionNotice()}
-            disabled={exportingNotice}
-          >
-            {exportingNotice
-              ? "Đang tạo học phí và thông báo..."
-              : "Tạo thanh toán và xuất thông báo"}
+          <Button component={Link} href={`/admin/classes/${id}/students`} variant="contained">
+            Quản lý học viên
+          </Button>
+          <Button component={Link} href={`/admin/classes/${id}/tuition`} variant="outlined">
+            Học phí tháng
           </Button>
           <Button component={Link} href="/admin/classes" variant="outlined">
             Quay lại
@@ -417,7 +388,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
         >
           <Tab label="Tổng quan" />
           <Tab label="Môn học" />
-          <Tab label="Học viên" />
           <Tab label="Lịch học" />
         </Tabs>
       </Paper>
@@ -508,7 +478,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
           </Table>
         </Paper>
       )}
-      {tab === 2 && (
+      {false && (
         <Paper sx={{ overflow: "auto" }}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -527,7 +497,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
               variant="contained"
               startIcon={<PersonAddAlt1Icon />}
               onClick={() => setStudentDialogOpen(true)}
-              disabled={addingStudent || !classData.classSubjects.length}
+              disabled={addingStudent || !classData?.classSubjects.length}
             >
               Đăng ký học viên
             </Button>
@@ -544,8 +514,17 @@ export function ClassDetailPanel({ id }: { id: string }) {
             </TableHead>
             <TableBody>
               {classStudents.map((item) => {
+                const [selectedBillingYear, selectedBillingMonth] = billingMonth
+                  .split("-")
+                  .map(Number);
+                const monthlyFees = item.tuitionFees.filter(
+                  (fee) =>
+                    fee.billingType === "MONTHLY" &&
+                    fee.billingYear === selectedBillingYear &&
+                    fee.billingMonth === selectedBillingMonth,
+                );
                 const billedSubjectIds = new Set(
-                  item.tuitionFees.flatMap((fee) =>
+                  monthlyFees.flatMap((fee) =>
                     fee.items
                       .map((feeItem) => feeItem.classSubjectId)
                       .filter((value): value is string => Boolean(value)),
@@ -554,8 +533,8 @@ export function ClassDetailPanel({ id }: { id: string }) {
                 const hasUnbilledSubjects = item.subjects.some(
                   (subject) => !billedSubjectIds.has(subject.classSubjectId),
                 );
-                const hasTuitionFee = item.tuitionFees.length > 0;
-                const isBusy = removingStudent || exportingNotice;
+                const hasTuitionFee = monthlyFees.length > 0;
+                const isBusy = removingStudent;
 
                 return (
                   <TableRow key={item.id}>
@@ -565,7 +544,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
                       {item.subjects
                         .map(
                           (entry) =>
-                            classData.classSubjects.find(
+                            classData?.classSubjects.find(
                               (subject) => subject.id === entry.classSubjectId,
                             )?.subject.name,
                         )
@@ -638,7 +617,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
           </Table>
         </Paper>
       )}
-      {tab === 3 && (
+      {tab === 2 && (
         <ClassSchedulePanel
           classId={classData.id}
           classSubjects={classData.classSubjects}
