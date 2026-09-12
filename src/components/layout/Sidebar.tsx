@@ -130,9 +130,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
     <Box
       sx={{
         width: collapsed ? 76 : 260,
-        height: "100vh",
+        height: "100dvh",
+        minHeight: 0,
         bgcolor: "background.paper",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
         transition: "width 180ms ease",
       }}
     >
@@ -173,7 +176,18 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
       <Divider />
 
       {/* Menu */}
-      <List sx={{ px: collapsed ? 1 : 1.5, py: 2 }}>
+      <List
+        sx={{
+          px: collapsed ? 1 : 1.5,
+          py: 2,
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          overscrollBehavior: "contain",
+          scrollbarGutter: "stable",
+        }}
+      >
         {items.map((item, index) => {
           const selected = item.href === activeHref;
           const previousSection = index > 0 ? items[index - 1]?.section : null;

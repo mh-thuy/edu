@@ -12,16 +12,17 @@ import {
   DialogContent,
   DialogTitle,
   Paper,
+  Skeleton,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import Link from "next/link";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type Fee = {
@@ -44,6 +45,7 @@ type Fee = {
     id: string;
     paymentNo: string;
     amount: number;
+    paymentStatus: string;
     paymentMethod: string;
     paymentDate: string;
     receipt?: { id: string } | null;
@@ -55,6 +57,18 @@ const labels = {
   OVERDUE: "Quá hạn",
   EXEMPTED: "Miễn học phí",
   CANCELLED: "Đã hủy",
+};
+const paymentMethodLabels: Record<string, string> = {
+  CASH: "Tiền mặt",
+  BANK_TRANSFER: "Chuyển khoản",
+  QR: "QR ngân hàng",
+};
+const paymentStatusLabels: Record<string, string> = {
+  SUCCESS: "Thành công",
+  PENDING: "Đang chờ",
+  FAILED: "Thất bại",
+  CANCELLED: "Đã hủy",
+  REFUNDED: "Đã hoàn tiền",
 };
 
 export function TuitionDetail({ id }: { id: string }) {
@@ -110,9 +124,27 @@ export function TuitionDetail({ id }: { id: string }) {
       setStatusSaving(false);
     }
   }
-  if (loading) return <Typography>Đang tải chi tiết học phí...</Typography>;
+  if (loading)
+    return (
+      <Stack spacing={1.5}>
+        <Skeleton variant="text" width={260} height={42} />
+        <Skeleton variant="rounded" height={140} />
+        <Skeleton variant="rounded" height={220} />
+      </Stack>
+    );
   if (error || !fee)
-    return <Alert severity="error">{error || "Không tìm thấy học phí"}</Alert>;
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button color="inherit" size="small" onClick={() => void load()}>
+            Thử lại
+          </Button>
+        }
+      >
+        {error || "Không tìm thấy học phí"}
+      </Alert>
+    );
   const paid = fee.status === "PAID";
   const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
   const editableStatus = (fee.status === "UNPAID" || fee.status === "OVERDUE") && !pendingBatch;
@@ -240,7 +272,7 @@ export function TuitionDetail({ id }: { id: string }) {
               Tổng phải thanh toán
             </Typography>
             <Typography variant="h5" fontWeight={800} color="primary.main">
-              {Number(fee.finalAmount).toLocaleString("vi-VN")} VND
+              {Number(fee.finalAmount).toLocaleString("vi-VN")} ₫
             </Typography>
           </Box>
         </Stack>
@@ -261,26 +293,26 @@ export function TuitionDetail({ id }: { id: string }) {
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
-                  {Number(item.amount).toLocaleString("vi-VN")} VND
+                  {Number(item.amount).toLocaleString("vi-VN")} ₫
                 </TableCell>
               </TableRow>
             ))}
             <TableRow sx={{ "& td": { borderTop: 1, borderColor: "divider" } }}>
               <TableCell>Học phí gốc</TableCell>
               <TableCell align="right">
-                {Number(fee.originalAmount).toLocaleString("vi-VN")} VND
+                {Number(fee.originalAmount).toLocaleString("vi-VN")} ₫
               </TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Giảm giá / học bổng</TableCell>
               <TableCell align="right">
-                -{Number(fee.discountAmount).toLocaleString("vi-VN")} VND
+                -{Number(fee.discountAmount).toLocaleString("vi-VN")} ₫
               </TableCell>
             </TableRow>
             <TableRow>
               <TableCell>Phụ phí</TableCell>
               <TableCell align="right">
-                {Number(fee.additionalAmount).toLocaleString("vi-VN")} VND
+                {Number(fee.additionalAmount).toLocaleString("vi-VN")} ₫
               </TableCell>
             </TableRow>
             <TableRow>
@@ -289,7 +321,7 @@ export function TuitionDetail({ id }: { id: string }) {
               </TableCell>
               <TableCell align="right">
                 <strong>
-                  {Number(fee.finalAmount).toLocaleString("vi-VN")} VND
+                  {Number(fee.finalAmount).toLocaleString("vi-VN")} ₫
                 </strong>
               </TableCell>
             </TableRow>
@@ -308,11 +340,17 @@ export function TuitionDetail({ id }: { id: string }) {
               sx={{ py: 1 }}
             >
               <Typography>
-                {payment.paymentNo} · {payment.paymentMethod} ·{" "}
+                {payment.paymentNo} · {paymentMethodLabels[payment.paymentMethod] ?? payment.paymentMethod} ·{" "}
                 {new Date(payment.paymentDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
               </Typography>
-              <Typography>
-                {Number(payment.amount).toLocaleString("vi-VN")} VND{" "}
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" justifyContent={{ xs: "flex-start", md: "flex-end" }}>
+                <Chip
+                  size="small"
+                  color={payment.paymentStatus === "SUCCESS" ? "success" : "warning"}
+                  label={paymentStatusLabels[payment.paymentStatus] ?? payment.paymentStatus}
+                />
+                <Typography>
+                {Number(payment.amount).toLocaleString("vi-VN")} ₫{" "}
                 {payment.receipt && (
                   <Button
                     size="small"
@@ -322,7 +360,8 @@ export function TuitionDetail({ id }: { id: string }) {
                     Xuất biên lai
                   </Button>
                 )}
-              </Typography>
+                </Typography>
+              </Stack>
             </Stack>
           ))
         ) : (
@@ -338,7 +377,7 @@ export function TuitionDetail({ id }: { id: string }) {
             {statusAction === "EXEMPTED" ? "Khoản phí sẽ không còn được đưa vào công nợ hoặc thanh toán." : "Khoản phí sẽ được hủy và không thể thanh toán lại."}
           </Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>Học phí: <strong>{fee.feeNo}</strong></Typography>
-          <TextField
+          <AppTextField
             fullWidth
             required
             multiline

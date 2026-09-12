@@ -13,11 +13,11 @@ import {
   DialogTitle,
   Divider,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 const money = (value: number) =>
@@ -67,6 +67,12 @@ const receiptStatusLabels: Record<string, string> = {
   ACTIVE: "Đang hiệu lực",
   CANCELLED: "Đã hủy",
 };
+const refundStatusLabels: Record<string, string> = {
+  PENDING: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  COMPLETED: "Đã hoàn tất",
+  CANCELLED: "Đã hủy",
+};
 export function ReceiptDetailDialog({
   id,
   onClose,
@@ -84,7 +90,10 @@ export function ReceiptDetailDialog({
   const [refundBankTransactionNo, setRefundBankTransactionNo] = useState("");
   const [refundLoading, setRefundLoading] = useState(false);
 
-  const load = useCallback(() => fetch(`/api/receipts/${id}`)
+  const load = useCallback(() => {
+    setError("");
+    setData(null);
+    return fetch(`/api/receipts/${id}`)
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
@@ -102,7 +111,8 @@ export function ReceiptDetailDialog({
             ? reason.message
           : "Không thể tải chi tiết biên lai",
         ),
-      ), [id]);
+      );
+  }, [id]);
 
   useEffect(() => {
     void load();
@@ -179,7 +189,18 @@ export function ReceiptDetailDialog({
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Chi tiết biên lai</DialogTitle>
       <DialogContent>
-        {error && <Alert severity="error">{error}</Alert>}
+        {error && (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={() => void load()}>
+                Thử lại
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
+        )}
         {!data && !error && (
           <Stack alignItems="center" sx={{ py: 4 }}>
             <CircularProgress />
@@ -201,7 +222,7 @@ export function ReceiptDetailDialog({
             <Typography>Mã giao dịch: {data.payment.paymentNo}</Typography>
             {activeRefund && (
               <Alert severity={activeRefund.status === "COMPLETED" ? "success" : "warning"}>
-                Hoàn tiền {activeRefund.refundNo}: {activeRefund.status}
+                Hoàn tiền {activeRefund.refundNo}: {refundStatusLabels[activeRefund.status] ?? activeRefund.status}
               </Alert>
             )}
             <Typography>Mã học phí: {data.payment.tuitionFee.feeNo}</Typography>
@@ -293,14 +314,14 @@ export function ReceiptDetailDialog({
                 {refundDialog === "CREATE" ? (
                   <Stack spacing={2} sx={{ pt: 1 }}>
                     <Typography variant="body2" color="text.secondary">Nếu payment thuộc batch nhiều khoản, toàn bộ batch sẽ được hoàn cùng lúc.</Typography>
-                    <TextField select label="Phương thức hoàn" value={refundMethod} onChange={(event) => setRefundMethod(event.target.value as "CASH" | "BANK_TRANSFER")} SelectProps={{ native: true }}>
+                    <AppTextField select label="Phương thức hoàn" value={refundMethod} onChange={(event) => setRefundMethod(event.target.value as "CASH" | "BANK_TRANSFER")} SelectProps={{ native: true }}>
                       <option value="CASH">Tiền mặt</option>
                       <option value="BANK_TRANSFER">Chuyển khoản</option>
-                    </TextField>
-                    <TextField fullWidth required multiline minRows={2} label="Lý do" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} inputProps={{ maxLength: 500 }} />
+                    </AppTextField>
+                    <AppTextField fullWidth required multiline minRows={2} label="Lý do" value={refundReason} onChange={(event) => setRefundReason(event.target.value)} inputProps={{ maxLength: 500 }} />
                   </Stack>
                 ) : (
-                  <TextField fullWidth sx={{ mt: 1 }} label="Mã giao dịch hoàn tiền" required={activeRefund?.refundMethod === "BANK_TRANSFER"} value={refundBankTransactionNo} onChange={(event) => setRefundBankTransactionNo(event.target.value)} disabled={activeRefund?.refundMethod === "CASH"} />
+                  <AppTextField fullWidth sx={{ mt: 1 }} label="Mã giao dịch hoàn tiền" required={activeRefund?.refundMethod === "BANK_TRANSFER"} value={refundBankTransactionNo} onChange={(event) => setRefundBankTransactionNo(event.target.value)} disabled={activeRefund?.refundMethod === "CASH"} />
                 )}
               </DialogContent>
               <DialogActions>

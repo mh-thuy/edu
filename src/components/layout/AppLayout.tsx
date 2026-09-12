@@ -76,7 +76,13 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       <Drawer
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
-        PaperProps={{ sx: { width: 260 } }}
+        PaperProps={{
+          sx: {
+            width: 260,
+            height: "100dvh",
+            overflow: "hidden",
+          },
+        }}
       >
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Drawer>

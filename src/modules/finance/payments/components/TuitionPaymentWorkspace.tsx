@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Divider,
   FormControl,
+  FormHelperText,
   InputLabel,
   FormControlLabel,
   MenuItem,
@@ -21,11 +22,14 @@ import {
   Step,
   StepLabel,
   Stepper,
-  TextField,
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchIcon from "@mui/icons-material/Search";
+import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import {
   MasterSelectField,
   type MasterSelectValue,
@@ -34,7 +38,9 @@ import {
   StudentSelectDialog,
   type StudentItem,
 } from "@/components/shared/dialogs/StudentSelectDialog";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { useDisclosure } from "@/hooks/useDisclosure";
+import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
 type Fee = {
@@ -56,9 +62,24 @@ type BankAccount = {
   accountNo: string;
   accountName: string;
 };
+type PendingBatch = {
+  id: string;
+  batchNo: string;
+  amount: number;
+  account: BankAccount;
+  qrUrl: string;
+};
 const steps = ["Tìm học sinh", "Chọn khoản phí", "Xác nhận thanh toán", "Hoàn tất"];
+const feeStatusLabels: Record<string, string> = {
+  UNPAID: "Chưa thanh toán",
+  OVERDUE: "Quá hạn",
+};
+const feeStatusColors: Record<string, "warning" | "error"> = {
+  UNPAID: "warning",
+  OVERDUE: "error",
+};
 const money = (value: number) =>
-  `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
+  `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 
 export function TuitionPaymentWorkspace({
   initialTuitionFeeId,
@@ -75,15 +96,18 @@ export function TuitionPaymentWorkspace({
   const [transactionReference, setTransactionReference] = useState("");
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [bankAccountId, setBankAccountId] = useState("");
-  const [pendingBatch, setPendingBatch] = useState<{
-    id: string;
-    batchNo: string;
-    qrUrl: string;
-  } | null>(null);
+  const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
+  const [bankAccountsError, setBankAccountsError] = useState("");
+  const [bankAccountError, setBankAccountError] = useState("");
+  const [pendingBatch, setPendingBatch] = useState<PendingBatch | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const studentDialog = useDisclosure();
+  const { showSuccess, showError, Snackbar } = useSnackbar();
   const selectedFees = fees.filter((fee) => selectedIds.includes(fee.id));
   const total = useMemo(
     () => selectedFees.reduce((sum, fee) => sum + Number(fee.finalAmount), 0),
@@ -91,14 +115,35 @@ export function TuitionPaymentWorkspace({
   );
   const selectedStudent = fees[0]?.student;
 
-  useEffect(() => {
-    void fetch("/api/bank-accounts")
-      .then(async (response) =>
-        response.ok ? unwrapApiResponse<BankAccount[]>(response) : [],
-      )
-      .then(setBankAccounts)
-      .catch(() => setBankAccounts([]));
+  const loadBankAccounts = useCallback(async () => {
+    setBankAccountsLoading(true);
+    setBankAccountsError("");
+    try {
+      const response = await fetch("/api/bank-accounts");
+      if (!response.ok) {
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể tải tài khoản ngân hàng",
+          ),
+        );
+      }
+      setBankAccounts(await unwrapApiResponse<BankAccount[]>(response));
+    } catch (reason) {
+      setBankAccounts([]);
+      setBankAccountsError(
+        reason instanceof Error
+          ? reason.message
+          : "Không thể tải tài khoản ngân hàng",
+      );
+    } finally {
+      setBankAccountsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadBankAccounts();
+  }, [loadBankAccounts]);
 
   useEffect(() => {
     if (!initialTuitionFeeId) return;
@@ -192,6 +237,46 @@ export function TuitionPaymentWorkspace({
     }
   }
 
+  async function loadPendingQr(batch: {
+    id: string;
+    batchNo: string;
+    amount: number;
+    account: BankAccount;
+  }) {
+    setQrLoading(true);
+    setQrError("");
+    try {
+      const qrResponse = await fetch(`/api/payment-batches/${batch.id}/qr`);
+      if (!qrResponse.ok) {
+        throw new Error(
+          await extractApiErrorMessage(
+            qrResponse,
+            "Không thể tạo QR thanh toán",
+          ),
+        );
+      }
+      const qr = await unwrapApiResponse<{
+        qrUrl: string;
+        amount: number;
+        account: BankAccount;
+      }>(qrResponse);
+      setPendingBatch({
+        ...batch,
+        amount: Number(qr.amount),
+        account: qr.account,
+        qrUrl: qr.qrUrl,
+      });
+    } catch (reason) {
+      setQrError(
+        reason instanceof Error
+          ? reason.message
+          : "Không thể tạo QR thanh toán",
+      );
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
   async function submitPayment() {
     if (!selectedIds.length) {
       setError("Hãy chọn ít nhất một khoản học phí");
@@ -199,9 +284,10 @@ export function TuitionPaymentWorkspace({
       return;
     }
     if (method === "BANK_TRANSFER" && !bankAccountId) {
-      setError("Hãy chọn tài khoản nhận tiền");
+      setBankAccountError("Hãy chọn tài khoản nhận tiền");
       return;
     }
+    setConfirmOpen(false);
     setLoading(true);
     setError("");
     try {
@@ -224,28 +310,44 @@ export function TuitionPaymentWorkspace({
         id: string;
         batchNo: string;
         status: string;
+        totalAmount: number;
         receipt?: { id: string } | null;
       }>(response);
       if (batch.status === "SUCCESS") {
         setReceiptId(batch.receipt?.id || null);
         setStep(3);
+        showSuccess("Đã ghi nhận thanh toán và phát hành biên lai");
         return;
       }
-      const qrResponse = await fetch(`/api/payment-batches/${batch.id}/qr`);
-      if (!qrResponse.ok)
-        throw new Error(
-          await extractApiErrorMessage(
-            qrResponse,
-            "Không thể tạo QR thanh toán",
-          ),
-        );
-      const qr = await unwrapApiResponse<{ qrUrl: string }>(qrResponse);
       setPendingBatch({
         id: batch.id,
         batchNo: batch.batchNo,
-        qrUrl: qr.qrUrl,
+        amount: Number(batch.totalAmount),
+        account:
+          bankAccounts.find((account) => account.id === bankAccountId) ?? {
+            id: bankAccountId,
+            bankCode: "",
+            bankName: "",
+            accountNo: "",
+            accountName: "",
+          },
+        qrUrl: "",
       });
       setStep(3);
+      await loadPendingQr({
+        id: batch.id,
+        batchNo: batch.batchNo,
+        amount: Number(batch.totalAmount),
+        account:
+          bankAccounts.find((account) => account.id === bankAccountId) ?? {
+            id: bankAccountId,
+            bankCode: "",
+            bankName: "",
+            accountNo: "",
+            accountName: "",
+          },
+      });
+      showSuccess("Đã tạo đợt chuyển khoản. Chờ đối soát sau khi nhận tiền");
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Thanh toán thất bại",
@@ -264,12 +366,46 @@ export function TuitionPaymentWorkspace({
     setPendingBatch(null);
     setReceiptId(null);
     setError("");
+    setMethod("CASH");
+    setPayerName("");
+    setTransactionReference("");
+    setBankAccountId("");
+    setBankAccountError("");
+    setQrError("");
   }
   function selectStudent(item: StudentItem) {
     setStudent({ id: item.id, code: item.code, name: item.fullName });
     setStudentCode(item.code);
+    setFees([]);
+    setSelectedIds([]);
+    setPendingBatch(null);
+    setReceiptId(null);
     setError("");
     studentDialog.onClose();
+  }
+
+  function requestPaymentConfirmation() {
+    if (!selectedIds.length) {
+      setError("Hãy chọn ít nhất một khoản học phí");
+      setStep(1);
+      return;
+    }
+    if (method === "BANK_TRANSFER" && !bankAccountId) {
+      setBankAccountError("Hãy chọn tài khoản nhận tiền");
+      return;
+    }
+    setBankAccountError("");
+    setConfirmOpen(true);
+  }
+
+  async function copyTransferContent() {
+    if (!pendingBatch) return;
+    try {
+      await navigator.clipboard.writeText(`PB ${pendingBatch.batchNo}`);
+      showSuccess("Đã sao chép nội dung chuyển khoản");
+    } catch {
+      showError("Không thể sao chép tự động. Vui lòng nhập: PB " + pendingBatch.batchNo);
+    }
   }
 
   return (
@@ -392,9 +528,22 @@ export function TuitionPaymentWorkspace({
                         }
                         label={
                           <Box>
-                            <Typography>
-                              {fee.feeNo} · {fee.class?.name || "Chưa có lớp"}
-                            </Typography>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={0.75}
+                              alignItems={{ sm: "center" }}
+                            >
+                              <Typography>
+                                {fee.feeNo} · {fee.class?.name || "Chưa có lớp"}
+                              </Typography>
+                              {!locked && (
+                                <Chip
+                                  size="small"
+                                  color={feeStatusColors[fee.status] || "warning"}
+                                  label={feeStatusLabels[fee.status] || fee.status}
+                                />
+                              )}
+                            </Stack>
                             <Typography
                               variant="caption"
                               color={locked ? "warning.main" : "text.secondary"}
@@ -465,17 +614,39 @@ export function TuitionPaymentWorkspace({
                   </Typography>
                 </Stack>
               </Paper>
-              <TextField
+              <AppTextField
                 select
+                fullWidth
                 label="Phương thức thanh toán"
                 value={method}
-                onChange={(event) => setMethod(event.target.value)}
+                onChange={(event) => {
+                  setMethod(event.target.value);
+                  setBankAccountError("");
+                  if (event.target.value === "CASH") setBankAccountId("");
+                }}
               >
                 <MenuItem value="CASH">Tiền mặt</MenuItem>
                 <MenuItem value="BANK_TRANSFER">Chuyển khoản / VietQR</MenuItem>
-              </TextField>
+              </AppTextField>
               {method === "BANK_TRANSFER" && (
                 <>
+                  {bankAccountsError && (
+                    <Alert
+                      severity="error"
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          onClick={() => void loadBankAccounts()}
+                          disabled={bankAccountsLoading}
+                        >
+                          Thử lại
+                        </Button>
+                      }
+                    >
+                      {bankAccountsError}
+                    </Alert>
+                  )}
                   <FormControl fullWidth required>
                     <InputLabel id="bank-account-label">
                       Tài khoản nhận tiền
@@ -484,9 +655,24 @@ export function TuitionPaymentWorkspace({
                       labelId="bank-account-label"
                       label="Tài khoản nhận tiền"
                       value={bankAccountId}
-                      onChange={(event) => setBankAccountId(event.target.value)}
+                      onChange={(event) => {
+                        setBankAccountId(event.target.value);
+                        setBankAccountError("");
+                      }}
+                      error={Boolean(bankAccountError)}
                     >
-                      <MenuItem value="">Chọn tài khoản nhận tiền</MenuItem>
+                      <MenuItem value="">
+                        {bankAccountsLoading
+                          ? "Đang tải tài khoản..."
+                          : "Chọn tài khoản nhận tiền"}
+                      </MenuItem>
+                      {!bankAccountsLoading &&
+                        !bankAccountsError &&
+                        !bankAccounts.length && (
+                          <MenuItem value="" disabled>
+                            Chưa cấu hình tài khoản nhận tiền
+                          </MenuItem>
+                        )}
                       {bankAccounts.map((account) => (
                         <MenuItem key={account.id} value={account.id}>
                           {account.bankName} — {account.accountNo} —{" "}
@@ -494,8 +680,13 @@ export function TuitionPaymentWorkspace({
                         </MenuItem>
                       ))}
                     </Select>
+                    <FormHelperText error={Boolean(bankAccountError)}>
+                      {bankAccountError ||
+                        "Chỉ chọn tài khoản đang hoạt động của trung tâm"}
+                    </FormHelperText>
                   </FormControl>
-                  <TextField
+                  <AppTextField
+                    fullWidth
                     label="Mã giao dịch (nếu có)"
                     value={transactionReference}
                     onChange={(event) =>
@@ -504,7 +695,8 @@ export function TuitionPaymentWorkspace({
                   />
                 </>
               )}
-              <TextField
+              <AppTextField
+                fullWidth
                 label="Người nộp"
                 value={payerName}
                 onChange={(event) => setPayerName(event.target.value)}
@@ -519,13 +711,13 @@ export function TuitionPaymentWorkspace({
                 </Button>
                 <Button
                   variant="contained"
-                  onClick={() => void submitPayment()}
-                  disabled={loading}
+                  onClick={requestPaymentConfirmation}
+                  disabled={loading || qrLoading}
                 >
                   {loading ? (
                     <CircularProgress size={20} color="inherit" />
                   ) : (
-                    "Xác nhận thanh toán"
+                    "Xác nhận thanh toán toàn bộ"
                   )}
                 </Button>
               </Stack>
@@ -551,20 +743,79 @@ export function TuitionPaymentWorkspace({
               </Typography>
               {pendingBatch && (
                 <>
-                  <Alert severity="info">
-                    Nội dung chuyển khoản cần có mã đợt thanh toán{" "}
-                    <strong>{pendingBatch.batchNo}</strong>.
+                  <Alert severity="info" sx={{ width: "100%", textAlign: "left" }}>
+                    Đây là phiếu báo thanh toán, chưa phải biên lai. Chỉ chuyển đúng số tiền và nội dung bên dưới.
                   </Alert>
-                  <Box
-                    component="img"
-                    src={pendingBatch.qrUrl}
-                    alt="QR chuyển khoản"
-                    sx={{ width: 260, height: 260 }}
-                  />
+                  <Paper variant="outlined" sx={{ width: "100%", p: 2, textAlign: "left" }}>
+                    <Stack spacing={0.75}>
+                      <Typography><strong>Ngân hàng:</strong> {pendingBatch.account.bankName || "-"}</Typography>
+                      <Typography><strong>Số tài khoản:</strong> {pendingBatch.account.accountNo || "-"}</Typography>
+                      <Typography><strong>Chủ tài khoản:</strong> {pendingBatch.account.accountName || "-"}</Typography>
+                      <Typography><strong>Số tiền:</strong> {money(pendingBatch.amount)}</Typography>
+                      <Typography sx={{ overflowWrap: "anywhere" }}>
+                        <strong>Nội dung chuyển khoản:</strong> PB {pendingBatch.batchNo}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                  {qrError && (
+                    <Alert
+                      severity="error"
+                      sx={{ width: "100%" }}
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          onClick={() => void loadPendingQr(pendingBatch)}
+                          disabled={qrLoading}
+                        >
+                          Thử lại
+                        </Button>
+                      }
+                    >
+                      {qrError}
+                    </Alert>
+                  )}
+                  {qrLoading ? (
+                    <Stack alignItems="center" spacing={1} sx={{ py: 3 }}>
+                      <CircularProgress />
+                      <Typography color="text.secondary">Đang tạo QR thanh toán...</Typography>
+                    </Stack>
+                  ) : pendingBatch.qrUrl ? (
+                    <Box
+                      component="img"
+                      src={pendingBatch.qrUrl}
+                      alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`}
+                      sx={{ width: 260, height: 260, border: "1px solid", borderColor: "divider" }}
+                    />
+                  ) : null}
+                  <Typography variant="body2" color="text.secondary">
+                    Nếu số tiền hoặc khoản phí thay đổi, hãy tạo lại đợt thanh toán và QR mới.
+                  </Typography>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                     <Button
                       variant="outlined"
+                      startIcon={<ContentCopyOutlinedIcon />}
+                      onClick={() => void copyTransferContent()}
+                    >
+                      Sao chép nội dung
+                    </Button>
+                    {pendingBatch.qrUrl && (
+                      <Button
+                        component="a"
+                        href={pendingBatch.qrUrl}
+                        download={`qr-${pendingBatch.batchNo}.png`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        variant="outlined"
+                        startIcon={<DownloadOutlinedIcon />}
+                      >
+                        Tải QR
+                      </Button>
+                    )}
+                    <Button
+                      variant="outlined"
                       href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`}
+                      startIcon={<DownloadOutlinedIcon />}
                     >
                       Tải thông báo PDF
                     </Button>
@@ -573,6 +824,7 @@ export function TuitionPaymentWorkspace({
                       href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`}
                       target="_blank"
                       rel="noopener noreferrer"
+                      startIcon={<PrintOutlinedIcon />}
                     >
                       Mở để in
                     </Button>
@@ -593,6 +845,11 @@ export function TuitionPaymentWorkspace({
                   Xuất biên lai tổng
                 </Button>
               )}
+              {!pendingBatch && (
+                <Alert severity="success" sx={{ width: "100%", textAlign: "left" }}>
+                  Thanh toán đã hoàn tất và biên lai đã được phát hành. Vui lòng xuất hoặc in biên lai để lưu hồ sơ.
+                </Alert>
+              )}
               <Button variant="outlined" onClick={reset}>Thu học phí cho học sinh khác</Button>
             </Stack>
           </CardContent>
@@ -603,6 +860,34 @@ export function TuitionPaymentWorkspace({
         onClose={studentDialog.onClose}
         onSelect={selectStudent}
       />
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Xác nhận thu học phí"
+        message="Bạn có chắc muốn ghi nhận toàn bộ các khoản học phí đã chọn? Thao tác này sẽ tạo giao dịch; thanh toán tiền mặt hoàn tất ngay, còn chuyển khoản sẽ chờ đối soát."
+        content={
+          <Stack spacing={0.5} sx={{ mt: 2 }}>
+            <Typography variant="body2">
+              Học viên: <strong>{selectedStudent?.fullName || "-"}</strong>
+            </Typography>
+            <Typography variant="body2">
+              Số khoản: <strong>{selectedFees.length}</strong>
+            </Typography>
+            <Typography variant="body2">
+              Tổng tiền: <strong>{money(total)}</strong>
+            </Typography>
+            <Typography variant="body2">
+              Phương thức: <strong>{method === "CASH" ? "Tiền mặt" : "Chuyển khoản / VietQR"}</strong>
+            </Typography>
+          </Stack>
+        }
+        onConfirm={() => void submitPayment()}
+        onCancel={() => setConfirmOpen(false)}
+        isLoading={loading}
+        confirmLabel="Ghi nhận thanh toán"
+        cancelLabel="Quay lại"
+        confirmColor="primary"
+      />
+      {Snackbar}
     </Stack>
   );
 }

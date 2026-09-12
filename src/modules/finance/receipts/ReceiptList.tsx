@@ -16,7 +16,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -28,6 +27,7 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ReceiptDetailDialog } from "./ReceiptDetailDialog";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type Receipt = {
   id: string;
@@ -57,7 +57,7 @@ type ReceiptResult = {
   pages: number;
 };
 const money = (value: number) =>
-  `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
+  `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 const statusLabels = { ACTIVE: "Đang hiệu lực", CANCELLED: "Đã hủy" } as const;
 
 export function ReceiptList() {
@@ -161,7 +161,8 @@ export function ReceiptList() {
           </Box>
         </Stack>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} flexWrap="wrap" useFlexGap>
-          <TextField
+          <AppTextField
+            fullWidth
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -178,7 +179,7 @@ export function ReceiptList() {
             }}
             sx={{ flex: 1 }}
           />
-          <TextField
+          <AppTextField
             select
             label="Trạng thái"
             value={status}
@@ -191,7 +192,7 @@ export function ReceiptList() {
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="ACTIVE">Đang hiệu lực</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
-          </TextField>
+          </AppTextField>
           <DatePickerField
             label="Từ ngày"
             value={dateFrom}
@@ -226,7 +227,18 @@ export function ReceiptList() {
           </Button>
         </Stack>
       </Paper>
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => setRefreshKey((value) => value + 1)}>
+              Thử lại
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
       <Paper elevation={0} sx={{ overflow: "hidden", border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
           <Box>

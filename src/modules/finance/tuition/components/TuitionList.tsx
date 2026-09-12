@@ -8,6 +8,8 @@ import {
   Box,
   Button,
   Chip,
+  FormControl,
+  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -76,14 +78,19 @@ export function TuitionList() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [studentCode, setStudentCode] = useState("");
+  const [appliedStudentCode, setAppliedStudentCode] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(null);
   const [classId, setClassId] = useState("");
+  const [appliedClassId, setAppliedClassId] = useState("");
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
   const [status, setStatus] = useState("");
+  const [appliedStatus, setAppliedStatus] = useState("");
   const [billingType, setBillingType] = useState("");
+  const [appliedBillingType, setAppliedBillingType] = useState("");
   const [billingMonth, setBillingMonth] = useState("");
+  const [appliedBillingMonth, setAppliedBillingMonth] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -92,11 +99,11 @@ export function TuitionList() {
     setLoading(true);
     setError("");
     const query = new URLSearchParams({ page: String(page + 1), pageSize: String(pageSize) });
-    if (studentCode.trim()) query.set("studentCode", studentCode.trim());
-    if (classId) query.set("classId", classId);
-    if (status) query.set("status", status);
-    if (billingType) query.set("billingType", billingType);
-    if (billingMonth) query.set("month", billingMonth);
+    if (appliedStudentCode.trim()) query.set("studentCode", appliedStudentCode.trim());
+    if (appliedClassId) query.set("classId", appliedClassId);
+    if (appliedStatus) query.set("status", appliedStatus);
+    if (appliedBillingType) query.set("billingType", appliedBillingType);
+    if (appliedBillingMonth) query.set("month", appliedBillingMonth);
 
     try {
       const response = await fetch(`/api/tuition-fees?${query}`);
@@ -109,18 +116,18 @@ export function TuitionList() {
     } finally {
       setLoading(false);
     }
-  }, [studentCode, classId, status, billingType, billingMonth, page, pageSize]);
+  }, [appliedStudentCode, appliedClassId, appliedStatus, appliedBillingType, appliedBillingMonth, page, pageSize]);
 
   useEffect(() => { void load(); }, [load]);
 
   async function exportCsv() {
     setExporting(true);
     const query = new URLSearchParams({ export: "csv" });
-    if (studentCode.trim()) query.set("studentCode", studentCode.trim());
-    if (classId) query.set("classId", classId);
-    if (status) query.set("status", status);
-    if (billingType) query.set("billingType", billingType);
-    if (billingMonth) query.set("month", billingMonth);
+    if (appliedStudentCode.trim()) query.set("studentCode", appliedStudentCode.trim());
+    if (appliedClassId) query.set("classId", appliedClassId);
+    if (appliedStatus) query.set("status", appliedStatus);
+    if (appliedBillingType) query.set("billingType", appliedBillingType);
+    if (appliedBillingMonth) query.set("month", appliedBillingMonth);
 
     try {
       const response = await fetch(`/api/tuition-fees?${query}`);
@@ -142,11 +149,25 @@ export function TuitionList() {
   function clearFilters() {
     setStudent(null);
     setStudentCode("");
+    setAppliedStudentCode("");
     setSelectedClass(null);
     setClassId("");
+    setAppliedClassId("");
     setStatus("");
+    setAppliedStatus("");
     setBillingType("");
+    setAppliedBillingType("");
     setBillingMonth("");
+    setAppliedBillingMonth("");
+    setPage(0);
+  }
+
+  function applyFilters() {
+    setAppliedStudentCode(studentCode);
+    setAppliedClassId(classId);
+    setAppliedStatus(status);
+    setAppliedBillingType(billingType);
+    setAppliedBillingMonth(billingMonth);
     setPage(0);
   }
 
@@ -173,16 +194,22 @@ export function TuitionList() {
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ xs: "stretch", md: "center" }}>
             <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: { md: 230 } }} />
             <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" sx={{ flex: 1, minWidth: { md: 230 } }} />
-            <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={(value) => { setBillingMonth(value); setPage(0); }} textFieldProps={{ size: "small" }} />
-            <Select size="small" displayEmpty value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }} sx={{ minWidth: 185 }}>
-              <MenuItem value="">Tất cả trạng thái</MenuItem>
-              {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
-            </Select>
-            <Select size="small" displayEmpty value={billingType} onChange={(event) => { setBillingType(event.target.value); setPage(0); }} sx={{ minWidth: 165 }}>
-              <MenuItem value="">Tất cả loại phí</MenuItem>
-              {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
-            </Select>
-            <Button variant="contained" onClick={() => void load()}>Tìm kiếm</Button>
+            <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={setBillingMonth} textFieldProps={{ size: "small" }} />
+            <FormControl size="small" sx={{ minWidth: 185 }}>
+              <InputLabel id="tuition-status-label">Trạng thái</InputLabel>
+              <Select labelId="tuition-status-label" label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value)}>
+                <MenuItem value="">Tất cả trạng thái</MenuItem>
+                {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 165 }}>
+              <InputLabel id="tuition-type-label">Loại phí</InputLabel>
+              <Select labelId="tuition-type-label" label="Loại phí" value={billingType} onChange={(event) => setBillingType(event.target.value)}>
+                <MenuItem value="">Tất cả loại phí</MenuItem>
+                {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <Button variant="contained" onClick={applyFilters}>Tìm kiếm</Button>
             <Button variant="outlined" onClick={clearFilters} disabled={!studentCode && !classId && !status && !billingType && !billingMonth}>Xóa lọc</Button>
           </Stack>
         </Stack>
@@ -197,23 +224,23 @@ export function TuitionList() {
             <Typography variant="body2" color="text.secondary">{total} khoản phí trong kết quả hiện tại</Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-            {billingMonth && <Chip size="small" color="info" label={`Kỳ ${billingMonth}`} />}
-            {billingType && <Chip size="small" variant="outlined" label={billingTypeLabels[billingType as BillingType]} />}
+            {appliedBillingMonth && <Chip size="small" color="info" label={`Kỳ ${appliedBillingMonth}`} />}
+            {appliedBillingType && <Chip size="small" variant="outlined" label={billingTypeLabels[appliedBillingType as BillingType]} />}
           </Stack>
         </Stack>
-        <Table sx={{ minWidth: 1040 }} size="small">
-          <TableHead><TableRow><TableCell>Mã học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Lớp</TableCell><TableCell>Loại phí</TableCell><TableCell>Kỳ</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Giảm giá</TableCell><TableCell>Phụ phí</TableCell><TableCell align="right">Tổng phải thu</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell>Trạng thái</TableCell></TableRow></TableHead>
+        <Table sx={{ minWidth: 1160 }} size="small">
+          <TableHead><TableRow><TableCell>Mã học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Lớp</TableCell><TableCell>Loại phí</TableCell><TableCell>Kỳ</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Giảm giá</TableCell><TableCell>Phụ phí</TableCell><TableCell align="right">Tổng phải thu</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
           <TableBody>
-            {!loading && items.map((item) => <TableRow key={item.id} hover><TableCell><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="outlined">{item.feeNo}</Button></TableCell><TableCell><Typography variant="body2" fontWeight={600}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell><TableCell>{item.class?.name || "-"}</TableCell><TableCell><Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} /></TableCell><TableCell>{`${item.billingYear}-${String(item.billingMonth).padStart(2, "0")}`}</TableCell><TableCell>{money(item.originalAmount)}</TableCell><TableCell>{money(item.discountAmount)}</TableCell><TableCell>{money(item.additionalAmount)}</TableCell><TableCell align="right"><strong>{money(item.finalAmount)}</strong></TableCell><TableCell>{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</TableCell><TableCell><Chip size="small" color={colors[item.status]} label={labels[item.status]} /></TableCell></TableRow>)}
-            {!loading && !items.length && <TableRow><TableCell colSpan={11}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
-            {loading && <TableRow><TableCell colSpan={11}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
+            {!loading && items.map((item) => <TableRow key={item.id} hover><TableCell><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="outlined">{item.feeNo}</Button></TableCell><TableCell><Typography variant="body2" fontWeight={600}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell><TableCell>{item.class?.name || "-"}</TableCell><TableCell><Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} /></TableCell><TableCell>{`${item.billingYear}-${String(item.billingMonth).padStart(2, "0")}`}</TableCell><TableCell>{money(item.originalAmount)}</TableCell><TableCell>{money(item.discountAmount)}</TableCell><TableCell>{money(item.additionalAmount)}</TableCell><TableCell align="right"><strong>{money(item.finalAmount)}</strong></TableCell><TableCell>{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</TableCell><TableCell><Chip size="small" color={colors[item.status]} label={labels[item.status]} /></TableCell><TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={0.5}><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Xem chi tiết</Button>{(item.status === "UNPAID" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">Thu tiền</Button>}</Stack></TableCell></TableRow>)}
+            {!loading && !items.length && <TableRow><TableCell colSpan={12}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={12}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
           </TableBody>
         </Table>
         <TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} />
       </Paper>
 
-      <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); setPage(0); studentDialog.onClose(); }} />
-      <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); setPage(0); classDialog.onClose(); }} />
+      <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); studentDialog.onClose(); }} />
+      <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); classDialog.onClose(); }} />
     </Stack>
   );
 }
