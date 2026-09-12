@@ -27,6 +27,7 @@ Các module chính:
 - Quản lý thanh toán
 - Quản lý biên lai
 - Báo cáo thu học phí theo lớp và môn học
+- Báo cáo thu học phí theo từng ngày
 - Audit log hệ thống
 
 Luồng tổng quát:

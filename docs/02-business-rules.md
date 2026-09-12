@@ -334,6 +334,13 @@ Thực hiện trong transaction
 
 Nếu học viên đăng ký thêm môn sau khi đã tạo học phí, thao tác tạo học phí lần tiếp theo chỉ tạo phí cho các môn mới chưa được lập phí.
 
+## 6.5 Báo cáo thu học phí theo ngày
+
+Báo cáo ngày chỉ tính các payment học phí có trạng thái `SUCCESS` trong ngày
+được chọn theo múi giờ Việt Nam. Báo cáo phải phân biệt tổng tiền mặt và tổng
+chuyển khoản, đồng thời có chi tiết từng payment để đối soát. Hệ thống không tự
+suy diễn chi phí hoặc số tiền nộp quỹ khi chưa có nghiệp vụ tương ứng.
+
 ---
 
 # 7. Schedule Rules

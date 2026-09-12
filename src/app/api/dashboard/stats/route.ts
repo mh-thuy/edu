@@ -40,12 +40,28 @@ export async function GET(request: Request) {
         { status: "UNPAID" as const, dueDate: { lt: todayStart } },
       ],
     };
-    const [paymentAggregate, tuitionFeeAggregate, debtAggregate, overdueFees, activeClasses, activeStudents, pendingBatches] =
+    const [paymentAggregate, cashPaymentAggregate, bankTransferPaymentAggregate, tuitionFeeAggregate, debtAggregate, overdueFees, activeClasses, activeStudents, pendingBatches] =
       await Promise.all([
         prisma.tuitionPayment.aggregate({ where: { paymentStatus: "SUCCESS", ...(Object.keys(paymentDate).length ? { paymentDate } : {}) },
           _sum: {
             amount: true,
           },
+        }),
+        prisma.tuitionPayment.aggregate({
+          where: {
+            paymentStatus: "SUCCESS",
+            paymentMethod: "CASH",
+            ...(Object.keys(paymentDate).length ? { paymentDate } : {}),
+          },
+          _sum: { amount: true },
+        }),
+        prisma.tuitionPayment.aggregate({
+          where: {
+            paymentStatus: "SUCCESS",
+            paymentMethod: "BANK_TRANSFER",
+            ...(Object.keys(paymentDate).length ? { paymentDate } : {}),
+          },
+          _sum: { amount: true },
         }),
         prisma.tuitionFee.aggregate({
           where: { status: { in: ["UNPAID", "PAID", "OVERDUE"] } },
@@ -64,6 +80,8 @@ export async function GET(request: Request) {
         prisma.paymentBatch.count({ where: { status: "PENDING" } }),
       ]);
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);
+    const cashCollected = cashPaymentAggregate._sum.amount ?? toDecimal(0);
+    const bankTransferCollected = bankTransferPaymentAggregate._sum.amount ?? toDecimal(0);
     const totalFeeAmount = tuitionFeeAggregate._sum.finalAmount ?? toDecimal(0);
     const totalCollected = totalRevenue;
     const totalDebt = debtAggregate._sum.finalAmount ?? toDecimal(0);
@@ -73,6 +91,8 @@ export async function GET(request: Request) {
       totalRevenue,
       totalDebt: totalDebt.greaterThan(0) ? totalDebt : toDecimal(0),
       totalCollected,
+      cashCollected,
+      bankTransferCollected,
       activeClasses,
       activeStudents,
       overdueFees,

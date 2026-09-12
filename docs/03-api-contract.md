@@ -569,6 +569,21 @@ Ví dụ Prisma:
 await prisma.$transaction(async (tx) => {})
 ```
 
+## 19.2 Xuất báo cáo thu học phí theo ngày
+
+```http
+GET /api/reports/daily-payments/export?date=YYYY-MM-DD
+```
+
+API trả file Excel gồm bảng tổng hợp theo giáo viên/lớp/mức phí và sheet chi
+tiết payment. Chỉ payment `SUCCESS` trong ngày theo múi giờ Việt Nam được tính.
+
+Tên file trả về có dạng:
+
+```text
+bao-cao-thu-hoc-phi-ngay-YYYY-MM-DD.xlsx
+```
+
 ---
 
 # 19.1 Enrollment và tạo học phí tách rời
