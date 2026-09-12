@@ -431,15 +431,31 @@ export async function assignStudentToClass(
 
     const reactivationStart = new Date();
     reactivationStart.setUTCHours(0, 0, 0, 0);
-    const clearedPauseIds = existing?.status === "LEFT"
-      ? (await tx.enrollmentPause.findMany({
-          where: {
-            enrollmentId: existing.id,
-            endMonth: { gte: reactivationStart },
-          },
-          select: { id: true },
-        })).map((pause) => pause.id)
+    const reactivationMonthStart = new Date(Date.UTC(
+      reactivationStart.getUTCFullYear(),
+      reactivationStart.getUTCMonth(),
+      1,
+    ));
+    const clearedPauses = existing?.status === "LEFT"
+      ? await tx.$queryRaw<Array<{
+          id: string;
+          enrollmentId: string;
+          startMonth: Date;
+          endMonth: Date;
+          reason: string | null;
+        }>>`
+          SELECT id,
+                 enrollment_id AS "enrollmentId",
+                 start_month AS "startMonth",
+                 end_month AS "endMonth",
+                 reason
+          FROM enrollment_pauses
+          WHERE enrollment_id = ${existing.id}::uuid
+            AND status = 'ACTIVE'::enrollment_pause_status
+            AND end_month >= ${reactivationMonthStart}::date
+        `
       : [];
+    const clearedPauseIds = clearedPauses.map((pause) => pause.id);
     if (clearedPauseIds.length > 0) {
       await tx.$executeRaw`
         UPDATE enrollment_pauses
@@ -448,6 +464,24 @@ export async function assignStudentToClass(
         WHERE id = ANY(${clearedPauseIds}::uuid[])
           AND status = 'ACTIVE'::enrollment_pause_status
       `;
+      await tx.tuitionAuditLog.createMany({
+        data: clearedPauses.map((pause) => ({
+          entityType: "ENROLLMENT_PAUSE",
+          entityId: pause.id,
+          action: "CANCELLED",
+          dataBefore: {
+            ...pause,
+            status: "ACTIVE",
+          } as unknown as Prisma.InputJsonValue,
+          dataAfter: {
+            id: pause.id,
+            enrollmentId: pause.enrollmentId,
+            status: "CANCELLED",
+          },
+          reason: "Hủy khoảng tạm nghỉ khi học viên tái đăng ký",
+          performedBy: actorId || studentId,
+        })),
+      });
     }
 
     const enrollment = existing
@@ -845,7 +879,7 @@ export async function deleteEnrollmentPause(
       data: {
         entityType: "ENROLLMENT_PAUSE",
         entityId: pause.id,
-        action: "DELETED",
+        action: "CANCELLED",
         dataBefore: pause as unknown as Prisma.InputJsonValue,
         dataAfter: cancelled[0] as unknown as Prisma.InputJsonValue,
         reason: "Hủy thời gian tạm nghỉ",
