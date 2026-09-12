@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
 
 export async function POST(
@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const rawMonth = request.nextUrl.searchParams.get("month");
     const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).safeParse(rawMonth);

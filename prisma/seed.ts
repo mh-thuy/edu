@@ -27,40 +27,11 @@ async function cleanup() {
   await prisma.class.deleteMany();
   await prisma.student.deleteMany();
   await prisma.teacher.deleteMany();
-  await prisma.userRole.deleteMany();
-  await prisma.role.deleteMany();
   await prisma.user.deleteMany();
 }
 
 async function seedAuth() {
   const defaultPasswordHash = await bcrypt.hash("password", 10);
-
-  const adminRole = await prisma.role.create({
-    data: {
-      code: "ADMIN",
-      name: "Quản trị viên",
-      description: "Toàn quyền hệ thống",
-      isActive: true,
-    },
-  });
-
-  const staffRole = await prisma.role.create({
-    data: {
-      code: "STAFF",
-      name: "Nhân viên",
-      description: "Quản lý vận hành trung tâm",
-      isActive: true,
-    },
-  });
-
-  const teacherRole = await prisma.role.create({
-    data: {
-      code: "TEACHER",
-      name: "Giáo viên",
-      description: "Giáo viên giảng dạy",
-      isActive: true,
-    },
-  });
 
   const adminUser = await prisma.user.create({
     data: {
@@ -87,14 +58,6 @@ async function seedAuth() {
       passwordHash: defaultPasswordHash,
       status: "ACTIVE",
     },
-  });
-
-  await prisma.userRole.createMany({
-    data: [
-      { userId: adminUser.id, roleId: adminRole.id },
-      { userId: staffUser.id, roleId: staffRole.id },
-      { userId: teacherUser.id, roleId: teacherRole.id },
-    ],
   });
 
   return { adminUser, staffUser, teacherUser };

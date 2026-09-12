@@ -8,4 +8,4 @@
 6. Mọi confirm payment chạy transaction, khóa tuition fee, kiểm tra idempotency/version và tạo receipt/audit atomically.
 7. Không sửa snapshot của notice/receipt đã phát hành; thay bằng version/cancel/reissue.
 8. Refund mặc định toàn bộ payment SUCCESS, không sửa payment gốc.
-9. Bank transaction chỉ ghép một tuition fee và chỉ confirm nếu credit amount khớp tuyệt đối.
+9. Bank transaction chỉ confirm một payment batch đang `PENDING` và credit amount phải khớp tuyệt đối với tổng batch; mỗi allocation trong batch phải bằng toàn bộ `final_amount` của fee tương ứng.

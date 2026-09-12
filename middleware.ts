@@ -4,11 +4,9 @@ import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api";
 import { AUTH_COOKIE_NAME } from "@/constants/auth";
 import {
-  API_ROLE_RULES,
   AUTH_ROUTES,
   PROTECTED_DEFAULT_REDIRECT,
   PUBLIC_PATH_PREFIXES,
-  ROLE_ROUTE_RULES,
 } from "@/constants/routes";
 import type { SessionUser } from "@/types/auth";
 
@@ -34,11 +32,11 @@ function isApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/");
 }
 
-function unauthorizedApiResponse(status: 401 | 403, message: string): NextResponse {
+function unauthorizedApiResponse(message: string): NextResponse {
   return apiError(
-    status === 401 ? "UNAUTHORIZED" : "FORBIDDEN",
+    "UNAUTHORIZED",
     message,
-    status,
+    401,
   );
 }
 
@@ -64,14 +62,13 @@ async function getUserFromRequest(request: NextRequest): Promise<SessionUser | n
 
     const user = payload.user as Partial<SessionUser>;
 
-    if (!user.id || !user.email || !user.role || !user.fullName) {
+    if (!user.id || !user.email || !user.fullName) {
       return null;
     }
 
     return {
       id: user.id,
       email: user.email,
-      role: user.role,
       fullName: user.fullName,
     };
   } catch {
@@ -92,7 +89,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   if (!user && !isAuthRoute) {
     if (apiPath) {
-      return unauthorizedApiResponse(401, "Authentication required");
+      return unauthorizedApiResponse("Authentication required");
     }
 
     const loginUrl = new URL("/login", request.url);
@@ -105,22 +102,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   if (!user) {
     return NextResponse.next();
-  }
-
-  if (apiPath) {
-    for (const rule of API_ROLE_RULES) {
-      if (pathname.startsWith(rule.prefix) && !rule.roles.includes(user.role)) {
-        return unauthorizedApiResponse(403, "Insufficient permissions");
-      }
-    }
-
-    return NextResponse.next();
-  }
-
-  for (const rule of ROLE_ROUTE_RULES) {
-    if (pathname.startsWith(rule.prefix) && !rule.roles.includes(user.role)) {
-      return NextResponse.redirect(new URL("/forbidden", request.url));
-    }
   }
 
   return NextResponse.next();

@@ -1,30 +1,5 @@
-import type { RoleCode } from "@/constants/roles";
-
 export const AUTH_ROUTES = new Set(["/login"]);
 
 export const PUBLIC_PATH_PREFIXES = ["/_next", "/favicon.ico"];
 
-export const PROTECTED_DEFAULT_REDIRECT = "/";
-
-export const ROLE_ROUTE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
-  { prefix: "/admin", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/staff", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/teacher", roles: ["TEACHER"] },
-];
-
-export const API_ROLE_RULES: Array<{ prefix: string; roles: RoleCode[] }> = [
-  { prefix: "/api/dashboard", roles: ["ADMIN", "STAFF", "TEACHER"] },
-  { prefix: "/api/classes", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/payment-batches", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/tuition-fees", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/bank-statement-imports", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/bank-reconciliations", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/tuition-receipts", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/bank-accounts", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/receipts", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/schedules", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/students", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/teacher", roles: ["TEACHER"] },
-  { prefix: "/api/teachers", roles: ["ADMIN", "STAFF"] },
-  { prefix: "/api/users", roles: ["ADMIN"] },
-];
+export const PROTECTED_DEFAULT_REDIRECT = "/admin";

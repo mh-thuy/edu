@@ -1,6 +1,12 @@
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { removeSubjectFromEnrollment } from "@/modules/class/services/class.service";
+import { z } from "zod";
+
+const removeSubjectSchema = z.object({
+  force: z.boolean().optional().default(false),
+  reason: z.string().trim().max(500).optional(),
+});
 
 type Params = Promise<{
   id: string;
@@ -9,18 +15,26 @@ type Params = Promise<{
 }>;
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Params },
 ) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, studentId, classSubjectId } = await context.params;
+    let body: unknown = {};
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+    const options = removeSubjectSchema.parse(body);
     const result = await removeSubjectFromEnrollment(
       id,
       studentId,
       classSubjectId,
       user.id,
+      options,
     );
     return apiSuccess(result);
   } catch (error: unknown) {

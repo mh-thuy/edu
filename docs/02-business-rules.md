@@ -56,17 +56,10 @@ Backend bắt buộc check.
 
 ---
 
-## 2.3 Role
+## 2.3 Access
 
-Role hợp lệ:
-
-```text
-ADMIN
-STAFF
-TEACHER
-```
-
-Không cho tạo role khác.
+Mọi user đã đăng nhập dùng chung một quyền truy cập. Hệ thống không tạo,
+gán hoặc kiểm tra role.
 
 ---
 
@@ -140,12 +133,10 @@ teacher.email hoạt động độc lập
 
 ## 3.4 Teacher Delete
 
-Không cho xóa teacher nếu teacher đang:
-
-```text
-Được gán cho lớp học
-Hoặc có payroll
-```
+Không hard delete teacher. Thao tác xóa trên UI chỉ chuyển teacher sang
+`INACTIVE` và lưu `deleted_at` để bảo toàn lịch sử. Teacher đang được gán cho
+lớp không bị xóa khỏi dữ liệu; không được dùng teacher `INACTIVE` cho lịch hoặc
+phân công mới.
 
 ---
 
@@ -180,20 +171,9 @@ Email đúng format
 
 ## 4.3 Student Delete
 
-Không cho xóa học viên nếu đã có:
-
-```text
-class enrollment
-student fee
-payment
-receipt
-```
-
-Chỉ cho:
-
-```text
-inactive
-```
+Không hard delete student. Thao tác xóa trên UI chỉ chuyển student sang
+`INACTIVE` và lưu `deleted_at` để bảo toàn enrollment, học phí, payment và
+receipt. Student `INACTIVE` không được đăng ký mới vào lớp.
 
 ---
 
@@ -282,6 +262,9 @@ payment
 receipt
 ```
 
+Với lớp chưa có dữ liệu liên quan, thao tác xóa chỉ chuyển lớp sang `CANCELLED`
+và lưu `deleted_at`; không hard delete bản ghi lớp.
+
 ---
 
 ## 6.4 Class Status
@@ -354,10 +337,15 @@ Không cho remove học viên nếu:
 Đã phát sinh student_fee
 ```
 
-Trừ khi:
+Trừ khi người dùng đã đăng nhập gửi `force = true` và nhập lý do.
+
+Với bỏ một môn:
 
 ```text
-ADMIN force cancel
+Nếu môn đã có học phí:
+    chỉ cho force cancel có lý do
+    khoản học phí đã phát sinh vẫn được giữ nguyên
+    các kỳ sau không tạo thêm phí cho môn đó
 ```
 
 Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; enrollment có thể được kích hoạt lại khi đăng ký lại môn phù hợp.
@@ -544,46 +532,19 @@ Enrollment có khoảng tạm nghỉ bao phủ tháng -> không tạo phí
 
 ## 10.1 QR Generation
 
-Mỗi student fee có một QR riêng.
+QR được tạo động theo `payment_batch` đang `PENDING`, sử dụng tài khoản ngân hàng
+đã gắn với batch, tổng `final_amount` và `batchNo` làm nội dung chuyển khoản.
 
 ```text
-1 student_fee = 1 active QR
+1 payment_batch = 1 QR động tại thời điểm xem/in
 ```
 
----
+Không lưu ảnh QR hoặc bản ghi QR riêng trong database.
 
-## 10.2 QR Regeneration
+## 10.2 QR Validity
 
-Nếu thay đổi:
-
-```text
-amount
-discount
-actual_amount
-```
-
-Thì:
-
-```text
-QR cũ phải inactive
-QR mới phải tạo lại
-```
-
----
-
-## 10.3 QR Expiration
-
-Nếu QR có hạn:
-
-```text
-expired_at < now()
-```
-
-Thì:
-
-```text
-Không cho thanh toán bằng QR cũ
-```
+QR chỉ được tạo khi batch còn `PENDING` và tài khoản nhận tiền còn hoạt động.
+Batch `SUCCESS` hoặc `CANCELLED` không được tạo QR mới.
 
 ---
 
@@ -615,30 +576,15 @@ discount
 due_date
 ```
 
-Thì:
-
-```text
-Bill cũ invalid
-Phải tạo bill mới
-```
+Thì batch đang chờ phải được hủy hoặc thay thế trước khi tạo batch mới. PDF notice
+được tạo lại theo batch hiện hành và không lưu lịch sử bản PDF trong database.
 
 ---
 
 ## 11.3 Bill History
 
-Cho phép:
-
-```text
-In lại nhiều lần
-Gửi lại nhiều lần
-```
-
-Phải lưu:
-
-```text
-printed_at
-sent_at
-```
+Cho phép xuất/in lại nhiều lần khi batch còn `PENDING`; hệ thống hiện chưa gửi
+email/SMS và chưa lưu lịch sử số lần xuất/in.
 
 ---
 
@@ -646,31 +592,15 @@ sent_at
 
 ## 12.1 Payment Amount
 
-Không cho:
+Hệ thống chỉ hỗ trợ thanh toán đủ một lần cho từng học phí.
 
 ```text
-payment > outstanding amount
+payment.amount = tuition_fee.final_amount
 ```
 
-Ví dụ:
+Không cho thanh toán thiếu, thừa hoặc nhập số tiền tùy ý từ frontend.
 
-```text
-Need pay = 3000000
-
-Already paid = 2500000
-```
-
-Không cho:
-
-```text
-Payment = 600000
-```
-
-Chỉ tối đa:
-
-```text
-500000
-```
+Nếu số tiền không khớp `final_amount`, trả lỗi `PAYMENT_AMOUNT_MISMATCH`.
 
 ---
 
@@ -681,70 +611,33 @@ Cho phép:
 ```text
 cash
 transfer
-wallet
 ```
 
 Không cho method khác.
 
 ---
 
-## 12.3 Multiple Payments
-
-Cho phép:
+## 12.3 Payment Uniqueness
 
 ```text
-1 student_fee có nhiều payment
+1 student_fee chỉ có tối đa một payment SUCCESS
 ```
 
-Ví dụ:
-
-```text
-1000000
-1000000
-1000000
-```
+Payment `FAILED` hoặc `CANCELLED` vẫn được lưu để tra cứu lịch sử, nhưng không
+được tính là đã thanh toán và không được tạo receipt.
 
 ---
 
 ## 12.4 Payment Status Update
 
-Sau mỗi payment phải tính lại.
-
-Nếu:
+Trạng thái học phí chỉ có hai trạng thái thanh toán chính:
 
 ```text
-total_paid = 0
+Chưa có payment SUCCESS -> UNPAID hoặc OVERDUE
+Có payment SUCCESS đúng final_amount -> PAID
 ```
 
-Status:
-
-```text
-UNPAID
-```
-
-Nếu:
-
-```text
-0 < total_paid < actual_amount
-```
-
-Status:
-
-```text
-PARTIAL
-```
-
-Nếu:
-
-```text
-total_paid >= actual_amount
-```
-
-Status:
-
-```text
-PAID
-```
+Sau khi đã `PAID`, không cho tạo thêm payment SUCCESS.
 
 ---
 
@@ -801,7 +694,10 @@ Cho phép:
 cancel receipt
 ```
 
-Nếu cần nghiệp vụ hủy.
+Khi hủy một receipt thuộc payment batch đã thành công, hệ thống hoàn tác toàn bộ
+batch trong một transaction: các payment chuyển `CANCELLED`, các receipt liên
+quan bị hủy, học phí được mở lại thành `UNPAID` hoặc `OVERDUE`, batch chuyển
+`CANCELLED` và ghi audit log. Không cho xuất lại receipt tổng đã hoàn tác.
 
 ---
 
@@ -909,8 +805,8 @@ Receipt created
 Payroll approved
 Payroll paid
 Student fee generated
-QR regenerated
-Bill regenerated
+QR generated dynamically
+Bill generated dynamically
 ```
 
 Đăng ký học viên và tạo học phí là hai audit event riêng biệt.
@@ -998,11 +894,11 @@ Backend phải tự tính lại:
 
 ```text
 actual_amount
-
-outstanding_amount
-
 payment_status
 ```
+
+Payment SUCCESS luôn có số tiền bằng `actual_amount`; không phát sinh
+`outstanding_amount` do hệ thống không hỗ trợ thanh toán từng phần.
 
 ---
 

@@ -4,6 +4,8 @@
 
 Trạng thái triển khai hiện hành được tóm tắt tại [11-current-system.md](./11-current-system.md). Khi tài liệu đặc tả cũ còn mô tả tạo học phí thủ công, áp dụng quy trình hiện hành trong tài liệu này và các business rules mới.
 
+Mô hình truy cập hiện hành là một quyền dùng chung cho mọi user đã đăng nhập; chi tiết tại [09-permissions-matrix.md](./09-permissions-matrix.md).
+
 Mọi AI Coding Agent (Codex, GitHub Copilot, Claude Code…) bắt buộc đọc file này trước khi sửa code.
 
 ---

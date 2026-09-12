@@ -1,6 +1,7 @@
 import { getSessionFromCookie } from "@/lib/session";
 import { apiError } from "@/lib/api";
-import type { RoleCode } from "@/constants/roles";
+import { prisma } from "@/lib/prisma";
+import { UserStatus } from "@prisma/client";
 import type { SessionUser } from "@/types/auth";
 
 export async function requireApiUser(): Promise<
@@ -12,21 +13,13 @@ export async function requireApiUser(): Promise<
     return apiError("UNAUTHORIZED", "Unauthorized", 401);
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { status: true, deletedAt: true },
+  });
+  if (!user || user.status !== UserStatus.ACTIVE || user.deletedAt) {
+    return apiError("UNAUTHORIZED", "Tài khoản không còn hoạt động", 401);
+  }
+
   return session.user;
-}
-
-export async function requireApiRole(
-  roles: RoleCode[],
-): Promise<SessionUser | Response> {
-  const user = await requireApiUser();
-
-  if (user instanceof Response) {
-    return user;
-  }
-
-  if (!roles.includes(user.role)) {
-    return apiError("FORBIDDEN", "Insufficient permissions", 403);
-  }
-
-  return user;
 }

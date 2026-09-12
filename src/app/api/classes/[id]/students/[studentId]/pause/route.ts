@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { pauseStudentEnrollment } from "@/modules/class/services/class.service";
 
 const pauseSchema = z.object({
@@ -20,7 +20,7 @@ export async function POST(
   context: { params: Params },
 ) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, studentId } = await context.params;
     const data = pauseSchema.parse(await request.json());

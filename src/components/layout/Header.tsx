@@ -5,6 +5,7 @@ import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
 import {
   Avatar,
   Box,
+  Breadcrumbs,
   IconButton,
   ListItemIcon,
   Menu,
@@ -20,15 +21,10 @@ type HeaderProps = {
   user: SessionUser;
   onToggleSidebar: () => void;
   currentTitle?: string;
+  currentSection?: string;
 };
 
-const roleLabels: Record<SessionUser["role"], string> = {
-  ADMIN: "Quản trị viên",
-  STAFF: "Nhân viên",
-  TEACHER: "Giáo viên",
-};
-
-export function Header({ user, onToggleSidebar, currentTitle = "Tổng quan" }: HeaderProps): ReactElement {
+export function Header({ user, onToggleSidebar, currentTitle = "Dashboard", currentSection = "Tổng quan" }: HeaderProps): ReactElement {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const open = Boolean(anchorEl);
@@ -58,27 +54,28 @@ export function Header({ user, onToggleSidebar, currentTitle = "Tổng quan" }: 
         justifyContent: "space-between",
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1.5}>
+      <Stack direction="row" alignItems="center" spacing={1.5} minWidth={0}>
         <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" sx={{ bgcolor: "#f1f5f9", "&:hover": { bgcolor: "#e2e8f0" } }}>
           <MenuOutlinedIcon />
         </IconButton>
-        <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={600}>
-            TRUNG TÂM ĐÀO TẠO
-          </Typography>
-          <Typography variant="h6" fontWeight={800} lineHeight={1.2}>
+        <Box minWidth={0}>
+          <Breadcrumbs
+            separator="/"
+            sx={{ display: { xs: "none", sm: "flex" }, "& .MuiBreadcrumbs-li": { lineHeight: 1 } }}
+          >
+            <Typography variant="caption" color="text.secondary">EduCenter</Typography>
+            <Typography variant="caption" color="text.secondary">{currentSection}</Typography>
+          </Breadcrumbs>
+          <Typography variant="h6" fontWeight={800} lineHeight={1.2} noWrap>
             {currentTitle}
           </Typography>
         </Box>
       </Stack>
 
       <Stack direction="row" alignItems="center" spacing={1.5}>
-        <Box textAlign="right">
+        <Box textAlign="right" sx={{ display: { xs: "none", sm: "block" } }}>
           <Typography variant="body2" fontWeight={600}>
             {user.fullName}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {roleLabels[user.role]}
           </Typography>
         </Box>
         <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small">

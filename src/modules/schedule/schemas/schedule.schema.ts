@@ -3,9 +3,9 @@ import { z } from "zod";
 const minuteSchema = z.number().int().min(0).max(1439);
 
 const requiredClassScheduleSchema = z.object({
-  classId: z.string().min(1, "Lớp học là bắt buộc"),
-  classSubjectId: z.string().uuid().optional(),
-  teacherId: z.string().min(1, "Giáo viên là bắt buộc"),
+  classId: z.string().uuid("Lớp học không hợp lệ"),
+  classSubjectId: z.string().uuid("Môn học là bắt buộc"),
+  teacherId: z.string().uuid("Giáo viên không hợp lệ"),
   dayOfWeek: z.number().int().min(0).max(6),
   startMinute: minuteSchema,
   endMinute: minuteSchema,

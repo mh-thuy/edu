@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiUser } from "@/lib/api-auth";
 import { classScheduleCreateSchema, scheduleFilterSchema } from "@/modules/schedule/schemas/schedule.schema";
 import {
   createClassSchedule,
@@ -9,6 +10,8 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const searchParams = request.nextUrl.searchParams;
     const filter = scheduleFilterSchema.parse({
       classId: searchParams.get("classId") || undefined,
@@ -27,6 +30,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const body = await request.json();
     const data = classScheduleCreateSchema.parse(body);
 

@@ -56,7 +56,7 @@ type BankAccount = {
   accountNo: string;
   accountName: string;
 };
-const steps = ["Tìm học sinh", "Chọn khoản phí", "Xác nhận thanh toán"];
+const steps = ["Tìm học sinh", "Chọn khoản phí", "Xác nhận thanh toán", "Hoàn tất"];
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 
@@ -154,14 +154,24 @@ export function TuitionPaymentWorkspace({
     setReceiptId(null);
     try {
       const response = await fetch(
-        `/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&pageSize=10000`,
+        `/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&pageSize=100`,
       );
       if (!response.ok)
         throw new Error(
           await extractApiErrorMessage(response, "Không thể tải học phí"),
         );
-      const result = await unwrapApiResponse<{ items: Fee[] }>(response);
-      const unpaid = result.items.filter(
+      const result = await unwrapApiResponse<{ items: Fee[]; pagination?: { totalPages: number } }>(response);
+      const totalPages = result.pagination?.totalPages ?? 1;
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(totalPages - 1, 0) }, (_, index) =>
+          fetch(`/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&page=${index + 2}&pageSize=100`).then(async (pageResponse) => {
+            if (!pageResponse.ok) throw new Error(await extractApiErrorMessage(pageResponse, "Không thể tải đầy đủ học phí"));
+            return unwrapApiResponse<{ items: Fee[] }>(pageResponse);
+          }),
+        ),
+      );
+      const allFees = [result.items, ...remainingPages.map((page) => page.items)].flat();
+      const unpaid = allFees.filter(
         (fee) => fee.status === "UNPAID" || fee.status === "OVERDUE",
       );
       setFees(unpaid);
@@ -263,7 +273,7 @@ export function TuitionPaymentWorkspace({
   }
 
   return (
-    <Stack spacing={3} sx={{ width: "100%" }}>
+    <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
       <Box>
         <Typography variant="h4" fontWeight={700}>
           Thu học phí
@@ -391,7 +401,7 @@ export function TuitionPaymentWorkspace({
                             >
                               {locked
                                 ? `Đang chờ thanh toán trong đợt ${batchNo}`
-                                : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN")}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
+                                : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
                             </Typography>
                           </Box>
                         }
@@ -463,7 +473,6 @@ export function TuitionPaymentWorkspace({
               >
                 <MenuItem value="CASH">Tiền mặt</MenuItem>
                 <MenuItem value="BANK_TRANSFER">Chuyển khoản / VietQR</MenuItem>
-                <MenuItem value="OTHER">Khác</MenuItem>
               </TextField>
               {method === "BANK_TRANSFER" && (
                 <>

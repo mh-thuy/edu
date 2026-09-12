@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Button,
+  Box,
   MenuItem,
   Paper,
   Select,
@@ -18,22 +19,25 @@ import {
   Typography,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 type SubjectOption = {
   id: string;
-  subject: { name: string };
+  subject: { name: string; status?: "ACTIVE" | "INACTIVE" };
   teacherId: string | null;
   teacher?: { fullName?: string | null } | null;
 };
 type Schedule = {
   id: string;
-  classSubjectId?: string | null;
+  classSubjectId: string;
+  teacherId: string;
   dayOfWeek: number;
   startMinute: number;
   endMinute: number;
   teacher?: { fullName?: string | null } | null;
-  classSubject?: { subject: { name: string } } | null;
+  classSubject: { subject: { name: string } };
 };
 const days = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
 const toMinutes = (value: string) => {
@@ -50,18 +54,23 @@ export function ClassSchedulePanel({
   classId: string;
   classSubjects: SubjectOption[];
 }) {
+  const activeClassSubjects = classSubjects.filter(
+    (subject) => subject.subject.status !== "INACTIVE",
+  );
   const [items, setItems] = useState<Schedule[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [classSubjectId, setClassSubjectId] = useState(
-    classSubjects[0]?.id || "",
+    activeClassSubjects[0]?.id || "",
   );
   const [day, setDay] = useState(1);
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("10:00");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Schedule | null>(null);
   const selectedSubject = classSubjects.find(
     (subject) => subject.id === classSubjectId,
   );
@@ -86,6 +95,24 @@ export function ClassSchedulePanel({
     void load();
   }, [load]);
 
+  function resetForm() {
+    setEditingSchedule(null);
+    setClassSubjectId(activeClassSubjects[0]?.id || "");
+    setDay(1);
+    setStart("08:00");
+    setEnd("10:00");
+    setError("");
+  }
+
+  function openEditSchedule(schedule: Schedule) {
+    setEditingSchedule(schedule);
+    setClassSubjectId(schedule.classSubjectId);
+    setDay(schedule.dayOfWeek);
+    setStart(toTime(schedule.startMinute));
+    setEnd(toTime(schedule.endMinute));
+    setError("");
+  }
+
   async function addSchedule() {
     if (!selectedSubject) {
       setError("Lớp chưa có môn học");
@@ -102,8 +129,41 @@ export function ClassSchedulePanel({
     setSaving(true);
     setError("");
     try {
-      const response = await fetch("/api/schedules", {
+      const conflictResponse = await fetch("/api/schedules/check-conflict", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          classId,
+          classSubjectId,
+          teacherId: selectedSubject.teacherId,
+          dayOfWeek: day,
+          startMinute: toMinutes(start),
+          endMinute: toMinutes(end),
+          ...(editingSchedule?.id && { excludeScheduleId: editingSchedule.id }),
+        }),
+      });
+      if (!conflictResponse.ok) {
+        throw new Error(await extractApiErrorMessage(conflictResponse, "Không thể kiểm tra trùng lịch"));
+      }
+      const conflictResult = await unwrapApiResponse<{
+        hasConflict: boolean;
+        conflicts: Array<{
+          class?: { code?: string; name?: string } | null;
+          startMinute: number;
+          endMinute: number;
+        }>;
+      }>(conflictResponse);
+      if (conflictResult.hasConflict) {
+        const details = conflictResult.conflicts
+          .slice(0, 2)
+          .map((conflict) => `${conflict.class?.code || "Lớp khác"} (${toTime(conflict.startMinute)}–${toTime(conflict.endMinute)})`)
+          .join(", ");
+        setError(`Lịch học bị trùng${details ? ` với ${details}` : ""}. Vui lòng chọn khung giờ khác.`);
+        return;
+      }
+
+      const response = await fetch(editingSchedule ? `/api/schedules/${editingSchedule.id}` : "/api/schedules", {
+        method: editingSchedule ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           classId,
@@ -114,11 +174,11 @@ export function ClassSchedulePanel({
           endMinute: toMinutes(end),
         }),
       });
-      if (!response.ok)
-        setError(
-          await extractApiErrorMessage(response, "Không thể tạo lịch học"),
-        );
-      else await load();
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, editingSchedule ? "Không thể cập nhật lịch học" : "Không thể tạo lịch học"));
+      }
+      resetForm();
+      await load();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Không thể tạo lịch học",
@@ -137,12 +197,15 @@ export function ClassSchedulePanel({
       });
       if (!response.ok)
         setError(
-          await extractApiErrorMessage(response, "Không thể xóa lịch học"),
+          await extractApiErrorMessage(response, "Không thể gỡ lịch học"),
         );
-      else await load();
+      else {
+        setRemoveTarget(null);
+        await load();
+      }
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "Không thể xóa lịch học",
+        reason instanceof Error ? reason.message : "Không thể gỡ lịch học",
       );
     } finally {
       setSaving(false);
@@ -150,10 +213,16 @@ export function ClassSchedulePanel({
   }
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper sx={{ p: 2 }}>
         <Stack spacing={2}>
-          <Typography>Giáo viên được lấy theo môn học đã phân công.</Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+            <Box>
+              <Typography fontWeight={700}>{editingSchedule ? "Sửa lịch học" : "Thêm lịch học"}</Typography>
+              <Typography variant="body2" color="text.secondary">Giáo viên được lấy theo môn học đã phân công.</Typography>
+            </Box>
+            {editingSchedule && <Button size="small" variant="outlined" onClick={resetForm}>Hủy sửa</Button>}
+          </Stack>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
             <Select
               size="small"
@@ -165,7 +234,7 @@ export function ClassSchedulePanel({
               <MenuItem value="" disabled>
                 Chọn môn học
               </MenuItem>
-              {classSubjects.map((subject) => (
+              {activeClassSubjects.map((subject) => (
                 <MenuItem key={subject.id} value={subject.id}>
                   {subject.subject.name} —{" "}
                   {subject.teacher?.fullName || "Chưa phân công"}
@@ -204,7 +273,7 @@ export function ClassSchedulePanel({
               onClick={() => void addSchedule()}
               disabled={saving}
             >
-              Thêm lịch học
+              {editingSchedule ? "Cập nhật lịch học" : "Thêm lịch học"}
             </Button>
           </Stack>
           {error && <Alert severity="error">{error}</Alert>}
@@ -229,19 +298,31 @@ export function ClassSchedulePanel({
                 <TableCell>
                   {toTime(item.startMinute)} - {toTime(item.endMinute)}
                 </TableCell>
-                <TableCell>{item.teacher?.fullName || "-"}</TableCell>
-                <TableCell align="right">
-                  <Button
-                    color="error"
-                    size="small"
-                    variant="outlined"
-                    startIcon={<DeleteOutlineIcon />}
-                    onClick={() => void removeSchedule(item.id)}
-                    disabled={saving}
-                  >
-                    Xóa
-                  </Button>
-                </TableCell>
+                  <TableCell>{item.teacher?.fullName || "-"}</TableCell>
+                  <TableCell align="right">
+                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                    <Button
+                      color="primary"
+                      size="small"
+                      variant="outlined"
+                      startIcon={<EditOutlinedIcon />}
+                      onClick={() => openEditSchedule(item)}
+                      disabled={saving}
+                    >
+                      Sửa
+                    </Button>
+                    <Button
+                      color="error"
+                      size="small"
+                      variant="outlined"
+                      startIcon={<DeleteOutlineIcon />}
+                      onClick={() => setRemoveTarget(item)}
+                      disabled={saving}
+                    >
+                      Gỡ lịch
+                    </Button>
+                  </Stack>
+                  </TableCell>
               </TableRow>
             ))}
             {!items.length && (
@@ -275,6 +356,17 @@ export function ClassSchedulePanel({
           }
         />
       </Paper>
+      <ConfirmDialog
+        open={Boolean(removeTarget)}
+        title="Gỡ lịch học"
+        message={`Bạn có chắc muốn gỡ lịch ${removeTarget ? `${days[removeTarget.dayOfWeek]} ${toTime(removeTarget.startMinute)}–${toTime(removeTarget.endMinute)}` : "này"}? Lịch sẽ được giữ lại trong lịch sử.`}
+        onConfirm={() => {
+          if (removeTarget) void removeSchedule(removeTarget.id);
+        }}
+        onCancel={() => setRemoveTarget(null)}
+        isLoading={saving}
+        confirmLabel="Gỡ lịch"
+      />
     </Stack>
   );
 }

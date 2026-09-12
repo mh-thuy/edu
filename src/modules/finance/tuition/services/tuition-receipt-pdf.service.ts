@@ -2,14 +2,14 @@ import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
-export async function generateTuitionReceiptPdf(receiptId: string) {
+export async function generateTuitionReceiptPdf(receiptId: string, _actorId: string) {
   const receipt = await prisma.tuitionReceipt.findUnique({
     where: { id: receiptId },
     include: {
@@ -30,6 +30,8 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
     },
   });
   if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
+  if (receipt.status === "CANCELLED")
+    throw new ConflictError("Biên lai đã được hủy và không thể xuất PDF");
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
@@ -53,7 +55,11 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
   };
   draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
   draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
-  draw(`Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN")}`, 55, 708);
+  draw(
+    `Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    55,
+    708,
+  );
   draw(`Mã thanh toán: ${receipt.payment.paymentNo}`, 55, 686);
   draw("THÔNG TIN HỌC SINH", 55, 640, 13, true);
   draw(`Mã học sinh: ${receipt.payment.tuitionFee.student.code}`, 75, 615);
@@ -77,6 +83,16 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
     draw(`${money(Number(item.amount))} VND`, 400, y);
     y -= 24;
   }
+  if (receipt.payment.tuitionFee.discountAmount.greaterThan(0)) {
+    draw("Giảm giá", 75, y);
+    draw(`-${money(Number(receipt.payment.tuitionFee.discountAmount))} VND`, 400, y);
+    y -= 24;
+  }
+  if (receipt.payment.tuitionFee.additionalAmount.greaterThan(0)) {
+    draw("Phụ thu", 75, y);
+    draw(`${money(Number(receipt.payment.tuitionFee.additionalAmount))} VND`, 400, y);
+    y -= 24;
+  }
   page.drawLine({
     start: { x: 55 * A5_SCALE, y: (y - 5) * A5_SCALE },
     end: { x: 540 * A5_SCALE, y: (y - 5) * A5_SCALE },
@@ -87,5 +103,6 @@ export async function generateTuitionReceiptPdf(receiptId: string) {
   draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13, true);
   draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
   draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
-  return Buffer.from(await pdf.save());
+  const pdfBuffer = Buffer.from(await pdf.save());
+  return pdfBuffer;
 }

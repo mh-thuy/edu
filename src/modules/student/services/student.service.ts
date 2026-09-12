@@ -44,6 +44,7 @@ function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput
     }),
     ...(data.address !== undefined && { address: data.address || null }),
     ...(data.status !== undefined && { status: data.status }),
+    ...(data.status === "ACTIVE" && { deletedAt: null }),
   };
 }
 
@@ -62,7 +63,7 @@ export async function getStudentById(id: string): Promise<StudentWithClasses | n
 }
 
 export async function getStudents(filter: StudentFilter) {
-  const { search, status, page, pageSize } = filter;
+  const { search, status, excludeClassId, page, pageSize } = filter;
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.StudentWhereInput = {
@@ -73,6 +74,15 @@ export async function getStudents(filter: StudentFilter) {
       ],
     }),
     ...(status && { status }),
+    ...(!status && { deletedAt: null }),
+    ...(excludeClassId && {
+      enrollments: {
+        none: {
+          classId: excludeClassId,
+          status: "ACTIVE",
+        },
+      },
+    }),
   };
 
   const [students, total] = await Promise.all([
@@ -91,6 +101,12 @@ export async function getStudents(filter: StudentFilter) {
     page,
     pageSize,
     pages: Math.ceil(total / pageSize),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
   };
 }
 
@@ -107,29 +123,15 @@ export async function updateStudent(
 export async function deleteStudent(id: string): Promise<Student> {
   const student = await prisma.student.findUnique({
     where: { id },
-    select: {
-      _count: {
-        select: {
-          enrollments: true,
-          tuitionFees: true,
-        },
-      },
-    },
+    select: { id: true },
   });
 
   if (!student) {
     throw new NotFoundError("Không tìm thấy học viên");
   }
 
-  if (student._count.enrollments > 0) {
-    throw new ConflictError("Cannot delete student with class enrollments");
-  }
-
-  if (student._count.tuitionFees > 0) {
-    throw new ConflictError("Cannot delete student with tuition fees");
-  }
-
-  return prisma.student.delete({
+  return prisma.student.update({
     where: { id },
+    data: { status: "INACTIVE", deletedAt: new Date() },
   });
 }

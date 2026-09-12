@@ -78,6 +78,66 @@ function normalizePhone(value: string): string | null {
   return phone || null;
 }
 
+function normalizeHeader(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const FULL_NAME_HEADERS = new Set([
+  "ho ten",
+  "ho va ten",
+  "ten hoc vien",
+  "student name",
+  "full name",
+  "name",
+]);
+const LAST_NAME_HEADERS = new Set(["ho", "ho dem", "last name"]);
+const FIRST_NAME_HEADERS = new Set(["ten", "first name"]);
+const PHONE_HEADERS = new Set([
+  "so dien thoai",
+  "sdt",
+  "phone",
+  "mobile",
+  "telephone",
+]);
+
+function getHeaderMapping(columns: string[]) {
+  const headers = columns.map(normalizeHeader);
+  const fullNameIndex = headers.findIndex((header) => FULL_NAME_HEADERS.has(header));
+  const lastNameIndex = headers.findIndex((header) => LAST_NAME_HEADERS.has(header));
+  const firstNameIndex = headers.findIndex((header) => FIRST_NAME_HEADERS.has(header));
+  const phoneIndex = headers.findIndex((header) => PHONE_HEADERS.has(header));
+  const hasHeader = headers.some(
+    (header) =>
+      FULL_NAME_HEADERS.has(header) ||
+      LAST_NAME_HEADERS.has(header) ||
+      FIRST_NAME_HEADERS.has(header) ||
+      PHONE_HEADERS.has(header) ||
+      header === "stt" ||
+      header === "ma" ||
+      header === "ma hoc vien",
+  );
+
+  if (!hasHeader) return null;
+  if (fullNameIndex < 0 && (lastNameIndex < 0 || firstNameIndex < 0)) {
+    throw new ConflictError(
+      "CSV phải có cột Họ tên hoặc đủ hai cột Họ và Tên",
+    );
+  }
+
+  return {
+    fullNameIndex: fullNameIndex >= 0 ? fullNameIndex : null,
+    lastNameIndex: lastNameIndex >= 0 ? lastNameIndex : null,
+    firstNameIndex: firstNameIndex >= 0 ? firstNameIndex : null,
+    phoneIndex: phoneIndex >= 0 ? phoneIndex : null,
+  };
+}
+
 function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: StudentImportResult["errors"] } {
   const lines = decodeCsv(buffer).split(/\r?\n/).filter((line) => line.trim());
   if (lines.length === 0) throw new Error("File CSV không có dữ liệu");
@@ -86,18 +146,53 @@ function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: St
   const rows: ParsedStudentRow[] = [];
   const errors: StudentImportResult["errors"] = [];
 
-  lines.forEach((line, index) => {
+  const firstColumns = parseCsvLine(lines[0]!, delimiter);
+  const headerMapping = getHeaderMapping(firstColumns);
+  const firstDataIndex = headerMapping ? 1 : 0;
+
+  lines.slice(firstDataIndex).forEach((line, offset) => {
+    const index = offset + firstDataIndex;
     const rowNo = index + 1;
     const columns = parseCsvLine(line, delimiter);
-    const fullName = `${columns[1] ?? ""} ${columns[2] ?? ""}`.replace(/\s+/g, " ").trim();
+    let fullName: string;
+    let phone: string | null;
+
+    if (headerMapping) {
+      const nameParts = headerMapping.fullNameIndex !== null
+        ? [columns[headerMapping.fullNameIndex] ?? ""]
+        : [
+            columns[headerMapping.lastNameIndex!] ?? "",
+            columns[headerMapping.firstNameIndex!] ?? "",
+          ];
+      fullName = nameParts.join(" ").replace(/\s+/g, " ").trim();
+      phone = normalizePhone(
+        headerMapping.phoneIndex === null
+          ? ""
+          : columns[headerMapping.phoneIndex] ?? "",
+      );
+    } else if (columns.length >= 4) {
+      // Backward-compatible format: STT, Họ, Tên, Số điện thoại.
+      fullName = `${columns[1] ?? ""} ${columns[2] ?? ""}`
+        .replace(/\s+/g, " ")
+        .trim();
+      phone = normalizePhone(columns[3] ?? "");
+    } else {
+      // Headerless compact format: Họ tên, Số điện thoại.
+      fullName = (columns[0] ?? "").trim();
+      phone = normalizePhone(columns[1] ?? "");
+    }
 
     if (!fullName) {
       errors.push({ rowNo, message: "Thiếu họ tên" });
       return;
     }
 
-    rows.push({ rowNo, fullName, phone: normalizePhone(columns[3] ?? "") });
+    rows.push({ rowNo, fullName, phone });
   });
+
+  if (rows.length === 0 && errors.length === 0) {
+    throw new Error("File CSV không có dữ liệu học viên");
+  }
 
   return { rows, errors };
 }

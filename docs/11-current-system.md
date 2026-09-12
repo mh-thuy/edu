@@ -19,15 +19,26 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Không tạo học phí độc lập ngoài enrollment.
 - Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng dù không có điểm danh; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
+- Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.
+- Xóa học viên/giáo viên/lớp/lịch chỉ là soft delete hoặc chuyển trạng thái; không hard delete bản ghi.
 - Thanh toán bắt đầu từ chi tiết học phí bằng nút `Thanh toán học phí`.
 - Thông báo thanh toán, biên lai tổng hợp và phiếu thu đều hiển thị các môn đã đăng ký của học viên.
 
+## Thanh toán và đối soát
+
+- Chỉ có hai phương thức: `CASH` và `BANK_TRANSFER`; không hỗ trợ thanh toán từng phần.
+- Batch `BANK_TRANSFER` bắt buộc gắn đúng một tài khoản ngân hàng nhận tiền.
+- Đối soát chỉ chọn batch `BANK_TRANSFER` đang `PENDING`, cùng tài khoản và đúng tổng tiền.
+- QR được sinh động theo payment batch, không lưu lịch sử QR.
+- Hủy receipt của payment batch thành công sẽ hoàn tác toàn bộ batch, mở lại các khoản học phí và ghi audit log.
+
 ## Người dùng
 
-- Admin quản lý người dùng tại `/admin/users`.
-- CRUD gồm email, họ tên, mật khẩu, trạng thái và nhiều role.
+- Quản lý người dùng tại `/admin/users`.
+- CRUD gồm email, họ tên, mật khẩu và trạng thái.
+- Mọi người dùng đã đăng nhập dùng chung một quyền truy cập; không còn role hoặc màn hình phân quyền.
 - Xóa người dùng là khóa mềm tài khoản; không xóa vật lý.
-- API `/api/users` chỉ cho role `ADMIN` và không bao giờ trả về `passwordHash`.
+- API `/api/users` yêu cầu đăng nhập và không bao giờ trả về `passwordHash`.
 
 ## Prisma và dữ liệu cũ
 

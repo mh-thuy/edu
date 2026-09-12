@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { requireApiUser } from "@/lib/api-auth";
 import { classScheduleUpdateSchema } from "@/modules/schedule/schemas/schedule.schema";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import {
@@ -21,6 +22,8 @@ export async function GET(
   context: { params?: Params },
 ) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const id = await getScheduleId(context);
     const schedule = await getClassScheduleById(id);
     if (!schedule) {
@@ -38,6 +41,8 @@ export async function PATCH(
   context: { params?: Params },
 ) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const id = await getScheduleId(context);
     const existingSchedule = await getClassScheduleById(id);
     if (!existingSchedule) {
@@ -66,6 +71,8 @@ export async function DELETE(
   context: { params?: Params },
 ) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const id = await getScheduleId(context);
     const schedule = await deleteClassSchedule(id);
     return apiSuccess(schedule);

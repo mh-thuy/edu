@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { classUpdateSchema } from "@/modules/class/schemas/class.schema";
 import { getClassById, updateClass, deleteClass } from "@/modules/class/services/class.service";
 
@@ -10,6 +10,8 @@ type Params = Promise<{
 
 export async function GET(_request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const { id } = await params;
     const classData = await getClassById(id);
     if (!classData) {
@@ -23,6 +25,8 @@ export async function GET(_request: NextRequest, { params }: { params: Params })
 
 export async function PATCH(request: NextRequest, { params }: { params: Params }) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const { id } = await params;
     const body = await request.json();
     const data = classUpdateSchema.parse(body);
@@ -36,7 +40,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN"]);
+    const user = await requireApiUser();
     if (user instanceof Response) {
       return user;
     }

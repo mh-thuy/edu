@@ -1,7 +1,8 @@
-import { PaymentBatchStatus, TuitionPaymentStatus } from "@prisma/client";
+import { PaymentBatchStatus, Prisma, TuitionPaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { ClassTuitionReportInput } from "@/modules/finance/reports/schemas/class-tuition-report.schema";
+import { getVietnamMonthRange } from "@/lib/vietnam-time";
 
 export type ClassTuitionReportRow = {
   studentCode: string;
@@ -32,10 +33,44 @@ function splitStudentName(fullName: string) {
 }
 
 function getMonthRange(month: string) {
-  const start = new Date(`${month}-01T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
-  return { start, end };
+  const range = getVietnamMonthRange(month);
+  if (!range) throw new ConflictError("Kỳ báo cáo không hợp lệ");
+  return range;
+}
+
+function getSubjectPaidAmount(
+  fee: {
+    originalAmount: Prisma.Decimal;
+    discountAmount: Prisma.Decimal;
+    additionalAmount: Prisma.Decimal;
+    finalAmount: Prisma.Decimal;
+    items: Array<{ classSubjectId: string | null; amount: Prisma.Decimal }>;
+    payments: Array<{ amount: Prisma.Decimal }>;
+  },
+  classSubjectId: string,
+) {
+  const subjectGross = fee.items
+    .filter((item) => item.classSubjectId === classSubjectId)
+    .reduce((total, item) => total + Number(item.amount), 0);
+  if (subjectGross <= 0) return 0;
+
+  const originalAmount = Number(fee.originalAmount);
+  const adjustmentRatio = originalAmount > 0
+    ? Math.min(Math.max(subjectGross / originalAmount, 0), 1)
+    : 1;
+  const subjectFinal = Math.max(
+    0,
+    subjectGross
+      - Number(fee.discountAmount) * adjustmentRatio
+      + Number(fee.additionalAmount) * adjustmentRatio,
+  );
+  const finalAmount = Number(fee.finalAmount);
+  const paymentRatio = finalAmount > 0 ? subjectFinal / finalAmount : 0;
+
+  return fee.payments.reduce(
+    (total, payment) => total + Number(payment.amount) * paymentRatio,
+    0,
+  );
 }
 
 export async function getClassTuitionReport(
@@ -71,18 +106,13 @@ export async function getClassTuitionReport(
     throw new ConflictError("Môn học chưa được phân công giáo viên");
   }
 
-  if (classSubject.teacher.status !== "ACTIVE") {
-    throw new ConflictError("Giáo viên phụ trách đang không hoạt động");
-  }
-
   const enrollments = await prisma.classStudent.findMany({
     where: {
       classId: input.classId,
-      status: "ACTIVE",
-      subjects: {
+      tuitionFees: {
         some: {
-          classSubjectId: input.classSubjectId,
-          status: "ACTIVE",
+          classId: input.classId,
+          items: { some: { classSubjectId: input.classSubjectId } },
         },
       },
     },
@@ -94,6 +124,13 @@ export async function getClassTuitionReport(
           items: { some: { classSubjectId: input.classSubjectId } },
         },
         select: {
+          originalAmount: true,
+          discountAmount: true,
+          additionalAmount: true,
+          finalAmount: true,
+          items: {
+            select: { classSubjectId: true, amount: true },
+          },
           payments: {
             where: {
               paymentStatus: TuitionPaymentStatus.SUCCESS,
@@ -124,8 +161,7 @@ export async function getClassTuitionReport(
         enrollment.student.fullName,
       );
       const paidAmount = enrollment.tuitionFees.reduce(
-        (total, fee) =>
-          total + fee.payments.reduce((feeTotal, payment) => feeTotal + Number(payment.amount), 0),
+        (total, fee) => total + getSubjectPaidAmount(fee, input.classSubjectId),
         0,
       );
 

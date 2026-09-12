@@ -1,10 +1,13 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiUser } from "@/lib/api-auth";
 import { classCreateSchema, classFilterSchema } from "@/modules/class/schemas/class.schema";
 import { createClass, getClasses } from "@/modules/class/services/class.service";
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const searchParams = request.nextUrl.searchParams;
     const filter = classFilterSchema.parse({
       search: searchParams.get("search") || undefined,
@@ -22,6 +25,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const body = await request.json();
     const data = classCreateSchema.parse(body);
 

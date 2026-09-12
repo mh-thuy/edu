@@ -14,7 +14,6 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import { GridColDef } from "@mui/x-data-grid";
-import type { RoleCode } from "@/constants/roles";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
@@ -44,7 +43,7 @@ type TeacherRow = Teacher & {
   _onDelete?: (teacher: Teacher) => void;
 };
 
-const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
+const getColumns = (): GridColDef<TeacherRow>[] => [
   {
     field: "code",
     headerName: "Mã giáo viên",
@@ -109,7 +108,7 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 160,
+    minWidth: 300,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -131,10 +130,7 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
           variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
+            minWidth: 64,
           }}
         >
           Sửa
@@ -145,27 +141,15 @@ const getColumns = (canDelete: boolean): GridColDef<TeacherRow>[] => [
           variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
-          disabled={!canDelete}
-          sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
-          }}
         >
-          Xóa
+          Ngừng hoạt động
         </Button>
       </Stack>
     ),
   },
 ];
 
-type TeacherListProps = {
-  role: RoleCode;
-};
-
-export function TeacherList({ role }: TeacherListProps): ReactElement {
-  const canDelete = role === "ADMIN";
+export function TeacherList(): ReactElement {
   const [search, setSearch] = useState("");
 
   const {
@@ -214,14 +198,20 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
       });
 
       if (!response.ok) {
-        throw new Error("Không thể xóa giáo viên");
+        throw new Error(
+          "Không thể chuyển giáo viên sang trạng thái ngừng hoạt động",
+        );
       }
 
-      showSuccess("Xóa giáo viên thành công");
+      showSuccess("Đã chuyển giáo viên sang trạng thái ngừng hoạt động");
       setDeleteId(null);
       refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Lỗi khi xóa giáo viên");
+      showError(
+        err instanceof Error
+          ? err.message
+          : "Lỗi khi cập nhật trạng thái giáo viên",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -278,11 +268,11 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
   }));
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
+          p: { xs: 2, md: 3 },
           borderRadius: 3,
           border: "1px solid",
           borderColor: "divider",
@@ -326,18 +316,20 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
             startIcon={<AddIcon />}
             onClick={handleCreate}
             sx={{
-              borderRadius: 2,
-              px: 2.5,
-              height: 40,
               whiteSpace: "nowrap",
-              textTransform: "none",
             }}
           >
             Thêm giáo viên
           </Button>
         </Stack>
+      </Paper>
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }} sx={{ mt: 2.5 }}>
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          alignItems={{ sm: "center" }}
+        >
           <TextField
             placeholder="Tìm theo mã hoặc số điện thoại..."
             value={search}
@@ -360,32 +352,28 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
               },
             }}
           />
-          <Button variant="text" onClick={() => setSearch("")} disabled={!search}>Xóa tìm kiếm</Button>
+          <Button
+            variant="outlined"
+            onClick={() => setSearch("")}
+            disabled={!search}
+          >
+            Xóa tìm kiếm
+          </Button>
         </Stack>
       </Paper>
 
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-          bgcolor: "background.paper",
-        }}
-      >
-        <BaseTable
-          columns={getColumns(canDelete)}
-          rows={tableData}
-          totalRows={data?.total || 0}
-          page={page}
-          pageSize={pageSize}
-          isLoading={isLoading}
-          onPageChange={setPageNumber}
-          onPageSizeChange={setPageSize}
-          error={error}
-        />
-      </Paper>
+      <BaseTable
+        columns={getColumns()}
+        rows={tableData}
+        totalRows={data?.total || 0}
+        page={page}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        onPageChange={setPageNumber}
+        onPageSizeChange={setPageSize}
+        error={error}
+        onRetry={refresh}
+      />
 
       <FormDialog
         open={openDialog}
@@ -408,8 +396,8 @@ export function TeacherList({ role }: TeacherListProps): ReactElement {
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Xóa giáo viên"
-        message="Bạn có chắc chắn muốn xóa giáo viên này không?"
+        title="Ngừng hoạt động giáo viên"
+        message="Giáo viên sẽ được giữ lại để bảo toàn lịch sử và chuyển sang trạng thái ngừng hoạt động. Tiếp tục?"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
         isLoading={isSubmitting}

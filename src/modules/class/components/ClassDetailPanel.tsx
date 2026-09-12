@@ -3,15 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
-  Checkbox,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   FormControl,
-  FormGroup,
   InputLabel,
   MenuItem,
   Paper,
@@ -27,14 +26,8 @@ import {
   Select,
   Typography,
 } from "@mui/material";
-import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
 import Link from "next/link";
 import { ClassSchedulePanel } from "./ClassSchedulePanel";
-import {
-  StudentSelectDialog,
-  type StudentItem,
-} from "@/components/shared/dialogs/StudentSelectDialog";
-import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import {
   TeacherSelectDialog,
   type TeacherSelectValue,
@@ -45,14 +38,14 @@ import {
 } from "@/components/shared/forms/MasterSelectField";
 import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
-import { useSnackbar } from "@/hooks/useSnackbar";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 
 type ClassSubject = {
   id: string;
   teacherId: string | null;
   tuitionFee: number;
   totalSessions: number;
-  subject: { id: string; name: string };
+  subject: { id: string; name: string; status?: "ACTIVE" | "INACTIVE" };
   teacher?: {
     id: string;
     code: string;
@@ -98,10 +91,9 @@ export function ClassDetailPanel({ id }: { id: string }) {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   })();
-  const [studentDialogOpen, setStudentDialogOpen] = useState(false);
-  const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
   const [teacherDialogOpen, setTeacherDialogOpen] = useState(false);
   const [manageSubjectDialogOpen, setManageSubjectDialogOpen] = useState(false);
+  const [removeSubjectTarget, setRemoveSubjectTarget] = useState<ClassSubject | null>(null);
   const [editingSubject, setEditingSubject] = useState<ClassSubject | null>(
     null,
   );
@@ -110,21 +102,9 @@ export function ClassDetailPanel({ id }: { id: string }) {
     useState<MasterSelectValue | null>(null);
   const [subjectFee, setSubjectFee] = useState(0);
   const [subjectSessions, setSubjectSessions] = useState(0);
-  const [pendingStudent, setPendingStudent] = useState<StudentItem | null>(
-    null,
-  );
-  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
-  const [registeredSubjectIds, setRegisteredSubjectIds] = useState<string[]>(
-    [],
-  );
-  const [addingStudent, setAddingStudent] = useState(false);
-  const [studentToRemove, setStudentToRemove] = useState<ClassStudent | null>(
-    null,
-  );
-  const [removingStudent, setRemovingStudent] = useState(false);
+  const [savingSubject, setSavingSubject] = useState(false);
   const [error, setError] = useState("");
-  const { showSuccess, showError, Snackbar } = useSnackbar();
-
+  const classLocked = classData?.status === "COMPLETED" || classData?.status === "CANCELLED";
   const load = useCallback(async () => {
     const response = await fetch(`/api/classes/${id}`);
     if (!response.ok) {
@@ -146,7 +126,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
       );
     }
     const feeResponse = await fetch(
-      `/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&page=1&pageSize=1`,
+      `/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&billingType=MONTHLY&page=1&pageSize=1`,
     );
     if (feeResponse.ok) {
       const feeResult = await unwrapApiResponse<{
@@ -156,8 +136,8 @@ export function ClassDetailPanel({ id }: { id: string }) {
       setFeeTotal(feeResult.total);
     }
     const [unpaidResponse, overdueResponse] = await Promise.all([
-      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&status=UNPAID&page=1&pageSize=1`),
-      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&status=OVERDUE&page=1&pageSize=1`),
+      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&billingType=MONTHLY&status=UNPAID&page=1&pageSize=1`),
+      fetch(`/api/tuition-fees?classId=${id}&month=${encodeURIComponent(billingMonth)}&billingType=MONTHLY&status=OVERDUE&page=1&pageSize=1`),
     ]);
     const unpaid = unpaidResponse.ok
       ? await unwrapApiResponse<{ total: number }>(unpaidResponse)
@@ -168,68 +148,9 @@ export function ClassDetailPanel({ id }: { id: string }) {
     setOutstandingFeeTotal(unpaid.total + overdue.total);
   }, [billingMonth, id]);
 
-  async function chooseStudent(student: StudentItem) {
-    setStudentDialogOpen(false);
-    setPendingStudent(student);
-    try {
-      const response = await fetch(`/api/classes/${id}/students`);
-      if (response.ok) {
-        const enrolled = await unwrapApiResponse<
-          Array<{
-            studentId: string;
-            subjects: Array<{ classSubjectId: string }>;
-          }>
-        >(response);
-        const registered =
-          enrolled
-            .find((entry) => entry.studentId === student.id)
-            ?.subjects.map((subject) => subject.classSubjectId) || [];
-        setRegisteredSubjectIds(registered);
-        setSelectedSubjectIds(registered);
-      } else {
-        setRegisteredSubjectIds([]);
-        setSelectedSubjectIds([]);
-      }
-    } catch {
-      setRegisteredSubjectIds([]);
-      setSelectedSubjectIds([]);
-    }
-    setSubjectDialogOpen(true);
-  }
-
-  async function addStudent() {
-    if (!pendingStudent || selectedSubjectIds.length === 0) return;
-    setAddingStudent(true);
-    setError("");
-    try {
-      const response = await fetch(`/api/classes/${id}/students`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: pendingStudent.id,
-          classSubjectIds: selectedSubjectIds,
-        }),
-      });
-      if (!response.ok)
-        throw new Error(
-          await extractApiErrorMessage(response, "Không thể đăng ký học sinh"),
-        );
-      setSubjectDialogOpen(false);
-      setPendingStudent(null);
-      await load();
-      showSuccess("Đã đăng ký học viên vào lớp");
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Không thể đăng ký học sinh",
-      );
-    } finally {
-      setAddingStudent(false);
-    }
-  }
-
   async function addSubjectToClass() {
     if (!selectedCatalogSubjectId) return;
-    setAddingStudent(true);
+    setSavingSubject(true);
     setError("");
     try {
       const response = await fetch(
@@ -263,38 +184,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         reason instanceof Error ? reason.message : "Không thể thêm môn học",
       );
     } finally {
-      setAddingStudent(false);
-    }
-  }
-
-  async function removeStudent() {
-    if (!studentToRemove) return;
-    setRemovingStudent(true);
-    try {
-      const response = await fetch(`/api/classes/${id}/students`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: studentToRemove.studentId }),
-      });
-      if (!response.ok) {
-        throw new Error(
-          await extractApiErrorMessage(
-            response,
-            "Không thể xóa học viên khỏi lớp",
-          ),
-        );
-      }
-      setStudentToRemove(null);
-      await load();
-      showSuccess("Đã xóa học viên khỏi lớp");
-    } catch (reason) {
-      showError(
-        reason instanceof Error
-          ? reason.message
-          : "Không thể xóa học viên khỏi lớp",
-      );
-    } finally {
-      setRemovingStudent(false);
+      setSavingSubject(false);
     }
   }
 
@@ -325,8 +215,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
   }
 
   async function removeSubject(subject: ClassSubject) {
-    if (!window.confirm(`Xóa môn ${subject.subject.name} khỏi lớp?`)) return;
-    setAddingStudent(true);
+    setSavingSubject(true);
     setError("");
     try {
       const response = await fetch(
@@ -337,13 +226,14 @@ export function ClassDetailPanel({ id }: { id: string }) {
         throw new Error(
           await extractApiErrorMessage(response, "Không thể xóa môn học"),
         );
+      setRemoveSubjectTarget(null);
       await load();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Không thể xóa môn học",
       );
     } finally {
-      setAddingStudent(false);
+      setSavingSubject(false);
     }
   }
 
@@ -353,34 +243,52 @@ export function ClassDetailPanel({ id }: { id: string }) {
   if (error && !classData) return <Alert severity="error">{error}</Alert>;
   if (!classData) return <Typography>Đang tải lớp học...</Typography>;
 
+  const statusLabel: Record<string, string> = {
+    ACTIVE: "Đang hoạt động",
+    DRAFT: "Bản nháp",
+    COMPLETED: "Đã hoàn thành",
+    CANCELLED: "Đã hủy",
+  };
+  const formatDate = (value?: string | null) => value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa xác định";
+
   return (
-    <Stack spacing={2} width="100%">
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-      >
-        <Stack>
+    <Stack spacing={{ xs: 2, md: 3 }} width="100%">
+      <Paper sx={{ p: { xs: 2, md: 3 } }}>
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ md: "center" }}
+          gap={2}
+        >
+          <Stack spacing={0.75}>
           <Typography variant="h5" fontWeight={700}>
             {classData.code} — {classData.name}
           </Typography>
-          <Typography color="text.secondary">
-            Quản lý môn học, đăng ký và học phí theo từng môn
-          </Typography>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography color="text.secondary">
+                Quản lý môn học, học viên và lịch học theo lớp
+              </Typography>
+              <Chip size="small" color={classData.status === "ACTIVE" ? "success" : "default"} label={statusLabel[classData.status] ?? classData.status} />
+            </Stack>
+            <Typography variant="body2" color="text.secondary">
+              Thời gian: {formatDate(classData.startDate)} — {formatDate(classData.endDate)}
+            </Typography>
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button component={Link} href={`/admin/classes/${id}/students`} variant="contained">
+              Quản lý học viên
+            </Button>
+            <Button component={Link} href={`/admin/classes/${id}/tuition`} variant="outlined">
+              Học phí tháng
+            </Button>
+            <Button component={Link} href="/admin/classes" variant="outlined">
+              Quay lại
+            </Button>
+          </Stack>
         </Stack>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-          <Button component={Link} href={`/admin/classes/${id}/students`} variant="contained">
-            Quản lý học viên
-          </Button>
-          <Button component={Link} href={`/admin/classes/${id}/tuition`} variant="outlined">
-            Học phí tháng
-          </Button>
-          <Button component={Link} href="/admin/classes" variant="outlined">
-            Quay lại
-          </Button>
-        </Stack>
-      </Stack>
+      </Paper>
       {error && <Alert severity="error">{error}</Alert>}
-      <Paper>
+      <Paper sx={{ overflowX: "auto" }}>
         <Tabs
           value={tab}
           onChange={(_, value) => setTab(value)}
@@ -392,14 +300,24 @@ export function ClassDetailPanel({ id }: { id: string }) {
         </Tabs>
       </Paper>
       {tab === 0 && (
-        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+        <Stack spacing={1.5}>
+          <Typography variant="body2" color="text.secondary">
+            Số liệu học phí kỳ {billingMonth}
+          </Typography>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" },
+              gap: 2,
+            }}
+          >
           {[
             ["Môn học", classData.classSubjects.length],
             ["Học viên", classStudents.length],
-            ["Khoản học phí", feeTotal],
-            ["Khoản chưa thu", outstandingFeeTotal],
+            ["Số khoản học phí", feeTotal],
+            ["Số khoản chưa thu", outstandingFeeTotal],
           ].map(([label, value]) => (
-            <Paper key={String(label)} sx={{ p: 2, flex: 1 }}>
+            <Paper key={String(label)} sx={{ p: 2 }}>
               <Typography variant="body2" color="text.secondary">
                 {label}
               </Typography>
@@ -408,6 +326,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
               </Typography>
             </Paper>
           ))}
+          </Box>
         </Stack>
       )}
       {tab === 1 && (
@@ -419,7 +338,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
             sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}
           >
             <Typography variant="h6">Các môn trong lớp</Typography>
-            <Button variant="contained" onClick={openAddSubjectDialog}>
+            <Button variant="contained" onClick={openAddSubjectDialog} disabled={classLocked || savingSubject}>
               Thêm môn học
             </Button>
           </Stack>
@@ -449,7 +368,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
                       size="small"
                       variant="outlined"
                       onClick={() => openEditSubjectDialog(item)}
-                      disabled={addingStudent}
+                      disabled={classLocked || savingSubject}
                     >
                       Sửa
                     </Button>
@@ -457,8 +376,8 @@ export function ClassDetailPanel({ id }: { id: string }) {
                       size="small"
                       color="error"
                       variant="outlined"
-                      onClick={() => void removeSubject(item)}
-                      disabled={addingStudent}
+                      onClick={() => setRemoveSubjectTarget(item)}
+                      disabled={classLocked || savingSubject}
                     >
                       Xóa
                     </Button>
@@ -478,161 +397,15 @@ export function ClassDetailPanel({ id }: { id: string }) {
           </Table>
         </Paper>
       )}
-      {false && (
-        <Paper sx={{ overflow: "auto" }}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "stretch", sm: "center" }}
-            spacing={1}
-            sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}
-          >
-            <Stack>
-              <Typography variant="h6">Học viên trong lớp</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Mỗi học viên có thể đăng ký một hoặc nhiều môn trong lớp
-              </Typography>
-            </Stack>
-            <Button
-              variant="contained"
-              startIcon={<PersonAddAlt1Icon />}
-              onClick={() => setStudentDialogOpen(true)}
-              disabled={addingStudent || !classData?.classSubjects.length}
-            >
-              Đăng ký học viên
-            </Button>
-          </Stack>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Mã học viên</TableCell>
-                <TableCell>Họ tên</TableCell>
-                <TableCell>Môn đang học</TableCell>
-                <TableCell>Học phí</TableCell>
-                <TableCell align="right">Thao tác</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {classStudents.map((item) => {
-                const [selectedBillingYear, selectedBillingMonth] = billingMonth
-                  .split("-")
-                  .map(Number);
-                const monthlyFees = item.tuitionFees.filter(
-                  (fee) =>
-                    fee.billingType === "MONTHLY" &&
-                    fee.billingYear === selectedBillingYear &&
-                    fee.billingMonth === selectedBillingMonth,
-                );
-                const billedSubjectIds = new Set(
-                  monthlyFees.flatMap((fee) =>
-                    fee.items
-                      .map((feeItem) => feeItem.classSubjectId)
-                      .filter((value): value is string => Boolean(value)),
-                  ),
-                );
-                const hasUnbilledSubjects = item.subjects.some(
-                  (subject) => !billedSubjectIds.has(subject.classSubjectId),
-                );
-                const hasTuitionFee = monthlyFees.length > 0;
-                const isBusy = removingStudent;
-
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>{item.student.code}</TableCell>
-                    <TableCell>{item.student.fullName}</TableCell>
-                    <TableCell>
-                      {item.subjects
-                        .map(
-                          (entry) =>
-                            classData?.classSubjects.find(
-                              (subject) => subject.id === entry.classSubjectId,
-                            )?.subject.name,
-                        )
-                        .filter(Boolean)
-                        .join(", ") || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Typography
-                        variant="body2"
-                        color={
-                          hasUnbilledSubjects ? "warning.main" : "success.main"
-                        }
-                      >
-                        {hasUnbilledSubjects
-                          ? hasTuitionFee
-                            ? "Còn môn chưa tạo phí"
-                            : "Chưa tạo học phí"
-                          : "Đã tạo học phí"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" gap={1}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() =>
-                            void chooseStudent({
-                              id: item.studentId,
-                              code: item.student.code,
-                              fullName: item.student.fullName,
-                            })
-                          }
-                          disabled={isBusy}
-                        >
-                          Thêm môn
-                        </Button>
-                      <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => setStudentToRemove(item)}
-                          disabled={isBusy || hasTuitionFee}
-                          title={
-                            hasTuitionFee
-                              ? "Không thể xóa vì đã phát sinh học phí"
-                              : undefined
-                          }
-                        >
-                          Xóa
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {!classStudents.length && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Typography
-                      sx={{ p: 3 }}
-                      textAlign="center"
-                      color="text.secondary"
-                    >
-                      Chưa có học viên
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Paper>
-      )}
       {tab === 2 && (
         <ClassSchedulePanel
           classId={classData.id}
           classSubjects={classData.classSubjects}
         />
       )}
-      {studentDialogOpen && (
-        <StudentSelectDialog
-          open
-          onClose={() => setStudentDialogOpen(false)}
-          onSelect={chooseStudent}
-        />
-      )}
       <Dialog
         open={manageSubjectDialogOpen}
-        onClose={() => !addingStudent && setManageSubjectDialogOpen(false)}
+        onClose={() => !savingSubject && setManageSubjectDialogOpen(false)}
         fullWidth
         maxWidth="sm"
       >
@@ -670,10 +443,12 @@ export function ClassDetailPanel({ id }: { id: string }) {
               label="Giáo viên"
               value={selectedTeacher}
               onOpen={() => setTeacherDialogOpen(true)}
-              required
               codeLabel="Mã GV"
               nameLabel="Họ tên"
             />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+              Có thể phân công giáo viên sau; cần phân công trước khi tạo lịch học.
+            </Typography>
             <CurrencyInput
               label="Học phí"
               value={subjectFee}
@@ -697,7 +472,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
               setManageSubjectDialogOpen(false);
               setEditingSubject(null);
             }}
-            disabled={addingStudent}
+            disabled={savingSubject}
           >
             Hủy
           </Button>
@@ -705,7 +480,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
             variant="contained"
             onClick={() => void addSubjectToClass()}
             disabled={
-              addingStudent || !selectedCatalogSubjectId || !selectedTeacher
+              savingSubject || !selectedCatalogSubjectId
             }
           >
             {editingSubject ? "Lưu thay đổi" : "Thêm môn"}
@@ -722,63 +497,17 @@ export function ClassDetailPanel({ id }: { id: string }) {
           }}
         />
       )}
-      <Dialog
-        open={subjectDialogOpen}
-        onClose={() => !addingStudent && setSubjectDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Chọn môn cho {pendingStudent?.fullName}</DialogTitle>
-        <DialogContent>
-          <FormGroup>
-            {classData.classSubjects.map((item) => (
-              <FormControlLabel
-                key={item.id}
-                control={
-                  <Checkbox
-                    checked={selectedSubjectIds.includes(item.id)}
-                    disabled={registeredSubjectIds.includes(item.id)}
-                    onChange={(event) =>
-                      setSelectedSubjectIds((current) =>
-                        event.target.checked
-                          ? [...current, item.id]
-                          : current.filter((value) => value !== item.id),
-                      )
-                    }
-                  />
-                }
-                label={`${item.subject.name} — ${Number(item.tuitionFee).toLocaleString("vi-VN")} VND${registeredSubjectIds.includes(item.id) ? " (đã đăng ký)" : ""}`}
-              />
-            ))}
-          </FormGroup>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant="outlined"
-            onClick={() => setSubjectDialogOpen(false)}
-            disabled={addingStudent}
-          >
-            Hủy
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => void addStudent()}
-            disabled={addingStudent || selectedSubjectIds.length === 0}
-          >
-            {addingStudent ? "Đang đăng ký..." : "Đăng ký"}
-          </Button>
-        </DialogActions>
-      </Dialog>
       <ConfirmDialog
-        open={Boolean(studentToRemove)}
-        title="Xóa học viên khỏi lớp"
-        message={`Bạn có chắc muốn xóa ${studentToRemove?.student.fullName ?? "học viên này"} khỏi lớp? Nếu đã phát sinh học phí, hệ thống sẽ không cho phép xóa.`}
-        onConfirm={() => void removeStudent()}
-        onCancel={() => setStudentToRemove(null)}
-        isLoading={removingStudent}
-        confirmLabel="Xóa"
+        open={Boolean(removeSubjectTarget)}
+        title="Xóa môn khỏi lớp"
+        message={`Xóa môn ${removeSubjectTarget?.subject.name ?? "này"} khỏi lớp? Chỉ thực hiện được khi môn chưa có học viên đăng ký hoặc học phí.`}
+        onConfirm={() => {
+          if (removeSubjectTarget) void removeSubject(removeSubjectTarget);
+        }}
+        onCancel={() => setRemoveSubjectTarget(null)}
+        isLoading={savingSubject}
+        confirmLabel="Xóa môn"
       />
-      {Snackbar}
     </Stack>
   );
 }

@@ -1,19 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
-  FormGroup,
   InputLabel,
   MenuItem,
   Paper,
@@ -27,36 +24,31 @@ import {
   TableRow,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
+import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 
-type Role = {
-  id: string;
-  code: string;
-  name: string;
-  description?: string | null;
-};
 type User = {
   id: string;
   email: string;
   fullName: string;
   status: "ACTIVE" | "INACTIVE" | "LOCKED";
-  roles: Array<{ role: Role }>;
 };
 type FormState = {
   email: string;
   fullName: string;
   password: string;
   status: User["status"];
-  roleIds: string[];
 };
 const emptyForm: FormState = {
   email: "",
   fullName: "",
   password: "",
   status: "ACTIVE",
-  roleIds: [],
 };
 const statusLabel = {
   ACTIVE: "Hoạt động",
@@ -65,8 +57,9 @@ const statusLabel = {
 } as const;
 
 export function UserManagement() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [items, setItems] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -96,11 +89,9 @@ export function UserManagement() {
       const result = await unwrapApiResponse<{
         items: User[];
         total: number;
-        roles: Role[];
       }>(response);
       setItems(result.items);
       setTotal(result.total);
-      setRoles(result.roles);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Không thể tải người dùng",
@@ -125,7 +116,6 @@ export function UserManagement() {
       fullName: user.fullName,
       password: "",
       status: user.status,
-      roleIds: user.roles.map(({ role }) => role.id),
     });
     setError("");
     setOpen(true);
@@ -181,19 +171,29 @@ export function UserManagement() {
       setLoading(false);
     }
   };
-  const roleText = useMemo(
-    () => (user: User) => user.roles.map(({ role }) => role.name).join(", "),
-    [],
-  );
   return (
-    <Stack spacing={2.5}>
-      <Stack
+    <Stack spacing={{ xs: 2, md: 3 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 3,
+        }}
+      >
+        <Stack
         direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
         alignItems={{ md: "center" }}
         gap={2}
-      >
-        <BoxTitle />
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+              <PeopleAltOutlinedIcon />
+            </Box>
+            <BoxTitle />
+          </Stack>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -201,14 +201,20 @@ export function UserManagement() {
         >
           Thêm người dùng
         </Button>
-      </Stack>
+        </Stack>
+      </Paper>
       {message && (
         <Alert severity="success" onClose={() => setMessage("")}>
           {message}
         </Alert>
       )}
       {error && !open && <Alert severity="error">{error}</Alert>}
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+      <Paper elevation={0} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: { md: 1 } }}>
+          <FilterAltOutlinedIcon color="action" fontSize="small" />
+          <Typography variant="subtitle2">Bộ lọc</Typography>
+        </Stack>
         <TextField
           size="small"
           label="Tìm email hoặc họ tên"
@@ -234,15 +240,15 @@ export function UserManagement() {
             </MenuItem>
           ))}
         </Select>
-        <Button variant="text" onClick={() => { setSearch(""); setStatus(""); setPage(0); }} disabled={!search && !status}>Xóa bộ lọc</Button>
-      </Stack>
+        <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); setPage(0); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+        </Stack>
+      </Paper>
       <Paper sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 700 }} size="small">
           <TableHead>
             <TableRow>
               <TableCell>Họ tên</TableCell>
               <TableCell>Email</TableCell>
-              <TableCell>Role</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell align="right">Thao tác</TableCell>
             </TableRow>
@@ -250,7 +256,7 @@ export function UserManagement() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={4}>
                   <Typography sx={{ p: 3 }} textAlign="center">
                     Đang tải người dùng...
                   </Typography>
@@ -258,7 +264,7 @@ export function UserManagement() {
               </TableRow>
             ) : !items.length ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={4}>
                   <Typography
                     sx={{ p: 3 }}
                     textAlign="center"
@@ -273,7 +279,6 @@ export function UserManagement() {
                 <TableRow key={user.id}>
                   <TableCell>{user.fullName}</TableCell>
                   <TableCell>{user.email}</TableCell>
-                  <TableCell>{roleText(user)}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"
@@ -318,6 +323,7 @@ export function UserManagement() {
         onClose={() => !loading && setOpen(false)}
         fullWidth
         maxWidth="sm"
+        fullScreen={isMobile}
       >
         <DialogTitle>
           {editing ? "Sửa người dùng" : "Thêm người dùng"}
@@ -376,28 +382,6 @@ export function UserManagement() {
                 ))}
               </Select>
             </FormControl>
-            <Typography variant="subtitle2">Phân quyền</Typography>
-            <FormGroup>
-              {roles.map((role) => (
-                <FormControlLabel
-                  key={role.id}
-                  control={
-                    <Checkbox
-                      checked={form.roleIds.includes(role.id)}
-                      onChange={(event) =>
-                        setForm({
-                          ...form,
-                          roleIds: event.target.checked
-                            ? [...form.roleIds, role.id]
-                            : form.roleIds.filter((id) => id !== role.id),
-                        })
-                      }
-                    />
-                  }
-                  label={`${role.code} — ${role.name}`}
-                />
-              ))}
-            </FormGroup>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -424,7 +408,7 @@ function BoxTitle() {
         Quản lý người dùng
       </Typography>
       <Typography variant="body2" color="text.secondary">
-        Quản lý tài khoản đăng nhập, trạng thái và phân quyền hệ thống.
+        Quản lý tài khoản đăng nhập và trạng thái hoạt động.
       </Typography>
     </Box>
   );

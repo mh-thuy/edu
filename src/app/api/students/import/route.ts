@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { importStudentsCsv } from "@/modules/student/services/student-import.service";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
 
     const form = await request.formData();

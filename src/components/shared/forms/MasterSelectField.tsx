@@ -157,7 +157,6 @@ export function MasterSelectField({
             disabled={disabled}
             sx={{
               flexShrink: 0,
-              height: isSmall ? 28 : 32,
               boxShadow: "none",
               "&:hover": {
                 boxShadow: "none",

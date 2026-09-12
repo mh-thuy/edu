@@ -28,10 +28,6 @@ Password:
 
 password
 
-Role:
-
-ADMIN
-
 ---
 
 # Login Flow

@@ -5,6 +5,8 @@
 **Phạm vi:** Toàn bộ source code — prisma/schema.prisma, src/app, src/modules, src/lib, middleware.ts  
 **Quy tắc:** Chỉ đọc và phân tích. Không sửa code.
 
+> Ghi chú: Đây là báo cáo lịch sử trước đợt cleanup quyền truy cập. Các phát hiện liên quan đến role/permissions đã được thay thế bởi mô hình một quyền dùng chung; xem [09-permissions-matrix.md](./09-permissions-matrix.md).
+
 ---
 
 ## Tóm tắt nhanh

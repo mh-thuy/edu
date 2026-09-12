@@ -12,6 +12,7 @@ const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 export async function generatePaymentBatchNoticePdf(
   batchId: string,
   exportedByName: string,
+  _exportedById: string,
 ) {
   const batch = await prisma.paymentBatch.findUnique({
     where: { id: batchId },
@@ -23,7 +24,6 @@ export async function generatePaymentBatchNoticePdf(
             include: {
               class: true,
               items: {
-                where: { classSubjectId: { not: null } },
                 include: { classSubject: { include: { subject: true } } },
                 orderBy: { displayOrder: "asc" },
               },
@@ -40,24 +40,32 @@ export async function generatePaymentBatchNoticePdf(
     );
   }
 
+  if (batch.paymentMethod !== "BANK_TRANSFER" || !batch.bankAccountId) {
+    throw new ConflictError(
+      "Chỉ có thể xuất thông báo chuyển khoản cho đợt thanh toán đã gắn tài khoản ngân hàng",
+    );
+  }
+
   const account = await prisma.bankAccount.findFirst({
-    where: { id: batch.bankAccountId || undefined, isActive: true },
-    orderBy: { createdAt: "asc" },
+    where: { id: batch.bankAccountId, isActive: true },
   });
-  const qrUrl = account
-    ? buildVietQrUrl({
-        bankCode: account.bankCode,
-        accountNo: account.accountNo,
-        accountName: account.accountName,
-        amount: Number(batch.totalAmount),
-        addInfo: `PB ${batch.batchNo}`,
-      })
-    : null;
+  if (!account) {
+    throw new ConflictError(
+      "Tài khoản ngân hàng của đợt thanh toán không còn hoạt động hoặc không tồn tại",
+    );
+  }
+  const qrUrl = buildVietQrUrl({
+    bankCode: account.bankCode,
+    accountNo: account.accountNo,
+    accountName: account.accountName,
+    amount: Number(batch.totalAmount),
+    addInfo: `PB ${batch.batchNo}`,
+  });
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  const exportedAt = new Date().toLocaleString("vi-VN");
+  const exportedAt = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
   let page = pdf.addPage([595, 842]);
   const color = rgb(0.12, 0.16, 0.24);
   const muted = rgb(0.38, 0.42, 0.48);
@@ -76,7 +84,11 @@ export async function generatePaymentBatchNoticePdf(
   draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 133, 770, 17);
   draw("Chưa xác nhận thanh toán", 220, 747, 10, muted);
   draw(`Mã đợt thanh toán: ${batch.batchNo}`, 55, 708);
-  draw(`Ngày tạo: ${batch.createdAt.toLocaleDateString("vi-VN")}`, 55, 686);
+  draw(
+    `Ngày tạo: ${batch.createdAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    55,
+    686,
+  );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
   draw(`Mã học sinh: ${batch.student.code}`, 75, 615);
   draw(`Họ tên: ${batch.student.fullName}`, 75, 593);
@@ -109,6 +121,16 @@ export async function generatePaymentBatchNoticePdf(
       const subjectName = item.classSubject?.subject.name || item.itemName;
       draw(`- ${subjectName}`, 90, itemY, 9, muted);
       draw(`${money(Number(item.amount))} VND`, 390, itemY, 9, muted);
+      itemY -= 17;
+    }
+    if (allocation.tuitionFee.discountAmount.greaterThan(0)) {
+      draw("- Giảm giá", 90, itemY, 9, muted);
+      draw(`-${money(Number(allocation.tuitionFee.discountAmount))} VND`, 390, itemY, 9, muted);
+      itemY -= 17;
+    }
+    if (allocation.tuitionFee.additionalAmount.greaterThan(0)) {
+      draw("- Phụ thu", 90, itemY, 9, muted);
+      draw(`${money(Number(allocation.tuitionFee.additionalAmount))} VND`, 390, itemY, 9, muted);
       itemY -= 17;
     }
     y = itemY - 10;
@@ -150,5 +172,6 @@ export async function generatePaymentBatchNoticePdf(
     9,
     muted,
   );
-  return { pdf: Buffer.from(await pdf.save()), batchNo: batch.batchNo };
+  const pdfBuffer = Buffer.from(await pdf.save());
+  return { pdf: pdfBuffer, batchNo: batch.batchNo };
 }

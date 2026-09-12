@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { bankStatementImportSchema } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
 import { importBankStatement } from "@/modules/finance/bank/services/bank-csv.service";
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]); if (user instanceof Response) return user;
+    const user = await requireApiUser(); if (user instanceof Response) return user;
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) throw new Error("File Excel sao kê là bắt buộc");

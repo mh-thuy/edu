@@ -21,6 +21,9 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import {
@@ -192,20 +195,27 @@ export function PaymentBatchHistory() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Box>
-        <Typography variant="h4" fontWeight={700}>
-          Giao dịch thu học phí
-        </Typography>
-        <Typography color="text.secondary">
-          Theo dõi các đợt thanh toán, đối soát chuyển khoản và biên lai.
-        </Typography>
-      </Box>
+    <Stack spacing={{ xs: 2, md: 3 }}>
+      <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
+        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+              <ReceiptLongOutlinedIcon />
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight={700}>Giao dịch thu học phí</Typography>
+              <Typography variant="body2" color="text.secondary">Theo dõi thanh toán, đối soát chuyển khoản và biên lai.</Typography>
+            </Box>
+          </Stack>
+          <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+        </Stack>
+      </Paper>
 
       <Paper sx={{ p: 2 }}>
-        <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
-          Bộ lọc tra cứu
-        </Typography>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+          <FilterAltOutlinedIcon color="action" fontSize="small" />
+          <Typography variant="subtitle1" fontWeight={700}>Bộ lọc tra cứu</Typography>
+        </Stack>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
@@ -241,7 +251,7 @@ export function PaymentBatchHistory() {
             Tìm kiếm
           </Button>
           <Button
-            variant="text"
+            variant="outlined"
             onClick={clearSearch}
             disabled={!studentCode && !status}
           >
@@ -252,7 +262,15 @@ export function PaymentBatchHistory() {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Paper sx={{ overflowX: "auto" }}>
+      <Paper sx={{ overflow: "hidden" }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>Danh sách đợt thanh toán</Typography>
+            <Typography variant="body2" color="text.secondary">{total} giao dịch</Typography>
+          </Box>
+          <Chip size="small" label={status ? statusLabels[status] : "Tất cả trạng thái"} variant="outlined" />
+        </Stack>
+        <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 1040 }} size="small">
           <TableHead>
             <TableRow>
@@ -311,7 +329,7 @@ export function PaymentBatchHistory() {
                         ? "Chuyển khoản / VietQR"
                         : batch.paymentMethod === "CASH"
                           ? "Tiền mặt"
-                          : "Khác"}
+                          : "Phương thức cũ"}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -322,11 +340,11 @@ export function PaymentBatchHistory() {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(batch.createdAt).toLocaleDateString("vi-VN")}
+                        {new Date(batch.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                       </Typography>
-                      {batch.paymentDate && (
+                      {batch.status === "SUCCESS" && batch.paymentDate && (
                         <Typography variant="caption" color="text.secondary">
-                          Thu: {new Date(batch.paymentDate).toLocaleDateString("vi-VN")}
+                          Thu: {new Date(batch.paymentDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                         </Typography>
                       )}
                     </TableCell>
@@ -376,7 +394,7 @@ export function PaymentBatchHistory() {
                               </Typography>
                             </Stack>
                           ))}
-                          {batch.receipt ? (
+                          {batch.receipt && batch.status === "SUCCESS" ? (
                             <Button
                               size="small"
                               sx={{ mt: 1 }}
@@ -453,6 +471,7 @@ export function PaymentBatchHistory() {
             )}
           </TableBody>
         </Table>
+        </Box>
         <TablePagination
           component="div"
           count={total}

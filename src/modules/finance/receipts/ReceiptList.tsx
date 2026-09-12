@@ -6,6 +6,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Chip,
   MenuItem,
   Paper,
   Stack,
@@ -21,7 +22,9 @@ import {
 import SearchIcon from "@mui/icons-material/Search";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
-import type { RoleCode } from "@/constants/roles";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ReceiptDetailDialog } from "./ReceiptDetailDialog";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
@@ -39,7 +42,10 @@ type Receipt = {
       feeNo: string;
       student: { code: string; fullName: string };
       class: { name: string };
-      items: Array<{ classSubject: { subject: { name: string } } | null }>;
+      items: Array<{
+        itemName: string;
+        classSubject: { subject: { name: string } } | null;
+      }>;
     };
   };
 };
@@ -54,8 +60,7 @@ const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 const statusLabels = { ACTIVE: "Đang hiệu lực", CANCELLED: "Đã hủy" } as const;
 
-export function ReceiptList({ role }: { role: RoleCode }) {
-  void role;
+export function ReceiptList() {
   const [items, setItems] = useState<Receipt[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -71,6 +76,14 @@ export function ReceiptList({ role }: { role: RoleCode }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    const hasInvalidDateRange = dateFrom && dateTo && dateFrom > dateTo;
+    if (hasInvalidDateRange) {
+      setItems([]);
+      setTotal(0);
+      setLoading(false);
+      setError("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
+      return () => controller.abort();
+    }
     const timer = window.setTimeout(() => {
       setLoading(true);
       setError("");
@@ -121,7 +134,8 @@ export function ReceiptList({ role }: { role: RoleCode }) {
   }
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
+      <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
       <Stack
         direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
@@ -137,13 +151,16 @@ export function ReceiptList({ role }: { role: RoleCode }) {
           Làm mới
         </Button>
       </Stack>
+      </Paper>
       <Paper sx={{ p: 2 }}>
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={1.5}
-          flexWrap="wrap"
-          useFlexGap
-        >
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+          <FilterAltOutlinedIcon color="action" fontSize="small" />
+          <Box>
+            <Typography fontWeight={700}>Bộ lọc tra cứu</Typography>
+            <Typography variant="body2" color="text.secondary">Kết hợp mã, trạng thái hoặc khoảng ngày phát hành.</Typography>
+          </Box>
+        </Stack>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} flexWrap="wrap" useFlexGap>
           <TextField
             value={search}
             onChange={(event) => {
@@ -182,6 +199,9 @@ export function ReceiptList({ role }: { role: RoleCode }) {
               setDateFrom(value);
               setPage(0);
             }}
+            textFieldProps={{
+              error: Boolean(dateFrom && dateTo && dateFrom > dateTo),
+            }}
           />
           <DatePickerField
             label="Đến ngày"
@@ -190,9 +210,15 @@ export function ReceiptList({ role }: { role: RoleCode }) {
               setDateTo(value);
               setPage(0);
             }}
+            textFieldProps={{
+              error: Boolean(dateFrom && dateTo && dateFrom > dateTo),
+              helperText: dateFrom && dateTo && dateFrom > dateTo
+                ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc"
+                : undefined,
+            }}
           />
           <Button
-            variant="text"
+            variant="outlined"
             onClick={resetFilters}
             disabled={!search && !status && !dateFrom && !dateTo}
           >
@@ -201,7 +227,15 @@ export function ReceiptList({ role }: { role: RoleCode }) {
         </Stack>
       </Paper>
       {error && <Alert severity="error">{error}</Alert>}
-      <Paper sx={{ overflowX: "auto" }}>
+      <Paper elevation={0} sx={{ overflow: "hidden", border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>Danh sách biên lai</Typography>
+            <Typography variant="body2" color="text.secondary">{total} biên lai trong kết quả hiện tại</Typography>
+          </Box>
+          {status && <Chip size="small" variant="outlined" label={statusLabels[status as keyof typeof statusLabels]} />}
+        </Stack>
+        <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 1000 }}>
           <TableHead>
             <TableRow>
@@ -251,36 +285,44 @@ export function ReceiptList({ role }: { role: RoleCode }) {
                   <TableCell>{item.payment.tuitionFee.feeNo}</TableCell>
                   <TableCell>
                     {item.payment.tuitionFee.items
-                      .map((feeItem) => feeItem.classSubject?.subject.name)
-                      .filter(Boolean)
+                      .map((feeItem) => feeItem.classSubject?.subject.name || feeItem.itemName)
                       .join(", ") || "-"}
                   </TableCell>
                   <TableCell>
-                    {new Date(item.issuedAt).toLocaleDateString("vi-VN")}
+                    {new Date(item.issuedAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                   </TableCell>
-                  <TableCell>{statusLabels[item.status]}</TableCell>
+                  <TableCell><Chip size="small" color={item.status === "ACTIVE" ? "success" : "default"} label={statusLabels[item.status]} /></TableCell>
                   <TableCell align="right">
                     {money(Number(item.amount))}
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        href={`/api/tuition-receipts/${item.id}/pdf`}
-                      >
-                        Tải PDF
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<PrintOutlinedIcon />}
-                        href={`/api/tuition-receipts/${item.id}/pdf?inline=1`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        In
-                      </Button>
+                      {item.status === "ACTIVE" ? (
+                        <>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<DownloadOutlinedIcon />}
+                            href={`/api/tuition-receipts/${item.id}/pdf`}
+                          >
+                            Tải PDF
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<PrintOutlinedIcon />}
+                            href={`/api/tuition-receipts/${item.id}/pdf?inline=1`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            In
+                          </Button>
+                        </>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          Đã hủy
+                        </Typography>
+                      )}
                     </Stack>
                   </TableCell>
                 </TableRow>
@@ -300,6 +342,7 @@ export function ReceiptList({ role }: { role: RoleCode }) {
             )}
           </TableBody>
         </Table>
+        </Box>
         <TablePagination
           component="div"
           count={total}
@@ -318,7 +361,11 @@ export function ReceiptList({ role }: { role: RoleCode }) {
         />
       </Paper>
       {detailId && (
-        <ReceiptDetailDialog id={detailId} onClose={() => setDetailId(null)} />
+        <ReceiptDetailDialog
+          id={detailId}
+          onClose={() => setDetailId(null)}
+          onCancelled={() => setRefreshKey((value) => value + 1)}
+        />
       )}
     </Stack>
   );
@@ -326,13 +373,14 @@ export function ReceiptList({ role }: { role: RoleCode }) {
 
 function BoxTitle() {
   return (
-    <Box>
-      <Typography variant="h5" fontWeight={700}>
-        Biên lai học phí
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        Tra cứu, xem chi tiết và tải lại biên lai đã phát hành
-      </Typography>
-    </Box>
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+        <ReceiptLongOutlinedIcon />
+      </Box>
+      <Box>
+        <Typography variant="h5" fontWeight={700}>Biên lai học phí</Typography>
+        <Typography variant="body2" color="text.secondary">Tra cứu, xem chi tiết và tải lại biên lai đã phát hành.</Typography>
+      </Box>
+    </Stack>
   );
 }

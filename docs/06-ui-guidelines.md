@@ -89,7 +89,6 @@ Lương giáo viên
 
 Hệ thống
 - Người dùng
-- Phân quyền
 - Cấu hình
 ```
 
@@ -108,13 +107,12 @@ Topbar hiển thị:
 - Tên hệ thống
 - Nút mở/đóng sidebar
 - Tên user đang đăng nhập
-- Role user
 - Nút đăng xuất
 
 Ví dụ:
 
 ```text
-Trung tâm đào tạo ABC                      Nguyễn Văn A - STAFF
+Trung tâm đào tạo ABC                      Nguyễn Văn A
 ```
 
 ## 3.3 Main content
@@ -442,7 +440,6 @@ COMPLETED -> Hoàn thành
 CANCELLED -> Đã hủy
 
 UNPAID    -> Chưa thanh toán
-PARTIAL   -> Thanh toán một phần
 PAID      -> Đã thanh toán
 
 SENT      -> Đã gửi
@@ -506,7 +503,6 @@ Thao tác
 Email
 Họ tên
 Mật khẩu
-Vai trò
 Trạng thái
 ```
 
@@ -515,10 +511,7 @@ Trạng thái
 - Password chỉ bắt buộc khi tạo mới.
 - Khi chỉnh sửa user, không hiển thị password trực tiếp.
 - Nếu cần đổi mật khẩu, dùng action riêng `Đổi mật khẩu`.
-- Role hiển thị tiếng Việt:
-  - ADMIN -> Quản trị
-  - STAFF -> Nhân viên
-  - TEACHER -> Giáo viên
+- Không hiển thị hoặc chỉnh sửa role; mọi user đã đăng nhập dùng chung một quyền.
 
 ---
 
@@ -844,9 +837,9 @@ Ghi chú
 
 ## 23.3 UI rules
 
-- Không cho nhập số tiền lớn hơn còn nợ.
-- Nếu thanh toán đủ, preview trạng thái mới là `Đã thanh toán`.
-- Nếu thanh toán một phần, preview trạng thái mới là `Thanh toán một phần`.
+- Không hiển thị ô nhập số tiền thanh toán.
+- Hiển thị số tiền phải thanh toán bằng `finalAmount` ở chế độ chỉ đọc.
+- Chỉ cho xác nhận thanh toán đủ một lần.
 - Sau khi lưu payment thành công, gợi ý in biên lai.
 
 ---
@@ -988,35 +981,11 @@ Sau khi ghi nhận, trạng thái học phí sẽ được cập nhật.
 
 ---
 
-# 29. Phân quyền UI
+# 29. Access UI
 
-Role:
-
-```text
-ADMIN
-STAFF
-TEACHER
-```
-
-Gợi ý:
-
-```text
-ADMIN:
-- Toàn quyền
-
-STAFF:
-- Quản lý học viên, lớp, lịch học, học phí, thanh toán, biên lai
-
-TEACHER:
-- Xem lớp của mình
-- Xem lịch dạy của mình
-- Xem bảng lương của mình
-```
-
-Rule:
-
-- Ẩn hoặc disable action theo quyền.
-- API vẫn phải kiểm tra quyền, không chỉ dựa vào UI.
+- Mọi user đã đăng nhập nhìn thấy cùng sidebar và cùng các action.
+- UI không ẩn hoặc disable action theo role.
+- API vẫn phải yêu cầu đăng nhập.
 
 ---
 
@@ -1133,7 +1102,7 @@ Validation
 Empty state
 Loading state
 Error state
-Role authorization
+Authentication
 ```
 
 ---

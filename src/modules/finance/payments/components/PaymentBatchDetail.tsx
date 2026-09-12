@@ -74,9 +74,9 @@ type Batch = {
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
 const date = (value?: string | null) =>
-  value ? new Date(value).toLocaleDateString("vi-VN") : "-";
+  value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-";
 const dateTime = (value?: string | null) =>
-  value ? new Date(value).toLocaleString("vi-VN") : "-";
+  value ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-";
 const statusLabels: Record<string, string> = {
   PENDING: "Chờ chuyển khoản / đối soát",
   SUCCESS: "Đã thanh toán",
@@ -164,7 +164,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
     return <Alert severity="error">{error || "Không tìm thấy đợt thanh toán"}</Alert>;
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Stack
         direction={{ xs: "column", md: "row" }}
         justifyContent="space-between"
@@ -237,7 +237,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
                   </Button>
                 </>
               )}
-              {batch.receipt && (
+              {batch.receipt && batch.status === "SUCCESS" && (
                 <Button
                   variant="outlined"
                   href={`/api/payment-batch-receipts/${batch.receipt.id}/pdf`}
@@ -254,7 +254,10 @@ export function PaymentBatchDetail({ id }: { id: string }) {
             <Info label="Phương thức" value={paymentMethodLabel(batch.paymentMethod)} />
             <Info label="Tổng tiền" value={money(batch.totalAmount)} strong />
             <Info label="Ngày tạo" value={dateTime(batch.createdAt)} />
-            <Info label="Ngày thanh toán" value={dateTime(batch.paymentDate)} />
+            <Info
+              label="Ngày thanh toán"
+              value={batch.status === "SUCCESS" ? dateTime(batch.paymentDate) : "-"}
+            />
             <Info label="Nhân viên tạo" value={batch.createdByUser?.fullName || "-"} />
             <Info
               label={batch.paymentMethod === "CASH" ? "Nhân viên nhận tiền" : "Nhân viên xác nhận"}
@@ -359,7 +362,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
           <Info label="Tài khoản nhận" value={batch.bankAccount ? `${batch.bankAccount.bankName} — ${batch.bankAccount.accountNo}` : "-"} />
           <Info label="Ngày cập nhật" value={dateTime(batch.updatedAt)} />
         </InfoGrid>
-        {batch.receipt && (
+        {batch.receipt && batch.status === "SUCCESS" && (
           <Alert severity="success" sx={{ mt: 2 }}>
             Biên lai {batch.receipt.receiptNo} đã phát hành ngày {dateTime(batch.receipt.issuedAt)}
             {batch.paymentMethod === "CASH" &&
@@ -406,5 +409,5 @@ function Info({ label, value, strong = false }: { label: string; value: string; 
 function paymentMethodLabel(value: string) {
   if (value === "BANK_TRANSFER") return "Chuyển khoản / VietQR";
   if (value === "CASH") return "Tiền mặt";
-  return "Khác";
+  return "Phương thức cũ";
 }

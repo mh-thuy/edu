@@ -4,7 +4,6 @@ import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
 import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
-import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
@@ -21,151 +20,125 @@ import {
   ListItemIcon,
   ListItemText,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactElement } from "react";
-import type { RoleCode } from "@/constants/roles";
-
 type SidebarItem = {
   label: string;
   href: string;
   icon: ReactElement;
-  roles: RoleCode[];
+  section: "Tổng quan" | "Đào tạo" | "Tài chính" | "Hệ thống";
 };
 
 const items: SidebarItem[] = [
   {
-    label: "Người dùng",
-    href: "/admin/users",
-    icon: <ManageAccountsOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
-  },
-  {
     label: "Dashboard",
     href: "/admin",
     icon: <HomeOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tổng quan",
   },
   {
     label: "Giáo viên",
     href: "/admin/teachers",
     icon: <SchoolOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Đào tạo",
   },
   {
     label: "Học viên",
     href: "/admin/students",
     icon: <GroupOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Đào tạo",
   },
   {
     label: "Lớp học",
     href: "/admin/classes",
     icon: <ClassOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Đào tạo",
   },
   {
     label: "Môn học",
     href: "/admin/subjects",
     icon: <ClassOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Đào tạo",
   },
   {
     label: "Các khoản học phí",
     href: "/admin/tuition-fees",
     icon: <AccountBalanceWalletOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Thu học phí",
     href: "/admin/tuition-fees/payment",
     icon: <PaymentsOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Giao dịch thu học phí",
     href: "/admin/tuition-fees/payment-history",
     icon: <HistoryOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Biên lai",
     href: "/admin/receipts",
     icon: <ReceiptOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Đối soát ngân hàng",
     href: "/admin/bank-reconciliation",
     icon: <AccountBalanceOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Báo cáo",
     href: "/admin/reports",
     icon: <AssessmentOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN", "STAFF"],
+    section: "Tài chính",
   },
   {
     label: "Tài khoản nhận tiền",
     href: "/admin/bank-accounts",
     icon: <AccountBalanceOutlinedIcon fontSize="small" />,
-    roles: ["ADMIN"],
+    section: "Tài chính",
   },
   {
-    label: "Lớp của tôi",
-    href: "/teacher/classes",
-    icon: <ClassOutlinedIcon fontSize="small" />,
-    roles: ["TEACHER"],
-  },
-  {
-    label: "Lịch của tôi",
-    href: "/teacher/schedules",
-    icon: <ScheduleOutlinedIcon fontSize="small" />,
-    roles: ["TEACHER"],
+    label: "Người dùng",
+    href: "/admin/users",
+    icon: <ManageAccountsOutlinedIcon fontSize="small" />,
+    section: "Hệ thống",
   },
 ];
 
 type SidebarProps = {
-  role: RoleCode;
+  collapsed?: boolean;
   onNavigate?: () => void;
 };
 
-export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
+export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
-
-  const visibleItems = items.filter((item) => item.roles.includes(role));
-  const groupFor = (href: string) =>
-    href === "/" || href === "/admin"
-      ? "Tổng quan"
-      : href.startsWith("/teacher")
-        ? "Giáo viên"
-        : [
-              "/admin/teachers",
-              "/admin/students",
-              "/admin/classes",
-              "/admin/subjects",
-              "/admin/users",
-            ].includes(href)
-          ? "Đào tạo"
-          : "Tài chính";
+  const activeHref = items
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((left, right) => right.href.length - left.href.length)[0]?.href;
 
   return (
     <Box
       sx={{
-        width: 264,
-        height: "100%",
-        bgcolor: "#ffffff",
-        borderRight: "1px solid",
-        borderColor: "divider",
+        width: collapsed ? 76 : 260,
+        height: "100vh",
+        bgcolor: "background.paper",
+        overflow: "hidden",
+        transition: "width 180ms ease",
       }}
     >
       {/* Logo */}
-      <Box sx={{ p: 2.5 }}>
-        <Stack direction="row" spacing={1.25} alignItems="center">
+      <Box sx={{ px: collapsed ? 1.5 : 2.5, py: 2.25 }}>
+        <Stack direction="row" spacing={1.25} alignItems="center" justifyContent={collapsed ? "center" : "flex-start"}>
           <Box
             sx={{
               width: 38,
@@ -179,9 +152,9 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
               boxShadow: "0 8px 16px rgba(37,99,235,.22)",
             }}
           >
-            E
-          </Box>
-          <Box>
+              E
+            </Box>
+          <Box sx={{ display: collapsed ? "none" : "block", minWidth: 0 }}>
             <Typography
               variant="subtitle1"
               fontWeight={800}
@@ -200,20 +173,63 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
       <Divider />
 
       {/* Menu */}
-      <List sx={{ px: 1.5, py: 2 }}>
-        {visibleItems.map((item, index) => {
-          const selected =
-            pathname === item.href ||
-            (item.href !== "/" &&
-              item.href !== "/admin" &&
-              pathname.startsWith(`${item.href}/`));
-          const group = groupFor(item.href);
-          const previousGroup =
-            index > 0 ? groupFor(visibleItems[index - 1]!.href) : null;
+      <List sx={{ px: collapsed ? 1 : 1.5, py: 2 }}>
+        {items.map((item, index) => {
+          const selected = item.href === activeHref;
+          const previousSection = index > 0 ? items[index - 1]?.section : null;
+
+          const button = (
+            <ListItemButton
+              component={Link}
+              href={item.href}
+              selected={selected}
+              onClick={onNavigate}
+              aria-current={selected ? "page" : undefined}
+              sx={{
+                position: "relative",
+                borderRadius: 2,
+                mb: 0.5,
+                minHeight: 44,
+                px: collapsed ? 1.25 : 1.5,
+                justifyContent: collapsed ? "center" : "flex-start",
+                color: "text.secondary",
+                "& .MuiListItemIcon-root": { color: "inherit" },
+                "&.Mui-selected": {
+                  bgcolor: "primary.light",
+                  color: "primary.dark",
+                  "&:before": {
+                    content: '""',
+                    position: "absolute",
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
+                    width: 3,
+                    borderRadius: 3,
+                    bgcolor: "primary.main",
+                  },
+                  "&:hover": { bgcolor: "#bfdbfe" },
+                },
+                "&:hover": { bgcolor: "#f8fafc", color: "text.primary" },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: collapsed ? 0 : 36, justifyContent: "center" }}>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                sx={{ display: collapsed ? "none" : "block" }}
+                primaryTypographyProps={{
+                  fontSize: 13.5,
+                  fontWeight: selected ? 700 : 500,
+                  noWrap: true,
+                }}
+              />
+            </ListItemButton>
+          );
 
           return (
             <Box key={item.href}>
-              {group !== "Tổng quan" && group !== previousGroup && (
+              {!collapsed && item.section !== "Tổng quan" && item.section !== previousSection && (
                 <Typography
                   variant="overline"
                   color="text.secondary"
@@ -225,37 +241,10 @@ export function Sidebar({ role, onNavigate }: SidebarProps): ReactElement {
                     fontWeight: 700,
                   }}
                 >
-                  {group}
+                  {item.section}
                 </Typography>
               )}
-              <ListItemButton
-                component={Link}
-                href={item.href}
-                selected={selected}
-                onClick={onNavigate}
-                sx={{
-                  borderRadius: 2.5,
-                  mb: 0.5,
-                  minHeight: 44,
-                  color: "text.secondary",
-                  "& .MuiListItemIcon-root": { color: "inherit" },
-                  "&.Mui-selected": {
-                    bgcolor: "#eff6ff",
-                    color: "primary.main",
-                    "&:hover": { bgcolor: "#dbeafe" },
-                  },
-                  "&:hover": { bgcolor: "#f8fafc", color: "text.primary" },
-                }}
-              >
-                <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-                <ListItemText
-                  primary={item.label}
-                  primaryTypographyProps={{
-                    fontSize: 14,
-                    fontWeight: selected ? 600 : 400,
-                  }}
-                />
-              </ListItemButton>
+              {collapsed ? <Tooltip title={item.label} placement="right">{button}</Tooltip> : button}
             </Box>
           );
         })}

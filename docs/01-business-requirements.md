@@ -76,14 +76,6 @@ Bảng:
 users
 ```
 
-Role:
-
-```text
-ADMIN
-STAFF
-TEACHER
-```
-
 Field:
 
 ```text
@@ -91,7 +83,6 @@ id
 email
 password_hash
 full_name
-role
 is_active
 created_at
 updated_at
@@ -407,8 +398,6 @@ enrollment_id
 amount
 discount
 final_amount
-paid_amount
-remaining_amount
 due_date
 status
 note
@@ -420,8 +409,9 @@ Status:
 
 ```text
 UNPAID
-PARTIAL
 PAID
+OVERDUE
+EXEMPTED
 CANCELLED
 ```
 
@@ -432,9 +422,11 @@ Rule:
 
 final_amount = amount - discount
 
-remaining_amount = final_amount - paid_amount
+Mỗi học phí chỉ được thanh toán một lần.
 
-Không cho overpayment
+Payment SUCCESS phải có số tiền đúng bằng final_amount.
+
+Không cho thanh toán thiếu, thừa hoặc tạo payment SUCCESS thứ hai.
 ```
 
 Học phí theo tháng được tính trọn tháng theo từng môn:
@@ -447,276 +439,96 @@ Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học ph
 
 ---
 
-# 11. Tạo yêu cầu thanh toán
+# 11. Payment batch
 
-Mỗi lần gửi phụ huynh sẽ tạo payment request riêng.
+Thanh toán bắt đầu từ một hoặc nhiều khoản học phí của cùng một học viên.
+Các khoản được gom vào một `payment_batch`; mỗi allocation phải bằng toàn bộ
+`final_amount` của khoản học phí tương ứng.
 
-Bảng:
+Các bảng hiện hành:
 
 ```text
-payment_requests
+payment_batches
+payment_allocations
+tuition_payments
+tuition_receipts
+payment_batch_receipts
 ```
 
-Field:
+Phương thức duy nhất:
 
 ```text
-id
-student_fee_id
-payment_code
-requested_amount
-expired_at
-status
-created_at
-```
-
-Status:
-
-```text
-ACTIVE
-EXPIRED
-PAID
-CANCELLED
+CASH
+BANK_TRANSFER
 ```
 
 Rule:
 
 ```text
-payment_code unique
-
-1 student_fee có thể có nhiều payment request
+Không hỗ trợ thanh toán từng phần.
+Một tuition fee chỉ có tối đa một payment SUCCESS.
+Payment SUCCESS phải có amount đúng bằng final_amount.
+CASH hoàn tất ngay trong transaction.
+BANK_TRANSFER tạo batch PENDING và chỉ hoàn tất sau đối soát.
 ```
 
 ---
 
-# 12. Sinh VietQR thanh toán
+# 12. QR thanh toán động
 
-Bảng:
-
-```text
-payment_qr_codes
-```
-
-Field:
+QR được sinh động từ payment batch và tài khoản ngân hàng đang hoạt động:
 
 ```text
-id
-payment_request_id
-qr_payload
-created_at
+AMOUNT = payment_batch.total_amount
+CONTENT = payment_batch.batch_no
 ```
 
-Ví dụ payload:
+Không tạo bảng hoặc lưu lịch sử QR. QR chỉ có hiệu lực khi batch còn `PENDING`,
+phương thức là `BANK_TRANSFER` và batch đã gắn tài khoản nhận tiền.
 
-```text
-BANK:VCB
-ACCOUNT:0123456789
-AMOUNT:3000000
-CONTENT:HP202606001
-```
+---
+
+# 13. Thông báo và biên lai
+
+PDF thông báo học phí và biên lai được sinh động từ dữ liệu hiện tại/snapshot
+của payment batch. Không có luồng gửi email/SMS tự động trong phiên bản này.
 
 Rule:
 
 ```text
-Không lưu qr image
-
-Frontend hoặc backend generate QR từ payload
+Batch SUCCESS sinh payment, receipt theo từng tuition fee và receipt tổng hợp.
+Receipt đã phát hành không bị xóa; nếu hủy phải có lý do và audit log.
+Receipt CANCELLED không được xuất lại PDF. Nếu receipt thuộc payment batch đã
+thành công, thao tác hủy sẽ hoàn tác toàn bộ batch atomically: hủy các payment
+và receipt liên quan, mở lại học phí về `UNPAID`/`OVERDUE`, chuyển batch sang
+`CANCELLED` và ghi audit log.
 ```
 
 ---
 
-# 13. Phiếu báo học phí
+# 14. Import và đối soát sao kê ngân hàng
 
-Bảng:
-
-```text
-payment_notices
-```
-
-Field:
-
-```text
-id
-payment_request_id
-notice_number
-version
-pdf_url
-sent_at
-printed_at
-status
-created_at
-```
-
-Status:
-
-```text
-DRAFT
-SENT
-PRINTED
-CANCELLED
-```
-
-Rule:
-
-```text
-Có thể generate nhiều version
-
-Ví dụ:
-
-HP001-v1
-
-HP001-v2
-```
-
----
-
-# 14. Import sao kê ngân hàng
-
-Bảng:
-
-```text
-bank_transactions
-```
-
-Field:
-
-```text
-id
-bank_code
-transaction_id
-amount
-transaction_date
-description
-reference_code
-raw_data
-matched
-matched_at
-created_at
-```
-
-Rule:
-
-```text
-transaction_id unique
-
-Parse payment_code từ description
-```
-
-Ví dụ:
-
-```text
-Noi dung CK:
-
-HP202606001
-```
-
----
-
-# 15. Đối soát giao dịch
+Sao kê chỉ được phân tích tạm trong response/token của phiên làm việc; không
+lưu lịch sử dòng sao kê. Chỉ giao dịch ghi có mới được đối soát.
 
 Luồng:
 
 ```text
-Import bank transaction
+Import sao kê
       ↓
-Parse payment_code
+Tìm batch PENDING cùng tài khoản ngân hàng và đúng số tiền
       ↓
-Find payment_request
+Ưu tiên batch_no trong nội dung giao dịch
       ↓
-Auto match
+Nếu không có batch_no: người dùng chọn một candidate cùng số tiền
       ↓
-Create payment
+Backend xác thực token, tài khoản, phương thức, trạng thái và số tiền
+      ↓
+Hoàn tất payment batch atomically
 ```
 
-Rule:
-
-```text
-Nếu match thành công:
-
-matched=true
-```
-
----
-
-# 16. Thanh toán
-
-Bảng:
-
-```text
-payments
-```
-
-Field:
-
-```text
-id
-student_fee_id
-bank_transaction_id nullable
-amount
-method
-payment_date
-status
-notes
-created_at
-```
-
-Method:
-
-```text
-cash
-transfer
-wallet
-```
-
-Status:
-
-```text
-PENDING
-CONFIRMED
-FAILED
-CANCELLED
-REFUNDED
-```
-
-Rule:
-
-```text
-1 student_fee có thể có nhiều payment
-
-Không cho overpayment
-
-Chỉ payment CONFIRMED mới cập nhật student_fee
-```
-
----
-
-# 17. Biên lai chính thức
-
-Bảng:
-
-```text
-receipts
-```
-
-Field:
-
-```text
-id
-payment_id
-receipt_number
-issue_date
-printed_at
-created_at
-```
-
-Rule:
-
-```text
-1 payment = 1 receipt
-
-receipt_number unique
-
-Chỉ sinh receipt khi payment = CONFIRMED
-```
+Không đối soát được batch `CASH`, batch khác tài khoản, batch không `PENDING`
+hoặc giao dịch có số tiền không khớp tuyệt đối.
 
 ---
 
@@ -876,22 +688,13 @@ Staff thu tiền mặt
 
 ```text
 1. Import bank statement
-
-2. Parse payment_code
-
-3. Match payment_request
-
-4. Create payment (PENDING)
-
-5. Staff confirm payment
-
-6. Payment = CONFIRMED
-
-7. Update student_fee
-
-8. Generate receipt
-
-9. Print receipt
+2. Tìm payment batch BANK_TRANSFER đang PENDING, cùng tài khoản và đúng số tiền
+3. Ưu tiên match batch_no trong nội dung giao dịch
+4. Nếu không có batch_no, nhân viên chọn batch hợp lệ cùng số tiền
+5. Backend xác thực token và hoàn tất batch trong một transaction
+6. Tạo tuition payment SUCCESS, cập nhật tuition fee PAID
+7. Sinh receipt theo khoản và receipt tổng hợp
+8. In hoặc xuất chứng từ
 ```
 
 ---

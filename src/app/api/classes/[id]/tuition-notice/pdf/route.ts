@@ -1,11 +1,11 @@
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { apiError, handleApiError } from "@/lib/api";
 import { z } from "zod";
 import { createClassPaymentBatches, generateClassTuitionNoticePdf } from "@/modules/finance/tuition/services/class-tuition-notice-pdf.service";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const classId = (await params).id;
     const rawMonth = new URL(request.url).searchParams.get("month");
@@ -17,7 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const billingMonth = Number(month.data.slice(5, 7));
     const period = { billingYear, billingMonth };
     await createClassPaymentBatches(classId, user.id, period);
-    const result = await generateClassTuitionNoticePdf(classId, user.fullName, period);
+    const result = await generateClassTuitionNoticePdf(classId, user.fullName, user.id, period);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, {
       headers: {

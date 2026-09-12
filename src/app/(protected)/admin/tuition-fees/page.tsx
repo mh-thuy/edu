@@ -1,7 +1,7 @@
 import { Metadata } from "next";
-import { requireRole } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { TuitionList } from "@/modules/finance/tuition/components/TuitionList";
 
 export const metadata: Metadata = { title: "Quản lý các khoản học phí" };
 
-export default async function TuitionFeesPage() { await requireRole(["ADMIN", "STAFF"]); return <TuitionList />; }
+export default async function TuitionFeesPage() { await requireAuth(); return <TuitionList />; }

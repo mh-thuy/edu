@@ -97,7 +97,6 @@ export function LoginForm(): ReactElement {
             <Button
               type="submit"
               variant="contained"
-              size="large"
               disabled={pending}
               startIcon={<LoginOutlinedIcon />}
             >
@@ -106,7 +105,7 @@ export function LoginForm(): ReactElement {
           </Stack>
 
           <Typography variant="caption" color="text.secondary">
-            Tài khoản demo: admin@example.com / staff@example.com / teacher@example.com
+            Tài khoản mặc định: admin@edu.local
           </Typography>
         </Stack>
       </CardContent>

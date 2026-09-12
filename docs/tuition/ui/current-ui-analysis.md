@@ -17,7 +17,7 @@
 
 ## Vấn đề đã xác định
 
-- `PaymentForm` cho chọn nhiều học phí trong một request, trái quy tắc một payment thuộc một tuition fee.
+- Payment workspace gom nhiều học phí của cùng học viên thành một batch; mỗi payment sinh ra sau xác nhận vẫn gắn đúng một tuition fee và đúng toàn bộ `final_amount`.
 - Nút xác nhận còn mơ hồ và thiếu dialog xác nhận nghiệp vụ.
 - UI cũ chưa có danh sách học phí độc lập với bộ lọc trạng thái chuẩn.
 - Trạng thái được hiển thị trực tiếp bằng mã máy, chưa có nhãn và màu/ý nghĩa nhất quán.
@@ -25,4 +25,4 @@
 
 ## Logic không còn sử dụng
 
-Không giữ UI chia kỳ, thanh toán một phần, nhập số tiền tùy ý, payment allocation, tiền dư hoặc `PARTIALLY_PAID`. Các route/module legacy đã bị xóa trong đợt cutover database.
+Không giữ UI chia kỳ, thanh toán một phần, nhập số tiền tùy ý, phân bổ một phần, tiền dư hoặc `PARTIALLY_PAID`. Batch nhiều khoản chỉ phân bổ đúng toàn bộ `final_amount` của từng khoản. Các route/module legacy đã bị xóa trong đợt cutover database.

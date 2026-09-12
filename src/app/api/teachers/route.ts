@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiUser } from "@/lib/api-auth";
 import {
   teacherCreateSchema,
   teacherFilterSchema,
@@ -11,6 +12,8 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const searchParams = request.nextUrl.searchParams;
     const filter = teacherFilterSchema.parse({
       search: searchParams.get("search") || undefined,
@@ -26,6 +29,7 @@ export async function GET(request: NextRequest) {
       page: result.page,
       pageSize: result.pageSize,
       pages: result.pages,
+      pagination: result.pagination,
     });
   } catch (error: unknown) {
     return handleApiError(error, "Failed to fetch teachers");
@@ -34,6 +38,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const body = await request.json();
     const data = teacherCreateSchema.parse(body);
 

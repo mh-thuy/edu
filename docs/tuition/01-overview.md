@@ -4,4 +4,4 @@
 
 Phạm vi: tuition, items, adjustments, notices, one-time payments, receipts, refunds, bank accounts, Excel BIDV/Techcombank import, reconciliation, permissions và audit log.
 
-Không hỗ trợ partial payment, installment, payment allocation hoặc credit balance.
+Không hỗ trợ partial payment, installment hoặc credit balance. Một payment batch có thể gom nhiều khoản học phí, nhưng mỗi khoản phải được phân bổ đúng toàn bộ `final_amount`; không có phân bổ một phần hay tiền dư.

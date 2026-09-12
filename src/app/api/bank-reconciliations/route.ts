@@ -1,11 +1,11 @@
 import { apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { bankReconciliationConfirmSchema } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
 import { confirmBankReconciliation } from "@/modules/finance/bank/services/bank-csv.service";
 
 export async function POST(request: Request) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const body = bankReconciliationConfirmSchema.parse(await request.json());
     return apiSuccess(await confirmBankReconciliation({ ...body, actorId: user.id }));

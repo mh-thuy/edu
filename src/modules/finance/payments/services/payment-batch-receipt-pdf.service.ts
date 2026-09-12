@@ -2,14 +2,14 @@ import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
-import { NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
-export async function generatePaymentBatchReceiptPdf(receiptId: string) {
+export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId: string) {
   const receipt = await prisma.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
     include: {
@@ -22,7 +22,6 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
                 include: {
                   class: true,
                   items: {
-                    where: { classSubjectId: { not: null } },
                     include: { classSubject: { include: { subject: true } } },
                     orderBy: { displayOrder: "asc" },
                   },
@@ -35,6 +34,9 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
     },
   });
   if (!receipt) throw new NotFoundError("Không tìm thấy biên lai tổng");
+  if (receipt.paymentBatch.status !== "SUCCESS") {
+    throw new ConflictError("Biên lai tổng đã bị hủy và không thể xuất PDF");
+  }
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -53,7 +55,11 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
   draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 770, 17);
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
   draw(`Mã thanh toán: ${receipt.paymentBatch.batchNo}`, 55, 708);
-  draw(`Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN")}`, 55, 686);
+  draw(
+    `Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    55,
+    686,
+  );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
   draw(`Mã học sinh: ${receipt.paymentBatch.student.code}`, 75, 615);
   draw(`Họ tên: ${receipt.paymentBatch.student.fullName}`, 75, 593);
@@ -86,6 +92,16 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
       draw(`${money(Number(item.amount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
+    if (allocation.tuitionFee.discountAmount.greaterThan(0)) {
+      draw("- Giảm giá", 90, itemY, 9);
+      draw(`-${money(Number(allocation.tuitionFee.discountAmount))} VND`, 390, itemY, 9);
+      itemY -= 17;
+    }
+    if (allocation.tuitionFee.additionalAmount.greaterThan(0)) {
+      draw("- Phụ thu", 90, itemY, 9);
+      draw(`${money(Number(allocation.tuitionFee.additionalAmount))} VND`, 390, itemY, 9);
+      itemY -= 17;
+    }
     y = itemY - 10;
   }
   page.drawLine({
@@ -109,8 +125,9 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string) {
     90,
     9,
   );
+  const pdfBuffer = Buffer.from(await pdf.save());
   return {
-    pdf: Buffer.from(await pdf.save()),
+    pdf: pdfBuffer,
     batchNo: receipt.paymentBatch.batchNo,
   };
 }

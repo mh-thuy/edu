@@ -4,8 +4,8 @@ import { AppThemeProvider } from "@/components/providers/AppThemeProvider";
 import { LocalizationWrapper } from "@/components/providers/LocalizationWrapper";
 
 export const metadata: Metadata = {
-  title: "Edu Center - Classroom Rental",
-  description: "Management platform for classroom rental center",
+  title: "EduCenter - Quản lý đào tạo",
+  description: "Nền tảng quản lý trung tâm đào tạo",
 };
 
 type RootLayoutProps = {
@@ -16,7 +16,7 @@ export default function RootLayout({
   children,
 }: RootLayoutProps): ReactElement {
   return (
-    <html lang="en">
+    <html lang="vi">
       <body>
         <LocalizationWrapper>
           <AppThemeProvider>{children}</AppThemeProvider>

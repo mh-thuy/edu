@@ -32,6 +32,20 @@ export function ClassForm({
   defaultValues,
 }: ClassFormProps): ReactElement {
   const isEditing = Boolean(defaultValues?.code);
+  const statusOptions = isEditing
+    ? {
+        DRAFT: ["DRAFT", "ACTIVE", "CANCELLED"],
+        ACTIVE: ["ACTIVE", "COMPLETED", "CANCELLED"],
+        COMPLETED: ["COMPLETED"],
+        CANCELLED: ["CANCELLED"],
+      }[defaultValues?.status ?? "DRAFT"]
+    : ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"];
+  const statusLabels: Record<string, string> = {
+    DRAFT: "Nháp",
+    ACTIVE: "Hoạt động",
+    COMPLETED: "Hoàn thành",
+    CANCELLED: "Đã hủy",
+  };
 
   const { control, handleSubmit } = useForm<ClassFormData>({
     resolver: zodResolver(classCreateSchema),
@@ -81,8 +95,9 @@ export function ClassForm({
               {...field}
               label="Tên lớp"
               error={!!error}
-              helperText={error?.message}
+              helperText={error?.message ?? "Nhập tên lớp dễ nhận biết"}
               fullWidth
+              required
               placeholder="VD: Toán 101"
             />
           )}
@@ -123,10 +138,11 @@ export function ClassForm({
             <FormControl error={!!error} fullWidth>
               <InputLabel>Trạng thái</InputLabel>
               <Select {...field} label="Trạng thái">
-                <MenuItem value="DRAFT">Nháp</MenuItem>
-                <MenuItem value="ACTIVE">Hoạt động</MenuItem>
-                <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
-                <MenuItem value="CANCELLED">Đã hủy</MenuItem>
+                {statusOptions.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {statusLabels[status]}
+                  </MenuItem>
+                ))}
               </Select>
               <FormHelperText>{error?.message}</FormHelperText>
             </FormControl>

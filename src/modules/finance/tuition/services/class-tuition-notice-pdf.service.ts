@@ -16,9 +16,19 @@ export async function createClassPaymentBatches(
   actorId: string,
   period: TuitionBillingPeriod,
 ) {
-  await TuitionService.createClassTuitionFees(classId, period, actorId);
+  return prisma.$transaction(async (tx) => {
+    await TuitionService.createClassTuitionFees(classId, period, actorId, tx);
 
-  const fees = await prisma.tuitionFee.findMany({
+    const bankAccount = await tx.bankAccount.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!bankAccount) {
+      throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
+    }
+
+    const fees = await tx.tuitionFee.findMany({
     where: {
       classId,
       billingYear: period.billingYear,
@@ -51,16 +61,23 @@ export async function createClassPaymentBatches(
       .map((fee) => fee.id);
     if (feeIds.length) {
       await createPaymentBatch(
-        { tuitionFeeIds: feeIds, paymentMethod: "BANK_TRANSFER" },
+        {
+          tuitionFeeIds: feeIds,
+          paymentMethod: "BANK_TRANSFER",
+          bankAccountId: bankAccount.id,
+        },
         actorId,
+        tx,
       );
     }
   }
+  });
 }
 
 export async function generateClassTuitionNoticePdf(
   classId: string,
   exportedByName: string,
+  exportedById: string,
   period: TuitionBillingPeriod,
 ) {
   const classData = await prisma.class.findUnique({
@@ -73,6 +90,14 @@ export async function generateClassTuitionNoticePdf(
     where: {
       status: PaymentBatchStatus.PENDING,
       allocations: {
+        every: {
+          tuitionFee: {
+            classId,
+            billingYear: period.billingYear,
+            billingMonth: period.billingMonth,
+            billingType: TuitionFeeBillingType.MONTHLY,
+          },
+        },
         some: {
           tuitionFee: {
             classId,
@@ -94,6 +119,7 @@ export async function generateClassTuitionNoticePdf(
     const notice = await generatePaymentBatchNoticePdf(
       batch.id,
       exportedByName,
+      exportedById,
     );
     const sourcePdf = await PDFDocument.load(notice.pdf);
     const pages = await combinedPdf.copyPages(

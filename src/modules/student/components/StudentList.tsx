@@ -14,7 +14,6 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolIcon from "@mui/icons-material/School";
 import { GridColDef } from "@mui/x-data-grid";
-import type { RoleCode } from "@/constants/roles";
 import { useState, useCallback } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
@@ -45,7 +44,7 @@ type StudentRow = Student & {
   _onDelete?: (student: Student) => void;
 };
 
-const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
+const getColumns = (): GridColDef<StudentRow>[] => [
   {
     field: "code",
     headerName: "Mã học sinh",
@@ -100,7 +99,7 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 150,
+    minWidth: 300,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -122,10 +121,7 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
           variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
+            minWidth: 64,
           }}
         >
           Sửa
@@ -136,27 +132,18 @@ const getColumns = (canDelete: boolean): GridColDef<StudentRow>[] => [
           variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
-          disabled={!canDelete}
           sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
+            minWidth: 64,
           }}
         >
-          Xóa
+          Ngừng hoạt động
         </Button>
       </Stack>
     ),
   },
 ];
 
-type StudentListProps = {
-  role: RoleCode;
-};
-
-export function StudentList({ role }: StudentListProps): ReactElement {
-  const canDelete = role === "ADMIN";
+export function StudentList(): ReactElement {
   const [search, setSearch] = useState("");
 
   const {
@@ -209,14 +196,20 @@ export function StudentList({ role }: StudentListProps): ReactElement {
       });
 
       if (!response.ok) {
-        throw new Error("Xóa học sinh thất bại");
+        throw new Error(
+          "Không thể chuyển học sinh sang trạng thái ngừng hoạt động",
+        );
       }
 
-      showSuccess("Đã xóa học sinh thành công");
+      showSuccess("Đã chuyển học sinh sang trạng thái ngừng hoạt động");
       setDeleteId(null);
       await refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Có lỗi khi xóa học sinh");
+      showError(
+        err instanceof Error
+          ? err.message
+          : "Có lỗi khi cập nhật trạng thái học sinh",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -275,11 +268,11 @@ export function StudentList({ role }: StudentListProps): ReactElement {
   }));
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
+          p: { xs: 2, md: 3 },
           borderRadius: 3,
           border: "1px solid",
           borderColor: "divider",
@@ -318,91 +311,100 @@ export function StudentList({ role }: StudentListProps): ReactElement {
             </Box>
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreate}
-            sx={{
-              borderRadius: 2,
-              px: 2.5,
-              height: 40,
-              whiteSpace: "nowrap",
-            }}
-          >
-            Thêm học sinh
-          </Button>
-          <Button
-            variant="outlined"
-            component="label"
-            disabled={isSubmitting}
-            sx={{ borderRadius: 2, height: 40, whiteSpace: "nowrap" }}
-          >
-            Import CSV
-            <input
-              hidden
-              type="file"
-              accept=".csv,text/csv"
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!file) return;
+          <Box>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreate}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                Thêm học sinh
+              </Button>
+              <Button
+                variant="outlined"
+                component="label"
+                disabled={isSubmitting}
+                title="CSV có cột Họ tên và Số điện thoại; cũng hỗ trợ Họ, Tên, Số điện thoại"
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                Import CSV
+                <input
+                  hidden
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
 
-                try {
-                  setIsSubmitting(true);
-                  const form = new FormData();
-                  form.append("file", file);
-                  const response = await fetch("/api/students/import", {
-                    method: "POST",
-                    body: form,
-                  });
-                  if (!response.ok) {
-                    throw new Error(
-                      await extractApiErrorMessage(
-                        response,
-                        "Import học viên thất bại",
-                      ),
-                    );
-                  }
+                    try {
+                      setIsSubmitting(true);
+                      const form = new FormData();
+                      form.append("file", file);
+                      const response = await fetch("/api/students/import", {
+                        method: "POST",
+                        body: form,
+                      });
+                      if (!response.ok) {
+                        throw new Error(
+                          await extractApiErrorMessage(
+                            response,
+                            "Import học viên thất bại",
+                          ),
+                        );
+                      }
 
-                  const result = (await response.json()) as {
-                    success: boolean;
-                    data?: {
-                      importedRows: number;
-                      skippedRows: number;
-                      errors: Array<{ rowNo: number; message: string }>;
-                    };
-                  };
-                  if (!result.success || !result.data) {
-                    throw new Error("Import học viên thất bại");
-                  }
+                      const result = (await response.json()) as {
+                        success: boolean;
+                        data?: {
+                          importedRows: number;
+                          skippedRows: number;
+                          errors: Array<{ rowNo: number; message: string }>;
+                        };
+                      };
+                      if (!result.success || !result.data) {
+                        throw new Error("Import học viên thất bại");
+                      }
 
-                  const errorMessage =
-                    result.data.errors.length > 0
-                      ? ` Có ${result.data.errors.length} dòng lỗi.`
-                      : "";
-                  showSuccess(
-                    `Đã import ${result.data.importedRows} học viên, bỏ qua ${result.data.skippedRows} dòng.${errorMessage}`,
-                  );
-                  await refresh();
-                } catch (error) {
-                  showError(
-                    error instanceof Error
-                      ? error.message
-                      : "Import học viên thất bại",
-                  );
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-            />
-          </Button>
+                      const errorMessage =
+                        result.data.errors.length > 0
+                          ? ` Có ${result.data.errors.length} dòng lỗi.`
+                          : "";
+                      showSuccess(
+                        `Đã import ${result.data.importedRows} học viên, bỏ qua ${result.data.skippedRows} dòng.${errorMessage}`,
+                      );
+                      await refresh();
+                    } catch (error) {
+                      showError(
+                        error instanceof Error
+                          ? error.message
+                          : "Import học viên thất bại",
+                      );
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                />
+              </Button>
+            </Stack>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mt: 1, display: "block" }}
+            >
+              CSV hỗ trợ cột “Họ tên” và “Số điện thoại”, hoặc tách riêng “Họ”
+              và “Tên”.
+            </Typography>
+          </Box>
         </Stack>
+      </Paper>
 
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
           alignItems={{ sm: "center" }}
-          sx={{ mt: 2.5 }}
         >
           <TextField
             placeholder="Tìm theo mã học sinh, họ tên hoặc số điện thoại..."
@@ -427,7 +429,7 @@ export function StudentList({ role }: StudentListProps): ReactElement {
             }}
           />
           <Button
-            variant="text"
+            variant="outlined"
             onClick={() => setSearch("")}
             disabled={!search}
           >
@@ -436,28 +438,18 @@ export function StudentList({ role }: StudentListProps): ReactElement {
         </Stack>
       </Paper>
 
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-          bgcolor: "background.paper",
-        }}
-      >
-        <BaseTable
-          columns={getColumns(canDelete)}
-          rows={tableData}
-          totalRows={data?.total || 0}
-          page={page}
-          pageSize={pageSize}
-          isLoading={isLoading}
-          onPageChange={setPageNumber}
-          onPageSizeChange={setPageSize}
-          error={error}
-        />
-      </Paper>
+      <BaseTable
+        columns={getColumns()}
+        rows={tableData}
+        totalRows={data?.total || 0}
+        page={page}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        onPageChange={setPageNumber}
+        onPageSizeChange={setPageSize}
+        error={error}
+        onRetry={refresh}
+      />
 
       <FormDialog
         open={openDialog}
@@ -487,8 +479,8 @@ export function StudentList({ role }: StudentListProps): ReactElement {
 
       <ConfirmDialog
         open={!!deleteId}
-        title="Xóa học sinh"
-        message="Bạn có chắc chắn muốn xóa học sinh này không?"
+        title="Ngừng hoạt động học sinh"
+        message="Học sinh sẽ được giữ lại để bảo toàn lịch sử và chuyển sang trạng thái ngừng hoạt động. Tiếp tục?"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteId(null)}
         isLoading={isSubmitting}

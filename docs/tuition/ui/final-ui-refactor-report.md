@@ -18,7 +18,7 @@
 
 ## Đã loại bỏ
 
-Không còn UI chia kỳ, partial payment, nhập amount tùy ý, payment allocation, tiền dư hoặc badge `PARTIALLY_PAID`.
+Không còn UI chia kỳ, partial payment, nhập amount tùy ý, phân bổ một phần, tiền dư hoặc badge `PARTIALLY_PAID`. Batch nhiều khoản vẫn hiển thị phân bổ theo đúng toàn bộ `final_amount` của từng khoản.
 
 ## Kiểm tra
 

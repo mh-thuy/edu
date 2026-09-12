@@ -8,9 +8,11 @@ import {
   TuitionPaymentStatus,
 } from "@prisma/client";
 import type {
+  TuitionFeeStatusUpdate,
   TuitionFeeUpdate,
-  TuitionPaymentCreate,
 } from "@/modules/finance/tuition/schemas/tuition.schema";
+import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { getVietnamDayStart } from "@/lib/vietnam-time";
 
 const feeInclude = {
   student: true,
@@ -57,6 +59,7 @@ export class TuitionService {
     studentCode?: string;
     classId?: string;
     status?: TuitionFeeStatus;
+    billingType?: TuitionFeeBillingType;
     billingYear?: number;
     billingMonth?: number;
     page: number;
@@ -66,10 +69,29 @@ export class TuitionService {
       ? Math.max(Math.floor(params.page), 1)
       : 1;
     const pageSize = Number.isFinite(params.pageSize)
-      ? Math.min(Math.max(Math.floor(params.pageSize), 1), 10000)
+      ? Math.min(Math.max(Math.floor(params.pageSize), 1), 100)
       : 50;
+    const asOf = new Date();
+    const todayStart = getVietnamDayStart(asOf);
+    const statusFilter: Prisma.TuitionFeeWhereInput =
+      params.status === TuitionFeeStatus.OVERDUE
+        ? {
+            OR: [
+              { status: TuitionFeeStatus.OVERDUE },
+              { status: TuitionFeeStatus.UNPAID, dueDate: { lt: todayStart } },
+            ],
+          }
+        : params.status === TuitionFeeStatus.UNPAID
+          ? {
+              status: TuitionFeeStatus.UNPAID,
+              OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
+            }
+          : params.status
+            ? { status: params.status }
+            : {};
     const where: Prisma.TuitionFeeWhereInput = {
-      ...(params.status ? { status: params.status } : {}),
+      ...statusFilter,
+      ...(params.billingType ? { billingType: params.billingType } : {}),
       ...(params.studentCode
         ? {
             student: {
@@ -91,7 +113,23 @@ export class TuitionService {
       }),
       prisma.tuitionFee.count({ where }),
     ]);
-    return { items, total, page, pageSize, pages: Math.ceil(total / pageSize) };
+    const effectiveItems = items.map((fee) => ({
+      ...fee,
+      status: getEffectiveTuitionFeeStatus(fee.status, fee.dueDate, asOf),
+    }));
+    return {
+      items: effectiveItems,
+      total,
+      page,
+      pageSize,
+      pages: Math.ceil(total / pageSize),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
   }
 
   static async getFee(id: string) {
@@ -100,14 +138,18 @@ export class TuitionService {
       include: feeInclude,
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
-    return fee;
+    return {
+      ...fee,
+      status: getEffectiveTuitionFeeStatus(fee.status, fee.dueDate),
+    };
   }
 
   static async createFromEnrollment(
     data: { classId: string; studentId: string } & TuitionBillingPeriod,
     actorId: string,
+    transaction?: Prisma.TransactionClient,
   ) {
-    return prisma.$transaction(async (tx) => {
+    const execute = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${data.classId}:${data.billingYear}:${data.billingMonth}`}))`,
       );
@@ -121,13 +163,22 @@ export class TuitionService {
         include: {
           class: true,
           subjects: {
-            where: { status: "ACTIVE" },
+            where: {
+              status: "ACTIVE",
+              classSubject: {
+                status: "ACTIVE",
+                subject: { status: "ACTIVE" },
+              },
+            },
             include: { classSubject: { include: { subject: true } } },
           },
         },
       });
       if (!enrollment) {
         throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
+      }
+      if (enrollment.class.status === "COMPLETED" || enrollment.class.status === "CANCELLED") {
+        throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
       if (enrollment.subjects.length === 0) {
         throw new ConflictError("Học viên chưa đăng ký môn học nào");
@@ -316,55 +367,78 @@ export class TuitionService {
       });
       if (!result) throw new NotFoundError("Không tìm thấy khoản học phí");
       return result;
-    });
+    };
+    return transaction ? execute(transaction) : prisma.$transaction(execute);
   }
 
   static async createClassTuitionFees(
     classId: string,
     period: TuitionBillingPeriod,
     actorId: string,
+    transaction?: Prisma.TransactionClient,
   ) {
-    const enrollments = await prisma.classStudent.findMany({
-      where: { classId, status: "ACTIVE" },
-      select: {
-        studentId: true,
-        subjects: {
-          where: { status: "ACTIVE" },
-          select: { id: true },
-        },
-        pauses: {
-          where: {
-            startMonth: {
-              lte: new Date(Date.UTC(period.billingYear, period.billingMonth, 0)),
-            },
-            endMonth: {
-              gte: new Date(
-                Date.UTC(period.billingYear, period.billingMonth - 1, 1),
-              ),
-            },
-          },
-          select: { id: true },
-        },
-      },
-    });
-    let created = 0;
-    let skipped = 0;
-    for (const enrollment of enrollments) {
-      if (enrollment.pauses.length || enrollment.subjects.length === 0) {
-        skipped += 1;
-        continue;
+    const execute = async (tx: Prisma.TransactionClient) => {
+      const classData = await tx.class.findUnique({
+        where: { id: classId },
+        select: { status: true },
+      });
+      if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
+      if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
+        throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
-      await TuitionService.createFromEnrollment(
-        { classId, studentId: enrollment.studentId, ...period },
-        actorId,
-      );
-      created += 1;
-    }
-    return { created, skipped };
+      const enrollments = await tx.classStudent.findMany({
+        where: { classId, status: "ACTIVE" },
+        select: {
+          studentId: true,
+          subjects: {
+            where: {
+              status: "ACTIVE",
+              classSubject: {
+                status: "ACTIVE",
+                subject: { status: "ACTIVE" },
+              },
+            },
+            select: { id: true },
+          },
+          pauses: {
+            where: {
+              startMonth: {
+                lte: new Date(Date.UTC(period.billingYear, period.billingMonth, 0)),
+              },
+              endMonth: {
+                gte: new Date(
+                  Date.UTC(period.billingYear, period.billingMonth - 1, 1),
+                ),
+              },
+            },
+            select: { id: true },
+          },
+        },
+      });
+      let created = 0;
+      let skipped = 0;
+      for (const enrollment of enrollments) {
+        if (enrollment.pauses.length || enrollment.subjects.length === 0) {
+          skipped += 1;
+          continue;
+        }
+        await TuitionService.createFromEnrollment(
+          { classId, studentId: enrollment.studentId, ...period },
+          actorId,
+          tx,
+        );
+        created += 1;
+      }
+      return { created, skipped };
+    };
+    return transaction ? execute(transaction) : prisma.$transaction(execute);
   }
 
   static async updateFee(id: string, data: TuitionFeeUpdate, actorId: string) {
     return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
+      );
       const current = await tx.tuitionFee.findUnique({
         where: { id },
         include: {
@@ -384,16 +458,26 @@ export class TuitionService {
         throw new ConflictError(
           `Không thể sửa khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
         );
+      const discountAmount = new Prisma.Decimal(
+        data.discountAmount ?? current.discountAmount,
+      );
+      const additionalAmount = new Prisma.Decimal(
+        data.additionalAmount ?? current.additionalAmount,
+      );
+      if (discountAmount.greaterThan(current.originalAmount))
+        throw new ConflictError("Số tiền giảm không được vượt học phí gốc");
       const finalAmount = current.originalAmount
-        .sub(data.discountAmount ?? current.discountAmount)
-        .add(data.additionalAmount ?? current.additionalAmount);
-      if (finalAmount.isNegative())
+        .sub(discountAmount)
+        .add(additionalAmount);
+      if (!additionalAmount.greaterThanOrEqualTo(0))
+        throw new ConflictError("Số tiền phụ thu không hợp lệ");
+      if (!finalAmount.greaterThan(0))
         throw new ConflictError("Số tiền cuối không hợp lệ");
       const updated = await tx.tuitionFee.update({
         where: { id },
         data: {
-          discountAmount: data.discountAmount,
-          additionalAmount: data.additionalAmount,
+          discountAmount,
+          additionalAmount,
           finalAmount,
           dueDate:
             data.dueDate === undefined
@@ -422,15 +506,17 @@ export class TuitionService {
     });
   }
 
-  static async createPayment(data: TuitionPaymentCreate, actorId: string) {
+  static async updateStatus(
+    id: string,
+    data: TuitionFeeStatusUpdate,
+    actorId: string,
+  ) {
     return prisma.$transaction(async (tx) => {
-      const existing = await tx.tuitionPayment.findUnique({
-        where: { idempotencyKey: data.idempotencyKey },
-        include: { tuitionFee: true, receipt: true },
-      });
-      if (existing) return existing;
-      const fee = await tx.tuitionFee.findUnique({
-        where: { id: data.tuitionFeeId },
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
+      );
+      const current = await tx.tuitionFee.findUnique({
+        where: { id },
         include: {
           payments: { where: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
           paymentAllocations: {
@@ -439,69 +525,46 @@ export class TuitionService {
           },
         },
       });
-      if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
-      if (fee.status === TuitionFeeStatus.CANCELLED)
-        throw new ConflictError("TUITION_CANCELLED");
-      if (fee.status === TuitionFeeStatus.EXEMPTED)
-        throw new ConflictError("TUITION_EXEMPTED");
-      if (fee.payments.length > 0 || fee.status === TuitionFeeStatus.PAID)
-        throw new ConflictError("TUITION_ALREADY_PAID");
-      const pendingBatch = fee.paymentAllocations[0]?.paymentBatch.batchNo;
-      if (pendingBatch)
+      if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
+      if (current.version !== data.version)
+        throw new ConflictError("Khoản học phí đã thay đổi, vui lòng tải lại");
+      if (current.payments.length)
+        throw new ConflictError("Không thể miễn hoặc hủy khoản học phí đã thanh toán");
+      if (current.paymentAllocations.length)
         throw new ConflictError(
-          `Khoản học phí đang chờ thanh toán trong đợt ${pendingBatch}`,
+          `Không thể miễn hoặc hủy khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
         );
-      const payment = await tx.tuitionPayment.create({
+      if (
+        current.status !== TuitionFeeStatus.UNPAID &&
+        current.status !== TuitionFeeStatus.OVERDUE
+      ) {
+        throw new ConflictError("Khoản học phí không còn ở trạng thái có thể miễn hoặc hủy");
+      }
+
+      const updated = await tx.tuitionFee.update({
+        where: { id },
         data: {
-          paymentNo: `PAY-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-          tuitionFeeId: fee.id,
-          studentId: fee.studentId,
-          amount: fee.finalAmount,
-          paymentMethod: data.paymentMethod,
-          paymentStatus: TuitionPaymentStatus.SUCCESS,
-          idempotencyKey: data.idempotencyKey,
-          paymentDate: data.paymentDate
-            ? new Date(data.paymentDate)
-            : undefined,
-          bankAccountId: data.bankAccountId,
-          transactionReference: data.transactionReference,
-          payerName: data.payerName,
-          paymentContent: data.paymentContent,
-          note: data.note,
-          receivedBy: actorId,
-          confirmedBy: actorId,
-          confirmedAt: new Date(),
-          createdBy: actorId,
-          updatedBy: actorId,
-        },
-      });
-      await tx.tuitionFee.update({
-        where: { id: fee.id },
-        data: {
-          status: TuitionFeeStatus.PAID,
+          status: data.status,
+          exemptionReason: data.status === TuitionFeeStatus.EXEMPTED ? data.reason : null,
+          cancellationReason: data.status === TuitionFeeStatus.CANCELLED ? data.reason : null,
           version: { increment: 1 },
           updatedBy: actorId,
         },
-      });
-      const receipt = await tx.tuitionReceipt.create({
-        data: {
-          receiptNo: `REC-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
-          paymentId: payment.id,
-          issuedBy: actorId,
-          receiverName: data.payerName || fee.studentId,
-          amount: fee.finalAmount,
-        },
+        include: feeInclude,
       });
       await tx.tuitionAuditLog.create({
         data: {
-          entityType: "TUITION_PAYMENT",
-          entityId: payment.id,
-          action: "SUCCESS",
-          dataAfter: payment as unknown as Prisma.InputJsonValue,
+          entityType: "TUITION_FEE",
+          entityId: id,
+          action: data.status === TuitionFeeStatus.EXEMPTED ? "EXEMPT" : "CANCEL",
+          reason: data.reason,
+          dataBefore: current as unknown as Prisma.InputJsonValue,
+          dataAfter: updated as unknown as Prisma.InputJsonValue,
           performedBy: actorId,
         },
       });
-      return { payment, receipt };
+      return updated;
     });
   }
+
 }

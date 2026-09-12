@@ -7,12 +7,17 @@ import {
   Box,
   Chip,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import Link from "next/link";
@@ -28,6 +33,7 @@ type Fee = {
   discountAmount: number;
   additionalAmount: number;
   finalAmount: number;
+  version: number;
   dueDate?: string | null;
   status: "UNPAID" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
   student: { code: string; fullName: string; phone?: string | null };
@@ -55,6 +61,9 @@ export function TuitionDetail({ id }: { id: string }) {
   const [fee, setFee] = useState<Fee | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [statusAction, setStatusAction] = useState<"EXEMPTED" | "CANCELLED" | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -80,18 +89,40 @@ export function TuitionDetail({ id }: { id: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function submitStatusAction() {
+    if (!fee || !statusAction || !statusReason.trim()) return;
+    setStatusSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/tuition-fees/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: statusAction, reason: statusReason.trim(), version: fee.version }),
+      });
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể thay đổi trạng thái học phí"));
+      setStatusAction(null);
+      setStatusReason("");
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể thay đổi trạng thái học phí");
+    } finally {
+      setStatusSaving(false);
+    }
+  }
   if (loading) return <Typography>Đang tải chi tiết học phí...</Typography>;
   if (error || !fee)
     return <Alert severity="error">{error || "Không tìm thấy học phí"}</Alert>;
   const paid = fee.status === "PAID";
   const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
+  const editableStatus = (fee.status === "UNPAID" || fee.status === "OVERDUE") && !pendingBatch;
   const canPay =
     !paid &&
     fee.status !== "EXEMPTED" &&
     fee.status !== "CANCELLED" &&
     !fee.paymentAllocations?.length;
   return (
-    <Stack spacing={2}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
         <Stack spacing={2}>
           <Stack
@@ -142,7 +173,7 @@ export function TuitionDetail({ id }: { id: string }) {
                   Xuất thông báo
                 </Button>
               )}
-              {!paid && !pendingBatch && (
+              {!paid && !pendingBatch && fee.status !== "EXEMPTED" && fee.status !== "CANCELLED" && (
                 <Button
                   component={Link}
                   href={`/admin/tuition-fees/${id}/edit`}
@@ -151,6 +182,16 @@ export function TuitionDetail({ id }: { id: string }) {
                 >
                   Chỉnh sửa
                 </Button>
+              )}
+              {editableStatus && (
+                <>
+                  <Button variant="outlined" color="warning" onClick={() => setStatusAction("EXEMPTED")}>
+                    Miễn học phí
+                  </Button>
+                  <Button variant="outlined" color="error" onClick={() => setStatusAction("CANCELLED")}>
+                    Hủy học phí
+                  </Button>
+                </>
               )}
               <Button component={Link} href="/admin/tuition-fees" variant="outlined">
                 Quay lại
@@ -189,7 +230,7 @@ export function TuitionDetail({ id }: { id: string }) {
             <Info title="Hạn thanh toán">
               <Typography fontWeight={600}>
                 {fee.dueDate
-                  ? new Date(fee.dueDate).toLocaleDateString("vi-VN")
+                  ? new Date(fee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })
                   : "Chưa xác định"}
               </Typography>
             </Info>
@@ -268,7 +309,7 @@ export function TuitionDetail({ id }: { id: string }) {
             >
               <Typography>
                 {payment.paymentNo} · {payment.paymentMethod} ·{" "}
-                {new Date(payment.paymentDate).toLocaleDateString("vi-VN")}
+                {new Date(payment.paymentDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
               </Typography>
               <Typography>
                 {Number(payment.amount).toLocaleString("vi-VN")} VND{" "}
@@ -290,6 +331,31 @@ export function TuitionDetail({ id }: { id: string }) {
           </Typography>
         )}
       </Paper>
+      <Dialog open={Boolean(statusAction)} onClose={() => !statusSaving && setStatusAction(null)} fullWidth maxWidth="sm">
+        <DialogTitle>{statusAction === "EXEMPTED" ? "Miễn học phí" : "Hủy khoản học phí"}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            {statusAction === "EXEMPTED" ? "Khoản phí sẽ không còn được đưa vào công nợ hoặc thanh toán." : "Khoản phí sẽ được hủy và không thể thanh toán lại."}
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1 }}>Học phí: <strong>{fee.feeNo}</strong></Typography>
+          <TextField
+            fullWidth
+            required
+            multiline
+            minRows={2}
+            label="Lý do"
+            value={statusReason}
+            onChange={(event) => setStatusReason(event.target.value)}
+            inputProps={{ maxLength: 500 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button variant="outlined" onClick={() => setStatusAction(null)} disabled={statusSaving}>Hủy</Button>
+          <Button variant="contained" color={statusAction === "EXEMPTED" ? "warning" : "error"} onClick={() => void submitStatusAction()} disabled={statusSaving || !statusReason.trim()}>
+            {statusSaving ? "Đang lưu..." : "Xác nhận"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }

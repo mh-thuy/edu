@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { classSubjectUpdateSchema } from "@/modules/class/schemas/class-subject.schema";
 import { removeClassSubject, updateClassSubject } from "@/modules/class/services/class.service";
 
@@ -14,7 +14,7 @@ async function getIds(context: { params?: Params }) {
 
 export async function PATCH(request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, subjectId } = await getIds(context);
     return apiSuccess(await updateClassSubject(id, subjectId, classSubjectUpdateSchema.parse(await request.json())));
@@ -26,7 +26,7 @@ export async function PATCH(request: NextRequest, context: { params?: Params }) 
 
 export async function DELETE(_request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, subjectId } = await getIds(context);
     await removeClassSubject(id, subjectId);

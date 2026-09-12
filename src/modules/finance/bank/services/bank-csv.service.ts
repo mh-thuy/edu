@@ -32,6 +32,18 @@ type ReconciliationTokenPayload = {
   paymentBatchId: string | null;
 };
 
+type PaymentBatchMatch = {
+  id: string;
+  batchNo: string;
+  totalAmount: Prisma.Decimal;
+  student: { code: string; fullName: string };
+  allocations: Array<{
+    tuitionFeeId: string;
+    amount: Prisma.Decimal;
+    tuitionFee: { feeNo: string };
+  }>;
+};
+
 export type BankImportItem = {
   confirmationToken: string;
   rowNo: number;
@@ -42,17 +54,8 @@ export type BankImportItem = {
   debitAmount: Prisma.Decimal;
   balanceAmount: Prisma.Decimal | null;
   reconciliationStatus: ReconciliationStatus;
-  paymentBatch: {
-    id: string;
-    batchNo: string;
-    totalAmount: Prisma.Decimal;
-    student: { code: string; fullName: string };
-    allocations: Array<{
-      tuitionFeeId: string;
-      amount: Prisma.Decimal;
-      tuitionFee: { feeNo: string };
-    }>;
-  } | null;
+  paymentBatch: PaymentBatchMatch | null;
+  paymentBatchCandidates: Array<PaymentBatchMatch & { confirmationToken: string }>;
 };
 
 export type BankImportResult = {
@@ -403,6 +406,20 @@ function createTokenPayload(
   };
 }
 
+function toPaymentBatchMatch(batch: PaymentBatchMatch): PaymentBatchMatch {
+  return {
+    id: batch.id,
+    batchNo: batch.batchNo,
+    totalAmount: batch.totalAmount,
+    student: batch.student,
+    allocations: batch.allocations.map((allocation) => ({
+      tuitionFeeId: allocation.tuitionFeeId,
+      amount: allocation.amount,
+      tuitionFee: { feeNo: allocation.tuitionFee.feeNo },
+    })),
+  };
+}
+
 export async function importBankStatement(args: {
   buffer: Buffer;
   fileName: string;
@@ -423,7 +440,7 @@ export async function importBankStatement(args: {
     .filter((value): value is string => Boolean(value));
   const existingPayments = await prisma.tuitionPayment.findMany({
     where: {
-      paymentStatus: TuitionPaymentStatus.SUCCESS,
+      paymentStatus: { in: [TuitionPaymentStatus.SUCCESS, TuitionPaymentStatus.CANCELLED] },
       bankAccountId: args.bankAccountId,
       OR: [
         { transactionReference: { in: transactionHashes } },
@@ -442,7 +459,12 @@ export async function importBankStatement(args: {
   );
   const pendingBatches = amounts.length
     ? await prisma.paymentBatch.findMany({
-        where: { status: PaymentBatchStatus.PENDING, totalAmount: { in: amounts } },
+        where: {
+          status: PaymentBatchStatus.PENDING,
+          paymentMethod: "BANK_TRANSFER",
+          bankAccountId: args.bankAccountId,
+          totalAmount: { in: amounts },
+        },
         include: { student: true, allocations: { include: { tuitionFee: true } } },
       })
     : [];
@@ -471,6 +493,7 @@ export async function importBankStatement(args: {
       balanceAmount: row.balance,
       reconciliationStatus: (isCredit ? "UNMATCHED" : "IGNORED") as ReconciliationStatus,
       paymentBatch: null as BankImportItem["paymentBatch"],
+      paymentBatchCandidates: [] as BankImportItem["paymentBatchCandidates"],
     };
     if (
       importedHashes.has(transactionHash) ||
@@ -497,30 +520,31 @@ export async function importBankStatement(args: {
     );
     if (batch) {
       matchedRows += 1;
+      const paymentBatch = toPaymentBatchMatch(batch);
       items.push({
         ...baseItem,
         confirmationToken: createConfirmationToken(
           createTokenPayload(args.bankAccountId, transactionHash, row, batch.id),
         ),
         reconciliationStatus: "AUTO_MATCHED",
-        paymentBatch: {
-          id: batch.id,
-          batchNo: batch.batchNo,
-          totalAmount: batch.totalAmount,
-          student: batch.student,
-          allocations: batch.allocations.map((allocation) => ({
-            tuitionFeeId: allocation.tuitionFeeId,
-            amount: allocation.amount,
-            tuitionFee: { feeNo: allocation.tuitionFee.feeNo },
-          })),
-        },
+        paymentBatch,
       });
       continue;
     }
     unmatchedRows += 1;
 
+    const paymentBatchCandidates = pendingBatches
+      .filter((candidate) => candidate.totalAmount.equals(row.amount))
+      .map((candidate) => ({
+        ...toPaymentBatchMatch(candidate),
+        confirmationToken: createConfirmationToken(
+          createTokenPayload(args.bankAccountId, transactionHash, row, candidate.id),
+        ),
+      }));
+
     items.push({
       ...baseItem,
+      paymentBatchCandidates,
     });
   }
 
@@ -557,6 +581,10 @@ async function confirmPaymentBatch(
     const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
     if (batch.status !== PaymentBatchStatus.PENDING) throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
+    if (batch.paymentMethod !== "BANK_TRANSFER")
+      throw new ConflictError("Chỉ payment batch chuyển khoản mới được đối soát ngân hàng");
+    if (batch.bankAccountId !== payload.bankAccountId)
+      throw new ConflictError("Tài khoản ngân hàng không khớp với đợt thanh toán");
     if (!new Prisma.Decimal(payload.creditAmount).equals(batch.totalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
     return completePaymentBatch(tx, batchId, actorId, {
       paymentDate: new Date(payload.transactionDate),

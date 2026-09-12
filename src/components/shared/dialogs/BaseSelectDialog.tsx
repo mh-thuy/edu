@@ -142,7 +142,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
             <Button
               variant="contained"
               onClick={handleSearch}
-              sx={{ px: 3, whiteSpace: "nowrap" }}
+              sx={{ whiteSpace: "nowrap" }}
             >
               Tìm
             </Button>

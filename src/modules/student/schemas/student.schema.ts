@@ -22,6 +22,7 @@ export const studentUpdateSchema = studentCreateSchema.partial().extend({
 export const studentFilterSchema = z.object({
   search: z.string().optional(),
   status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+  excludeClassId: z.string().uuid().optional(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(10),
 });

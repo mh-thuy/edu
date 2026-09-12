@@ -1,141 +1,33 @@
-# Permissions Matrix
+# Access model
 
-Version: 1.0
+Version: 2.0
 Priority: HIGH
 
-## Role definitions
+## Single access level
 
-```text
-ADMIN
-STAFF
-TEACHER
-```
+The system uses one shared access level for every authenticated user. There is no
+role-based authorization and no role-management screen.
 
-Ý nghĩa:
+| Actor | Access |
+|---|---|
+| Authenticated user | All application modules and actions |
+| Unauthenticated user | Public pages only; protected pages and APIs require login |
 
-```text
-Y = Full access
-R = Read only
-N = No access
-```
+## Enforcement
 
----
+Page and API access only verify authentication:
 
-## Matrix
+- `requireAuth()` for protected pages
+- `requireApiUser()` for protected API handlers
+- `middleware.ts` for the global protected-route boundary
 
-| Module          | ADMIN | STAFF | TEACHER |
-| --------------- | ----- | ----- | ------- |
-| Dashboard       | Y     | Y     | Y       |
-| Users           | Y     | N     | N       |
-| Roles           | Y     | N     | N       |
-| Teachers        | Y     | Y     | R       |
-| Students        | Y     | Y     | N       |
-| Classes         | Y     | Y     | R       |
-| Enrollment      | Y     | Y     | N       |
-| Schedule        | Y     | Y     | R       |
-| Student Fees    | Y     | Y     | N       |
-| Payment QR      | Y     | Y     | N       |
-| Payment Notice  | Y     | Y     | N       |
-| Payments        | Y     | Y     | N       |
-| Receipts        | Y     | Y     | N       |
-| Salary Rules    | Y     | N     | N       |
-| Payroll         | Y     | R     | R       |
-| Payroll Approve | Y     | N     | N       |
-| Reports         | Y     | Y     | R       |
-| System Config   | Y     | N     | N       |
+The UI renders the same navigation and actions for every authenticated user.
 
----
+Business validations remain active independently of authentication, including
+financial consistency checks, audit requirements, and non-hard-delete rules.
 
-## Action Level Permissions
+## Removed concepts
 
-### TEACHER
-
-Cho phép:
-
-```text
-Xem lớp của mình
-Xem lịch dạy của mình
-Xem bảng lương của mình
-Xem dashboard cá nhân
-```
-
-Không cho:
-
-```text
-Create payment
-Delete student
-Delete class
-Approve payroll
-Create receipt
-Generate student fee
-```
-
----
-
-### STAFF
-
-Cho phép:
-
-```text
-CRUD student
-CRUD teacher
-CRUD class
-CRUD schedule
-Create student fee
-Generate QR
-Generate payment notice
-Create payment
-Create receipt
-```
-
-Không cho:
-
-```text
-Manage users
-Manage roles
-Approve payroll
-Change system config
-Delete payroll
-```
-
----
-
-### ADMIN
-
-Cho phép toàn quyền.
-
----
-
-## Backend Rule
-
-Không chỉ ẩn UI.
-
-Backend bắt buộc check permission.
-
-Ví dụ:
-
-```text
-TEACHER call POST /api/payments
-
-→ 403 Forbidden
-```
-
----
-
-## AI Rules
-
-AI không được:
-
-```text
-Cho TEACHER create payment
-Cho STAFF approve payroll
-Cho STAFF create admin user
-```
-
-Permission check phải có:
-
-```text
-Frontend
-Backend
-API middleware
-```
+The application no longer uses `ADMIN`, `STAFF`, or `TEACHER` as authorization
+roles. Existing users remain users, but role assignment and role-based UI/API
+checks are not supported.

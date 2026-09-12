@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { subjectUpdateSchema } from "@/modules/class/schemas/class-subject.schema";
 import { updateSubject } from "@/modules/class/services/class.service";
 
@@ -8,7 +8,7 @@ type Params = Promise<{ id: string }>;
 
 export async function PATCH(request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const params = await context.params;
     if (!params?.id) return apiError("BAD_REQUEST", "Thiếu môn học", 400);

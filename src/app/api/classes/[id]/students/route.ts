@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents } from "@/modules/class/services/class.service";
 
 const assignStudentRequestSchema = z.object({
@@ -12,6 +12,15 @@ const assignStudentRequestSchema = z.object({
 const removeStudentRequestSchema = z.object({
   studentId: z.string().min(1, "studentId is required"),
   force: z.boolean().optional(),
+  reason: z.string().trim().max(500).optional(),
+}).superRefine((data, ctx) => {
+  if (data.force && !data.reason) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["reason"],
+      message: "Bắt buộc nhập lý do khi force rời lớp",
+    });
+  }
 });
 
 type Params = Promise<{
@@ -26,7 +35,7 @@ async function getClassId(context: { params?: Params }) {
 
 export async function GET(_request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
     const students = await getClassStudents(id);
@@ -39,7 +48,7 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
 
 export async function POST(request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
     const body: unknown = await request.json();
@@ -55,16 +64,16 @@ export async function POST(request: NextRequest, context: { params?: Params }) {
 
 export async function DELETE(request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
     const body: unknown = await request.json();
-    const { studentId, force } = removeStudentRequestSchema.parse(body);
+    const { studentId, force, reason } = removeStudentRequestSchema.parse(body);
 
     await removeStudentFromClass(id, studentId, {
       force,
-      isAdmin: user.role === "ADMIN",
-    });
+      reason,
+    }, user.id);
     return apiSuccess({ deleted: true });
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);

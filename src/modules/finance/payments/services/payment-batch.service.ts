@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 
 async function generateBatchNo(tx: Prisma.TransactionClient) {
   const prefix = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
@@ -36,6 +37,10 @@ export async function completePaymentBatch(
     paymentContent?: string;
   },
 ) {
+  // Serialize completion of the same batch before creating payments/receipts.
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+  );
   const batch = await tx.paymentBatch.findUnique({
     where: { id: batchId },
     include: { allocations: { include: { tuitionFee: true } } },
@@ -44,21 +49,66 @@ export async function completePaymentBatch(
   if (batch.status === PaymentBatchStatus.SUCCESS) return batch;
   if (batch.status !== PaymentBatchStatus.PENDING)
     throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
+
+  if (!batch.allocations.length)
+    throw new ConflictError("Đợt thanh toán không có khoản học phí");
+
+  const allocationTotal = batch.allocations.reduce(
+    (total, allocation) => total.add(allocation.amount),
+    new Prisma.Decimal(0),
+  );
+  if (!allocationTotal.equals(batch.totalAmount))
+    throw new ConflictError("Tổng phân bổ không khớp tổng thanh toán");
+
   for (const allocation of batch.allocations) {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${allocation.tuitionFeeId}::uuid FOR UPDATE`,
+    );
+    const fee = await tx.tuitionFee.findUnique({
+      where: { id: allocation.tuitionFeeId },
+      include: {
+        payments: {
+          where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
+          select: { id: true },
+        },
+      },
+    });
+    if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
+    if (fee.payments.length > 0)
+      throw new ConflictError("TUITION_ALREADY_PAID");
     if (
-      allocation.tuitionFee.status === TuitionFeeStatus.PAID ||
-      allocation.tuitionFee.status === TuitionFeeStatus.CANCELLED ||
-      allocation.tuitionFee.status === TuitionFeeStatus.EXEMPTED
+      fee.status !== TuitionFeeStatus.UNPAID &&
+      fee.status !== TuitionFeeStatus.OVERDUE
     )
       throw new ConflictError(
-        `Học phí ${allocation.tuitionFee.feeNo} không còn đủ điều kiện thanh toán`,
+        `Học phí ${fee.feeNo} không còn đủ điều kiện thanh toán`,
       );
-    if (!allocation.amount.equals(allocation.tuitionFee.finalAmount))
+    if (!allocation.amount.greaterThan(0))
+      throw new ConflictError("Số tiền thanh toán phải lớn hơn 0");
+    if (!allocation.amount.equals(fee.finalAmount))
       throw new ConflictError(
-        `Số tiền phân bổ của ${allocation.tuitionFee.feeNo} không khớp`,
+        `Số tiền phân bổ của ${fee.feeNo} không khớp toàn bộ học phí`,
       );
   }
   const paymentDate = data?.paymentDate || batch.paymentDate;
+  const bankAccountId = data?.bankAccountId ?? batch.bankAccountId;
+  if (batch.paymentMethod === "BANK_TRANSFER" && !bankAccountId) {
+    throw new ConflictError("Thanh toán chuyển khoản phải có tài khoản nhận tiền");
+  }
+  if (
+    batch.paymentMethod === "BANK_TRANSFER" &&
+    data?.bankAccountId &&
+    batch.bankAccountId &&
+    data.bankAccountId !== batch.bankAccountId
+  ) {
+    throw new ConflictError("Tài khoản ngân hàng không khớp với đợt thanh toán");
+  }
+  if (
+    batch.paymentMethod === "CASH" &&
+    (bankAccountId || batch.bankTransactionNo || batch.transactionReference || data?.bankAccountId || data?.bankTransactionNo)
+  ) {
+    throw new ConflictError("Thanh toán tiền mặt không được chứa thông tin giao dịch ngân hàng");
+  }
   for (const [index, allocation] of batch.allocations.entries()) {
     const sequence = String(index + 1).padStart(3, "0");
     const batchToken = batch.batchNo.slice(-20);
@@ -72,10 +122,12 @@ export async function completePaymentBatch(
         amount: allocation.amount,
         paymentMethod: batch.paymentMethod,
         paymentStatus: TuitionPaymentStatus.SUCCESS,
-        bankAccountId: data?.bankAccountId || batch.bankAccountId,
-        bankTransactionNo: data?.bankTransactionNo,
+        bankAccountId,
+        bankTransactionNo: batch.paymentMethod === "CASH" ? undefined : data?.bankTransactionNo,
         transactionReference:
-          data?.transactionReference || batch.transactionReference,
+          batch.paymentMethod === "CASH"
+            ? undefined
+            : data?.transactionReference || batch.transactionReference,
         payerName: batch.payerName,
         paymentContent: data?.paymentContent || batch.paymentContent,
         receivedBy: actorId,
@@ -145,10 +197,12 @@ export async function completePaymentBatch(
     data: {
       status: PaymentBatchStatus.SUCCESS,
       paymentDate,
-      bankAccountId: data?.bankAccountId || batch.bankAccountId,
-      bankTransactionNo: data?.bankTransactionNo,
+      bankAccountId,
+      bankTransactionNo: batch.paymentMethod === "CASH" ? null : data?.bankTransactionNo,
       transactionReference:
-        data?.transactionReference || batch.transactionReference,
+        batch.paymentMethod === "CASH"
+          ? null
+          : data?.transactionReference || batch.transactionReference,
       paymentContent: data?.paymentContent || batch.paymentContent,
       confirmedBy: actorId,
       confirmedAt: new Date(),
@@ -177,16 +231,53 @@ export async function completePaymentBatch(
 export async function createPaymentBatch(
   data: PaymentBatchCreate,
   actorId: string,
+  transaction?: Prisma.TransactionClient,
 ) {
-  return prisma.$transaction(async (tx) => {
+  const execute = async (tx: Prisma.TransactionClient) => {
+    const feeRefs = await tx.tuitionFee.findMany({
+      where: { id: { in: data.tuitionFeeIds } },
+      select: { id: true, studentId: true },
+    });
+    if (feeRefs.length !== data.tuitionFeeIds.length)
+      throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
+    const studentId = feeRefs[0]?.studentId;
+    if (!studentId || feeRefs.some((fee) => fee.studentId !== studentId))
+      throw new ConflictError("Chỉ được gom học phí của cùng một học viên");
+    if (data.paymentMethod === "CASH" && data.bankAccountId)
+      throw new ConflictError("Thanh toán tiền mặt không được gắn tài khoản ngân hàng");
+    if (data.paymentMethod === "CASH" && data.transactionReference)
+      throw new ConflictError("Thanh toán tiền mặt không được có mã giao dịch ngân hàng");
+    if (data.paymentMethod === "BANK_TRANSFER" && !data.bankAccountId)
+      throw new ConflictError("Thanh toán chuyển khoản phải có tài khoản nhận tiền");
+    if (data.bankAccountId) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM bank_accounts WHERE id = ${data.bankAccountId}::uuid FOR UPDATE`,
+      );
+      const bankAccount = await tx.bankAccount.findUnique({
+        where: { id: data.bankAccountId },
+        select: { id: true, isActive: true },
+      });
+      if (!bankAccount || !bankAccount.isActive)
+        throw new ConflictError("Tài khoản ngân hàng không hoạt động");
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`,
+    );
+
+    // Serialize fee edits and payment completion before reading amounts/statuses.
+    for (const tuitionFeeId of data.tuitionFeeIds) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${tuitionFeeId}::uuid FOR UPDATE`,
+      );
+    }
+
     const fees = await tx.tuitionFee.findMany({
       where: { id: { in: data.tuitionFeeIds } },
       include: { student: true },
     });
     if (fees.length !== data.tuitionFeeIds.length)
       throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
-    const studentId = fees[0]?.studentId;
-    if (!studentId || fees.some((fee) => fee.studentId !== studentId))
+    if (fees.some((fee) => fee.studentId !== studentId))
       throw new ConflictError("Chỉ được gom học phí của cùng một học viên");
     if (
       fees.some(
@@ -198,9 +289,8 @@ export async function createPaymentBatch(
       throw new ConflictError(
         "Danh sách có học phí không còn đủ điều kiện thanh toán",
       );
-    await tx.$executeRaw(
-      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`,
-    );
+    if (fees.some((fee) => !fee.finalAmount.greaterThan(0)))
+      throw new ConflictError("Học phí phải có số tiền lớn hơn 0");
     const paid = await tx.tuitionPayment.findMany({
       where: {
         tuitionFeeId: { in: data.tuitionFeeIds },
@@ -226,7 +316,19 @@ export async function createPaymentBatch(
           selectedFeeIds.has(allocation.tuitionFeeId),
         ),
     );
-    if (duplicate) return duplicate;
+    if (duplicate) {
+      const samePaymentMethod = duplicate.paymentMethod === data.paymentMethod;
+      const sameBankAccount =
+        data.paymentMethod === "BANK_TRANSFER"
+          ? duplicate.bankAccountId === data.bankAccountId
+          : duplicate.bankAccountId === null;
+      if (!samePaymentMethod || !sameBankAccount) {
+        throw new ConflictError(
+          `Các khoản học phí đã thuộc đợt ${duplicate.batchNo} với phương thức thanh toán khác`,
+        );
+      }
+      return duplicate;
+    }
     if (
       pendingBatches.some((candidate) =>
         candidate.allocations.some((allocation) =>
@@ -244,7 +346,7 @@ export async function createPaymentBatch(
         totalAmount,
         paymentMethod: data.paymentMethod,
         status: PaymentBatchStatus.PENDING,
-        bankAccountId: data.bankAccountId,
+        bankAccountId: data.paymentMethod === "BANK_TRANSFER" ? data.bankAccountId : undefined,
         transactionReference: data.transactionReference,
         payerName: data.payerName,
         paymentContent: data.note,
@@ -262,10 +364,25 @@ export async function createPaymentBatch(
         student: true,
       },
     });
-    if (data.paymentMethod === "CASH" || data.paymentMethod === "OTHER")
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "PAYMENT_BATCH",
+        entityId: batch.id,
+        action: "CREATED",
+        dataAfter: {
+          status: batch.status,
+          paymentMethod: batch.paymentMethod,
+          totalAmount: batch.totalAmount.toString(),
+          tuitionFeeIds: data.tuitionFeeIds,
+        },
+        performedBy: actorId,
+      },
+    });
+    if (data.paymentMethod === "CASH")
       return completePaymentBatch(tx, batch.id, actorId);
     return batch;
-  });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute);
 }
 
 export async function listPaymentBatches(params: {
@@ -304,7 +421,22 @@ export async function listPaymentBatches(params: {
     }),
     prisma.paymentBatch.count({ where }),
   ]);
-  return { items, total, page, pageSize, pages: Math.ceil(total / pageSize) };
+  return {
+    items: items.map((item) => ({
+      ...item,
+      receipt: item.status === PaymentBatchStatus.SUCCESS ? item.receipt : null,
+    })),
+    total,
+    page,
+    pageSize,
+    pages: Math.ceil(total / pageSize),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
 }
 
 export async function getPaymentBatchDetail(batchId: string) {
@@ -364,8 +496,22 @@ export async function getPaymentBatchDetail(batchId: string) {
   });
   const usersById = new Map(users.map((user) => [user.id, user]));
 
+  const allocations = batch.allocations.map((allocation) => ({
+    ...allocation,
+    tuitionFee: {
+      ...allocation.tuitionFee,
+      status: getEffectiveTuitionFeeStatus(
+        allocation.tuitionFee.status,
+        allocation.tuitionFee.dueDate,
+      ),
+    },
+  }));
+
   return {
     ...batch,
+    allocations,
+    receipt:
+      batch.status === PaymentBatchStatus.SUCCESS ? batch.receipt : null,
     createdByUser: usersById.get(batch.createdBy) || null,
     updatedByUser: usersById.get(batch.updatedBy) || null,
     confirmedByUser: batch.confirmedBy
@@ -386,6 +532,9 @@ export async function cancelPaymentBatch(
   reason: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+    );
     const batch = await tx.paymentBatch.findUnique({
       where: { id: batchId },
       include: { allocations: true },
@@ -419,6 +568,9 @@ export async function convertPaymentBatchToCash(
   actorId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+    );
     const batch = await tx.paymentBatch.findUnique({
       where: { id: batchId },
       include: { allocations: true },
@@ -433,6 +585,9 @@ export async function convertPaymentBatchToCash(
       where: { id: batchId },
       data: {
         paymentMethod: "CASH",
+        bankAccountId: null,
+        bankTransactionNo: null,
+        transactionReference: null,
         updatedBy: actorId,
       },
     });
@@ -453,7 +608,7 @@ export async function convertPaymentBatchToCash(
   });
 }
 
-export async function getPaymentBatchQr(batchId: string) {
+export async function getPaymentBatchQr(batchId: string, _actorId: string) {
   const batch = await prisma.paymentBatch.findUnique({
     where: { id: batchId },
     include: { student: true },
@@ -461,9 +616,12 @@ export async function getPaymentBatchQr(batchId: string) {
   if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
   if (batch.status !== PaymentBatchStatus.PENDING)
     throw new ConflictError("Đợt thanh toán không còn hiệu lực");
+  if (batch.paymentMethod !== "BANK_TRANSFER")
+    throw new ConflictError("Chỉ payment batch chuyển khoản mới có mã QR");
+  if (!batch.bankAccountId)
+    throw new ConflictError("Đợt thanh toán chưa gắn tài khoản ngân hàng");
   const account = await prisma.bankAccount.findFirst({
-    where: { id: batch.bankAccountId || undefined, isActive: true },
-    orderBy: { createdAt: "asc" },
+    where: { id: batch.bankAccountId, isActive: true },
   });
   if (!account)
     throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");

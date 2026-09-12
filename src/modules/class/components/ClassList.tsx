@@ -16,8 +16,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import ClassIcon from "@mui/icons-material/Class";
 import { GridColDef } from "@mui/x-data-grid";
-import type { RoleCode } from "@/constants/roles";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
@@ -28,6 +27,7 @@ import type { ReactElement } from "react";
 import type { z } from "zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import Link from "next/link";
+import { extractApiErrorMessage } from "@/lib/api-client";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -46,7 +46,7 @@ type ClassRow = Class & {
   _onDelete?: (cls: Class) => void;
 };
 
-const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
+const getColumns = (): GridColDef<ClassRow>[] => [
   {
     field: "code",
     headerName: "Mã lớp",
@@ -61,7 +61,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
   },
   {
     field: "_count.students",
-    headerName: "Học sinh",
+    headerName: "Học viên",
     minWidth: 95,
     align: "center",
     headerAlign: "center",
@@ -153,9 +153,6 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
           variant="outlined"
           sx={{
             minWidth: 64,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
           }}
         >
           Chi tiết
@@ -166,10 +163,7 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
           variant="outlined"
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
+            minWidth: 64,
           }}
         >
           Sửa
@@ -180,29 +174,26 @@ const getColumns = (canDelete: boolean): GridColDef<ClassRow>[] => [
           variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
-          disabled={!canDelete}
           sx={{
-            minWidth: 56,
-            height: 30,
-            borderRadius: 1.5,
-            textTransform: "none",
+            minWidth: 64,
           }}
         >
-          Xóa
+          Đóng lớp
         </Button>
       </Stack>
     ),
   },
 ];
 
-type ClassListProps = {
-  role: RoleCode;
-};
-
-export function ClassList({ role }: ClassListProps): ReactElement {
-  const canDelete = role === "ADMIN";
+export function ClassList(): ReactElement {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const {
     data,
@@ -215,13 +206,13 @@ export function ClassList({ role }: ClassListProps): ReactElement {
     refresh,
   } = useList<Class>("/api/classes", {
     pageSize: 10,
-    search,
+    search: debouncedSearch,
     status: status || undefined,
   });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Class | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
@@ -237,7 +228,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
   }, []);
 
   const handleDelete = useCallback((cls: Class) => {
-    setDeleteId(cls.id);
+    setDeleteTarget(cls);
   }, []);
 
   const handleCloseDialog = useCallback(() => {
@@ -248,28 +239,28 @@ export function ClassList({ role }: ClassListProps): ReactElement {
   }, [isSubmitting]);
 
   const handleConfirmDelete = useCallback(async () => {
-    if (!deleteId) return;
+    if (!deleteTarget) return;
 
     try {
       setIsSubmitting(true);
 
-      const response = await fetch(`/api/classes/${deleteId}`, {
+      const response = await fetch(`/api/classes/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
       if (!response.ok) {
-        throw new Error("Xóa lớp học thất bại");
+        throw new Error(await extractApiErrorMessage(response, "Đóng lớp học thất bại"));
       }
 
-      showSuccess("Đã xóa lớp học thành công");
-      setDeleteId(null);
+      showSuccess("Đã đóng lớp và giữ lại lịch sử");
+      setDeleteTarget(null);
       await refresh();
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Có lỗi khi xóa lớp học");
+      showError(err instanceof Error ? err.message : "Có lỗi khi đóng lớp học");
     } finally {
       setIsSubmitting(false);
     }
-  }, [deleteId, refresh, showSuccess, showError]);
+  }, [deleteTarget, refresh, showSuccess, showError]);
 
   const handleSubmit = useCallback(
     async (formData: ClassFormData) => {
@@ -288,9 +279,7 @@ export function ClassList({ role }: ClassListProps): ReactElement {
         );
 
         if (!response.ok) {
-          throw new Error(
-            isEdit ? "Cập nhật lớp học thất bại" : "Thêm lớp học thất bại",
-          );
+          throw new Error(await extractApiErrorMessage(response, isEdit ? "Cập nhật lớp học thất bại" : "Thêm lớp học thất bại"));
         }
 
         showSuccess(
@@ -320,11 +309,11 @@ export function ClassList({ role }: ClassListProps): ReactElement {
   }));
 
   return (
-    <Stack spacing={2.5}>
+    <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
+          p: { xs: 2, md: 3 },
           borderRadius: 3,
           border: "1px solid",
           borderColor: "divider",
@@ -368,9 +357,6 @@ export function ClassList({ role }: ClassListProps): ReactElement {
             startIcon={<AddIcon />}
             onClick={handleCreate}
             sx={{
-              borderRadius: 2,
-              px: 2.5,
-              height: 40,
               whiteSpace: "nowrap",
             }}
           >
@@ -378,10 +364,12 @@ export function ClassList({ role }: ClassListProps): ReactElement {
           </Button>
         </Stack>
 
+      </Paper>
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={1.5}
-          sx={{ mt: 2.5 }}
         >
           <TextField
             placeholder="Tìm theo mã lớp hoặc tên lớp..."
@@ -417,32 +405,22 @@ export function ClassList({ role }: ClassListProps): ReactElement {
             <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </Select>
-          <Button variant="text" onClick={() => { setSearch(""); setStatus(""); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+          <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); }} disabled={!search && !status}>Xóa bộ lọc</Button>
         </Stack>
       </Paper>
 
-      <Paper
-        elevation={0}
-        sx={{
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          overflow: "hidden",
-          bgcolor: "background.paper",
-        }}
-      >
-        <BaseTable
-          columns={getColumns(canDelete)}
-          rows={tableData}
-          totalRows={data?.total || 0}
-          page={page}
-          pageSize={pageSize}
-          isLoading={isLoading}
-          onPageChange={setPageNumber}
-          onPageSizeChange={setPageSize}
-          error={error}
-        />
-      </Paper>
+      <BaseTable
+        columns={getColumns()}
+        rows={tableData}
+        totalRows={data?.total || 0}
+        page={page}
+        pageSize={pageSize}
+        isLoading={isLoading}
+        onPageChange={setPageNumber}
+        onPageSizeChange={setPageSize}
+        error={error}
+        onRetry={refresh}
+      />
 
       <FormDialog
         open={openDialog}
@@ -470,12 +448,13 @@ export function ClassList({ role }: ClassListProps): ReactElement {
       </FormDialog>
 
       <ConfirmDialog
-        open={!!deleteId}
-        title="Xóa lớp học"
-        message="Bạn có chắc chắn muốn xóa lớp học này không?"
+        open={!!deleteTarget}
+        title="Đóng lớp học"
+        message={`Lớp ${deleteTarget?.code ?? "này"} — ${deleteTarget?.name ?? ""} sẽ được giữ lại và chuyển sang trạng thái đã hủy. Chỉ thực hiện được khi lớp chưa có dữ liệu liên quan. Tiếp tục?`}
         onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleteId(null)}
+        onCancel={() => setDeleteTarget(null)}
         isLoading={isSubmitting}
+        confirmLabel="Đóng lớp"
       />
 
       {Snackbar}

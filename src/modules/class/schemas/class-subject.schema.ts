@@ -12,14 +12,14 @@ export const subjectUpdateSchema = z.object({
 export const classSubjectCreateSchema = z.object({
   subjectId: z.string().uuid(),
   teacherId: z.string().uuid().nullable().optional(),
-  tuitionFee: z.number().min(0),
+  tuitionFee: z.number().finite().positive(),
   totalSessions: z.number().int().min(0),
   maxStudents: z.number().int().min(1).nullable().optional(),
 });
 
 export const classSubjectUpdateSchema = z.object({
   teacherId: z.string().uuid().nullable().optional(),
-  tuitionFee: z.number().min(0),
+  tuitionFee: z.number().finite().positive(),
   totalSessions: z.number().int().min(0),
   maxStudents: z.number().int().min(1).nullable().optional(),
 });

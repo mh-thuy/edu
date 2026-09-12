@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { addClassSubject, getClassSubjects } from "@/modules/class/services/class.service";
 import { classSubjectCreateSchema } from "@/modules/class/schemas/class-subject.schema";
 
@@ -16,7 +16,7 @@ async function getClassId(context: { params?: Params }) {
 
 export async function GET(_request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     return apiSuccess(await getClassSubjects(await getClassId(context)));
   } catch (error: unknown) {
@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
 
 export async function POST(request: NextRequest, context: { params?: Params }) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
     return apiSuccess(await addClassSubject(id, classSubjectCreateSchema.parse(await request.json())), 201);

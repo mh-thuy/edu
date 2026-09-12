@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { NotFoundError } from "@/lib/errors";
-import type { ClassSchedule, Prisma } from "@prisma/client";
+import { ConflictError, NotFoundError } from "@/lib/errors";
+import { Prisma, type ClassSchedule } from "@prisma/client";
 import type {
   ClassScheduleCreate,
   ClassScheduleUpdate,
@@ -30,22 +30,32 @@ export class ScheduleConflictError extends Error {
 async function assertScheduleRelations(
   data: {
     classId: string;
-    classSubjectId?: string;
+    classSubjectId: string;
     teacherId: string;
   },
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<void> {
   const [classData, teacher, classSubject] = await Promise.all([
-    prisma.class.findUnique({
+    client.class.findUnique({
       where: { id: data.classId },
       select: { id: true, status: true },
     }),
-    prisma.teacher.findUnique({
+    client.teacher.findUnique({
       where: { id: data.teacherId },
       select: { id: true, status: true },
     }),
-    data.classSubjectId
-      ? prisma.classSubject.findFirst({ where: { id: data.classSubjectId, classId: data.classId, status: "ACTIVE" }, select: { id: true, teacherId: true } })
-      : Promise.resolve(null),
+    client.classSubject.findFirst({
+      where: {
+        id: data.classSubjectId,
+        classId: data.classId,
+        status: "ACTIVE",
+      },
+      select: {
+        id: true,
+        teacherId: true,
+        subject: { select: { status: true } },
+      },
+    }),
   ]);
 
   if (!classData) {
@@ -58,8 +68,32 @@ async function assertScheduleRelations(
     throw new Error("Không tìm thấy giáo viên");
   }
   if (teacher.status !== "ACTIVE") throw new Error("Giáo viên đã ngừng hoạt động");
-  if (data.classSubjectId && !classSubject) throw new Error("Môn học không thuộc lớp hoặc đã ngừng mở");
-  if (classSubject?.teacherId && classSubject.teacherId !== data.teacherId) throw new Error("Giáo viên không đúng với môn học");
+  if (!classSubject) throw new Error("Môn học không thuộc lớp hoặc đã ngừng mở");
+  if (classSubject.subject.status !== "ACTIVE") {
+    throw new Error("Môn học đã ngừng hoạt động");
+  }
+  if (classSubject.teacherId && classSubject.teacherId !== data.teacherId) throw new Error("Giáo viên không đúng với môn học");
+}
+
+async function lockScheduleResources(
+  client: Prisma.TransactionClient,
+  data: { classId: string; teacherId: string; dayOfWeek: number },
+) {
+  await client.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`schedule:class:${data.classId}:${data.dayOfWeek}`}))`,
+  );
+  await client.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`schedule:teacher:${data.teacherId}:${data.dayOfWeek}`}))`,
+  );
+}
+
+async function lockClassSubject(
+  client: Prisma.TransactionClient,
+  classSubjectId: string,
+) {
+  await client.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-subject:${classSubjectId}`}))`,
+  );
 }
 
 function hasTimeConflict(
@@ -106,6 +140,7 @@ export async function getScheduleConflicts(
     endMinute: number;
   },
   excludeId?: string,
+  client: typeof prisma | Prisma.TransactionClient = prisma,
 ): Promise<ScheduleConflict[]> {
   const conflictTargets: Prisma.ClassScheduleWhereInput[] = [
     ...(data.teacherId ? [{ teacherId: data.teacherId }] : []),
@@ -114,9 +149,11 @@ export async function getScheduleConflicts(
 
   if (conflictTargets.length === 0) return [];
 
-  const schedules = await prisma.classSchedule.findMany({
+  const schedules = await client.classSchedule.findMany({
     where: {
       dayOfWeek: data.dayOfWeek,
+      deletedAt: null,
+      class: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
       ...(excludeId && {
         id: {
           not: excludeId,
@@ -145,33 +182,41 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
   schedule: ClassScheduleWithRelations;
   conflicts: ScheduleConflict[];
 }> {
-  await assertScheduleRelations(data);
-  const conflicts = await getScheduleConflicts(data);
+  return prisma.$transaction(async (tx) => {
+    await lockScheduleResources(tx, data);
+    await lockClassSubject(tx, data.classSubjectId);
+    await assertScheduleRelations(data, tx);
+    const conflicts = await getScheduleConflicts(data, undefined, tx);
 
-  if (conflicts.length > 0) {
-    throw new ScheduleConflictError(conflicts);
-  }
+    if (conflicts.length > 0) {
+      throw new ScheduleConflictError(conflicts);
+    }
 
-  const schedule = await prisma.classSchedule.create({
-    data: toClassScheduleCreateInput(data),
-    include: {
-      class: true,
-      teacher: true,
-      classSubject: { include: { subject: true } },
-    },
+    const schedule = await tx.classSchedule.create({
+      data: toClassScheduleCreateInput(data),
+      include: {
+        class: true,
+        teacher: true,
+        classSubject: { include: { subject: true } },
+      },
+    });
+
+    return {
+      schedule,
+      conflicts,
+    };
   });
-
-  return {
-    schedule,
-    conflicts,
-  };
 }
 
 export async function getClassScheduleById(
   id: string,
 ): Promise<ClassScheduleWithRelations | null> {
-  return prisma.classSchedule.findUnique({
-    where: { id },
+  return prisma.classSchedule.findFirst({
+    where: {
+      id,
+      deletedAt: null,
+      class: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
+    },
     include: {
       class: true,
       teacher: true,
@@ -186,6 +231,8 @@ export async function getSchedules(filter: ScheduleFilter) {
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.ClassScheduleWhereInput = {
+    deletedAt: null,
+    class: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
     ...(filter.classId && { classId: filter.classId }),
     ...(filter.classSubjectId && { classSubjectId: filter.classSubjectId }),
     ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
@@ -212,47 +259,12 @@ export async function getSchedules(filter: ScheduleFilter) {
     page,
     pageSize,
     pages: Math.ceil(total / pageSize),
-  };
-}
-
-export async function getSchedulesByTeacherUserId(
-  userId: string,
-  filter: ScheduleFilter,
-) {
-  const page = Math.max(filter.page ?? 1, 1);
-  const pageSize = Math.max(filter.pageSize ?? 10, 1);
-  const skip = (page - 1) * pageSize;
-
-  const where: Prisma.ClassScheduleWhereInput = {
-    teacher: {
-      userId,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
     },
-    ...(filter.classId && { classId: filter.classId }),
-    ...(filter.classSubjectId && { classSubjectId: filter.classSubjectId }),
-    ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
-  };
-
-  const [schedules, total] = await Promise.all([
-    prisma.classSchedule.findMany({
-      where,
-      skip,
-      take: pageSize,
-      include: {
-        class: true,
-        teacher: true,
-        classSubject: { include: { subject: true } },
-      },
-      orderBy: [{ dayOfWeek: "asc" }, { startMinute: "asc" }, { id: "asc" }],
-    }),
-    prisma.classSchedule.count({ where }),
-  ]);
-
-  return {
-    items: schedules,
-    total,
-    page,
-    pageSize,
-    pages: Math.ceil(total / pageSize),
   };
 }
 
@@ -263,53 +275,67 @@ export async function updateClassSchedule(
   schedule: ClassScheduleWithRelations;
   conflicts: ScheduleConflict[];
 }> {
-  const current = await prisma.classSchedule.findUnique({
-    where: { id },
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM class_schedules WHERE id = ${id}::uuid FOR UPDATE`,
+    );
+    const current = await tx.classSchedule.findFirst({
+      where: { id, deletedAt: null },
+    });
+
+    if (!current) {
+      throw new NotFoundError("Không tìm thấy lịch học");
+    }
+
+    const classSubjectId = data.classSubjectId ?? current.classSubjectId;
+    if (!classSubjectId) {
+      throw new ConflictError("Lịch học phải được gắn với môn học");
+    }
+    const merged = {
+      classId: data.classId ?? current.classId,
+      classSubjectId,
+      teacherId: data.teacherId ?? current.teacherId,
+      dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
+      startMinute: data.startMinute ?? current.startMinute,
+      endMinute: data.endMinute ?? current.endMinute,
+    };
+
+    await lockScheduleResources(tx, merged);
+    await lockClassSubject(tx, merged.classSubjectId);
+    await assertScheduleRelations(merged, tx);
+    const conflicts = await getScheduleConflicts(merged, id, tx);
+
+    if (conflicts.length > 0) {
+      throw new ScheduleConflictError(conflicts);
+    }
+
+    const schedule = await tx.classSchedule.update({
+      where: { id },
+      data: toClassScheduleUpdateInput(data),
+      include: {
+        class: true,
+        teacher: true,
+        classSubject: { include: { subject: true } },
+      },
+    });
+
+    return {
+      schedule,
+      conflicts,
+    };
   });
-
-  if (!current) {
-    throw new NotFoundError("Không tìm thấy lịch học");
-  }
-
-  const merged = {
-    classId: data.classId ?? current.classId,
-    classSubjectId: data.classSubjectId ?? current.classSubjectId ?? undefined,
-    teacherId: data.teacherId ?? current.teacherId,
-    dayOfWeek: data.dayOfWeek ?? current.dayOfWeek,
-    startMinute: data.startMinute ?? current.startMinute,
-    endMinute: data.endMinute ?? current.endMinute,
-  };
-
-  await assertScheduleRelations(merged);
-  const conflicts = await getScheduleConflicts(merged, id);
-
-  if (conflicts.length > 0) {
-    throw new ScheduleConflictError(conflicts);
-  }
-
-  const schedule = await prisma.classSchedule.update({
-    where: { id },
-    data: toClassScheduleUpdateInput(data),
-    include: {
-      class: true,
-      teacher: true,
-      classSubject: { include: { subject: true } },
-    },
-  });
-
-  return {
-    schedule,
-    conflicts,
-  };
 }
 
 export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
-  const schedule = await prisma.classSchedule.findUnique({ where: { id } });
+  const schedule = await prisma.classSchedule.findUnique({
+    where: { id, deletedAt: null },
+  });
   if (!schedule) {
     throw new NotFoundError("Không tìm thấy lịch học");
   }
 
-  return prisma.classSchedule.delete({
+  return prisma.classSchedule.update({
     where: { id },
+    data: { deletedAt: new Date() },
   });
 }

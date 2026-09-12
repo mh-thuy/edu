@@ -48,6 +48,7 @@ function buildTeacherUpdateInput(
       commissionPercent: data.commissionPercent,
     }),
     ...(data.status !== undefined && { status: data.status }),
+    ...(data.status === "ACTIVE" && { deletedAt: null }),
   };
 }
 
@@ -82,6 +83,7 @@ export async function getTeachers(filter: TeacherFilter) {
       ],
     }),
     ...(status && { status }),
+    ...(!status && { deletedAt: null }),
   };
 
   const [teachers, total] = await Promise.all([
@@ -107,6 +109,12 @@ export async function getTeachers(filter: TeacherFilter) {
     page,
     pageSize,
     pages: Math.ceil(total / pageSize),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
   };
 }
 
@@ -134,24 +142,15 @@ export async function updateTeacher(
 export async function deleteTeacher(id: string): Promise<Teacher> {
   const teacher = await prisma.teacher.findUnique({
     where: { id },
-    select: {
-      _count: {
-        select: {
-          classSubjects: true,
-        },
-      },
-    },
+    select: { id: true },
   });
 
   if (!teacher) {
     throw new NotFoundError("Không tìm thấy giáo viên");
   }
 
-  if (teacher._count.classSubjects > 0) {
-    throw new ConflictError("Cannot delete teacher with class assignments");
-  }
-
-  return prisma.teacher.delete({
+  return prisma.teacher.update({
     where: { id },
+    data: { status: "INACTIVE", deletedAt: new Date() },
   });
 }

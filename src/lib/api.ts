@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { ConflictError, ForbiddenError, NotFoundError } from "@/lib/errors";
+import { ConflictError, NotFoundError } from "@/lib/errors";
 import { serializeDecimals } from "@/lib/decimal";
 import { Prisma } from "@prisma/client";
 
@@ -9,7 +9,6 @@ export type ApiErrorCode =
   | "CONFLICT"
   | "NOT_FOUND"
   | "UNAUTHORIZED"
-  | "FORBIDDEN"
   | "INTERNAL_ERROR"
   | "BAD_REQUEST";
 
@@ -71,10 +70,6 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
 
   if (error instanceof NotFoundError) {
     return apiError("NOT_FOUND", error.message, 404);
-  }
-
-  if (error instanceof ForbiddenError) {
-    return apiError("FORBIDDEN", error.message, 403);
   }
 
   if (error instanceof Prisma.PrismaClientKnownRequestError) {

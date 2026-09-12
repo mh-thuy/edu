@@ -202,9 +202,9 @@ Tính phí tháng trọn tháng theo mức phí của từng môn
 Enrollment tạm nghỉ không phát sinh học phí tháng
 Enrollment ACTIVE nhưng vắng không làm giảm học phí tháng
 Không tạo học phí/item trùng môn
-Không thanh toán vượt số tiền còn nợ
-Thanh toán một phần -> PARTIAL
+Thanh toán thiếu hoặc thừa -> PAYMENT_AMOUNT_MISMATCH
 Thanh toán đủ -> PAID
+Không cho payment SUCCESS thứ hai trên cùng học phí
 Payment tạo receipt
 Receipt không tạo nếu chưa có payment
 ```
@@ -257,8 +257,6 @@ Nên test các hàm:
 ```text
 formatCurrency
 formatDate
-calculateOutstandingAmount
-calculateStudentFeeStatus
 checkScheduleConflict
 calculateTeacherPayroll
 ```
@@ -353,12 +351,11 @@ Khi sửa payment/học phí, bắt buộc test flow:
 1. Đăng ký một hoặc nhiều môn trong lớp
 2. Kiểm tra học phí và item được tạo tự động
 3. Mở chi tiết học phí và sinh QR/bill tạm (nếu có)
-4. Ghi nhận thanh toán một phần
-5. Kiểm tra trạng thái PARTIAL
-6. Ghi nhận thanh toán phần còn lại
-7. Kiểm tra trạng thái PAID
-8. Kiểm tra receipt được tạo
-9. Không cho thanh toán thêm
+4. Xác nhận thanh toán đúng toàn bộ `finalAmount`
+5. Kiểm tra trạng thái PAID
+6. Kiểm tra receipt được tạo
+7. Thử thanh toán lại và xác nhận hệ thống từ chối
+8. Thử amount thiếu/thừa ở backend và nhận `PAYMENT_AMOUNT_MISMATCH`
 ```
 
 ---

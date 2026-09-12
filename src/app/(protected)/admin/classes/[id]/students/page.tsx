@@ -1,7 +1,7 @@
-import { requireRole } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { ClassStudentManagement } from "@/modules/class/components/ClassStudentManagement";
 
 export default async function ClassStudentsPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireRole(["ADMIN", "STAFF"]);
+  await requireAuth();
   return <ClassStudentManagement id={(await params).id} />;
 }

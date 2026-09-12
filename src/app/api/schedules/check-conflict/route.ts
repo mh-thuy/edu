@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiSuccess, handleApiError } from "@/lib/api";
+import { requireApiUser } from "@/lib/api-auth";
 import { getScheduleConflicts } from "@/modules/schedule/services/schedule.service";
 
 const checkScheduleConflictSchema = z
@@ -23,6 +24,8 @@ const checkScheduleConflictSchema = z
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
     const body: unknown = await request.json();
 
     const data = checkScheduleConflictSchema.parse(body);

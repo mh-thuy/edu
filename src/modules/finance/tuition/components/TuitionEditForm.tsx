@@ -97,7 +97,7 @@ export function TuitionEditForm({
     );
   const total = Number(fee.originalAmount) - discount + additional;
   return (
-    <Stack spacing={2} maxWidth={760}>
+    <Stack spacing={{ xs: 2, md: 3 }} maxWidth={760}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         justifyContent="space-between"
@@ -169,7 +169,7 @@ export function TuitionEditForm({
         <Button
           component={Link}
           href={`/admin/tuition-fees/${id}`}
-          variant="text"
+          variant="outlined"
         >
           Hủy
         </Button>

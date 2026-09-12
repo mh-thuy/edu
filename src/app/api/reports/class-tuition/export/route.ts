@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { handleApiError } from "@/lib/api";
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { classTuitionReportSchema } from "@/modules/finance/reports/schemas/class-tuition-report.schema";
 import { getClassTuitionReport } from "@/modules/finance/reports/services/class-tuition-report.service";
 import { buildClassTuitionReportExcel } from "@/modules/finance/reports/services/class-tuition-report-excel.service";
@@ -13,7 +13,7 @@ function safeFilePart(value: string) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
 
     const input = classTuitionReportSchema.parse({

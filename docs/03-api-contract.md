@@ -106,8 +106,6 @@ Ví dụ:
 
 401 Unauthorized → Chưa login
 
-403 Forbidden → Không đủ quyền
-
 404 Not Found → Không tồn tại dữ liệu
 
 409 Conflict → Vi phạm unique/business rule
@@ -124,7 +122,7 @@ Student code duplicated → 409
 
 Email invalid → 422
 
-Payment > outstanding amount → 409
+Payment amount khác `finalAmount` → 409
 ```
 
 ---
@@ -153,6 +151,9 @@ Request:
 ```http
 GET /api/students?page=1&pageSize=20
 ```
+
+Khi cần chỉ hiển thị học viên chưa đăng ký trong một lớp, truyền thêm
+`excludeClassId={classId}`. Chỉ enrollment đang `ACTIVE` bị loại khỏi danh sách.
 
 Response:
 
@@ -438,29 +439,12 @@ Token
 
 ---
 
-# 15. Permission Rules
+# 15. Authentication Rules
 
-Role:
+Mọi API nghiệp vụ yêu cầu user đã đăng nhập. Không có kiểm tra role ở frontend,
+backend hoặc API middleware.
 
-```text
-ADMIN
-STAFF
-TEACHER
-```
-
-Ví dụ:
-
-```text
-TEACHER không được create payment
-
-TEACHER không được delete student
-
-STAFF không được approve payroll
-```
-
-Backend bắt buộc check.
-
-Không chỉ check frontend.
+Các business rule độc lập với quyền đăng nhập vẫn phải được kiểm tra ở backend.
 
 ---
 
@@ -513,14 +497,12 @@ number chỉ để hiển thị
 Backend tự tính:
 
 ```text
-actual_amount
-
-outstanding_amount
-
 payment_status
 ```
 
-Không tin giá trị frontend gửi lên.
+Backend lấy `finalAmount` từ học phí và không nhận amount thanh toán tùy ý từ
+frontend. Mỗi học phí chỉ có tối đa một payment SUCCESS; payment SUCCESS phải
+đúng bằng toàn bộ `finalAmount`.
 
 ---
 
@@ -619,7 +601,7 @@ API này chỉ tạo hoặc bổ sung enrollment subject. API không tạo `tuit
 POST /api/classes/{classId}/students/{studentId}/tuition-fee
 ```
 
-API yêu cầu role `ADMIN` hoặc `STAFF`, query bắt buộc `month=YYYY-MM`, không cần body. Backend sẽ:
+API yêu cầu user đã đăng nhập, query bắt buộc `month=YYYY-MM`, không cần body. Backend sẽ:
 
 ```text
 Tìm enrollment của học viên trong lớp
@@ -726,8 +708,6 @@ Danh sách:
 VALIDATION_ERROR
 
 UNAUTHORIZED
-
-FORBIDDEN
 
 NOT_FOUND
 

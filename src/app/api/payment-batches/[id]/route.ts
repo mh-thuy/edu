@@ -1,4 +1,4 @@
-import { requireApiRole } from "@/lib/api-auth";
+import { requireApiUser } from "@/lib/api-auth";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { getPaymentBatchDetail } from "@/modules/finance/payments/services/payment-batch.service";
 
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireApiRole(["ADMIN", "STAFF"]);
+    const user = await requireApiUser();
     if (user instanceof Response) return user;
     return apiSuccess(await getPaymentBatchDetail((await params).id));
   } catch (error) {

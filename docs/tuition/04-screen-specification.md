@@ -1,8 +1,8 @@
 # Screen specification
 
 - Tuition list/detail/adjustment/exemption/cancellation: snapshot tiền, item, due date, status, history và quyền. Không có màn hình create thủ công.
-- Payment create/detail/attempt history: chọn một fee, amount mặc định final_amount và read-only; không có partial amount.
-- Payment workspace: chọn fee từ chi tiết học phí, số tiền mặc định theo số còn nợ và read-only theo nghiệp vụ.
+- Payment create/detail/attempt history: chọn một hoặc nhiều fee của cùng học viên, amount từng fee bằng `final_amount` và read-only; không có partial amount.
+- Payment workspace: chọn các fee đủ điều kiện, tổng batch bằng tổng `final_amount` và read-only theo nghiệp vụ.
 - Receipt preview/print/cancel: một receipt cho payment, immutable snapshot.
 - Refund create/detail: full refund, approval/status.
 - Bank account, Excel sao kê BIDV/Techcombank phân tích tạm thời, đối soát theo mã đợt thanh toán và xác nhận; không có lịch sử import chưa xác nhận.

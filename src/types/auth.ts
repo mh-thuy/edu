@@ -1,10 +1,7 @@
-import type { RoleCode } from "@/constants/roles";
-
 export type SessionUser = {
   id: string;
   email: string;
   fullName: string;
-  role: RoleCode;
 };
 
 export type SessionPayload = {
