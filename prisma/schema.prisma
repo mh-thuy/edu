@@ -240,6 +240,7 @@ model ClassStudent {
   classId    String           @map("class_id") @db.Uuid
   studentId  String           @map("student_id") @db.Uuid
   enrolledAt DateTime         @default(dbgenerated("CURRENT_DATE")) @map("enrolled_at") @db.Date
+  currentPeriodStart DateTime @default(dbgenerated("CURRENT_DATE")) @map("current_period_start") @db.Date
   leftAt     DateTime?        @map("left_at") @db.Date
   status     EnrollmentStatus @default(ACTIVE)
   note       String?

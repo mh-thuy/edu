@@ -632,6 +632,8 @@ Rule:
 - Học viên đã `LEFT` xuất hiện lại trong hộp chọn và có thể tái đăng ký môn.
 - Tạm nghỉ phải chọn khoảng tháng bắt đầu/kết thúc và lý do; UI phải cho sửa
   hoặc hủy khoảng tạm nghỉ đã tạo.
+- Với lớp `COMPLETED` hoặc `CANCELLED`, màn hình chỉ cho xem và khóa toàn bộ nút
+  đăng ký, thêm/bỏ môn, rời lớp và quản lý tạm nghỉ.
 
 ---
 

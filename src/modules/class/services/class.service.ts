@@ -100,6 +100,25 @@ async function assertClassCanManageSubjects(
   return classData;
 }
 
+async function assertClassAllowsEnrollmentChanges(
+  tx: Prisma.TransactionClient,
+  classId: string,
+) {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${classId}`}))`,
+  );
+  const classData = await tx.class.findUnique({
+    where: { id: classId },
+    select: { status: true },
+  });
+  if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
+  if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
+    throw new ConflictError(
+      "Không thể thay đổi đăng ký của lớp đã kết thúc hoặc đã hủy",
+    );
+  }
+}
+
 export async function createClass(data: ClassCreate): Promise<Class> {
   if (data.status !== "DRAFT") {
     throw new ConflictError("Lớp học mới phải bắt đầu ở trạng thái nháp");
@@ -188,45 +207,68 @@ export async function updateClass(
   id: string,
   data: ClassUpdate,
 ): Promise<Class> {
-  const current = await prisma.class.findUnique({
-    where: { id },
-    select: {
-      status: true,
-      startDate: true,
-      endDate: true,
-    },
-  });
-
-  if (!current) {
-    throw new NotFoundError("Không tìm thấy lớp học");
-  }
-
-  const startDate =
-    data.startDate === undefined ? current.startDate : new Date(data.startDate);
-  const endDate =
-    data.endDate === undefined ? current.endDate : new Date(data.endDate);
-  if (startDate && endDate && endDate < startDate) {
-    throw new ConflictError(
-      "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu",
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${id}`}))`,
     );
-  }
+    const current = await tx.class.findUnique({
+      where: { id },
+      select: { status: true, startDate: true, endDate: true },
+    });
 
-  if (data.status !== undefined && data.status !== current.status) {
-    const allowedTransitions: Record<Class["status"], Class["status"][]> = {
-      DRAFT: ["ACTIVE", "CANCELLED"],
-      ACTIVE: ["COMPLETED", "CANCELLED"],
-      COMPLETED: [],
-      CANCELLED: [],
-    };
+    if (!current) throw new NotFoundError("Không tìm thấy lớp học");
 
-    if (!allowedTransitions[current.status].includes(data.status)) {
-      throw new ConflictError("Trạng thái lớp học không hợp lệ");
+    const startDate = data.startDate === undefined
+      ? current.startDate
+      : new Date(data.startDate);
+    const endDate = data.endDate === undefined
+      ? current.endDate
+      : new Date(data.endDate);
+    if (startDate && endDate && endDate < startDate) {
+      throw new ConflictError("Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu");
     }
-  }
 
-  return prisma.class.update({
-    where: { id },
-    data: buildClassUpdateInput(data),
+    if (data.startDate !== undefined || data.endDate !== undefined) {
+      const conflicts = await tx.$queryRaw<Array<{ source: string }>>`
+        SELECT 'học phí' AS source
+        FROM tuition_fees tf
+        WHERE tf.class_id = ${id}::uuid
+          AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+          AND (
+            (${startDate}::date IS NOT NULL AND make_date(tf.billing_year::integer, tf.billing_month::integer, 1) < date_trunc('month', ${startDate}::date)::date)
+            OR (${endDate}::date IS NOT NULL AND make_date(tf.billing_year::integer, tf.billing_month::integer, 1) > date_trunc('month', ${endDate}::date)::date)
+          )
+        UNION ALL
+        SELECT 'tạm nghỉ' AS source
+        FROM enrollment_pauses ep
+        JOIN class_students cs ON cs.id = ep.enrollment_id
+        WHERE cs.class_id = ${id}::uuid
+          AND (
+            (${startDate}::date IS NOT NULL AND ep.start_month < date_trunc('month', ${startDate}::date)::date)
+            OR (${endDate}::date IS NOT NULL AND ep.end_month > date_trunc('month', ${endDate}::date)::date)
+          )
+        LIMIT 1
+      `;
+      if (conflicts.length > 0) {
+        throw new ConflictError(
+          `Không thể đổi thời gian lớp vì ${conflicts[0]?.source ?? "dữ liệu"} đã phát sinh ngoài khoảng mới`,
+        );
+      }
+    }
+
+    if (data.status !== undefined && data.status !== current.status) {
+      const allowedTransitions: Record<Class["status"], Class["status"][]> = {
+        DRAFT: ["ACTIVE", "CANCELLED"],
+        ACTIVE: ["COMPLETED", "CANCELLED"],
+        COMPLETED: [],
+        CANCELLED: [],
+      };
+      if (!allowedTransitions[current.status].includes(data.status)) {
+        throw new ConflictError("Trạng thái lớp học không hợp lệ");
+      }
+    }
+
+    return tx.class.update({ where: { id }, data: buildClassUpdateInput(data) });
   });
 }
 
@@ -276,6 +318,7 @@ export async function assignStudentToClass(
   actorId?: string,
 ): Promise<ClassStudentWithRelations> {
   return prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     if (classSubjectIds.length === 0) {
       throw new ConflictError("Hãy chọn ít nhất một môn học");
     }
@@ -347,10 +390,34 @@ export async function assignStudentToClass(
       throw new ConflictError("Học viên đã đăng ký các môn học được chọn");
     }
 
+    const reactivationStart = new Date();
+    reactivationStart.setUTCHours(0, 0, 0, 0);
+    const clearedPauseIds = existing?.status === "LEFT"
+      ? (await tx.enrollmentPause.findMany({
+          where: {
+            enrollmentId: existing.id,
+            endMonth: { gte: reactivationStart },
+          },
+          select: { id: true },
+        })).map((pause) => pause.id)
+      : [];
+    if (clearedPauseIds.length > 0) {
+      await tx.enrollmentPause.deleteMany({
+        where: { id: { in: clearedPauseIds } },
+      });
+    }
+
     const enrollment = existing
       ? await tx.classStudent.update({
           where: { id: existing.id },
-          data: { status: "ACTIVE", leftAt: null, deletedAt: null },
+          data: {
+            status: "ACTIVE",
+            leftAt: null,
+            deletedAt: null,
+            ...(existing.status === "LEFT" && {
+              currentPeriodStart: reactivationStart,
+            }),
+          },
           include: { student: true, class: true },
         })
       : await tx.classStudent.create({
@@ -400,6 +467,7 @@ export async function assignStudentToClass(
           classId,
           studentId,
           classSubjectIds: newClassSubjects.map((item) => item.id),
+          clearedPauseIds,
         },
         performedBy,
       },
@@ -416,6 +484,7 @@ export async function removeSubjectFromEnrollment(
   options?: { force?: boolean; reason?: string },
 ) {
   return prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     const enrollment = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
       include: { student: true },
@@ -513,6 +582,7 @@ export async function pauseStudentEnrollment(
     throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
   }
   return prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     const enrollmentRef = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
       select: { id: true },
@@ -525,9 +595,30 @@ export async function pauseStudentEnrollment(
     );
     const enrollment = await tx.classStudent.findUnique({
       where: { id: enrollmentRef.id },
+      include: { class: true },
     });
     if (!enrollment || enrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    const enrollmentMonth = new Date(Date.UTC(
+      enrollment.currentPeriodStart.getUTCFullYear(),
+      enrollment.currentPeriodStart.getUTCMonth(),
+      1,
+    ));
+    const classStartMonth = enrollment.class.startDate
+      ? new Date(Date.UTC(enrollment.class.startDate.getUTCFullYear(), enrollment.class.startDate.getUTCMonth(), 1))
+      : null;
+    const classEndMonth = enrollment.class.endDate
+      ? new Date(Date.UTC(enrollment.class.endDate.getUTCFullYear(), enrollment.class.endDate.getUTCMonth(), 1))
+      : null;
+    if (startMonth < enrollmentMonth) {
+      throw new ConflictError("Không thể tạm nghỉ trước tháng học viên đăng ký");
+    }
+    if (
+      (classStartMonth && startMonth < classStartMonth) ||
+      (classEndMonth && endMonth > classEndMonth)
+    ) {
+      throw new ConflictError("Khoảng tạm nghỉ nằm ngoài thời gian của lớp học");
     }
     const existingFees = await tx.$queryRaw<Array<{ id: string; status: string }>>`
       SELECT id, status::text AS status
@@ -590,6 +681,7 @@ export async function updateEnrollmentPause(
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     const pause = await tx.enrollmentPause.findFirst({
       where: {
         id: pauseId,
@@ -601,6 +693,33 @@ export async function updateEnrollmentPause(
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${pause.enrollmentId}`}))`,
     );
+    const enrollment = await tx.classStudent.findUnique({
+      where: { id: pause.enrollmentId },
+      include: { class: true },
+    });
+    if (!enrollment || enrollment.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    const enrollmentMonth = new Date(Date.UTC(
+      enrollment.currentPeriodStart.getUTCFullYear(),
+      enrollment.currentPeriodStart.getUTCMonth(),
+      1,
+    ));
+    const classStartMonth = enrollment.class.startDate
+      ? new Date(Date.UTC(enrollment.class.startDate.getUTCFullYear(), enrollment.class.startDate.getUTCMonth(), 1))
+      : null;
+    const classEndMonth = enrollment.class.endDate
+      ? new Date(Date.UTC(enrollment.class.endDate.getUTCFullYear(), enrollment.class.endDate.getUTCMonth(), 1))
+      : null;
+    if (startMonth < enrollmentMonth) {
+      throw new ConflictError("Không thể tạm nghỉ trước tháng học viên đăng ký");
+    }
+    if (
+      (classStartMonth && startMonth < classStartMonth) ||
+      (classEndMonth && endMonth > classEndMonth)
+    ) {
+      throw new ConflictError("Khoảng tạm nghỉ nằm ngoài thời gian của lớp học");
+    }
     const existingFee = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM tuition_fees
       WHERE enrollment_id = ${pause.enrollmentId}::uuid
@@ -656,6 +775,7 @@ export async function deleteEnrollmentPause(
   actorId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     const pause = await tx.enrollmentPause.findFirst({
       where: {
         id: pauseId,
@@ -921,6 +1041,7 @@ export async function removeStudentFromClass(
   actorId?: string,
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    await assertClassAllowsEnrollmentChanges(tx, classId);
     const enrollment = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
       select: { id: true },

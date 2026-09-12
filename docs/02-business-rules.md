@@ -300,9 +300,17 @@ còn học môn nào, phải dùng thao tác rời lớp để enrollment chuy�
 
 Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; chỉ enrollment `LEFT` mới có thể được kích hoạt lại khi đăng ký lại môn phù hợp. Enrollment `COMPLETED` hoặc `SUSPENDED` không được tự động mở lại.
 
+Khi kích hoạt lại enrollment `LEFT`, giữ nguyên `enrolled_at` để bảo toàn lịch
+sử và đặt `current_period_start` thành ngày tái đăng ký. Không được tạo học phí
+cho kỳ trước tháng đăng ký/tái đăng ký hiện tại. Các khoảng nghỉ chưa kết thúc
+từ giai đoạn cũ được hủy để không ảnh hưởng giai đoạn mới.
+
 Khoảng tạm nghỉ có thể được sửa hoặc hủy. Khi sửa vẫn phải kiểm tra không chồng
 lấn khoảng nghỉ khác và không phủ tháng đã phát sinh học phí. Mọi thao tác tạo,
 sửa, hủy khoảng nghỉ phải ghi audit log.
+
+Khoảng tạm nghỉ không được bắt đầu trước tháng đăng ký/tái đăng ký hiện tại và
+không được nằm ngoài tháng bắt đầu/kết thúc của lớp.
 
 ## 6.4 Enrollment và Student Fee độc lập
 
@@ -456,7 +464,13 @@ Quy tắc nghỉ:
 Enrollment ACTIVE nhưng không đi học -> vẫn tính đủ tháng
 Enrollment có khoảng tạm nghỉ bao phủ tháng -> không tạo phí
 Đăng ký giữa tháng -> vẫn tính đủ tháng
+Không tạo học phí trước tháng đăng ký/tái đăng ký
+Không tạo học phí ngoài thời gian bắt đầu/kết thúc của lớp
 ```
+
+Không được thu hẹp thời gian lớp nếu làm học phí hoặc khoảng tạm nghỉ đã tồn tại
+nằm ngoài khoảng mới. Khi lớp `COMPLETED` hoặc `CANCELLED`, enrollment chỉ được
+xem; không được đăng ký, bỏ môn, rời lớp hoặc thay đổi tạm nghỉ.
 
 ---
 

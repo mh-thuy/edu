@@ -589,6 +589,9 @@ Body:
 ```
 
 API này chỉ tạo hoặc bổ sung enrollment subject. API không tạo `tuition_fee`.
+Khi tái đăng ký enrollment `LEFT`, backend giữ ngày đăng ký ban đầu, đặt
+`currentPeriodStart` cho giai đoạn mới và xóa các khoảng nghỉ chưa kết thúc của
+giai đoạn cũ. Kỳ trước lần tái đăng ký không phát sinh học phí mới.
 
 ## 19.1.2 Tạo học phí từ enrollment
 
@@ -638,6 +641,12 @@ PATCH /api/classes/{classId}/students/{studentId}/pause
 Body gồm `pauseId`, `startMonth`, `endMonth`, `reason`. Khoảng mới không được
 trùng khoảng nghỉ khác hoặc phủ kỳ đã phát sinh học phí.
 
+Với cả tạo và sửa, khoảng nghỉ không được trước tháng đăng ký hiện tại hoặc
+ngoài thời gian của lớp.
+
+Các API thay đổi enrollment trả `409 Conflict` khi lớp đã `COMPLETED` hoặc
+`CANCELLED`.
+
 ```http
 DELETE /api/classes/{classId}/students/{studentId}/pause
 ```
@@ -652,6 +661,7 @@ POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
 ```
 
 API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông báo. Mỗi môn ACTIVE được tính trọn mức `ClassSubject.tuitionFee` của tháng; enrollment được tạm nghỉ trong kỳ sẽ được bỏ qua.
+Kỳ yêu cầu phải từ tháng đăng ký hiện tại trở đi và nằm trong thời gian của lớp.
 
 ## 19.1.5 Tạo học phí khi tạo thông báo theo lớp
 

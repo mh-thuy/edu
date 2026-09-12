@@ -200,6 +200,9 @@ Tạo học phí không tạo item trùng
 Tính phí tháng trọn tháng theo mức phí của từng môn
 Enrollment tạm nghỉ không phát sinh học phí tháng
 Enrollment ACTIVE nhưng vắng không làm giảm học phí tháng
+Không tạo học phí trước tháng đăng ký/tái đăng ký
+Không tạo học phí ngoài thời gian của lớp
+Không tạo khoảng tạm nghỉ trước tháng đăng ký hoặc ngoài thời gian của lớp
 Không tạo học phí/item trùng môn
 Thanh toán thiếu hoặc thừa -> PAYMENT_AMOUNT_MISMATCH
 Thanh toán đủ -> PAID

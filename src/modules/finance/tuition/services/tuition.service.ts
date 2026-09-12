@@ -151,6 +151,13 @@ export class TuitionService {
     options: { allowExistingComplete?: boolean } = {},
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
+      const periodStart = new Date(
+        Date.UTC(data.billingYear, data.billingMonth - 1, 1),
+      );
+      const periodEnd = new Date(Date.UTC(data.billingYear, data.billingMonth, 0));
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
+      );
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${data.classId}:${data.billingYear}:${data.billingMonth}`}))`,
       );
@@ -176,6 +183,7 @@ export class TuitionService {
           subjects: {
             where: {
               status: "ACTIVE",
+              enrolledAt: { lte: periodEnd },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
@@ -191,6 +199,15 @@ export class TuitionService {
       if (enrollment.class.status === "COMPLETED" || enrollment.class.status === "CANCELLED") {
         throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
+      if (enrollment.currentPeriodStart > periodEnd) {
+        throw new ConflictError("Không thể tạo học phí trước tháng học viên đăng ký");
+      }
+      if (
+        (enrollment.class.startDate && enrollment.class.startDate > periodEnd) ||
+        (enrollment.class.endDate && enrollment.class.endDate < periodStart)
+      ) {
+        throw new ConflictError("Kỳ học phí nằm ngoài thời gian của lớp học");
+      }
       if (enrollment.subjects.length === 0) {
         throw new ConflictError("Học viên chưa đăng ký môn học nào");
       }
@@ -201,10 +218,6 @@ export class TuitionService {
       if (enrollment.status !== "ACTIVE") {
         throw new ConflictError("Học viên không còn ở trạng thái đang học");
       }
-      const periodStart = new Date(
-        Date.UTC(data.billingYear, data.billingMonth - 1, 1),
-      );
-      const periodEnd = new Date(Date.UTC(data.billingYear, data.billingMonth, 0));
       const pause = await tx.enrollmentPause.findFirst({
         where: {
           enrollmentId: enrollment.id,
@@ -393,23 +406,41 @@ export class TuitionService {
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${classId}`}))`,
+      );
+      await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${classId}:${period.billingYear}:${period.billingMonth}`}))`,
       );
       const classData = await tx.class.findUnique({
         where: { id: classId },
-        select: { status: true },
+        select: { status: true, startDate: true, endDate: true },
       });
       if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
       if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
         throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
+      const periodStart = new Date(
+        Date.UTC(period.billingYear, period.billingMonth - 1, 1),
+      );
+      const periodEnd = new Date(Date.UTC(period.billingYear, period.billingMonth, 0));
+      if (
+        (classData.startDate && classData.startDate > periodEnd) ||
+        (classData.endDate && classData.endDate < periodStart)
+      ) {
+        throw new ConflictError("Kỳ học phí nằm ngoài thời gian của lớp học");
+      }
       const enrollments = await tx.classStudent.findMany({
-        where: { classId, status: "ACTIVE" },
+        where: {
+          classId,
+          status: "ACTIVE",
+          currentPeriodStart: { lte: periodEnd },
+        },
         select: {
           studentId: true,
           subjects: {
             where: {
               status: "ACTIVE",
+              enrolledAt: { lte: periodEnd },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
