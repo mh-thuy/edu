@@ -51,6 +51,12 @@ const getColumns = (): GridColDef<TeacherRow>[] => [
     flex: 0.7,
   },
   {
+    field: "fullName",
+    headerName: "Tên giáo viên",
+    minWidth: 200,
+    flex: 1,
+  },
+  {
     field: "phone",
     headerName: "Số điện thoại",
     minWidth: 140,

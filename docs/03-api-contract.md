@@ -81,7 +81,7 @@ Ví dụ:
 {
   "success": false,
   "error": {
-    "code": "BUSINESS_RULE_ERROR",
+    "code": "CONFLICT",
     "message": "Không thể thanh toán vượt số tiền còn nợ"
   }
 }
@@ -96,7 +96,7 @@ Ví dụ:
 ```text
 200 OK → Query thành công
 201 Created → Tạo mới
-204 No Content → Delete thành công không trả body
+200 OK → Delete/soft delete thành công và trả response chuẩn
 ```
 
 ## Lỗi
@@ -304,8 +304,11 @@ DELETE /api/students/uuid
 
 Response:
 
-```http
-204 No Content
+```json
+{
+  "success": true,
+  "data": {}
+}
 ```
 
 Rule:
@@ -320,7 +323,7 @@ Nếu business không cho xóa:
 {
   "success": false,
   "error": {
-    "code": "DELETE_NOT_ALLOWED",
+    "code": "CONFLICT",
     "message": "Không thể xóa vì đã phát sinh giao dịch"
   }
 }
@@ -511,26 +514,19 @@ frontend. Mỗi học phí chỉ có tối đa một payment SUCCESS; payment SU
 Ví dụ:
 
 ```http
-POST /api/student-fees/bulk-create
+POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
 ```
 
-Body:
-
-```json
-{
-  "classId": "uuid",
-  "month": "2026-06"
-}
-```
+Request không cần body. `classId` nằm trên path và `month` nằm trên query.
 
 Flow:
 
 ```text
-Create student_fee
+Tìm enrollment ACTIVE và môn ACTIVE trong lớp
 
-Generate QR
+Tạo hoặc bổ sung tuition_fee và tuition_fee_items cho kỳ được chọn
 
-Generate bill
+Không tạo payment batch, QR hoặc PDF ở endpoint này
 
 Commit transaction
 ```
@@ -541,7 +537,8 @@ Response:
 {
   "success": true,
   "data": {
-    "createdCount": 20
+    "created": 20,
+    "skipped": 3
   }
 }
 ```
@@ -655,6 +652,49 @@ month=YYYY-MM
 ```
 
 Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với kỳ đã chọn và các môn chưa có tuition fee item. Phí từng môn được tính trọn theo mức học phí tháng, không phụ thuộc số buổi. Nếu học phí đã tồn tại, chỉ bổ sung môn chưa có item và không tạo trùng item.
+
+---
+
+# 19.2 Refund APIs
+
+Tạo yêu cầu hoàn tiền toàn bộ:
+
+```http
+POST /api/payment-refunds
+```
+
+```json
+{
+  "paymentId": "uuid",
+  "refundMethod": "CASH",
+  "reason": "Thu nhầm học phí"
+}
+```
+
+Duyệt toàn bộ nhóm refund của payment batch:
+
+```http
+POST /api/payment-refunds/{refundId}/approve
+```
+
+Hoàn tất refund:
+
+```http
+POST /api/payment-refunds/{refundId}/complete
+```
+
+Body hoàn tiền mặt có thể rỗng. Hoàn chuyển khoản bắt buộc gửi mã giao dịch:
+
+```json
+{
+  "refundDate": "2026-09-12T10:00:00.000Z",
+  "bankTransactionNo": "RF-TXN-001"
+}
+```
+
+Các endpoint refund yêu cầu đăng nhập, chỉ hoàn toàn bộ payment hoặc toàn bộ
+batch, trả `409 CONFLICT` nếu sai trạng thái và thực hiện thay đổi tài chính
+trong transaction.
 
 ---
 

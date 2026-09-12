@@ -626,6 +626,56 @@ quan bị hủy, học phí được mở lại thành `UNPAID` hoặc `OVERDUE`
 
 ---
 
+## 12.5 Refund Rules
+
+Chỉ hỗ trợ hoàn toàn bộ payment. Không cho nhập hoặc thay đổi số tiền hoàn từ
+frontend.
+
+```text
+refund.amount = payment.amount
+```
+
+Payment độc lập chỉ hoàn chính payment đó. Nếu payment thuộc batch, hệ thống
+phải tạo và xử lý yêu cầu hoàn cho toàn bộ payment `SUCCESS` trong batch.
+
+Điều kiện tạo yêu cầu:
+
+```text
+payment.status = SUCCESS
+payment_batch.status = SUCCESS nếu payment thuộc batch
+không có refund đang hoạt động trên payment hoặc batch
+reason bắt buộc, tối đa 500 ký tự
+```
+
+Transition được hỗ trợ:
+
+```text
+PENDING -> APPROVED -> COMPLETED
+```
+
+Quy tắc phương thức:
+
+```text
+CASH: không có bank_transaction_no
+BANK_TRANSFER: bắt buộc có bank_transaction_no khi hoàn tất
+```
+
+Khi hoàn tất phải chạy trong một transaction:
+
+```text
+refund -> COMPLETED
+payment -> REFUNDED
+receipt -> CANCELLED
+tuition_fee -> UNPAID hoặc OVERDUE theo due_date
+payment_batch -> CANCELLED nếu có batch
+ghi đầy đủ audit log
+```
+
+Receipt tổng của batch `CANCELLED` không được xuất lại. Mọi user đã đăng nhập
+dùng chung quyền tạo, duyệt và hoàn tất refund theo access model hiện hành.
+
+---
+
 # 13. Delete Policy
 
 Nguyên tắc:
@@ -663,6 +713,9 @@ Receipt created
 Student fee generated
 QR generated dynamically
 Bill generated dynamically
+Refund created
+Refund approved
+Refund completed
 ```
 
 Đăng ký học viên và tạo học phí là hai audit event riêng biệt.
@@ -712,7 +765,7 @@ Lỗi:
 {
   "success": false,
   "error": {
-    "code": "BUSINESS_RULE_ERROR",
+    "code": "CONFLICT",
     "message": "Không thể thanh toán vượt số tiền còn nợ"
   }
 }
@@ -728,6 +781,8 @@ Các thao tác sau phải dùng database transaction.
 Create student fee + QR + bill
 
 Create payment + update fee status + create receipt
+
+Complete refund + cancel receipts + reopen fees + cancel batch
 
 ```
 

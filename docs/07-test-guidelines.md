@@ -294,7 +294,7 @@ Lỗi phải đúng:
 {
   "success": false,
   "error": {
-    "code": "BUSINESS_RULE_ERROR",
+    "code": "CONFLICT",
     "message": "..."
   }
 }

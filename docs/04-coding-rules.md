@@ -83,7 +83,7 @@ Lỗi:
 {
   "success": false,
   "error": {
-    "code": "BUSINESS_RULE_ERROR",
+    "code": "CONFLICT",
     "message": "Không thể thanh toán vượt số tiền còn nợ"
   }
 }
@@ -108,7 +108,8 @@ API bắt buộc validate:
 Bắt buộc transaction cho:
 
 ```text
-create student_fee + QR + bill
+create tuition fees theo lớp
+create tuition fees + payment batches khi tạo thông báo
 create payment + update fee status + receipt
 ```
 

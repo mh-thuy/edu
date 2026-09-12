@@ -522,3 +522,43 @@ Staff thu tiền mặt
 ```
 
 ---
+
+# 17. Hoàn tiền
+
+Hệ thống chỉ hoàn toàn bộ số tiền của payment, không hỗ trợ hoàn một phần.
+
+Nếu payment thuộc một payment batch, yêu cầu hoàn áp dụng cho toàn bộ các
+payment `SUCCESS` trong batch đó; không được hoàn riêng một khoản.
+
+Luồng trạng thái được hỗ trợ:
+
+```text
+PENDING -> APPROVED -> COMPLETED
+```
+
+Quy tắc:
+
+```text
+Chỉ payment SUCCESS thuộc batch SUCCESS mới được tạo yêu cầu hoàn
+Mỗi payment/batch chỉ có một nhóm yêu cầu hoàn đang hoạt động
+Lý do hoàn tiền là bắt buộc
+Phương thức hoàn chỉ gồm CASH và BANK_TRANSFER
+Hoàn BANK_TRANSFER bắt buộc có bank_transaction_no
+Hoàn CASH không được có bank_transaction_no
+```
+
+Khi hoàn tất, toàn bộ thao tác chạy trong một transaction:
+
+```text
+Payment -> REFUNDED
+Receipt theo từng payment -> CANCELLED
+Tuition fee -> UNPAID hoặc OVERDUE theo due_date
+Payment batch -> CANCELLED
+Receipt tổng không còn được phép xuất PDF
+Ghi audit log cho refund, payment, fee, receipt và batch
+```
+
+Mọi user đã đăng nhập dùng chung quyền tạo, duyệt và hoàn tất yêu cầu hoàn tiền
+theo mô hình truy cập hiện hành.
+
+---

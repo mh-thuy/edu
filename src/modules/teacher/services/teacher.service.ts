@@ -73,7 +73,6 @@ export async function getTeachers(filter: TeacherFilter) {
       OR: [
         { code: { contains: search, mode: "insensitive" } },
         { fullName: { contains: search, mode: "insensitive" } },
-        { user: { fullName: { contains: search, mode: "insensitive" } } },
         { phone: { contains: search, mode: "insensitive" } },
         { specialty: { contains: search, mode: "insensitive" } },
       ],

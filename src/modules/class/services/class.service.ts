@@ -506,9 +506,9 @@ export async function pauseStudentEnrollment(
       FROM tuition_fees
       WHERE enrollment_id = ${enrollment.id}::uuid
         AND billing_type = 'MONTHLY'::tuition_fee_billing_type
-        AND make_date(billing_year, billing_month, 1)
-          BETWEEN make_date(${startMonth.getUTCFullYear()}, ${startMonth.getUTCMonth() + 1}, 1)
-          AND make_date(${endMonth.getUTCFullYear()}, ${endMonth.getUTCMonth() + 1}, 1)
+        AND make_date(billing_year::integer, billing_month::integer, 1)
+          BETWEEN make_date(${startMonth.getUTCFullYear()}::integer, ${startMonth.getUTCMonth() + 1}::integer, 1)
+          AND make_date(${endMonth.getUTCFullYear()}::integer, ${endMonth.getUTCMonth() + 1}::integer, 1)
       LIMIT 1
     `;
     if (existingFees.length > 0) {
