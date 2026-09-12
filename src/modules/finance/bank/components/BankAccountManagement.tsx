@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Paper, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControlLabel, Paper, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { useForm } from "react-hook-form";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
@@ -24,7 +25,7 @@ export function BankAccountManagement() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [dialogError, setDialogError] = useState("");
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, Snackbar } = useSnackbar();
   const load = useCallback(async () => { setLoading(true); setError(""); try { const response = await fetch(`/api/bank-accounts?includeInactive=${showInactive}`); if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải tài khoản ngân hàng")); setItems(await unwrapApiResponse<Account[]>(response)); } catch (reason) { setError(reason instanceof Error ? reason.message : "Không thể tải tài khoản ngân hàng"); } finally { setLoading(false); } }, [showInactive]);
   useEffect(() => { void load(); }, [load]);
   function startCreate() { setEditing(null); setDialogError(""); setOpen(true); }
@@ -40,7 +41,6 @@ export function BankAccountManagement() {
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Không thể cập nhật trạng thái tài khoản";
       setError(message);
-      showError(message);
     } finally {
       setTogglingId(null);
     }
@@ -58,12 +58,11 @@ export function BankAccountManagement() {
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Không thể lưu tài khoản ngân hàng";
       setDialogError(message);
-      showError(message);
     } finally {
       setSaving(false);
     }
   }
-  return <Stack spacing={{ xs: 2, md: 3 }}><Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={2}><BoxTitle /><Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>Thêm tài khoản</Button></Stack></Paper>{error && <Alert severity="error">{error}</Alert>}<Paper sx={{ p: { xs: 2, md: 2.5 } }}><Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between"><Typography variant="subtitle2">Tài khoản sử dụng cho thu học phí</Typography><Stack direction="row" alignItems="center"><Switch checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} /><Typography variant="body2">Hiển thị tài khoản đã ngưng sử dụng</Typography></Stack></Stack></Paper><Paper sx={{ overflow: "auto" }}><Table size="small"><TableHead><TableRow><TableCell>Ngân hàng</TableCell><TableCell>Số tài khoản</TableCell><TableCell>Chủ tài khoản</TableCell><TableCell>Chi nhánh</TableCell><TableCell>Tiền tệ</TableCell><TableCell>Trạng thái</TableCell><TableCell /></TableRow></TableHead><TableBody>{!loading && items.map((item) => <TableRow key={item.id}><TableCell>{item.bankName}<br /><Typography variant="caption" color="text.secondary">{item.bankCode}</Typography></TableCell><TableCell>{item.accountNo}</TableCell><TableCell>{item.accountName}</TableCell><TableCell>{item.branchName || "-"}</TableCell><TableCell>{item.currencyCode}</TableCell><TableCell><Chip size="small" color={item.isActive ? "success" : "default"} label={item.isActive ? "Đang dùng" : "Đã ngưng"} /></TableCell><TableCell><Button size="small" variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => startEdit(item)}>Sửa</Button><Button size="small" variant="outlined" color={item.isActive ? "warning" : "success"} disabled={togglingId === item.id} onClick={() => void toggle(item)}>{togglingId === item.id ? "Đang cập nhật..." : item.isActive ? "Ngưng dùng" : "Kích hoạt"}</Button></TableCell></TableRow>)}{!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center" color="text.secondary">Chưa có tài khoản ngân hàng</Typography></TableCell></TableRow>}{loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center">Đang tải...</Typography></TableCell></TableRow>}</TableBody></Table></Paper><AccountDialog open={open} editing={editing} saving={saving} error={dialogError} onClose={() => { setDialogError(""); setOpen(false); }} onSave={save} />{Snackbar}</Stack>;
+  return <Stack spacing={{ xs: 2, md: 3 }}><Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={2}><BoxTitle /><Button variant="contained" startIcon={<AddIcon />} onClick={startCreate}>Thêm tài khoản</Button></Stack></Paper>{error && <Alert severity="error" action={<Button color="inherit" size="small" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Thử lại</Button>}>{error}</Alert>}<Paper sx={{ p: { xs: 2, md: 2.5 } }}><Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between"><Typography variant="subtitle2">Tài khoản sử dụng cho thu học phí</Typography><FormControlLabel control={<Switch checked={showInactive} onChange={(event) => setShowInactive(event.target.checked)} />} label="Hiển thị tài khoản đã ngưng sử dụng" /></Stack></Paper><Paper sx={{ overflow: "auto" }}><Table size="small"><TableHead><TableRow><TableCell>Ngân hàng</TableCell><TableCell>Số tài khoản</TableCell><TableCell>Chủ tài khoản</TableCell><TableCell>Chi nhánh</TableCell><TableCell>Tiền tệ</TableCell><TableCell>Trạng thái</TableCell><TableCell /></TableRow></TableHead><TableBody>{!loading && items.map((item) => <TableRow key={item.id}><TableCell>{item.bankName}<br /><Typography variant="caption" color="text.secondary">{item.bankCode}</Typography></TableCell><TableCell>{item.accountNo}</TableCell><TableCell>{item.accountName}</TableCell><TableCell>{item.branchName || "-"}</TableCell><TableCell>{item.currencyCode}</TableCell><TableCell><Chip size="small" color={item.isActive ? "success" : "default"} label={item.isActive ? "Đang dùng" : "Đã ngưng"} /></TableCell><TableCell><Button size="small" variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => startEdit(item)}>Sửa</Button><Button size="small" variant="outlined" color={item.isActive ? "warning" : "success"} disabled={togglingId === item.id} onClick={() => void toggle(item)}>{togglingId === item.id ? "Đang cập nhật..." : item.isActive ? "Ngưng dùng" : "Kích hoạt"}</Button></TableCell></TableRow>)}{!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center" color="text.secondary">Chưa có tài khoản ngân hàng</Typography></TableCell></TableRow>}{loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center">Đang tải...</Typography></TableCell></TableRow>}</TableBody></Table></Paper><AccountDialog open={open} editing={editing} saving={saving} error={dialogError} onClose={() => { setDialogError(""); setOpen(false); }} onSave={save} />{Snackbar}</Stack>;
 }
 
 function AccountDialog({ open, editing, saving, error, onClose, onSave }: { open: boolean; editing: Account | null; saving: boolean; error: string; onClose: () => void; onSave: (values: FormValues) => Promise<void> }) {

@@ -9,6 +9,7 @@ import {
   Chip,
   Divider,
   Paper,
+  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -20,6 +21,7 @@ import {
 import Link from "next/link";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
@@ -101,7 +103,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState("");
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,9 +141,6 @@ export function PaymentBatchDetail({ id }: { id: string }) {
       showSuccess("Đã chuyển đợt thanh toán sang tiền mặt và phát hành biên lai");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt");
-      showError(
-        reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
-      );
     } finally {
       setActionLoading(false);
     }
@@ -170,17 +169,38 @@ export function PaymentBatchDetail({ id }: { id: string }) {
       showSuccess("Đã hủy đợt thanh toán");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể hủy thanh toán");
-      showError(
-        reason instanceof Error ? reason.message : "Không thể hủy thanh toán",
-      );
     } finally {
       setActionLoading(false);
     }
   }
 
-  if (loading) return <Typography>Đang tải chi tiết đợt thanh toán...</Typography>;
+  if (loading)
+    return (
+      <Stack spacing={2}>
+        <Skeleton variant="rounded" height={48} width="45%" />
+        <Skeleton variant="rounded" height={120} />
+        <Skeleton variant="rounded" height={280} />
+      </Stack>
+    );
   if (error || !batch)
-    return <Alert severity="error">{error || "Không tìm thấy đợt thanh toán"}</Alert>;
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            startIcon={<RefreshOutlinedIcon />}
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            Thử lại
+          </Button>
+        }
+      >
+        {error || "Không tìm thấy đợt thanh toán"}
+      </Alert>
+    );
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>

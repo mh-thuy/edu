@@ -112,6 +112,8 @@ const reconciliationLabels: Record<string, string> = {
 const reconciliationColors: Record<string, "default" | "warning" | "info" | "success"> = {
   AUTO_MATCHED: "info",
   UNMATCHED: "warning",
+  IGNORED: "default",
+  DUPLICATED: "warning",
   CONFIRMED: "success",
 };
 
@@ -136,7 +138,7 @@ export function BankReconciliationPanel() {
   const [accountError, setAccountError] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, Snackbar } = useSnackbar();
 
   const loadAccounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -288,10 +290,6 @@ export function BankReconciliationPanel() {
         );
       const token = pendingConfirmation.itemToken;
       setConfirmedTokens((current) => new Set(current).add(token));
-      setMessage({
-        text: "Đã xác nhận đối soát và tạo thanh toán/biên lai.",
-        severity: "success",
-      });
       showSuccess("Đã xác nhận đối soát và tạo thanh toán/biên lai");
       setPendingConfirmation(null);
     } catch (reason) {
@@ -302,9 +300,6 @@ export function BankReconciliationPanel() {
             : "Không thể xác nhận đối soát",
         severity: "error",
       });
-      showError(
-        reason instanceof Error ? reason.message : "Không thể xác nhận đối soát",
-      );
     } finally {
       setLoading(false);
     }

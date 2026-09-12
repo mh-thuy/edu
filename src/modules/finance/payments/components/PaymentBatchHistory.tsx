@@ -91,7 +91,7 @@ export function PaymentBatchHistory() {
   const [convertingCash, setConvertingCash] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState("");
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, Snackbar } = useSnackbar();
   const studentDialog = useDisclosure();
 
   const load = useCallback(async () => {
@@ -187,9 +187,6 @@ export function PaymentBatchHistory() {
           ? reason.message
           : "Không thể hủy đợt thanh toán",
       );
-      showError(
-        reason instanceof Error ? reason.message : "Không thể hủy đợt thanh toán",
-      );
     } finally {
       setCancelling(false);
     }
@@ -212,9 +209,6 @@ export function PaymentBatchHistory() {
       showSuccess("Đã chuyển đợt thanh toán sang tiền mặt và phát hành biên lai");
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
-      );
-      showError(
         reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
       );
     } finally {
