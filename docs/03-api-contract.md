@@ -573,6 +573,17 @@ await prisma.$transaction(async (tx) => {})
 
 # 19.1 Enrollment và tạo học phí tách rời
 
+## 19.1.0 Đóng lớp
+
+```http
+PATCH /api/classes/{classId}
+```
+
+Khi cập nhật `status` từ `ACTIVE` sang `COMPLETED`, API chuyển atomically toàn
+bộ enrollment `ACTIVE` trong lớp và các môn `ACTIVE` của chúng sang
+`COMPLETED`, đồng thời ghi audit log theo từng enrollment. Dữ liệu enrollment
+đã hoàn thành vẫn được trả về ở API danh sách học viên để chỉ xem.
+
 ## 19.1.1 Đăng ký học viên
 
 ```http

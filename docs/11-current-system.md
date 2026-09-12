@@ -33,6 +33,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Tái đăng ký giữ lịch sử enrollment cũ và dùng `currentPeriodStart` cho giai
   đoạn hiện tại; lớp đã kết thúc/hủy chỉ cho xem enrollment.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
+- Khi lớp chuyển `ACTIVE -> COMPLETED`, enrollment và môn đang `ACTIVE` được chuyển sang `COMPLETED` cùng transaction, có audit log; lịch sử vẫn hiển thị nhưng chỉ đọc.
 - Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.
 - Xóa học viên/giáo viên/lớp/lịch chỉ là soft delete hoặc chuyển trạng thái; không hard delete bản ghi.
 - Thanh toán bắt đầu từ chi tiết học phí bằng nút `Thanh toán học phí`.

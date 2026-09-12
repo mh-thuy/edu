@@ -206,6 +206,7 @@ export async function getClasses(filter: ClassFilter) {
 export async function updateClass(
   id: string,
   data: ClassUpdate,
+  actorId: string,
 ): Promise<Class> {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
@@ -266,6 +267,43 @@ export async function updateClass(
       };
       if (!allowedTransitions[current.status].includes(data.status)) {
         throw new ConflictError("Trạng thái lớp học không hợp lệ");
+      }
+    }
+
+    if (data.status === "COMPLETED" && current.status !== "COMPLETED") {
+      const activeEnrollments = await tx.classStudent.findMany({
+        where: { classId: id, status: "ACTIVE" },
+        select: { id: true, studentId: true },
+      });
+      const enrollmentIds = activeEnrollments.map((enrollment) => enrollment.id);
+
+      if (enrollmentIds.length > 0) {
+        await tx.enrollmentSubject.updateMany({
+          where: { enrollmentId: { in: enrollmentIds }, status: "ACTIVE" },
+          data: { status: "COMPLETED" },
+        });
+        await tx.classStudent.updateMany({
+          where: { classId: id, status: "ACTIVE" },
+          data: { status: "COMPLETED" },
+        });
+        await tx.tuitionAuditLog.createMany({
+          data: activeEnrollments.map((enrollment) => ({
+            entityType: "ENROLLMENT",
+            entityId: enrollment.id,
+            action: "COMPLETED",
+            dataBefore: {
+              classId: id,
+              studentId: enrollment.studentId,
+              status: "ACTIVE",
+            },
+            dataAfter: {
+              classId: id,
+              studentId: enrollment.studentId,
+              status: "COMPLETED",
+            },
+            performedBy: actorId,
+          })),
+        });
       }
     }
 
@@ -1148,11 +1186,11 @@ export async function getClassStudents(
   >
 > {
   return prisma.classStudent.findMany({
-    where: { classId, status: "ACTIVE" },
+    where: { classId, status: { in: ["ACTIVE", "COMPLETED"] } },
     include: {
       student: true,
       subjects: {
-        where: { status: "ACTIVE" },
+        where: { status: { in: ["ACTIVE", "COMPLETED"] } },
         select: { classSubjectId: true },
       },
       tuitionFees: {

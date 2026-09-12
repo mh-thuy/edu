@@ -406,6 +406,10 @@ Enrollment
 Student Fees
 ```
 
+Khi chuyển lớp `ACTIVE -> COMPLETED`, kiểm tra enrollment và các môn đang
+`ACTIVE` chuyển sang `COMPLETED`, audit log được ghi, danh sách học viên vẫn
+hiển thị để xem và mọi thao tác thay đổi bị từ chối.
+
 ## Sửa Payment
 
 Kiểm tra thêm:

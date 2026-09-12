@@ -239,6 +239,11 @@ DRAFT
 → COMPLETED
 ```
 
+Khi lớp chuyển từ `ACTIVE` sang `COMPLETED`, trong cùng transaction hệ thống
+phải chuyển toàn bộ enrollment `ACTIVE` của lớp và các môn `ACTIVE` tương ứng
+sang `COMPLETED`, đồng thời ghi audit log cho từng enrollment. Enrollment và môn
+đã hoàn thành chỉ được xem, không được đăng ký lại, bỏ môn, rời lớp hoặc tạm nghỉ.
+
 Hoặc:
 
 ```text
@@ -742,6 +747,9 @@ Refund completed
 ```
 
 Đăng ký học viên và tạo học phí là hai audit event riêng biệt.
+
+Khi hoàn tất lớp, việc chuyển enrollment và môn học đang `ACTIVE` sang
+`COMPLETED` cũng phải ghi audit log.
 
 Thông tin cần lưu:
 

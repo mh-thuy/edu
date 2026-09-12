@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     const body = await request.json();
     const data = classUpdateSchema.parse(body);
 
-    const classData = await updateClass(id, data);
+    const classData = await updateClass(id, data, user.id);
     return apiSuccess(classData);
   } catch (error: unknown) {
     return handleApiError(error, "Failed to update class");
