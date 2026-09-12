@@ -69,6 +69,13 @@ enum EnrollmentStatus {
   @@map("enrollment_status")
 }
 
+enum EnrollmentPauseStatus {
+  ACTIVE
+  CANCELLED
+
+  @@map("enrollment_pause_status")
+}
+
 enum ReceiptStatus {
   ACTIVE
   CANCELLED
@@ -266,6 +273,7 @@ model EnrollmentPause {
   enrollmentId String   @map("enrollment_id") @db.Uuid
   startMonth   DateTime @map("start_month") @db.Date
   endMonth     DateTime @map("end_month") @db.Date
+  status       EnrollmentPauseStatus @default(ACTIVE)
   reason       String?
   createdBy    String   @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

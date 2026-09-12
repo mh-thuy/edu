@@ -154,6 +154,9 @@ export class TuitionService {
       const periodStart = new Date(
         Date.UTC(data.billingYear, data.billingMonth - 1, 1),
       );
+      const nextPeriodStart = new Date(
+        Date.UTC(data.billingYear, data.billingMonth, 1),
+      );
       const periodEnd = new Date(Date.UTC(data.billingYear, data.billingMonth, 0));
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
@@ -183,7 +186,7 @@ export class TuitionService {
           subjects: {
             where: {
               status: "ACTIVE",
-              enrolledAt: { lte: periodEnd },
+              enrolledAt: { lt: nextPeriodStart },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
@@ -218,15 +221,15 @@ export class TuitionService {
       if (enrollment.status !== "ACTIVE") {
         throw new ConflictError("Học viên không còn ở trạng thái đang học");
       }
-      const pause = await tx.enrollmentPause.findFirst({
-        where: {
-          enrollmentId: enrollment.id,
-          startMonth: { lte: periodEnd },
-          endMonth: { gte: periodStart },
-        },
-        select: { id: true },
-      });
-      if (pause) {
+      const pause = await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM enrollment_pauses
+        WHERE enrollment_id = ${enrollment.id}::uuid
+          AND status = 'ACTIVE'::enrollment_pause_status
+          AND start_month <= ${periodEnd}::date
+          AND end_month >= ${periodStart}::date
+        LIMIT 1
+      `;
+      if (pause.length > 0) {
         throw new ConflictError(
           `Học viên đang tạm nghỉ trong tháng ${data.billingMonth}/${data.billingYear}`,
         );
@@ -423,6 +426,9 @@ export class TuitionService {
         Date.UTC(period.billingYear, period.billingMonth - 1, 1),
       );
       const periodEnd = new Date(Date.UTC(period.billingYear, period.billingMonth, 0));
+      const nextPeriodStart = new Date(
+        Date.UTC(period.billingYear, period.billingMonth, 1),
+      );
       if (
         (classData.startDate && classData.startDate > periodEnd) ||
         (classData.endDate && classData.endDate < periodStart)
@@ -436,11 +442,12 @@ export class TuitionService {
           currentPeriodStart: { lte: periodEnd },
         },
         select: {
+          id: true,
           studentId: true,
           subjects: {
             where: {
               status: "ACTIVE",
-              enrolledAt: { lte: periodEnd },
+              enrolledAt: { lt: nextPeriodStart },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
@@ -448,25 +455,24 @@ export class TuitionService {
             },
             select: { id: true },
           },
-          pauses: {
-            where: {
-              startMonth: {
-                lte: new Date(Date.UTC(period.billingYear, period.billingMonth, 0)),
-              },
-              endMonth: {
-                gte: new Date(
-                  Date.UTC(period.billingYear, period.billingMonth - 1, 1),
-                ),
-              },
-            },
-            select: { id: true },
-          },
         },
       });
+      const pausedEnrollments = await tx.$queryRaw<Array<{ enrollmentId: string }>>`
+        SELECT enrollment_id AS "enrollmentId" FROM enrollment_pauses
+        WHERE status = 'ACTIVE'::enrollment_pause_status
+          AND start_month <= ${periodEnd}::date
+          AND end_month >= ${periodStart}::date
+          AND enrollment_id IN (
+            SELECT id FROM class_students WHERE class_id = ${classId}::uuid AND status = 'ACTIVE'::enrollment_status
+          )
+      `;
+      const pausedEnrollmentIds = new Set(
+        pausedEnrollments.map((pause) => pause.enrollmentId),
+      );
       let created = 0;
       let skipped = 0;
       for (const enrollment of enrollments) {
-        if (enrollment.pauses.length || enrollment.subjects.length === 0) {
+        if (pausedEnrollmentIds.has(enrollment.id) || enrollment.subjects.length === 0) {
           skipped += 1;
           continue;
         }

@@ -651,8 +651,8 @@ Các API thay đổi enrollment trả `409 Conflict` khi lớp đã `COMPLETED` 
 DELETE /api/classes/{classId}/students/{studentId}/pause
 ```
 
-Body gồm `pauseId`. API hủy khoảng tạm nghỉ và ghi audit log; không xóa
-enrollment.
+Body gồm `pauseId`. API chuyển khoảng tạm nghỉ sang `CANCELLED` và ghi audit
+log; không xóa bản ghi hoặc enrollment.
 
 ## 19.1.4 Tạo học phí tháng theo lớp
 

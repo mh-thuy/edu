@@ -203,6 +203,7 @@ Enrollment ACTIVE nhưng vắng không làm giảm học phí tháng
 Không tạo học phí trước tháng đăng ký/tái đăng ký
 Không tạo học phí ngoài thời gian của lớp
 Không tạo khoảng tạm nghỉ trước tháng đăng ký hoặc ngoài thời gian của lớp
+Hủy tạm nghỉ giữ bản ghi lịch sử và không còn chặn tạo học phí
 Không tạo học phí/item trùng môn
 Thanh toán thiếu hoặc thừa -> PAYMENT_AMOUNT_MISMATCH
 Thanh toán đủ -> PAID

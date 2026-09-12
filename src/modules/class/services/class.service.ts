@@ -243,6 +243,7 @@ export async function updateClass(
         FROM enrollment_pauses ep
         JOIN class_students cs ON cs.id = ep.enrollment_id
         WHERE cs.class_id = ${id}::uuid
+          AND ep.status = 'ACTIVE'::enrollment_pause_status
           AND (
             (${startDate}::date IS NOT NULL AND ep.start_month < date_trunc('month', ${startDate}::date)::date)
             OR (${endDate}::date IS NOT NULL AND ep.end_month > date_trunc('month', ${endDate}::date)::date)
@@ -402,9 +403,13 @@ export async function assignStudentToClass(
         })).map((pause) => pause.id)
       : [];
     if (clearedPauseIds.length > 0) {
-      await tx.enrollmentPause.deleteMany({
-        where: { id: { in: clearedPauseIds } },
-      });
+      await tx.$executeRaw`
+        UPDATE enrollment_pauses
+        SET status = 'CANCELLED'::enrollment_pause_status,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ANY(${clearedPauseIds}::uuid[])
+          AND status = 'ACTIVE'::enrollment_pause_status
+      `;
     }
 
     const enrollment = existing
@@ -635,15 +640,15 @@ export async function pauseStudentEnrollment(
         "Không thể tạm nghỉ vì khoảng thời gian đã phát sinh học phí",
       );
     }
-    const overlap = await tx.enrollmentPause.findFirst({
-      where: {
-        enrollmentId: enrollment.id,
-        startMonth: { lte: endMonth },
-        endMonth: { gte: startMonth },
-      },
-      select: { id: true },
-    });
-    if (overlap) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
+    const overlap = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM enrollment_pauses
+      WHERE enrollment_id = ${enrollment.id}::uuid
+        AND status = 'ACTIVE'::enrollment_pause_status
+        AND start_month <= ${endMonth}::date
+        AND end_month >= ${startMonth}::date
+      LIMIT 1
+    `;
+    if (overlap.length > 0) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
     const pause = await tx.enrollmentPause.create({
       data: {
         enrollmentId: enrollment.id,
@@ -734,16 +739,16 @@ export async function updateEnrollmentPause(
         "Không thể sửa tạm nghỉ vì khoảng thời gian đã phát sinh học phí",
       );
     }
-    const overlap = await tx.enrollmentPause.findFirst({
-      where: {
-        enrollmentId: pause.enrollmentId,
-        id: { not: pause.id },
-        startMonth: { lte: endMonth },
-        endMonth: { gte: startMonth },
-      },
-      select: { id: true },
-    });
-    if (overlap) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
+    const overlap = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM enrollment_pauses
+      WHERE enrollment_id = ${pause.enrollmentId}::uuid
+        AND status = 'ACTIVE'::enrollment_pause_status
+        AND id <> ${pause.id}::uuid
+        AND start_month <= ${endMonth}::date
+        AND end_month >= ${startMonth}::date
+      LIMIT 1
+    `;
+    if (overlap.length > 0) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
 
     const updated = await tx.enrollmentPause.update({
       where: { id: pause.id },
@@ -787,13 +792,24 @@ export async function deleteEnrollmentPause(
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${pause.enrollmentId}`}))`,
     );
-    await tx.enrollmentPause.delete({ where: { id: pause.id } });
+    const cancelled = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+      UPDATE enrollment_pauses
+      SET status = 'CANCELLED'::enrollment_pause_status,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${pause.id}::uuid
+        AND status = 'ACTIVE'::enrollment_pause_status
+      RETURNING id, status::text AS status
+    `;
+    if (cancelled.length === 0) {
+      throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ đang hoạt động");
+    }
     await tx.tuitionAuditLog.create({
       data: {
         entityType: "ENROLLMENT_PAUSE",
         entityId: pause.id,
         action: "DELETED",
         dataBefore: pause as unknown as Prisma.InputJsonValue,
+        dataAfter: cancelled[0] as unknown as Prisma.InputJsonValue,
         reason: "Hủy thời gian tạm nghỉ",
         performedBy: actorId,
       },
@@ -1123,6 +1139,7 @@ export async function getClassStudents(
       }>;
       pauses: Array<{
         id: string;
+        status: string;
         startMonth: Date;
         endMonth: Date;
         reason: string | null;
@@ -1150,12 +1167,29 @@ export async function getClassStudents(
         },
       },
       pauses: {
-        select: { id: true, startMonth: true, endMonth: true, reason: true },
+        select: {
+          id: true,
+          startMonth: true,
+          endMonth: true,
+          reason: true,
+        },
       },
     },
-  }).then((students) =>
-    students.map((student) => ({
+  }).then(async (students) => {
+    const pauseIds = students.flatMap((student) => student.pauses.map((pause) => pause.id));
+    const pauseStatuses = pauseIds.length > 0
+      ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+          SELECT id, status::text AS status FROM enrollment_pauses
+          WHERE id = ANY(${pauseIds}::uuid[])
+        `
+      : [];
+    const statusById = new Map(pauseStatuses.map((pause) => [pause.id, pause.status]));
+    return students.map((student) => ({
       ...student,
+      pauses: student.pauses.map((pause) => ({
+        ...pause,
+        status: statusById.get(pause.id) ?? "ACTIVE",
+      })),
       tuitionFees: student.tuitionFees.map((fee) => {
         const { dueDate, ...feeData } = fee;
         return {
@@ -1163,6 +1197,6 @@ export async function getClassStudents(
           status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
         };
       }),
-    })),
-  );
+    }));
+  });
 }

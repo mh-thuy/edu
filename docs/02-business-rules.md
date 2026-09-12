@@ -305,9 +305,11 @@ sử và đặt `current_period_start` thành ngày tái đăng ký. Không đư
 cho kỳ trước tháng đăng ký/tái đăng ký hiện tại. Các khoảng nghỉ chưa kết thúc
 từ giai đoạn cũ được hủy để không ảnh hưởng giai đoạn mới.
 
-Khoảng tạm nghỉ có thể được sửa hoặc hủy. Khi sửa vẫn phải kiểm tra không chồng
+Khoảng tạm nghỉ có thể được sửa hoặc hủy. Hủy chỉ chuyển trạng thái sang
+`CANCELLED`, không hard-delete, để bảo toàn lịch sử. Khi sửa vẫn phải kiểm tra không chồng
 lấn khoảng nghỉ khác và không phủ tháng đã phát sinh học phí. Mọi thao tác tạo,
-sửa, hủy khoảng nghỉ phải ghi audit log.
+sửa, hủy khoảng nghỉ phải ghi audit log. Chỉ khoảng nghỉ `ACTIVE` mới chặn tạo
+học phí.
 
 Khoảng tạm nghỉ không được bắt đầu trước tháng đăng ký/tái đăng ký hiện tại và
 không được nằm ngoài tháng bắt đầu/kết thúc của lớp.

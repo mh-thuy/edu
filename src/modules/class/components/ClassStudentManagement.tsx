@@ -43,7 +43,7 @@ type ClassSubject = {
 };
 
 type ClassData = { id: string; code: string; name: string; status: string; classSubjects: ClassSubject[] };
-type EnrollmentPause = { id: string; startMonth: string; endMonth: string; reason: string | null };
+type EnrollmentPause = { id: string; status: "ACTIVE" | "CANCELLED"; startMonth: string; endMonth: string; reason: string | null };
 type Fee = {
   id: string;
   status: string;
@@ -126,7 +126,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const subjectName = useMemo(() => new Map((classData?.classSubjects ?? []).map((item) => [item.id, item.subject.name])), [classData]);
-  const getPause = (student: StudentRow) => student.pauses.find((pause) => monthValue(pause.startMonth) <= month && monthValue(pause.endMonth) >= month);
+  const getPause = (student: StudentRow) => student.pauses.find((pause) => pause.status === "ACTIVE" && monthValue(pause.startMonth) <= month && monthValue(pause.endMonth) >= month);
   const getFee = (student: StudentRow) => {
     const [year, selectedMonth] = month.split("-").map(Number);
     return student.tuitionFees.find((fee) => fee.billingType === "MONTHLY" && fee.billingYear === year && fee.billingMonth === selectedMonth);
@@ -344,7 +344,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
         {selectedStudent.subjects.map((item) => <Paper key={item.classSubjectId} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Stack><Typography fontWeight={600}>{subjectName.get(item.classSubjectId)}</Typography><Typography variant="caption" color="text.secondary">{money(Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0))}/tháng</Typography></Stack><Button size="small" variant="outlined" color="error" disabled={classClosed} onClick={() => selectedStudent.subjects.length === 1 ? (setDeleteReason(""), setDeleteTarget(selectedStudent)) : setDropTarget({ student: selectedStudent, subjectId: item.classSubjectId, hasFee: selectedStudent.tuitionFees.some((fee) => fee.items.some((feeItem) => feeItem.classSubjectId === item.classSubjectId)) })}>{selectedStudent.subjects.length === 1 ? "Rời lớp" : "Bỏ môn"}</Button></Stack></Paper>)}
         <Button variant="contained" disabled={classClosed} onClick={() => openSubjectDialog({ id: selectedStudent.studentId, code: selectedStudent.student.code, fullName: selectedStudent.student.fullName }, selectedStudent)}>Thêm môn</Button>
         <Typography variant="subtitle1" fontWeight={700}>Lịch sử tạm nghỉ</Typography>
-        {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack><Stack direction="row"><Button size="small" disabled={classClosed} onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy || classClosed} onClick={() => setPauseCancelTarget({ student: selectedStudent, pauseId: pause.id })}>Hủy</Button></Stack></Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
+        {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5, opacity: pause.status === "CANCELLED" ? 0.65 : 1 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)} {pause.status === "CANCELLED" ? "· Đã hủy" : ""}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack>{pause.status === "ACTIVE" && <Stack direction="row"><Button size="small" disabled={classClosed} onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy || classClosed} onClick={() => setPauseCancelTarget({ student: selectedStudent, pauseId: pause.id })}>Hủy</Button></Stack>}</Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
         <Divider />
         <Typography variant="subtitle1" fontWeight={700}>Học phí {month}</Typography>
         <Typography variant="h5">{money(selectedStudent.subjects.reduce((total, item) => total + Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0), 0))}</Typography>
