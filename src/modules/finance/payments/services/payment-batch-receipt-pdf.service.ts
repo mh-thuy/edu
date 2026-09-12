@@ -3,13 +3,17 @@ import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import {
+  getPaymentBatchReceiptSnapshot,
+  parseBatchReceiptSnapshot,
+} from "./payment-document-snapshot";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
-export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId: string) {
+export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId: string) {
   const receipt = await prisma.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
     include: {
@@ -37,6 +41,22 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId
   if (receipt.paymentBatch.status !== "SUCCESS") {
     throw new ConflictError("Biên lai tổng đã bị hủy và không thể xuất PDF");
   }
+  const snapshot = parseBatchReceiptSnapshot(
+    await getPaymentBatchReceiptSnapshot(receipt.id),
+  );
+  const student = snapshot?.student ?? receipt.paymentBatch.student;
+  const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
+    feeNo: allocation.tuitionFee.feeNo,
+    finalAmount: allocation.amount.toString(),
+    className: allocation.tuitionFee.class?.name ?? null,
+    items: allocation.tuitionFee.items.map((item) => ({
+      itemName: item.itemName,
+      subjectName: item.classSubject?.subject.name ?? null,
+      amount: item.amount.toString(),
+    })),
+    discountAmount: allocation.tuitionFee.discountAmount.toString(),
+    additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
+  }));
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -61,12 +81,12 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId
     686,
   );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
-  draw(`Mã học sinh: ${receipt.paymentBatch.student.code}`, 75, 615);
-  draw(`Họ tên: ${receipt.paymentBatch.student.fullName}`, 75, 593);
+  draw(`Mã học sinh: ${student.code}`, 75, 615);
+  draw(`Họ tên: ${student.fullName}`, 75, 593);
   draw("CÁC KHOẢN ĐÃ THANH TOÁN", 55, 545, 13);
 
   let y = 515;
-  for (const allocation of receipt.paymentBatch.allocations) {
+  for (const allocation of fees) {
     if (y < 260) {
       page = pdf.addPage(A5_PAGE_SIZE);
       draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
@@ -74,32 +94,32 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId
       y = 725;
     }
     draw(
-      `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "Chưa có lớp"}`,
+      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`,
       75,
       y,
     );
-    draw(`${money(Number(allocation.amount))} VND`, 390, y);
+    draw(`${money(Number(allocation.finalAmount))} VND`, 390, y);
     let itemY = y - 17;
-    for (const item of allocation.tuitionFee.items) {
+    for (const item of allocation.items) {
       if (itemY < 220) {
         page = pdf.addPage([595, 842]);
         draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
         draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
         itemY = 725;
       }
-      const subjectName = item.classSubject?.subject.name || item.itemName;
+      const subjectName = item.subjectName || item.itemName;
       draw(`- ${subjectName}`, 90, itemY, 9);
       draw(`${money(Number(item.amount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
-    if (allocation.tuitionFee.discountAmount.greaterThan(0)) {
+    if (Number(allocation.discountAmount) > 0) {
       draw("- Giảm giá", 90, itemY, 9);
-      draw(`-${money(Number(allocation.tuitionFee.discountAmount))} VND`, 390, itemY, 9);
+      draw(`-${money(Number(allocation.discountAmount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
-    if (allocation.tuitionFee.additionalAmount.greaterThan(0)) {
+    if (Number(allocation.additionalAmount) > 0) {
       draw("- Phụ thu", 90, itemY, 9);
-      draw(`${money(Number(allocation.tuitionFee.additionalAmount))} VND`, 390, itemY, 9);
+      draw(`${money(Number(allocation.additionalAmount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
     y = itemY - 10;
@@ -126,6 +146,15 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, _actorId
     9,
   );
   const pdfBuffer = Buffer.from(await pdf.save());
+  await prisma.tuitionAuditLog.create({
+    data: {
+      entityType: "PAYMENT_BATCH",
+      entityId: receipt.paymentBatchId,
+      action: "RECEIPT_PDF_PRINTED",
+      dataAfter: { receiptNo: receipt.receiptNo, snapshotUsed: Boolean(snapshot) },
+      performedBy: actorId,
+    },
+  });
   return {
     pdf: pdfBuffer,
     batchNo: receipt.paymentBatch.batchNo,

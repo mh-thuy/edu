@@ -29,7 +29,14 @@ export async function POST(request: NextRequest, context: { params?: Params }) {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
-    return apiSuccess(await addClassSubject(id, classSubjectCreateSchema.parse(await request.json())), 201);
+    return apiSuccess(
+      await addClassSubject(
+        id,
+        classSubjectCreateSchema.parse(await request.json()),
+        user.id,
+      ),
+      201,
+    );
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") {
       return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);

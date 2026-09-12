@@ -39,7 +39,7 @@ export function ClassForm({
         COMPLETED: ["COMPLETED"],
         CANCELLED: ["CANCELLED"],
       }[defaultValues?.status ?? "DRAFT"]
-    : ["DRAFT", "ACTIVE", "COMPLETED", "CANCELLED"];
+    : ["DRAFT"];
   const statusLabels: Record<string, string> = {
     DRAFT: "Nháp",
     ACTIVE: "Hoạt động",

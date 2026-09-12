@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
       buffer: Buffer.from(await file.arrayBuffer()),
       fileName: file.name,
       bankAccountId,
+      actorId: user.id,
     });
     return apiSuccess(result, 201);
   } catch (error) { return handleApiError(error, "Không thể import sao kê ngân hàng"); }

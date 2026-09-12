@@ -148,6 +148,7 @@ export class TuitionService {
     data: { classId: string; studentId: string } & TuitionBillingPeriod,
     actorId: string,
     transaction?: Prisma.TransactionClient,
+    options: { allowExistingComplete?: boolean } = {},
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw(
@@ -177,6 +178,9 @@ export class TuitionService {
       if (!enrollment) {
         throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
       }
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollment.id}`}))`,
+      );
       if (enrollment.class.status === "COMPLETED" || enrollment.class.status === "CANCELLED") {
         throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
@@ -237,6 +241,9 @@ export class TuitionService {
         (subject) => !billedSubjectIds.has(subject.classSubjectId),
       );
       if (subjectsToCalculate.length === 0 && existingFee) {
+        if (!options.allowExistingComplete) {
+          throw new ConflictError("Khoản học phí tháng đã được tạo đầy đủ");
+        }
         const result = await tx.tuitionFee.findUnique({
           where: { id: existingFee.id },
           include: feeInclude,
@@ -378,6 +385,9 @@ export class TuitionService {
     transaction?: Prisma.TransactionClient,
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${classId}:${period.billingYear}:${period.billingMonth}`}))`,
+      );
       const classData = await tx.class.findUnique({
         where: { id: classId },
         select: { status: true },
@@ -422,12 +432,24 @@ export class TuitionService {
           skipped += 1;
           continue;
         }
+        const existingFee = await tx.tuitionFee.findFirst({
+          where: {
+            classId,
+            studentId: enrollment.studentId,
+            billingYear: period.billingYear,
+            billingMonth: period.billingMonth,
+            billingType: TuitionFeeBillingType.MONTHLY,
+          },
+          select: { id: true },
+        });
         await TuitionService.createFromEnrollment(
           { classId, studentId: enrollment.studentId, ...period },
           actorId,
           tx,
+          { allowExistingComplete: true },
         );
-        created += 1;
+        if (existingFee) skipped += 1;
+        else created += 1;
       }
       return { created, skipped };
     };

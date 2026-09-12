@@ -101,9 +101,12 @@ async function assertClassCanManageSubjects(
 }
 
 export async function createClass(data: ClassCreate): Promise<Class> {
+  if (data.status !== "DRAFT") {
+    throw new ConflictError("Lớp học mới phải bắt đầu ở trạng thái nháp");
+  }
   try {
     return await prisma.class.create({
-      data: buildClassCreateInput(data),
+      data: buildClassCreateInput({ ...data, status: "DRAFT" }),
     });
   } catch (error: unknown) {
     if (
@@ -189,11 +192,23 @@ export async function updateClass(
     where: { id },
     select: {
       status: true,
+      startDate: true,
+      endDate: true,
     },
   });
 
   if (!current) {
     throw new NotFoundError("Không tìm thấy lớp học");
+  }
+
+  const startDate =
+    data.startDate === undefined ? current.startDate : new Date(data.startDate);
+  const endDate =
+    data.endDate === undefined ? current.endDate : new Date(data.endDate);
+  if (startDate && endDate && endDate < startDate) {
+    throw new ConflictError(
+      "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu",
+    );
   }
 
   if (data.status !== undefined && data.status !== current.status) {
@@ -464,8 +479,18 @@ export async function pauseStudentEnrollment(
     throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
   }
   return prisma.$transaction(async (tx) => {
-    const enrollment = await tx.classStudent.findUnique({
+    const enrollmentRef = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
+      select: { id: true },
+    });
+    if (!enrollmentRef) {
+      throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollmentRef.id}`}))`,
+    );
+    const enrollment = await tx.classStudent.findUnique({
+      where: { id: enrollmentRef.id },
     });
     if (!enrollment || enrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
@@ -494,7 +519,7 @@ export async function pauseStudentEnrollment(
       select: { id: true },
     });
     if (overlap) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
-    return tx.enrollmentPause.create({
+    const pause = await tx.enrollmentPause.create({
       data: {
         enrollmentId: enrollment.id,
         startMonth,
@@ -503,6 +528,17 @@ export async function pauseStudentEnrollment(
         createdBy: actorId,
       },
     });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "ENROLLMENT_PAUSE",
+        entityId: pause.id,
+        action: "CREATED",
+        dataAfter: pause as unknown as Prisma.InputJsonValue,
+        reason: pause.reason,
+        performedBy: actorId,
+      },
+    });
+    return pause;
   });
 }
 
@@ -573,80 +609,138 @@ export async function getClassSubjects(classId: string) {
 export async function addClassSubject(
   classId: string,
   data: ClassSubjectCreate,
+  actorId: string,
 ) {
-  await assertClassCanManageSubjects(classId);
-  const subject = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM subjects WHERE id = ${data.subjectId}::uuid AND status = 'ACTIVE'::subject_status
-  `;
-  if (!subject[0]) throw new NotFoundError("Không tìm thấy môn học");
-  if (data.teacherId) {
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: data.teacherId },
-      select: { id: true, status: true },
+  return prisma.$transaction(async (tx) => {
+    await assertClassCanManageSubjects(classId, tx);
+    const subject = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM subjects WHERE id = ${data.subjectId}::uuid AND status = 'ACTIVE'::subject_status
+    `;
+    if (!subject[0]) throw new NotFoundError("Không tìm thấy môn học");
+    if (data.teacherId) {
+      const teacher = await tx.teacher.findUnique({
+        where: { id: data.teacherId },
+        select: { id: true, status: true },
+      });
+      if (!teacher || teacher.status !== "ACTIVE")
+        throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
+    }
+    const rows = await tx.$queryRaw<Array<{ id: string }>>`
+      INSERT INTO class_subjects (id, class_id, subject_id, teacher_id, tuition_fee, total_sessions, max_students, status, created_at, updated_at)
+      VALUES (gen_random_uuid(), ${classId}::uuid, ${data.subjectId}::uuid, ${data.teacherId ?? null}::uuid,
+        ${data.tuitionFee}, ${data.totalSessions}, ${data.maxStudents ?? null}, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id
+    `;
+    const created = (await queryClassSubjects(tx, classId)).find(
+      (item) => item.id === rows[0]?.id,
+    );
+    if (!created) throw new NotFoundError("Không tìm thấy môn học vừa tạo");
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "CLASS_SUBJECT",
+        entityId: created.id,
+        action: "CREATED",
+        dataAfter: created as unknown as Prisma.InputJsonValue,
+        performedBy: actorId,
+      },
     });
-    if (!teacher || teacher.status !== "ACTIVE")
-      throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
-  }
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    INSERT INTO class_subjects (id, class_id, subject_id, teacher_id, tuition_fee, total_sessions, max_students, status, created_at, updated_at)
-    VALUES (gen_random_uuid(), ${classId}::uuid, ${data.subjectId}::uuid, ${data.teacherId ?? null}::uuid,
-      ${data.tuitionFee}, ${data.totalSessions}, ${data.maxStudents ?? null}, 'ACTIVE'::class_subject_status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    RETURNING id
-  `;
-  return (await getClassSubjects(classId)).find(
-    (item) => item.id === rows[0]?.id,
-  );
+    return created;
+  });
 }
 
 export async function updateClassSubject(
   classId: string,
   classSubjectId: string,
   data: ClassSubjectUpdate,
+  actorId: string,
 ) {
-  await assertClassCanManageSubjects(classId);
-  const existing = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id FROM class_subjects
-    WHERE id = ${classSubjectId}::uuid AND class_id = ${classId}::uuid AND status = 'ACTIVE'::class_subject_status
-  `;
-  if (!existing[0]) throw new NotFoundError("Không tìm thấy môn học trong lớp");
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-subject:${classSubjectId}`}))`,
+    );
+    await assertClassCanManageSubjects(classId, tx);
+    const existing = (await queryClassSubjects(tx, classId)).find(
+      (item) => item.id === classSubjectId,
+    );
+    if (!existing) throw new NotFoundError("Không tìm thấy môn học trong lớp");
 
-  if (data.teacherId) {
-    const teacher = await prisma.teacher.findUnique({
-      where: { id: data.teacherId },
-      select: { id: true, status: true },
+    if (data.teacherId) {
+      const teacher = await tx.teacher.findUnique({
+        where: { id: data.teacherId },
+        select: { id: true, status: true },
+      });
+      if (!teacher || teacher.status !== "ACTIVE")
+        throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
+    }
+    if (data.teacherId !== undefined && data.teacherId !== existing.teacherId) {
+      const activeSchedule = await tx.classSchedule.findFirst({
+        where: { classSubjectId, deletedAt: null },
+        select: { id: true },
+      });
+      if (activeSchedule) {
+        throw new ConflictError(
+          "Không thể đổi giáo viên khi môn học đang có lịch; hãy xóa lịch học trước",
+        );
+      }
+    }
+    if (data.maxStudents !== undefined && data.maxStudents !== null) {
+      const activeEnrollmentCount = await tx.enrollmentSubject.count({
+        where: { classSubjectId, status: "ACTIVE" },
+      });
+      if (data.maxStudents < activeEnrollmentCount) {
+        throw new ConflictError(
+          `Giới hạn học viên không được nhỏ hơn số đang đăng ký (${activeEnrollmentCount})`,
+        );
+      }
+    }
+
+    await tx.$executeRaw`
+      UPDATE class_subjects
+      SET teacher_id = CASE
+            WHEN ${data.teacherId === undefined} THEN teacher_id
+            ELSE ${data.teacherId ?? null}::uuid
+          END,
+          tuition_fee = ${data.tuitionFee},
+          total_sessions = ${data.totalSessions},
+          max_students = CASE
+            WHEN ${data.maxStudents === undefined} THEN max_students
+            ELSE ${data.maxStudents ?? null}
+          END,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${classSubjectId}::uuid AND class_id = ${classId}::uuid
+    `;
+    const updated = (await queryClassSubjects(tx, classId)).find(
+      (item) => item.id === classSubjectId,
+    );
+    if (!updated) throw new NotFoundError("Không tìm thấy môn học vừa cập nhật");
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "CLASS_SUBJECT",
+        entityId: classSubjectId,
+        action: "UPDATED",
+        dataBefore: existing as unknown as Prisma.InputJsonValue,
+        dataAfter: updated as unknown as Prisma.InputJsonValue,
+        performedBy: actorId,
+      },
     });
-    if (!teacher || teacher.status !== "ACTIVE")
-      throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
-  }
-
-  await prisma.$executeRaw`
-    UPDATE class_subjects
-    SET teacher_id = ${data.teacherId ?? null}::uuid,
-        tuition_fee = ${data.tuitionFee},
-        total_sessions = ${data.totalSessions},
-        max_students = ${data.maxStudents ?? null},
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ${classSubjectId}::uuid AND class_id = ${classId}::uuid
-  `;
-  return (await getClassSubjects(classId)).find(
-    (item) => item.id === classSubjectId,
-  );
+    return updated;
+  });
 }
 
 export async function removeClassSubject(
   classId: string,
   classSubjectId: string,
+  actorId: string,
 ) {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-subject:${classSubjectId}`}))`,
     );
     await assertClassCanManageSubjects(classId, tx);
-    const existing = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT id FROM class_subjects
-      WHERE id = ${classSubjectId}::uuid AND class_id = ${classId}::uuid AND status = 'ACTIVE'::class_subject_status
-    `;
-    if (!existing[0]) throw new NotFoundError("Không tìm thấy môn học trong lớp");
+    const existing = (await queryClassSubjects(tx, classId)).find(
+      (item) => item.id === classSubjectId,
+    );
+    if (!existing) throw new NotFoundError("Không tìm thấy môn học trong lớp");
 
     const [enrollments, tuitionItems, schedules] = await Promise.all([
       tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM enrollment_subjects WHERE class_subject_id = ${classSubjectId}::uuid`,
@@ -667,6 +761,16 @@ export async function removeClassSubject(
       UPDATE class_subjects SET status = 'INACTIVE'::class_subject_status, deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ${classSubjectId}::uuid AND class_id = ${classId}::uuid
     `;
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "CLASS_SUBJECT",
+        entityId: classSubjectId,
+        action: "INACTIVATED",
+        dataBefore: existing as unknown as Prisma.InputJsonValue,
+        dataAfter: { status: "INACTIVE" },
+        performedBy: actorId,
+      },
+    });
   });
 }
 

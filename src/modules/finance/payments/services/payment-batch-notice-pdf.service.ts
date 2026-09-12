@@ -5,6 +5,10 @@ import { PaymentBatchStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import {
+  getPaymentBatchNoticeSnapshot,
+  parseDocumentSnapshot,
+} from "./payment-document-snapshot";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
@@ -12,7 +16,7 @@ const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 export async function generatePaymentBatchNoticePdf(
   batchId: string,
   exportedByName: string,
-  _exportedById: string,
+  exportedById: string,
 ) {
   const batch = await prisma.paymentBatch.findUnique({
     where: { id: batchId },
@@ -54,6 +58,20 @@ export async function generatePaymentBatchNoticePdf(
       "Tài khoản ngân hàng của đợt thanh toán không còn hoạt động hoặc không tồn tại",
     );
   }
+  const snapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id));
+  const student = snapshot?.student ?? batch.student;
+  const fees = snapshot?.fees ?? batch.allocations.map((allocation) => ({
+    feeNo: allocation.tuitionFee.feeNo,
+    className: allocation.tuitionFee.class?.name ?? null,
+    finalAmount: allocation.amount.toString(),
+    items: allocation.tuitionFee.items.map((item) => ({
+      itemName: item.itemName,
+      subjectName: item.classSubject?.subject.name ?? null,
+      amount: item.amount.toString(),
+    })),
+    discountAmount: allocation.tuitionFee.discountAmount.toString(),
+    additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
+  }));
   const qrUrl = buildVietQrUrl({
     bankCode: account.bankCode,
     accountNo: account.accountNo,
@@ -90,12 +108,12 @@ export async function generatePaymentBatchNoticePdf(
     686,
   );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
-  draw(`Mã học sinh: ${batch.student.code}`, 75, 615);
-  draw(`Họ tên: ${batch.student.fullName}`, 75, 593);
+  draw(`Mã học sinh: ${student.code}`, 75, 615);
+  draw(`Họ tên: ${student.fullName}`, 75, 593);
   draw("CÁC KHOẢN THANH TOÁN", 55, 545, 13);
 
   let y = 515;
-  for (const allocation of batch.allocations) {
+  for (const allocation of fees) {
     if (y < 260) {
       drawFooter();
       page = pdf.addPage([595, 842]);
@@ -104,13 +122,13 @@ export async function generatePaymentBatchNoticePdf(
       y = 725;
     }
     draw(
-      `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "Chưa có lớp"}`,
+      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`,
       75,
       y,
     );
-    draw(`${money(Number(allocation.amount))} VND`, 390, y);
+    draw(`${money(Number(allocation.finalAmount))} VND`, 390, y);
     let itemY = y - 17;
-    for (const item of allocation.tuitionFee.items) {
+    for (const item of allocation.items) {
       if (itemY < 220) {
         drawFooter();
         page = pdf.addPage([595, 842]);
@@ -118,19 +136,19 @@ export async function generatePaymentBatchNoticePdf(
         draw("CÁC KHOẢN THANH TOÁN (tiếp theo)", 55, 755, 13);
         itemY = 725;
       }
-      const subjectName = item.classSubject?.subject.name || item.itemName;
+      const subjectName = item.subjectName || item.itemName;
       draw(`- ${subjectName}`, 90, itemY, 9, muted);
       draw(`${money(Number(item.amount))} VND`, 390, itemY, 9, muted);
       itemY -= 17;
     }
-    if (allocation.tuitionFee.discountAmount.greaterThan(0)) {
+    if (Number(allocation.discountAmount) > 0) {
       draw("- Giảm giá", 90, itemY, 9, muted);
-      draw(`-${money(Number(allocation.tuitionFee.discountAmount))} VND`, 390, itemY, 9, muted);
+      draw(`-${money(Number(allocation.discountAmount))} VND`, 390, itemY, 9, muted);
       itemY -= 17;
     }
-    if (allocation.tuitionFee.additionalAmount.greaterThan(0)) {
+    if (Number(allocation.additionalAmount) > 0) {
       draw("- Phụ thu", 90, itemY, 9, muted);
-      draw(`${money(Number(allocation.tuitionFee.additionalAmount))} VND`, 390, itemY, 9, muted);
+      draw(`${money(Number(allocation.additionalAmount))} VND`, 390, itemY, 9, muted);
       itemY -= 17;
     }
     y = itemY - 10;
@@ -173,5 +191,14 @@ export async function generatePaymentBatchNoticePdf(
     muted,
   );
   const pdfBuffer = Buffer.from(await pdf.save());
+  await prisma.tuitionAuditLog.create({
+    data: {
+      entityType: "PAYMENT_BATCH",
+      entityId: batch.id,
+      action: "NOTICE_PRINTED",
+      dataAfter: { batchNo: batch.batchNo, snapshotUsed: Boolean(snapshot) },
+      performedBy: exportedById,
+    },
+  });
   return { pdf: pdfBuffer, batchNo: batch.batchNo };
 }

@@ -10,7 +10,26 @@ export function listBankAccounts(includeInactive = false) {
 }
 
 export function createBankAccount(data: BankAccountCreate, actorId: string) {
-  return prisma.bankAccount.create({ data: { ...data, branchName: data.branchName || null, createdBy: actorId, updatedBy: actorId } });
+  return prisma.$transaction(async (tx) => {
+    const created = await tx.bankAccount.create({
+      data: {
+        ...data,
+        branchName: data.branchName || null,
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "BANK_ACCOUNT",
+        entityId: created.id,
+        action: "CREATED",
+        dataAfter: created,
+        performedBy: actorId,
+      },
+    });
+    return created;
+  });
 }
 
 export async function updateBankAccount(id: string, data: BankAccountUpdate, actorId: string) {
@@ -20,7 +39,6 @@ export async function updateBankAccount(id: string, data: BankAccountUpdate, act
     `;
     const existing = await tx.bankAccount.findUnique({
       where: { id },
-      select: { id: true },
     });
     if (!existing) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
 
@@ -49,7 +67,7 @@ export async function updateBankAccount(id: string, data: BankAccountUpdate, act
       );
     }
 
-    return tx.bankAccount.update({
+    const updated = await tx.bankAccount.update({
       where: { id },
       data: {
         ...data,
@@ -59,5 +77,16 @@ export async function updateBankAccount(id: string, data: BankAccountUpdate, act
         updatedBy: actorId,
       },
     });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "BANK_ACCOUNT",
+        entityId: id,
+        action: "UPDATED",
+        dataBefore: existing,
+        dataAfter: updated,
+        performedBy: actorId,
+      },
+    });
+    return updated;
   });
 }

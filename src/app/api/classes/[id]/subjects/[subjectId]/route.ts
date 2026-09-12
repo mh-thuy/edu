@@ -17,7 +17,14 @@ export async function PATCH(request: NextRequest, context: { params?: Params }) 
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, subjectId } = await getIds(context);
-    return apiSuccess(await updateClassSubject(id, subjectId, classSubjectUpdateSchema.parse(await request.json())));
+    return apiSuccess(
+      await updateClassSubject(
+        id,
+        subjectId,
+        classSubjectUpdateSchema.parse(await request.json()),
+        user.id,
+      ),
+    );
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_SUBJECT_IDS_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc môn học", 400);
     return handleApiError(error, "Không thể cập nhật môn học");
@@ -29,7 +36,7 @@ export async function DELETE(_request: NextRequest, context: { params?: Params }
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, subjectId } = await getIds(context);
-    await removeClassSubject(id, subjectId);
+    await removeClassSubject(id, subjectId, user.id);
     return apiSuccess({ id: subjectId });
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_SUBJECT_IDS_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc môn học", 400);

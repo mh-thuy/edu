@@ -424,6 +424,7 @@ export async function importBankStatement(args: {
   buffer: Buffer;
   fileName: string;
   bankAccountId: string;
+  actorId: string;
 }): Promise<BankImportResult> {
   const bank = await prisma.bankAccount.findUnique({
     where: { id: args.bankAccountId },
@@ -440,7 +441,13 @@ export async function importBankStatement(args: {
     .filter((value): value is string => Boolean(value));
   const existingPayments = await prisma.tuitionPayment.findMany({
     where: {
-      paymentStatus: { in: [TuitionPaymentStatus.SUCCESS, TuitionPaymentStatus.CANCELLED] },
+      paymentStatus: {
+        in: [
+          TuitionPaymentStatus.SUCCESS,
+          TuitionPaymentStatus.CANCELLED,
+          TuitionPaymentStatus.REFUNDED,
+        ],
+      },
       bankAccountId: args.bankAccountId,
       OR: [
         { transactionReference: { in: transactionHashes } },
@@ -548,7 +555,7 @@ export async function importBankStatement(args: {
     });
   }
 
-  return {
+  const result = {
     fileName: args.fileName,
     totalRows: rows.length,
     validRows: rows.length,
@@ -559,6 +566,24 @@ export async function importBankStatement(args: {
     ignoredRows,
     items,
   };
+  await prisma.tuitionAuditLog.create({
+    data: {
+      entityType: "BANK_ACCOUNT",
+      entityId: args.bankAccountId,
+      action: "STATEMENT_IMPORTED",
+      reason: args.fileName,
+      dataAfter: {
+        fileName: args.fileName,
+        totalRows: result.totalRows,
+        matchedRows: result.matchedRows,
+        unmatchedRows: result.unmatchedRows,
+        duplicatedRows: result.duplicatedRows,
+        ignoredRows: result.ignoredRows,
+      },
+      performedBy: args.actorId,
+    },
+  });
+  return result;
 }
 
 async function confirmPaymentBatch(
@@ -569,11 +594,21 @@ async function confirmPaymentBatch(
   if (payload.paymentBatchId !== batchId) throw new ConflictError("Đợt thanh toán không thuộc giao dịch ngân hàng này");
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`);
+    if (payload.bankTransactionNo) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation-no:${payload.bankAccountId}:${payload.bankTransactionNo}`}))`,
+      );
+    }
     const existingBatch = await tx.paymentBatch.findFirst({
       where: {
-        status: PaymentBatchStatus.SUCCESS,
+        id: { not: batchId },
         bankAccountId: payload.bankAccountId,
-        transactionReference: payload.transactionHash,
+        OR: [
+          { transactionReference: payload.transactionHash },
+          ...(payload.bankTransactionNo
+            ? [{ bankTransactionNo: payload.bankTransactionNo }]
+            : []),
+        ],
       },
     });
     if (existingBatch) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");

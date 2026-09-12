@@ -233,8 +233,9 @@ export async function completePaymentRefund(
       const cancelledReceipt = await tx.tuitionReceipt.findUnique({
         where: { paymentId: payment.id },
       });
+      let updatedReceipt: typeof cancelledReceipt = cancelledReceipt;
       if (cancelledReceipt && cancelledReceipt.status !== ReceiptStatus.CANCELLED) {
-        await tx.tuitionReceipt.update({
+        updatedReceipt = await tx.tuitionReceipt.update({
           where: { id: cancelledReceipt.id },
           data: {
             status: ReceiptStatus.CANCELLED,
@@ -274,44 +275,69 @@ export async function completePaymentRefund(
           completedAt,
         },
       });
+      const auditRows: Prisma.TuitionAuditLogCreateManyInput[] = [];
+      if (updatedReceipt && cancelledReceipt && updatedReceipt.status !== cancelledReceipt.status) {
+        auditRows.push({
+          entityType: "TUITION_RECEIPT",
+          entityId: updatedReceipt.id,
+          action: "CANCEL",
+          dataBefore: cancelledReceipt as unknown as Prisma.InputJsonValue,
+          dataAfter: updatedReceipt as unknown as Prisma.InputJsonValue,
+          reason: refund.reason,
+          performedBy: actorId,
+        });
+      }
+      auditRows.push(
+        {
+          entityType: "PAYMENT_REFUND",
+          entityId: refund.id,
+          action: "COMPLETED",
+          dataBefore: refund as unknown as Prisma.InputJsonValue,
+          dataAfter: completedRefund as unknown as Prisma.InputJsonValue,
+          reason: refund.reason,
+          performedBy: actorId,
+        },
+        {
+          entityType: "TUITION_PAYMENT",
+          entityId: payment.id,
+          action: "REFUNDED",
+          dataBefore: payment as unknown as Prisma.InputJsonValue,
+          dataAfter: updatedPayment as unknown as Prisma.InputJsonValue,
+          reason: refund.reason,
+          performedBy: actorId,
+        },
+        {
+          entityType: "TUITION_FEE",
+          entityId: payment.tuitionFeeId,
+          action: "REFUND_REVERSED",
+          dataBefore: payment.tuitionFee as unknown as Prisma.InputJsonValue,
+          dataAfter: reopenedFee as unknown as Prisma.InputJsonValue,
+          reason: refund.reason,
+          performedBy: actorId,
+        },
+      );
       await tx.tuitionAuditLog.createMany({
-        data: [
-          {
-            entityType: "PAYMENT_REFUND",
-            entityId: refund.id,
-            action: "COMPLETED",
-            dataBefore: refund as unknown as Prisma.InputJsonValue,
-            dataAfter: completedRefund as unknown as Prisma.InputJsonValue,
-            reason: refund.reason,
-            performedBy: actorId,
-          },
-          {
-            entityType: "TUITION_PAYMENT",
-            entityId: payment.id,
-            action: "REFUNDED",
-            dataBefore: payment as unknown as Prisma.InputJsonValue,
-            dataAfter: updatedPayment as unknown as Prisma.InputJsonValue,
-            reason: refund.reason,
-            performedBy: actorId,
-          },
-          {
-            entityType: "TUITION_FEE",
-            entityId: payment.tuitionFeeId,
-            action: "REFUND_REVERSED",
-            dataBefore: payment.tuitionFee as unknown as Prisma.InputJsonValue,
-            dataAfter: reopenedFee as unknown as Prisma.InputJsonValue,
-            reason: refund.reason,
-            performedBy: actorId,
-          },
-        ],
+        data: auditRows,
       });
     }
 
     const batchId = refunds[0]?.payment.paymentBatchId;
     if (batchId) {
-      await tx.paymentBatch.update({
+      const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
+      const cancelledBatch = await tx.paymentBatch.update({
         where: { id: batchId },
         data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
+      });
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "PAYMENT_BATCH",
+          entityId: batchId,
+          action: "REFUND_REVERSED",
+          dataBefore: batch as unknown as Prisma.InputJsonValue,
+          dataAfter: cancelledBatch as unknown as Prisma.InputJsonValue,
+          reason: "Hoàn tiền toàn bộ batch",
+          performedBy: actorId,
+        },
       });
     }
     return tx.paymentRefund.findUnique({

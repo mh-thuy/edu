@@ -72,7 +72,12 @@ async function assertScheduleRelations(
   if (classSubject.subject.status !== "ACTIVE") {
     throw new Error("Môn học đã ngừng hoạt động");
   }
-  if (classSubject.teacherId && classSubject.teacherId !== data.teacherId) throw new Error("Giáo viên không đúng với môn học");
+  if (!classSubject.teacherId) {
+    throw new ConflictError("Môn học chưa được phân công giáo viên");
+  }
+  if (classSubject.teacherId !== data.teacherId) {
+    throw new ConflictError("Giáo viên không đúng với môn học");
+  }
 }
 
 async function lockScheduleResources(

@@ -9,6 +9,12 @@ import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import {
+  savePaymentBatchNoticeSnapshot,
+  savePaymentBatchReceiptSnapshot,
+  saveTuitionReceiptSnapshot,
+  toFeeSnapshot,
+} from "./payment-document-snapshot";
 
 async function generateBatchNo(tx: Prisma.TransactionClient) {
   const prefix = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
@@ -43,7 +49,19 @@ export async function completePaymentBatch(
   );
   const batch = await tx.paymentBatch.findUnique({
     where: { id: batchId },
-    include: { allocations: { include: { tuitionFee: true } } },
+    include: {
+      allocations: {
+        include: {
+          tuitionFee: {
+            include: {
+              class: true,
+              items: { include: { classSubject: { include: { subject: true } } } },
+            },
+          },
+        },
+      },
+      student: true,
+    },
   });
   if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
   if (batch.status === PaymentBatchStatus.SUCCESS) return batch;
@@ -90,6 +108,7 @@ export async function completePaymentBatch(
         `Số tiền phân bổ của ${fee.feeNo} không khớp toàn bộ học phí`,
       );
   }
+  const paymentReceiptIssuedAt = new Date();
   const paymentDate = data?.paymentDate || batch.paymentDate;
   const bankAccountId = data?.bankAccountId ?? batch.bankAccountId;
   if (batch.paymentMethod === "BANK_TRANSFER" && !bankAccountId) {
@@ -146,6 +165,29 @@ export async function completePaymentBatch(
         amount: allocation.amount,
       },
     });
+    await saveTuitionReceiptSnapshot(tx, receipt.id, {
+      version: 1,
+      receiptNo: receipt.receiptNo,
+      issuedAt: paymentReceiptIssuedAt.toISOString(),
+      student: { code: batch.student.code, fullName: batch.student.fullName },
+      tuitionFee: toFeeSnapshot(allocation.tuitionFee),
+      amount: allocation.amount.toString(),
+      paymentMethod: batch.paymentMethod,
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "TUITION_RECEIPT",
+        entityId: receipt.id,
+        action: "CREATED",
+        dataAfter: {
+          receiptNo: receipt.receiptNo,
+          paymentId: payment.id,
+          paymentBatchId: batch.id,
+          amount: receipt.amount.toString(),
+        },
+        performedBy: actorId,
+      },
+    });
     await tx.tuitionFee.update({
       where: { id: allocation.tuitionFeeId },
       data: {
@@ -183,13 +225,35 @@ export async function completePaymentBatch(
       },
     });
   }
-  await tx.paymentBatchReceipt.create({
+  const batchReceipt = await tx.paymentBatchReceipt.create({
     data: {
       receiptNo: `BRC-${batch.batchNo}`.slice(0, 40),
       paymentBatchId: batch.id,
       issuedBy: actorId,
       receiverName: batch.payerName || batch.studentId,
       amount: batch.totalAmount,
+    },
+  });
+  await savePaymentBatchReceiptSnapshot(tx, batchReceipt.id, {
+    version: 1,
+    receiptNo: batchReceipt.receiptNo,
+    issuedAt: paymentReceiptIssuedAt.toISOString(),
+    student: { code: batch.student.code, fullName: batch.student.fullName },
+    fees: batch.allocations.map((allocation) => toFeeSnapshot(allocation.tuitionFee)),
+    amount: batch.totalAmount.toString(),
+    paymentMethod: batch.paymentMethod,
+  });
+  await tx.tuitionAuditLog.create({
+    data: {
+      entityType: "PAYMENT_BATCH_RECEIPT",
+      entityId: batchReceipt.id,
+      action: "CREATED",
+      dataAfter: {
+        receiptNo: batchReceipt.receiptNo,
+        paymentBatchId: batch.id,
+        amount: batchReceipt.amount.toString(),
+      },
+      performedBy: actorId,
     },
   });
   const completed = await tx.paymentBatch.update({
@@ -273,7 +337,11 @@ export async function createPaymentBatch(
 
     const fees = await tx.tuitionFee.findMany({
       where: { id: { in: data.tuitionFeeIds } },
-      include: { student: true },
+      include: {
+        student: true,
+        class: true,
+        items: { include: { classSubject: { include: { subject: true } } } },
+      },
     });
     if (fees.length !== data.tuitionFeeIds.length)
       throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
@@ -363,6 +431,11 @@ export async function createPaymentBatch(
         allocations: { include: { tuitionFee: true } },
         student: true,
       },
+    });
+    await savePaymentBatchNoticeSnapshot(tx, batch.id, {
+      version: 1,
+      student: { code: fees[0]!.student.code, fullName: fees[0]!.student.fullName },
+      fees: fees.map((fee) => toFeeSnapshot(fee)),
     });
     await tx.tuitionAuditLog.create({
       data: {
@@ -608,7 +681,7 @@ export async function convertPaymentBatchToCash(
   });
 }
 
-export async function getPaymentBatchQr(batchId: string, _actorId: string) {
+export async function getPaymentBatchQr(batchId: string, actorId: string) {
   const batch = await prisma.paymentBatch.findUnique({
     where: { id: batchId },
     include: { student: true },
@@ -625,16 +698,30 @@ export async function getPaymentBatchQr(batchId: string, _actorId: string) {
   });
   if (!account)
     throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
+  const qrUrl = buildVietQrUrl({
+    bankCode: account.bankCode,
+    accountNo: account.accountNo,
+    accountName: account.accountName,
+    amount: Number(batch.totalAmount),
+    addInfo: `PB ${batch.batchNo}`,
+  });
+  await prisma.tuitionAuditLog.create({
+    data: {
+      entityType: "PAYMENT_BATCH",
+      entityId: batch.id,
+      action: "QR_GENERATED",
+      dataAfter: {
+        batchNo: batch.batchNo,
+        amount: batch.totalAmount.toString(),
+        bankAccountId: account.id,
+      },
+      performedBy: actorId,
+    },
+  });
   return {
     batchNo: batch.batchNo,
     amount: batch.totalAmount,
     account,
-    qrUrl: buildVietQrUrl({
-      bankCode: account.bankCode,
-      accountNo: account.accountNo,
-      accountName: account.accountName,
-      amount: Number(batch.totalAmount),
-      addInfo: `PB ${batch.batchNo}`,
-    }),
+    qrUrl,
   };
 }
