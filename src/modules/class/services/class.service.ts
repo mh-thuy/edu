@@ -294,10 +294,20 @@ export async function assignStudentToClass(
       throw new ConflictError("Môn học không thuộc lớp hoặc đã ngừng mở");
     }
 
-    const existing = await tx.classStudent.findUnique({
+    let existing = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
       include: { student: true, class: true },
     });
+
+    if (existing) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${existing.id}`}))`,
+      );
+      existing = await tx.classStudent.findUnique({
+        where: { id: existing.id },
+        include: { student: true, class: true },
+      });
+    }
 
     if (existing && !["ACTIVE", "LEFT"].includes(existing.status)) {
       throw new ConflictError(
@@ -411,6 +421,16 @@ export async function removeSubjectFromEnrollment(
       include: { student: true },
     });
     if (!enrollment || enrollment.status !== "ACTIVE") {
+      throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollment.id}`}))`,
+    );
+    const lockedEnrollment = await tx.classStudent.findUnique({
+      where: { id: enrollment.id },
+      select: { status: true },
+    });
+    if (!lockedEnrollment || lockedEnrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
     }
     const subject = await tx.enrollmentSubject.findUnique({
@@ -903,14 +923,24 @@ export async function removeStudentFromClass(
   await prisma.$transaction(async (tx) => {
     const enrollment = await tx.classStudent.findUnique({
       where: { classId_studentId: { classId, studentId } },
+      select: { id: true },
+    });
+    if (!enrollment) {
+      throw new NotFoundError("Không tìm thấy học viên đang đăng ký trong lớp");
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollment.id}`}))`,
+    );
+    const lockedEnrollment = await tx.classStudent.findUnique({
+      where: { id: enrollment.id },
       include: { tuitionFees: { select: { id: true, status: true } } },
     });
-    if (!enrollment || enrollment.status !== "ACTIVE") {
+    if (!lockedEnrollment || lockedEnrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang đăng ký trong lớp");
     }
 
     if (
-      enrollment.tuitionFees.length > 0 &&
+      lockedEnrollment.tuitionFees.length > 0 &&
       options?.force !== true
     ) {
       throw new ConflictError(
@@ -918,7 +948,7 @@ export async function removeStudentFromClass(
       );
     }
 
-    if (enrollment.tuitionFees.length > 0 && !options?.reason?.trim()) {
+    if (lockedEnrollment.tuitionFees.length > 0 && !options?.reason?.trim()) {
       throw new ConflictError(
         "Bắt buộc nhập lý do khi force rời lớp đã phát sinh học phí",
       );
@@ -940,8 +970,8 @@ export async function removeStudentFromClass(
           action: "LEFT",
           reason: options?.reason?.trim() || "Học viên rời lớp",
           dataBefore: {
-            status: enrollment.status,
-            tuitionFeeIds: enrollment.tuitionFees.map((fee) => fee.id),
+            status: lockedEnrollment.status,
+            tuitionFeeIds: lockedEnrollment.tuitionFees.map((fee) => fee.id),
           },
           dataAfter: {
             status: "LEFT",

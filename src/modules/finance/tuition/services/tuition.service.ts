@@ -154,13 +154,23 @@ export class TuitionService {
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${data.classId}:${data.billingYear}:${data.billingMonth}`}))`,
       );
-      const enrollment = await tx.classStudent.findUnique({
+      const enrollmentRef = await tx.classStudent.findUnique({
         where: {
           classId_studentId: {
             classId: data.classId,
             studentId: data.studentId,
           },
         },
+        select: { id: true },
+      });
+      if (!enrollmentRef) {
+        throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
+      }
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollmentRef.id}`}))`,
+      );
+      const enrollment = await tx.classStudent.findUnique({
+        where: { id: enrollmentRef.id },
         include: {
           class: true,
           subjects: {
@@ -178,9 +188,6 @@ export class TuitionService {
       if (!enrollment) {
         throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
       }
-      await tx.$executeRaw(
-        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${enrollment.id}`}))`,
-      );
       if (enrollment.class.status === "COMPLETED" || enrollment.class.status === "CANCELLED") {
         throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
       }
