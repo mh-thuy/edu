@@ -22,6 +22,8 @@ import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Batch = {
   id: string;
@@ -97,6 +99,9 @@ export function PaymentBatchDetail({ id }: { id: string }) {
   const [cashDialogOpen, setCashDialogOpen] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
+  const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,20 +136,30 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         );
       setCashDialogOpen(false);
       await load();
+      showSuccess("Đã chuyển đợt thanh toán sang tiền mặt và phát hành biên lai");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt");
+      showError(
+        reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
+      );
     } finally {
       setActionLoading(false);
     }
   }
 
   async function cancelPayment() {
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelReasonError("Lý do hủy là bắt buộc");
+      return;
+    }
+    setCancelReasonError("");
     setActionLoading(true);
     try {
       const response = await fetch(`/api/payment-batches/${id}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "Hủy từ chi tiết đợt thanh toán" }),
+        body: JSON.stringify({ reason }),
       });
       if (!response.ok)
         throw new Error(
@@ -152,8 +167,12 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         );
       setCancelDialogOpen(false);
       await load();
+      showSuccess("Đã hủy đợt thanh toán");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể hủy thanh toán");
+      showError(
+        reason instanceof Error ? reason.message : "Không thể hủy thanh toán",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -215,7 +234,11 @@ export function PaymentBatchDetail({ id }: { id: string }) {
                   <Button
                     variant="outlined"
                     color="error"
-                    onClick={() => setCancelDialogOpen(true)}
+                    onClick={() => {
+                      setCancelReason("");
+                      setCancelReasonError("");
+                      setCancelDialogOpen(true);
+                    }}
                   >
                     Hủy thanh toán
                   </Button>
@@ -390,10 +413,29 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         message={`Hủy đợt ${batch.batchNo}? Các khoản học phí sẽ được giải phóng để có thể tạo thanh toán lại.`}
         confirmLabel="Hủy thanh toán"
         cancelLabel="Quay lại"
+        content={
+          <AppTextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={3}
+            label="Lý do hủy"
+            value={cancelReason}
+            onChange={(event) => {
+              setCancelReason(event.target.value);
+              if (event.target.value.trim()) setCancelReasonError("");
+            }}
+            error={Boolean(cancelReasonError)}
+            helperText={cancelReasonError || "Tối đa 500 ký tự"}
+            inputProps={{ maxLength: 500 }}
+            sx={{ mt: 2 }}
+          />
+        }
         onConfirm={() => void cancelPayment()}
         onCancel={() => setCancelDialogOpen(false)}
         isLoading={actionLoading}
       />
+      {Snackbar}
     </Stack>
   );
 }

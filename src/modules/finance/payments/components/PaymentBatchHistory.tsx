@@ -16,7 +16,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -36,6 +35,8 @@ import {
 } from "@/components/shared/dialogs/StudentSelectDialog";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Batch = {
   id: string;
@@ -77,8 +78,10 @@ export function PaymentBatchHistory() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [studentCode, setStudentCode] = useState("");
+  const [pendingStudentCode, setPendingStudentCode] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [status, setStatus] = useState("");
+  const [pendingStatus, setPendingStatus] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,6 +89,9 @@ export function PaymentBatchHistory() {
   const [cancelling, setCancelling] = useState(false);
   const [cashTarget, setCashTarget] = useState<Batch | null>(null);
   const [convertingCash, setConvertingCash] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReasonError, setCancelReasonError] = useState("");
+  const { showSuccess, showError, Snackbar } = useSnackbar();
   const studentDialog = useDisclosure();
 
   const load = useCallback(async () => {
@@ -129,16 +135,32 @@ export function PaymentBatchHistory() {
   }, [load]);
 
   function clearSearch() {
-    const shouldReloadImmediately = !studentCode && !status;
+    const hasSearchState = Boolean(
+      studentCode || status || pendingStudentCode || pendingStatus || page !== 0,
+    );
     setStudent(null);
     setStudentCode("");
+    setPendingStudentCode("");
     setStatus("");
+    setPendingStatus("");
     setPage(0);
-    if (shouldReloadImmediately) void load();
+    if (!hasSearchState) return;
+  }
+
+  function applySearch() {
+    setStudentCode(pendingStudentCode);
+    setStatus(pendingStatus);
+    setPage(0);
   }
 
   async function cancelBatch() {
     if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      setCancelReasonError("Lý do hủy là bắt buộc");
+      return;
+    }
+    setCancelReasonError("");
     setCancelling(true);
     try {
       const response = await fetch(
@@ -146,9 +168,7 @@ export function PaymentBatchHistory() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reason: "Khách hàng chuyển sang thanh toán tiền mặt",
-          }),
+          body: JSON.stringify({ reason }),
         },
       );
       if (!response.ok)
@@ -160,11 +180,15 @@ export function PaymentBatchHistory() {
         );
       setCancelTarget(null);
       await load();
+      showSuccess("Đã hủy đợt thanh toán");
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : "Không thể hủy đợt thanh toán",
+      );
+      showError(
+        reason instanceof Error ? reason.message : "Không thể hủy đợt thanh toán",
       );
     } finally {
       setCancelling(false);
@@ -185,8 +209,12 @@ export function PaymentBatchHistory() {
       setCashTarget(null);
       setExpanded(null);
       await load();
+      showSuccess("Đã chuyển đợt thanh toán sang tiền mặt và phát hành biên lai");
     } catch (reason) {
       setError(
+        reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
+      );
+      showError(
         reason instanceof Error ? reason.message : "Không thể chuyển sang tiền mặt",
       );
     } finally {
@@ -230,15 +258,12 @@ export function PaymentBatchHistory() {
             nameLabel="Họ tên"
             sx={{ flex: 1, minWidth: 260 }}
           />
-          <TextField
+          <AppTextField
             size="small"
             select
             label="Trạng thái"
             value={status}
-            onChange={(event) => {
-              setStatus(event.target.value);
-              setPage(0);
-            }}
+            onChange={(event) => setPendingStatus(event.target.value)}
             sx={{ minWidth: 180 }}
           >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
@@ -246,14 +271,14 @@ export function PaymentBatchHistory() {
             <MenuItem value="PENDING">Chờ chuyển khoản / đối soát</MenuItem>
             <MenuItem value="FAILED">Thất bại</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
-          </TextField>
-          <Button variant="contained" onClick={() => void load()}>
+          </AppTextField>
+          <Button variant="contained" onClick={applySearch}>
             Tìm kiếm
           </Button>
           <Button
             variant="outlined"
             onClick={clearSearch}
-            disabled={!studentCode && !status}
+            disabled={!studentCode && !status && !pendingStudentCode && !pendingStatus && page === 0}
           >
             Xóa tìm kiếm
           </Button>
@@ -439,7 +464,11 @@ export function PaymentBatchHistory() {
                                 size="small"
                                 color="error"
                                 variant="outlined"
-                                onClick={() => setCancelTarget(batch)}
+                                onClick={() => {
+                                  setCancelReason("");
+                                  setCancelReasonError("");
+                                  setCancelTarget(batch);
+                                }}
                               >
                                 Hủy đợt thanh toán
                               </Button>
@@ -495,8 +524,7 @@ export function PaymentBatchHistory() {
         onClose={studentDialog.onClose}
         onSelect={(item: StudentItem) => {
           setStudent({ id: item.id, code: item.code, name: item.fullName });
-          setStudentCode(item.code);
-          setPage(0);
+          setPendingStudentCode(item.code);
           studentDialog.onClose();
         }}
       />
@@ -510,6 +538,24 @@ export function PaymentBatchHistory() {
         }
         confirmLabel="Hủy đợt thanh toán"
         cancelLabel="Quay lại"
+        content={
+          <AppTextField
+            autoFocus
+            fullWidth
+            multiline
+            minRows={3}
+            label="Lý do hủy"
+            value={cancelReason}
+            onChange={(event) => {
+              setCancelReason(event.target.value);
+              if (event.target.value.trim()) setCancelReasonError("");
+            }}
+            error={Boolean(cancelReasonError)}
+            helperText={cancelReasonError || "Tối đa 500 ký tự"}
+            inputProps={{ maxLength: 500 }}
+            sx={{ mt: 2 }}
+          />
+        }
         onConfirm={() => void cancelBatch()}
         onCancel={() => setCancelTarget(null)}
         isLoading={cancelling}
@@ -528,6 +574,7 @@ export function PaymentBatchHistory() {
         onCancel={() => setCashTarget(null)}
         isLoading={convertingCash}
       />
+      {Snackbar}
     </Stack>
   );
 }

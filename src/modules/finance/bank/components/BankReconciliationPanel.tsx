@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  FormControl,
+  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -24,6 +26,8 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Account = {
   id: string;
@@ -70,6 +74,13 @@ type PendingConfirmation = {
   title: string;
   message: string;
 };
+type ResultFilter =
+  | "ALL"
+  | "AUTO_MATCHED"
+  | "UNMATCHED"
+  | "IGNORED"
+  | "DUPLICATED"
+  | "CONFIRMED";
 
 const money = (value: number) =>
   new Intl.NumberFormat("vi-VN").format(Number(value));
@@ -96,10 +107,12 @@ const reconciliationLabels: Record<string, string> = {
   UNMATCHED: "Chưa khớp",
   IGNORED: "Bỏ qua",
   DUPLICATED: "Trùng giao dịch",
+  CONFIRMED: "Đã xác nhận",
 };
-const reconciliationColors: Record<string, "default" | "warning" | "info"> = {
+const reconciliationColors: Record<string, "default" | "warning" | "info" | "success"> = {
   AUTO_MATCHED: "info",
   UNMATCHED: "warning",
+  CONFIRMED: "success",
 };
 
 export function BankReconciliationPanel() {
@@ -108,28 +121,97 @@ export function BankReconciliationPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<Transaction[]>([]);
+  const [confirmedTokens, setConfirmedTokens] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [message, setMessage] = useState<{
     text: string;
     severity: "success" | "error" | "info";
   }>({ text: "", severity: "info" });
   const [loading, setLoading] = useState(false);
+  const [hasAnalysis, setHasAnalysis] = useState(false);
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [accountError, setAccountError] = useState("");
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const { showSuccess, showError, Snackbar } = useSnackbar();
+
+  const loadAccounts = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountError("");
+    try {
+      const response = await fetch("/api/bank-accounts");
+      if (!response.ok) {
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể tải tài khoản ngân hàng"),
+        );
+      }
+      const data = await unwrapApiResponse<Account[]>(response);
+      setAccounts(data);
+      setAccountId((current) =>
+        data.some((account) => account.id === current) ? current : data[0]?.id || "",
+      );
+    } catch (reason) {
+      setAccountError(
+        reason instanceof Error ? reason.message : "Không thể tải tài khoản ngân hàng",
+      );
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void fetch("/api/bank-accounts")
-      .then(async (response) =>
-        response.ok ? unwrapApiResponse<Account[]>(response) : [],
-      )
-      .then((data) => {
-        setAccounts(data);
-        setAccountId(data[0]?.id || "");
-      });
-  }, []);
+    void loadAccounts();
+  }, [loadAccounts]);
+
+  const displayedItems = useMemo(
+    () =>
+      items.map((item) =>
+        confirmedTokens.has(item.confirmationToken)
+          ? { ...item, reconciliationStatus: "CONFIRMED" }
+          : item,
+      ),
+    [confirmedTokens, items],
+  );
+
+  const filteredItems = useMemo(
+    () =>
+      resultFilter === "ALL"
+        ? displayedItems
+        : displayedItems.filter((item) => item.reconciliationStatus === resultFilter),
+    [displayedItems, resultFilter],
+  );
+
+  const summary = useMemo(
+    () => ({
+      total: displayedItems.length,
+      matched: displayedItems.filter((item) => item.reconciliationStatus === "AUTO_MATCHED").length,
+      unmatched: displayedItems.filter((item) => item.reconciliationStatus === "UNMATCHED").length,
+      ignored: displayedItems.filter((item) => item.reconciliationStatus === "IGNORED").length,
+      duplicated: displayedItems.filter((item) => item.reconciliationStatus === "DUPLICATED").length,
+      confirmed: displayedItems.filter((item) => item.reconciliationStatus === "CONFIRMED").length,
+      creditAmount: displayedItems.reduce((total, item) => total + item.creditAmount, 0),
+    }),
+    [displayedItems],
+  );
 
   function inspectFile(nextFile: File | null) {
     setFile(nextFile);
     if (nextFile) setStep(1);
+  }
+
+  function resetSession() {
+    setFile(null);
+    setItems([]);
+    setConfirmedTokens(new Set());
+    setHasAnalysis(false);
+    setPendingConfirmation(null);
+    setResultFilter("ALL");
+    setStep(0);
+    setMessage({ text: "", severity: "info" });
+    setResetDialogOpen(false);
   }
 
   async function importFile() {
@@ -155,6 +237,8 @@ export function BankReconciliationPanel() {
         );
       const result = await unwrapApiResponse<ImportResult>(response);
       setItems(result.items);
+      setHasAnalysis(true);
+      setResultFilter("ALL");
       setFile(null);
       setStep(2);
       setMessage({
@@ -203,13 +287,12 @@ export function BankReconciliationPanel() {
           await extractApiErrorMessage(response, "Không thể xác nhận đối soát"),
         );
       const token = pendingConfirmation.itemToken;
-      setItems((current) =>
-        current.filter((item) => item.confirmationToken !== token),
-      );
+      setConfirmedTokens((current) => new Set(current).add(token));
       setMessage({
         text: "Đã xác nhận đối soát và tạo thanh toán/biên lai.",
         severity: "success",
       });
+      showSuccess("Đã xác nhận đối soát và tạo thanh toán/biên lai");
       setPendingConfirmation(null);
     } catch (reason) {
       setMessage({
@@ -219,6 +302,9 @@ export function BankReconciliationPanel() {
             : "Không thể xác nhận đối soát",
         severity: "error",
       });
+      showError(
+        reason instanceof Error ? reason.message : "Không thể xác nhận đối soát",
+      );
     } finally {
       setLoading(false);
     }
@@ -253,21 +339,28 @@ export function BankReconciliationPanel() {
             spacing={2}
             alignItems="center"
           >
-            <Select
-              value={accountId}
-              onChange={(event) => setAccountId(event.target.value)}
-              displayEmpty
-              fullWidth
-              sx={{ minWidth: { md: 300 }, flex: 1 }}
+            <FormControl fullWidth sx={{ minWidth: { md: 300 }, flex: 1 }}>
+              <InputLabel id="reconciliation-bank-account-label">Tài khoản nhận</InputLabel>
+              <Select
+                labelId="reconciliation-bank-account-label"
+                value={accountId}
+                label="Tài khoản nhận"
+                onChange={(event) => setAccountId(event.target.value)}
+                disabled={accountsLoading || !accounts.length || loading || items.length > 0}
+              >
+                {accounts.map((account) => (
+                  <MenuItem key={account.id} value={account.id}>
+                    {account.bankName} — {account.accountNo}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<UploadFileOutlinedIcon />}
+              disabled={loading || items.length > 0}
             >
-              <MenuItem value="">Chọn tài khoản</MenuItem>
-              {accounts.map((account) => (
-                <MenuItem key={account.id} value={account.id}>
-                  {account.bankName} — {account.accountNo}
-                </MenuItem>
-              ))}
-            </Select>
-            <Button variant="outlined" component="label" startIcon={<UploadFileOutlinedIcon />}>
               {file?.name || "Chọn file Excel sao kê"}
               <input
                 hidden
@@ -279,6 +372,22 @@ export function BankReconciliationPanel() {
               />
             </Button>
           </Stack>
+          {accountsLoading && <Alert severity="info">Đang tải tài khoản ngân hàng...</Alert>}
+          {accountError && (
+            <Alert
+              severity="error"
+              action={
+                <Button color="inherit" size="small" onClick={() => void loadAccounts()}>
+                  Thử lại
+                </Button>
+              }
+            >
+              {accountError}
+            </Alert>
+          )}
+          {!accountsLoading && !accountError && !accounts.length && (
+            <Alert severity="warning">Chưa có tài khoản ngân hàng đang hoạt động để đối soát.</Alert>
+          )}
           {file && (
             <Stack
               direction={{ xs: "column", md: "row" }}
@@ -306,32 +415,81 @@ export function BankReconciliationPanel() {
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={0.5} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
           <Box>
             <Typography variant="subtitle1" fontWeight={700}>Kết quả phân tích</Typography>
-            <Typography variant="body2" color="text.secondary">{items.length ? `${items.length} giao dịch cần xử lý` : "Chưa có giao dịch trong phiên"}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {items.length
+                ? `${items.length} giao dịch trong phiên · ${money(summary.creditAmount)} VND ghi có`
+                : "Chưa có giao dịch trong phiên"}
+            </Typography>
           </Box>
-          {items.length > 0 && <Chip size="small" color="warning" label={`${items.filter((item) => item.reconciliationStatus === "UNMATCHED").length} chưa khớp`} />}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+            {items.length > 0 && (
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<RefreshOutlinedIcon />}
+                onClick={() => setResetDialogOpen(true)}
+                disabled={loading}
+              >
+                Phiên mới
+              </Button>
+            )}
+            {items.length > 0 && <Chip size="small" color="warning" label={`${summary.unmatched} chưa khớp`} />}
+          </Stack>
         </Stack>
+        {items.length > 0 && (
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ px: 2, pb: 2 }}>
+            <Chip size="small" variant="outlined" label={`Tất cả: ${summary.total}`} />
+            <Chip size="small" color="info" variant="outlined" label={`Khớp tự động: ${summary.matched}`} />
+            <Chip size="small" color="warning" variant="outlined" label={`Cần kiểm tra: ${summary.unmatched}`} />
+            <Chip size="small" variant="outlined" label={`Bỏ qua: ${summary.ignored}`} />
+            <Chip size="small" variant="outlined" label={`Trùng: ${summary.duplicated}`} />
+            <Chip size="small" color="success" variant="outlined" label={`Đã xác nhận: ${summary.confirmed}`} />
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel id="reconciliation-result-filter-label">Lọc trạng thái</InputLabel>
+              <Select
+                labelId="reconciliation-result-filter-label"
+                value={resultFilter}
+                label="Lọc trạng thái"
+                onChange={(event) => setResultFilter(event.target.value as ResultFilter)}
+              >
+                <MenuItem value="ALL">Tất cả</MenuItem>
+                <MenuItem value="AUTO_MATCHED">Khớp tự động</MenuItem>
+                <MenuItem value="UNMATCHED">Cần kiểm tra</MenuItem>
+                <MenuItem value="IGNORED">Bỏ qua</MenuItem>
+                <MenuItem value="DUPLICATED">Trùng giao dịch</MenuItem>
+                <MenuItem value="CONFIRMED">Đã xác nhận</MenuItem>
+              </Select>
+            </FormControl>
+          </Stack>
+        )}
         <Box sx={{ overflowX: "auto" }}>
         <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Dòng</TableCell>
               <TableCell>Ngày</TableCell>
+              <TableCell>Mã giao dịch</TableCell>
               <TableCell>Nội dung</TableCell>
               <TableCell align="right">Ghi có</TableCell>
+              <TableCell align="right">Ghi nợ</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell>Đối tượng đối soát</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <TableRow key={item.confirmationToken}>
                 <TableCell>{item.rowNo}</TableCell>
                 <TableCell>
                   {formatTransactionDate(item.transactionDate)}
                 </TableCell>
+                <TableCell>{item.bankTransactionNo || "-"}</TableCell>
                 <TableCell sx={{ minWidth: 300 }}>{item.description}</TableCell>
                 <TableCell align="right">
                   {money(item.creditAmount)} VND
+                </TableCell>
+                <TableCell align="right">
+                  {money(item.debitAmount)} VND
                 </TableCell>
                 <TableCell>
                   <Chip
@@ -347,7 +505,11 @@ export function BankReconciliationPanel() {
                   />
                 </TableCell>
                 <TableCell>
-                  {item.paymentBatch ? (
+                  {confirmedTokens.has(item.confirmationToken) ? (
+                    <Typography variant="body2" color="success.main">
+                      Đã xác nhận và tạo payment/biên lai trong phiên này
+                    </Typography>
+                  ) : item.paymentBatch ? (
                     <Box>
                       <Typography variant="body2">
                         <strong>{item.paymentBatch.batchNo}</strong> ·{" "}
@@ -367,7 +529,7 @@ export function BankReconciliationPanel() {
                             item,
                             { batchId: item.paymentBatch!.id },
                             "Xác nhận đợt thanh toán",
-                            `Xác nhận đợt thanh toán ${item.paymentBatch!.batchNo} và tạo biên lai?`,
+                            `Xác nhận ${item.paymentBatch!.batchNo} cho ${item.paymentBatch!.student.code} — ${item.paymentBatch!.student.fullName}, số tiền ${money(item.creditAmount)} VND, giao dịch ${item.bankTransactionNo || "không có mã"} lúc ${formatTransactionDate(item.transactionDate)} và tạo biên lai?`,
                           )
                         }
                       >
@@ -398,7 +560,7 @@ export function BankReconciliationPanel() {
                                   item,
                                   { batchId: candidate.id },
                                   "Xác nhận đợt thanh toán thủ công",
-                                  `Xác nhận giao dịch này cho đợt ${candidate.batchNo} và tạo biên lai?`,
+                                  `Xác nhận giao dịch ${item.bankTransactionNo || "không có mã"} số tiền ${money(item.creditAmount)} VND lúc ${formatTransactionDate(item.transactionDate)} cho ${candidate.batchNo} — ${candidate.student.code} — ${candidate.student.fullName} và tạo biên lai?`,
                                   candidate.confirmationToken,
                                 )
                               }
@@ -417,13 +579,24 @@ export function BankReconciliationPanel() {
             ))}
             {!items.length && (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={8}>
                   <Typography
                     sx={{ p: 3 }}
                     color="text.secondary"
                     textAlign="center"
                   >
-                    Chưa có dữ liệu phân tích trong phiên này
+                    {!hasAnalysis
+                      ? "Chưa có dữ liệu phân tích trong phiên này"
+                      : "Đã xử lý hết giao dịch trong phiên này"}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
+            {items.length > 0 && !filteredItems.length && (
+              <TableRow>
+                <TableCell colSpan={8}>
+                  <Typography sx={{ p: 3 }} color="text.secondary" textAlign="center">
+                    Không có giao dịch thuộc trạng thái đã chọn
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -443,6 +616,17 @@ export function BankReconciliationPanel() {
         onCancel={() => setPendingConfirmation(null)}
         isLoading={loading}
       />
+      <ConfirmDialog
+        open={resetDialogOpen}
+        title="Bắt đầu phiên đối soát mới"
+        message="Kết quả chưa xác nhận trong phiên hiện tại sẽ bị xóa khỏi màn hình. Các payment đã xác nhận vẫn được giữ nguyên. Bạn có muốn tiếp tục?"
+        confirmLabel="Bắt đầu phiên mới"
+        cancelLabel="Quay lại"
+        confirmColor="primary"
+        onConfirm={resetSession}
+        onCancel={() => setResetDialogOpen(false)}
+      />
+      {Snackbar}
     </Stack>
   );
 }
