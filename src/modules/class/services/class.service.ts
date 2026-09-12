@@ -422,6 +422,14 @@ export async function removeSubjectFromEnrollment(
     if (!subject || subject.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy môn học đang đăng ký");
     }
+    const activeSubjectCount = await tx.enrollmentSubject.count({
+      where: { enrollmentId: enrollment.id, status: "ACTIVE" },
+    });
+    if (activeSubjectCount <= 1) {
+      throw new ConflictError(
+        "Không thể bỏ môn cuối cùng; hãy dùng thao tác Rời lớp",
+      );
+    }
     const feeItem = await tx.tuitionFeeItem.findFirst({
       where: {
         classSubjectId,
@@ -545,6 +553,112 @@ export async function pauseStudentEnrollment(
       },
     });
     return pause;
+  });
+}
+
+export async function updateEnrollmentPause(
+  classId: string,
+  studentId: string,
+  pauseId: string,
+  data: { startMonth: string; endMonth: string; reason?: string },
+  actorId: string,
+) {
+  const startMonth = parseBillingMonth(data.startMonth);
+  const endMonth = parseBillingMonth(data.endMonth);
+  if (startMonth > endMonth) {
+    throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const pause = await tx.enrollmentPause.findFirst({
+      where: {
+        id: pauseId,
+        enrollment: { classId, studentId, status: "ACTIVE" },
+      },
+    });
+    if (!pause) throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ");
+
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${pause.enrollmentId}`}))`,
+    );
+    const existingFee = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM tuition_fees
+      WHERE enrollment_id = ${pause.enrollmentId}::uuid
+        AND billing_type = 'MONTHLY'::tuition_fee_billing_type
+        AND make_date(billing_year::integer, billing_month::integer, 1)
+          BETWEEN make_date(${startMonth.getUTCFullYear()}::integer, ${startMonth.getUTCMonth() + 1}::integer, 1)
+          AND make_date(${endMonth.getUTCFullYear()}::integer, ${endMonth.getUTCMonth() + 1}::integer, 1)
+      LIMIT 1
+    `;
+    if (existingFee.length > 0) {
+      throw new ConflictError(
+        "Không thể sửa tạm nghỉ vì khoảng thời gian đã phát sinh học phí",
+      );
+    }
+    const overlap = await tx.enrollmentPause.findFirst({
+      where: {
+        enrollmentId: pause.enrollmentId,
+        id: { not: pause.id },
+        startMonth: { lte: endMonth },
+        endMonth: { gte: startMonth },
+      },
+      select: { id: true },
+    });
+    if (overlap) throw new ConflictError("Khoảng tạm nghỉ bị trùng");
+
+    const updated = await tx.enrollmentPause.update({
+      where: { id: pause.id },
+      data: {
+        startMonth,
+        endMonth,
+        reason: data.reason?.trim() || null,
+      },
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "ENROLLMENT_PAUSE",
+        entityId: pause.id,
+        action: "UPDATED",
+        dataBefore: pause as unknown as Prisma.InputJsonValue,
+        dataAfter: updated as unknown as Prisma.InputJsonValue,
+        reason: updated.reason,
+        performedBy: actorId,
+      },
+    });
+    return updated;
+  });
+}
+
+export async function deleteEnrollmentPause(
+  classId: string,
+  studentId: string,
+  pauseId: string,
+  actorId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const pause = await tx.enrollmentPause.findFirst({
+      where: {
+        id: pauseId,
+        enrollment: { classId, studentId, status: "ACTIVE" },
+      },
+    });
+    if (!pause) throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ");
+
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${pause.enrollmentId}`}))`,
+    );
+    await tx.enrollmentPause.delete({ where: { id: pause.id } });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "ENROLLMENT_PAUSE",
+        entityId: pause.id,
+        action: "DELETED",
+        dataBefore: pause as unknown as Prisma.InputJsonValue,
+        reason: "Hủy thời gian tạm nghỉ",
+        performedBy: actorId,
+      },
+    });
+    return { deleted: true };
   });
 }
 

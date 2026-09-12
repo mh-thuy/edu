@@ -2,12 +2,24 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
-import { pauseStudentEnrollment } from "@/modules/class/services/class.service";
+import {
+  deleteEnrollmentPause,
+  pauseStudentEnrollment,
+  updateEnrollmentPause,
+} from "@/modules/class/services/class.service";
 
 const pauseSchema = z.object({
   startMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
   endMonth: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
   reason: z.string().max(500).optional(),
+});
+
+const updatePauseSchema = pauseSchema.extend({
+  pauseId: z.string().uuid(),
+});
+
+const deletePauseSchema = z.object({
+  pauseId: z.string().uuid(),
 });
 
 type Params = Promise<{
@@ -28,5 +40,43 @@ export async function POST(
     return apiSuccess(result, 201);
   } catch (error: unknown) {
     return handleApiError(error, "Không thể tạo thời gian tạm nghỉ");
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Params },
+) {
+  try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
+    const { id, studentId } = await context.params;
+    const { pauseId, ...data } = updatePauseSchema.parse(await request.json());
+    const result = await updateEnrollmentPause(
+      id,
+      studentId,
+      pauseId,
+      data,
+      user.id,
+    );
+    return apiSuccess(result);
+  } catch (error: unknown) {
+    return handleApiError(error, "Không thể sửa thời gian tạm nghỉ");
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Params },
+) {
+  try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
+    const { id, studentId } = await context.params;
+    const { pauseId } = deletePauseSchema.parse(await request.json());
+    const result = await deleteEnrollmentPause(id, studentId, pauseId, user.id);
+    return apiSuccess(result);
+  } catch (error: unknown) {
+    return handleApiError(error, "Không thể hủy thời gian tạm nghỉ");
   }
 }

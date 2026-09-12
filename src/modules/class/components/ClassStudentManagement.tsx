@@ -90,6 +90,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [pauseStart, setPauseStart] = useState(currentMonth);
   const [pauseEnd, setPauseEnd] = useState(currentMonth);
   const [pauseReason, setPauseReason] = useState("");
+  const [editingPauseId, setEditingPauseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
@@ -228,17 +229,41 @@ export function ClassStudentManagement({ id }: { id: string }) {
     setBusy(true);
     try {
       const response = await fetch(`/api/classes/${id}/students/${pauseTarget.studentId}/pause`, {
-        method: "POST",
+        method: editingPauseId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startMonth: pauseStart, endMonth: pauseEnd, reason: pauseReason }),
+        body: JSON.stringify({
+          ...(editingPauseId && { pauseId: editingPauseId }),
+          startMonth: pauseStart,
+          endMonth: pauseEnd,
+          reason: pauseReason,
+        }),
       });
-      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo thời gian tạm nghỉ"));
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể lưu thời gian tạm nghỉ"));
       setPauseTarget(null);
+      setEditingPauseId(null);
       setPauseReason("");
       await load();
-      showSuccess("Đã ghi nhận thời gian tạm nghỉ");
+      showSuccess(editingPauseId ? "Đã cập nhật thời gian tạm nghỉ" : "Đã ghi nhận thời gian tạm nghỉ");
     } catch (reason) {
       showError(reason instanceof Error ? reason.message : "Không thể tạo thời gian tạm nghỉ");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cancelPause(student: StudentRow, pauseId: string) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/classes/${id}/students/${student.studentId}/pause`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pauseId }),
+      });
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể hủy thời gian tạm nghỉ"));
+      await load();
+      showSuccess("Đã hủy thời gian tạm nghỉ");
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : "Không thể hủy thời gian tạm nghỉ");
     } finally {
       setBusy(false);
     }
@@ -306,17 +331,19 @@ export function ClassStudentManagement({ id }: { id: string }) {
       {selectedStudent && <Stack spacing={2} sx={{ width: { xs: "100vw", sm: 480 }, p: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start"><Stack><Typography variant="h6" fontWeight={700}>{selectedStudent.student.fullName}</Typography><Typography color="text.secondary">{selectedStudent.student.code}</Typography></Stack><Button variant="text" size="small" onClick={() => setSelectedStudent(null)}>Đóng</Button></Stack>
         <Divider />
-        <Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => { setPauseStart(month); setPauseEnd(month); setPauseReason(""); setPauseTarget(selectedStudent); }}>Tạm nghỉ</Button><Button color="error" variant="outlined" onClick={() => { setDeleteReason(""); setDeleteTarget(selectedStudent); }}>Xóa khỏi lớp</Button></Stack>
+        <Stack direction="row" spacing={1}><Button variant="outlined" onClick={() => { setEditingPauseId(null); setPauseStart(month); setPauseEnd(month); setPauseReason(""); setPauseTarget(selectedStudent); }}>Tạm nghỉ</Button><Button color="error" variant="outlined" onClick={() => { setDeleteReason(""); setDeleteTarget(selectedStudent); }}>Xóa khỏi lớp</Button></Stack>
         <Typography variant="subtitle1" fontWeight={700}>Môn đăng ký</Typography>
-        {selectedStudent.subjects.map((item) => <Paper key={item.classSubjectId} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Stack><Typography fontWeight={600}>{subjectName.get(item.classSubjectId)}</Typography><Typography variant="caption" color="text.secondary">{money(Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0))}/tháng</Typography></Stack><Button size="small" variant="outlined" color="error" onClick={() => setDropTarget({ student: selectedStudent, subjectId: item.classSubjectId, hasFee: selectedStudent.tuitionFees.some((fee) => fee.items.some((feeItem) => feeItem.classSubjectId === item.classSubjectId)) })}>Bỏ môn</Button></Stack></Paper>)}
+        {selectedStudent.subjects.map((item) => <Paper key={item.classSubjectId} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Stack><Typography fontWeight={600}>{subjectName.get(item.classSubjectId)}</Typography><Typography variant="caption" color="text.secondary">{money(Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0))}/tháng</Typography></Stack><Button size="small" variant="outlined" color="error" onClick={() => selectedStudent.subjects.length === 1 ? (setDeleteReason(""), setDeleteTarget(selectedStudent)) : setDropTarget({ student: selectedStudent, subjectId: item.classSubjectId, hasFee: selectedStudent.tuitionFees.some((fee) => fee.items.some((feeItem) => feeItem.classSubjectId === item.classSubjectId)) })}>{selectedStudent.subjects.length === 1 ? "Rời lớp" : "Bỏ môn"}</Button></Stack></Paper>)}
         <Button variant="contained" onClick={() => openSubjectDialog({ id: selectedStudent.studentId, code: selectedStudent.student.code, fullName: selectedStudent.student.fullName }, selectedStudent)}>Thêm môn</Button>
+        <Typography variant="subtitle1" fontWeight={700}>Lịch sử tạm nghỉ</Typography>
+        {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack><Stack direction="row"><Button size="small" onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy} onClick={() => void cancelPause(selectedStudent, pause.id)}>Hủy</Button></Stack></Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
         <Divider />
         <Typography variant="subtitle1" fontWeight={700}>Học phí {month}</Typography>
         <Typography variant="h5">{money(selectedStudent.subjects.reduce((total, item) => total + Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0), 0))}</Typography>
         <Typography variant="body2" color="text.secondary">Đăng ký học viên và tạo học phí là hai thao tác độc lập.</Typography>
       </Stack>}
     </Drawer>
-    <Dialog open={Boolean(pauseTarget)} onClose={() => !busy && setPauseTarget(null)} fullWidth maxWidth="sm"><DialogTitle>Tạm nghỉ học</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}><Typography>{pauseTarget?.student.fullName}</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1}><MonthPickerField label="Từ tháng" value={pauseStart} onChange={setPauseStart} /><MonthPickerField label="Đến tháng" value={pauseEnd} onChange={setPauseEnd} /></Stack><TextField fullWidth label="Lý do" multiline minRows={2} value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} /></Stack></DialogContent><DialogActions><Button variant="outlined" onClick={() => setPauseTarget(null)} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void pauseStudent()} disabled={busy}>Xác nhận tạm nghỉ</Button></DialogActions></Dialog>
+    <Dialog open={Boolean(pauseTarget)} onClose={() => !busy && (setPauseTarget(null), setEditingPauseId(null))} fullWidth maxWidth="sm"><DialogTitle>{editingPauseId ? "Sửa thời gian tạm nghỉ" : "Tạm nghỉ học"}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}><Typography>{pauseTarget?.student.fullName}</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1}><MonthPickerField label="Từ tháng" value={pauseStart} onChange={setPauseStart} /><MonthPickerField label="Đến tháng" value={pauseEnd} onChange={setPauseEnd} /></Stack><TextField fullWidth label="Lý do" multiline minRows={2} value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} /></Stack></DialogContent><DialogActions><Button variant="outlined" onClick={() => { setPauseTarget(null); setEditingPauseId(null); }} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void pauseStudent()} disabled={busy}>{editingPauseId ? "Lưu thay đổi" : "Xác nhận tạm nghỉ"}</Button></DialogActions></Dialog>
     <Dialog open={Boolean(dropTarget)} onClose={() => !busy && setDropTarget(null)} fullWidth maxWidth="sm">
       <DialogTitle>{dropTarget?.hasFee ? "Force cancel môn học" : "Bỏ môn học"}</DialogTitle>
       <DialogContent>

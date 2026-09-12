@@ -347,7 +347,7 @@ Khi sửa payment/học phí, bắt buộc test flow:
 
 ```text
 1. Đăng ký một hoặc nhiều môn trong lớp
-2. Kiểm tra học phí và item được tạo tự động
+2. Xác nhận đăng ký chưa tự động tạo học phí
 3. Mở chi tiết học phí và sinh QR/bill tạm (nếu có)
 4. Xác nhận thanh toán đúng toàn bộ `finalAmount`
 5. Kiểm tra trạng thái PAID

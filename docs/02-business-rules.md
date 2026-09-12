@@ -295,7 +295,14 @@ Nếu môn đã có học phí:
     các kỳ sau không tạo thêm phí cho môn đó
 ```
 
+Không được dùng thao tác bỏ môn cho môn `ACTIVE` cuối cùng. Khi học viên không
+còn học môn nào, phải dùng thao tác rời lớp để enrollment chuyển sang `LEFT`.
+
 Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; chỉ enrollment `LEFT` mới có thể được kích hoạt lại khi đăng ký lại môn phù hợp. Enrollment `COMPLETED` hoặc `SUSPENDED` không được tự động mở lại.
+
+Khoảng tạm nghỉ có thể được sửa hoặc hủy. Khi sửa vẫn phải kiểm tra không chồng
+lấn khoảng nghỉ khác và không phủ tháng đã phát sinh học phí. Mọi thao tác tạo,
+sửa, hủy khoảng nghỉ phải ghi audit log.
 
 ## 6.4 Enrollment và Student Fee độc lập
 

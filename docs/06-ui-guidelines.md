@@ -628,7 +628,10 @@ Rule:
 - Trang quản lý học viên có bộ lọc mã/tên, trạng thái, môn học và kỳ học phí.
 - Bảng học viên có thao tác xem chi tiết, quản lý môn, tạm nghỉ và xóa khỏi lớp.
 - Bỏ môn là thao tác riêng, không xóa toàn bộ học viên khỏi lớp.
-- Tạm nghỉ phải chọn khoảng tháng bắt đầu/kết thúc và lý do.
+- Môn cuối cùng không hiển thị thao tác bỏ môn; người dùng phải dùng `Rời lớp`.
+- Học viên đã `LEFT` xuất hiện lại trong hộp chọn và có thể tái đăng ký môn.
+- Tạm nghỉ phải chọn khoảng tháng bắt đầu/kết thúc và lý do; UI phải cho sửa
+  hoặc hủy khoảng tạm nghỉ đã tạo.
 
 ---
 

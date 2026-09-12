@@ -55,7 +55,7 @@ export function StudentSelectDialog({
       onClose={onClose}
       onSelect={onSelect}
       endpoint="/api/students"
-      title="Chọn học viên chưa đăng ký"
+      title="Chọn học viên để đăng ký"
       columns={columns}
       searchPlaceholder="Nhập mã hoặc tên học viên"
       maxWidth="lg"

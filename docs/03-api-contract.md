@@ -631,6 +631,20 @@ Body:
 
 Trong khoảng tạm nghỉ, học viên không phát sinh học phí tháng.
 
+```http
+PATCH /api/classes/{classId}/students/{studentId}/pause
+```
+
+Body gồm `pauseId`, `startMonth`, `endMonth`, `reason`. Khoảng mới không được
+trùng khoảng nghỉ khác hoặc phủ kỳ đã phát sinh học phí.
+
+```http
+DELETE /api/classes/{classId}/students/{studentId}/pause
+```
+
+Body gồm `pauseId`. API hủy khoảng tạm nghỉ và ghi audit log; không xóa
+enrollment.
+
 ## 19.1.4 Tạo học phí tháng theo lớp
 
 ```http
