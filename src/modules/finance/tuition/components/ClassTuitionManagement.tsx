@@ -22,8 +22,14 @@ import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
+import { getVietnamMonth } from "@/lib/vietnam-time";
 
-type ClassData = { id: string; code: string; name: string };
+type ClassData = {
+  id: string;
+  code: string;
+  name: string;
+  status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+};
 type Fee = {
   id: string;
   feeNo: string;
@@ -40,12 +46,13 @@ type Fee = {
 };
 
 const currentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return getVietnamMonth();
 };
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
 const statusLabel: Record<Fee["status"], string> = { UNPAID: "Chưa thu", PAID: "Đã thu", OVERDUE: "Quá hạn", EXEMPTED: "Miễn phí", CANCELLED: "Đã hủy" };
 const statusColor: Record<Fee["status"], "warning" | "success" | "error" | "info" | "default"> = { UNPAID: "warning", PAID: "success", OVERDUE: "error", EXEMPTED: "info", CANCELLED: "default" };
+const classStatusLabel: Record<ClassData["status"], string> = { DRAFT: "Bản nháp", ACTIVE: "Đang hoạt động", COMPLETED: "Đã hoàn thành", CANCELLED: "Đã hủy" };
+const classStatusColor: Record<ClassData["status"], "default" | "success" | "info" | "error"> = { DRAFT: "default", ACTIVE: "success", COMPLETED: "info", CANCELLED: "error" };
 
 export function ClassTuitionManagement({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
@@ -55,6 +62,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const { showSuccess, showError, Snackbar } = useSnackbar();
+  const classClosed = classData?.status === "COMPLETED" || classData?.status === "CANCELLED";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,13 +148,13 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const metrics = [
     { label: `Số khoản phí kỳ ${month}`, value: fees.length },
     { label: "Tổng phải thu", value: money(totals.amount) },
-    { label: "Đã thu", value: totals.paid },
-    { label: "Còn phải thu", value: totals.unpaid },
+    { label: "Số khoản đã thu", value: totals.paid },
+    { label: "Số khoản còn phải thu", value: totals.unpaid },
   ];
 
   return <Stack spacing={{ xs: 2, md: 3 }}>
     <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1}>
-      <Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}><AccountBalanceWalletOutlinedIcon /></Box><Box><Button component={Link} href={`/admin/classes/${id}`} variant="text" size="small" sx={{ alignSelf: "flex-start", px: 0 }}>← {classData.code}</Button><Typography variant="h5" fontWeight={700}>Học phí lớp học</Typography><Typography color="text.secondary">{classData.name}</Typography></Box></Stack>
+      <Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}><AccountBalanceWalletOutlinedIcon /></Box><Box><Button component={Link} href={`/admin/classes/${id}`} variant="text" size="small" sx={{ alignSelf: "flex-start", px: 0 }}>← {classData.code}</Button><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h5" fontWeight={700}>Học phí lớp học</Typography><Chip size="small" color={classStatusColor[classData.status]} label={classStatusLabel[classData.status]} /></Stack><Typography color="text.secondary">{classData.name}</Typography></Box></Stack>
     </Stack>
     <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
       <Stack spacing={2}>
@@ -157,10 +165,11 @@ export function ClassTuitionManagement({ id }: { id: string }) {
         <Divider />
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
           <Box><Typography variant="subtitle1" fontWeight={700}>Tạo học phí và thông báo</Typography><Typography variant="body2" color="text.secondary">Bước 1 tạo khoản phí còn thiếu. Bước 2 tạo đợt thu và xuất thông báo cho học viên.</Typography></Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}><Button variant="outlined" onClick={() => void createFees()} disabled={busy}>1. Tạo khoản phí</Button><Button variant="contained" onClick={() => void createPaymentNotice()} disabled={busy}>2. Tạo đợt thu & thông báo</Button></Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}><Button variant="outlined" onClick={() => void createFees()} disabled={busy || Boolean(classClosed)}>1. Tạo khoản phí</Button><Button variant="contained" onClick={() => void createPaymentNotice()} disabled={busy || Boolean(classClosed)}>2. Tạo đợt thu & thông báo</Button></Stack>
         </Stack>
       </Stack>
     </Paper>
+    {classClosed && <Alert severity="info">Lớp đã hoàn thành hoặc đã hủy; học phí chỉ được xem, không thể tạo mới.</Alert>}
     {error && <Alert severity="error">{error}</Alert>}
     <Alert severity="info">Học phí được tính trọn tháng theo các môn đang đăng ký. Bước 2 sẽ tự tạo các khoản phí còn thiếu, gom theo học viên thành đợt chuyển khoản và xuất thông báo.</Alert>
     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>

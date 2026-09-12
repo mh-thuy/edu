@@ -18,6 +18,7 @@ import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/C
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { getVietnamMonth } from "@/lib/vietnam-time";
 
 type ClassSubject = {
   id: string;
@@ -30,8 +31,7 @@ type ClassDetail = {
 };
 
 function currentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return getVietnamMonth();
 }
 
 export function ClassTuitionReportPage() {

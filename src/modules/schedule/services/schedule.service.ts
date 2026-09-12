@@ -237,7 +237,9 @@ export async function getSchedules(filter: ScheduleFilter) {
 
   const where: Prisma.ClassScheduleWhereInput = {
     deletedAt: null,
-    class: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
+    class: filter.classId
+      ? { id: filter.classId }
+      : { status: { notIn: ["COMPLETED", "CANCELLED"] } },
     ...(filter.classId && { classId: filter.classId }),
     ...(filter.classSubjectId && { classSubjectId: filter.classSubjectId }),
     ...(filter.dayOfWeek !== undefined && { dayOfWeek: filter.dayOfWeek }),
@@ -336,11 +338,18 @@ export async function updateClassSchedule(
 }
 
 export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
-  const schedule = await prisma.classSchedule.findUnique({
+  const schedule = await prisma.classSchedule.findFirst({
     where: { id, deletedAt: null },
+    select: {
+      id: true,
+      class: { select: { status: true } },
+    },
   });
   if (!schedule) {
     throw new NotFoundError("Không tìm thấy lịch học");
+  }
+  if (schedule.class.status === "COMPLETED" || schedule.class.status === "CANCELLED") {
+    throw new ConflictError("Không thể thay đổi lịch của lớp đã kết thúc hoặc đã hủy");
   }
 
   return prisma.classSchedule.update({

@@ -3,7 +3,6 @@
 import {
   Box,
   Stack,
-  TextField,
   Button,
   Chip,
   Paper,
@@ -28,6 +27,7 @@ import type { z } from "zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import Link from "next/link";
 import { extractApiErrorMessage } from "@/lib/api-client";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -38,7 +38,13 @@ export interface Class {
   startDate?: string | null;
   endDate?: string | null;
   status: "ACTIVE" | "DRAFT" | "COMPLETED" | "CANCELLED";
-  _count?: { students: number; schedules: number };
+  _count?: {
+    students: number;
+    schedules: number;
+    classSubjects: number;
+    tuitionFees: number;
+  };
+  teacherNames?: string[];
 }
 
 type ClassRow = Class & {
@@ -58,6 +64,14 @@ const getColumns = (): GridColDef<ClassRow>[] => [
     headerName: "Tên lớp",
     minWidth: 180,
     flex: 1,
+  },
+  {
+    field: "teacherNames",
+    headerName: "Giáo viên",
+    minWidth: 180,
+    flex: 0.9,
+    sortable: false,
+    valueGetter: (_value, row) => row.teacherNames?.join(", ") || "Chưa phân công",
   },
   {
     field: "_count.students",
@@ -174,6 +188,18 @@ const getColumns = (): GridColDef<ClassRow>[] => [
           variant="outlined"
           color="error"
           onClick={() => params.row._onDelete?.(params.row)}
+          disabled={
+            params.row.status === "COMPLETED" ||
+            params.row.status === "CANCELLED" ||
+            Boolean(
+              params.row._count &&
+                (params.row._count.students > 0 ||
+                  params.row._count.schedules > 0 ||
+                  params.row._count.classSubjects > 0 ||
+                  params.row._count.tuitionFees > 0),
+            )
+          }
+          title="Chỉ đóng được lớp chưa có dữ liệu liên quan"
           sx={{
             minWidth: 64,
           }}
@@ -210,9 +236,19 @@ export function ClassList(): ReactElement {
     status: status || undefined,
   });
 
+  useEffect(() => {
+    setPageNumber(1);
+  }, [debouncedSearch, status, setPageNumber]);
+
+  const submitSearch = useCallback(() => {
+    setDebouncedSearch(search.trim());
+    setPageNumber(1);
+  }, [search, setPageNumber]);
+
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Class | null>(null);
+  const [completionData, setCompletionData] = useState<ClassFormData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
@@ -262,7 +298,7 @@ export function ClassList(): ReactElement {
     }
   }, [deleteTarget, refresh, showSuccess, showError]);
 
-  const handleSubmit = useCallback(
+  const persistClass = useCallback(
     async (formData: ClassFormData) => {
       try {
         setIsSubmitting(true);
@@ -300,6 +336,17 @@ export function ClassList(): ReactElement {
       }
     },
     [editingClass, refresh, showSuccess, showError],
+  );
+
+  const handleSubmit = useCallback(
+    async (formData: ClassFormData) => {
+      if (editingClass?.status === "ACTIVE" && formData.status === "COMPLETED") {
+        setCompletionData(formData);
+        return;
+      }
+      await persistClass(formData);
+    },
+    [editingClass, persistClass],
   );
 
   const tableData = (data?.items || []).map((row) => ({
@@ -371,10 +418,13 @@ export function ClassList(): ReactElement {
           direction={{ xs: "column", md: "row" }}
           spacing={1.5}
         >
-          <TextField
+          <AppTextField
             placeholder="Tìm theo mã lớp hoặc tên lớp..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submitSearch();
+            }}
             size="small"
             fullWidth
             InputProps={{
@@ -405,7 +455,8 @@ export function ClassList(): ReactElement {
             <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </Select>
-          <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+          <Button variant="contained" onClick={submitSearch}>Tìm kiếm</Button>
+          <Button variant="outlined" onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus(""); setPageNumber(1); }} disabled={!search && !status}>Xóa bộ lọc</Button>
         </Stack>
       </Paper>
 
@@ -455,6 +506,23 @@ export function ClassList(): ReactElement {
         onCancel={() => setDeleteTarget(null)}
         isLoading={isSubmitting}
         confirmLabel="Đóng lớp"
+      />
+
+      <ConfirmDialog
+        open={Boolean(completionData)}
+        title="Hoàn thành lớp học"
+        message="Sau khi hoàn thành, toàn bộ học viên và môn đang hoạt động sẽ chuyển sang trạng thái đã hoàn thành. Thao tác này không thể hoàn tác. Bạn có chắc chắn muốn tiếp tục?"
+        onConfirm={() => {
+          if (completionData) {
+            const data = completionData;
+            setCompletionData(null);
+            void persistClass(data);
+          }
+        }}
+        onCancel={() => setCompletionData(null)}
+        isLoading={isSubmitting}
+        confirmLabel="Hoàn thành lớp"
+        confirmColor="warning"
       />
 
       {Snackbar}

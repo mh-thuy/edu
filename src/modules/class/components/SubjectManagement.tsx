@@ -17,14 +17,15 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import LibraryBooksOutlinedIcon from "@mui/icons-material/LibraryBooksOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type Subject = {
   id: string;
@@ -41,19 +42,24 @@ export function SubjectManagement() {
   const [status, setStatus] = useState<Subject["status"]>("ACTIVE");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const response = await fetch(
-      `/api/subjects?includeInactive=true${search ? `&search=${encodeURIComponent(search)}` : ""}`,
-    );
-    if (response.ok) setItems(await unwrapApiResponse<Subject[]>(response));
-    else
-      setError(
-        await extractApiErrorMessage(
-          response,
-          "Không thể tải danh sách môn học",
-        ),
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/subjects?includeInactive=true${search ? `&search=${encodeURIComponent(search)}` : ""}`,
       );
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách môn học"));
+      }
+      setItems(await unwrapApiResponse<Subject[]>(response));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể tải danh sách môn học");
+    } finally {
+      setLoading(false);
+    }
   }, [search]);
 
   useEffect(() => {
@@ -105,7 +111,7 @@ export function SubjectManagement() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      {error && <Alert severity="error">{error}</Alert>}
+      {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
       <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={2}>
           <Stack direction="row" spacing={1.5} alignItems="center">
@@ -126,7 +132,7 @@ export function SubjectManagement() {
           spacing={1}
           alignItems={{ sm: "center" }}
         >
-          <TextField
+          <AppTextField
             size="small"
             label="Tìm theo tên môn"
             value={search}
@@ -134,7 +140,10 @@ export function SubjectManagement() {
             sx={{ minWidth: 280, flex: 1 }}
             InputProps={{ startAdornment: <SearchOutlinedIcon color="action" sx={{ mr: 1 }} /> }}
           />
-          <Button variant="outlined" onClick={() => setSearch("")} disabled={!search}>Xóa tìm kiếm</Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+            <Button variant="outlined" onClick={() => setSearch("")} disabled={!search || loading}>Xóa tìm kiếm</Button>
+          </Stack>
         </Stack>
       </Paper>
       <Paper sx={{ overflow: "auto" }}>
@@ -147,7 +156,13 @@ export function SubjectManagement() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((item) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={3}>
+                  <Typography sx={{ p: 3 }} textAlign="center">Đang tải danh sách môn học...</Typography>
+                </TableCell>
+              </TableRow>
+            ) : items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.name}</TableCell>
                 <TableCell>
@@ -173,7 +188,7 @@ export function SubjectManagement() {
                 </TableCell>
               </TableRow>
             ))}
-            {!items.length && (
+            {!loading && !items.length && (
               <TableRow>
                 <TableCell colSpan={3}>
                   <Typography
@@ -198,7 +213,7 @@ export function SubjectManagement() {
         <DialogTitle>{editing ? "Sửa môn học" : "Thêm môn học"}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
+            <AppTextField
               label="Tên môn học"
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -206,7 +221,7 @@ export function SubjectManagement() {
               disabled={saving}
             />
             {editing && (
-              <TextField
+              <AppTextField
                 select
                 SelectProps={{ native: true }}
                 label="Trạng thái"
@@ -218,7 +233,7 @@ export function SubjectManagement() {
               >
                 <option value="ACTIVE">Đang hoạt động</option>
                 <option value="INACTIVE">Ngừng hoạt động</option>
-              </TextField>
+              </AppTextField>
             )}
           </Stack>
         </DialogContent>

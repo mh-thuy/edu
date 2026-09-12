@@ -79,7 +79,7 @@ export async function getStudents(filter: StudentFilter) {
       enrollments: {
         none: {
           classId: excludeClassId,
-          status: "ACTIVE",
+          status: { in: ["ACTIVE", "COMPLETED", "SUSPENDED"] },
         },
       },
     }),

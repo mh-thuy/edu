@@ -5,6 +5,9 @@ import {
   Alert,
   Button,
   Box,
+  CircularProgress,
+  FormControl,
+  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -15,13 +18,14 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { useSnackbar } from "@/hooks/useSnackbar";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type SubjectOption = {
   id: string;
@@ -50,9 +54,11 @@ const toTime = (value: number) =>
 export function ClassSchedulePanel({
   classId,
   classSubjects,
+  readOnly = false,
 }: {
   classId: string;
   classSubjects: SubjectOption[];
+  readOnly?: boolean;
 }) {
   const activeClassSubjects = classSubjects.filter(
     (subject) => subject.subject.status !== "INACTIVE",
@@ -68,32 +74,48 @@ export function ClassSchedulePanel({
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("10:00");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Schedule | null>(null);
   const selectedSubject = classSubjects.find(
     (subject) => subject.id === classSubjectId,
   );
+  const { showSuccess, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
-    const response = await fetch(
-      `/api/schedules?classId=${classId}&page=${page + 1}&pageSize=${pageSize}`,
-    );
-    if (response.ok) {
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `/api/schedules?classId=${classId}&page=${page + 1}&pageSize=${pageSize}`,
+      );
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, "Không thể tải lịch học"));
+      }
       const result = await unwrapApiResponse<{
         items: Schedule[];
         total: number;
       }>(response);
       setItems(result.items);
       setTotal(result.total);
-    } else
-      setError(
-        await extractApiErrorMessage(response, "Không thể tải lịch học"),
-      );
+      setError("");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể tải lịch học");
+    } finally {
+      setLoading(false);
+    }
   }, [classId, page, pageSize]);
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    const nextActiveSubjects = classSubjects.filter(
+      (subject) => subject.subject.status !== "INACTIVE",
+    );
+    if (!nextActiveSubjects.some((subject) => subject.id === classSubjectId)) {
+      setClassSubjectId(nextActiveSubjects[0]?.id || "");
+    }
+  }, [classSubjects, classSubjectId]);
 
   function resetForm() {
     setEditingSchedule(null);
@@ -114,6 +136,7 @@ export function ClassSchedulePanel({
   }
 
   async function addSchedule() {
+    if (readOnly) return;
     if (!selectedSubject) {
       setError("Lớp chưa có môn học");
       return;
@@ -179,6 +202,7 @@ export function ClassSchedulePanel({
       }
       resetForm();
       await load();
+      showSuccess(editingSchedule ? "Đã cập nhật lịch học" : "Đã thêm lịch học");
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Không thể tạo lịch học",
@@ -189,6 +213,7 @@ export function ClassSchedulePanel({
   }
 
   async function removeSchedule(id: string) {
+    if (readOnly) return;
     setSaving(true);
     setError("");
     try {
@@ -202,6 +227,7 @@ export function ClassSchedulePanel({
       else {
         setRemoveTarget(null);
         await load();
+        showSuccess("Đã gỡ lịch học");
       }
     } catch (reason) {
       setError(
@@ -214,7 +240,12 @@ export function ClassSchedulePanel({
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper sx={{ p: 2 }}>
+      {readOnly && (
+        <Alert severity="info">
+          Lớp đã hoàn thành hoặc đã hủy; lịch học chỉ được xem.
+        </Alert>
+      )}
+      {!readOnly && <Paper sx={{ p: 2 }}>
         <Stack spacing={2}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
             <Box>
@@ -224,35 +255,37 @@ export function ClassSchedulePanel({
             {editingSchedule && <Button size="small" variant="outlined" onClick={resetForm}>Hủy sửa</Button>}
           </Stack>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-            <Select
-              size="small"
-              value={classSubjectId}
-              displayEmpty
-              onChange={(event) => setClassSubjectId(event.target.value)}
-              sx={{ minWidth: 220 }}
-            >
-              <MenuItem value="" disabled>
-                Chọn môn học
-              </MenuItem>
-              {activeClassSubjects.map((subject) => (
-                <MenuItem key={subject.id} value={subject.id}>
-                  {subject.subject.name} —{" "}
-                  {subject.teacher?.fullName || "Chưa phân công"}
-                </MenuItem>
-              ))}
-            </Select>
-            <Select
-              size="small"
-              value={day}
-              onChange={(event) => setDay(Number(event.target.value))}
-            >
-              {days.map((label, index) => (
-                <MenuItem key={label} value={index}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-            <TextField
+            <FormControl size="small" sx={{ minWidth: 220 }}>
+              <InputLabel id="class-schedule-subject-label">Môn học</InputLabel>
+              <Select
+                labelId="class-schedule-subject-label"
+                label="Môn học"
+                value={classSubjectId}
+                onChange={(event) => setClassSubjectId(event.target.value)}
+              >
+                {activeClassSubjects.map((subject) => (
+                  <MenuItem key={subject.id} value={subject.id}>
+                    {subject.subject.name} — {subject.teacher?.fullName || "Chưa phân công"}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel id="class-schedule-day-label">Thứ</InputLabel>
+              <Select
+                labelId="class-schedule-day-label"
+                label="Thứ"
+                value={day}
+                onChange={(event) => setDay(Number(event.target.value))}
+              >
+                {days.map((label, index) => (
+                  <MenuItem key={label} value={index}>
+                    {label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <AppTextField
               size="small"
               type="time"
               label="Bắt đầu"
@@ -260,7 +293,7 @@ export function ClassSchedulePanel({
               onChange={(event) => setStart(event.target.value)}
               InputLabelProps={{ shrink: true }}
             />
-            <TextField
+            <AppTextField
               size="small"
               type="time"
               label="Kết thúc"
@@ -271,14 +304,14 @@ export function ClassSchedulePanel({
             <Button
               variant="contained"
               onClick={() => void addSchedule()}
-              disabled={saving}
+              disabled={readOnly || saving}
             >
               {editingSchedule ? "Cập nhật lịch học" : "Thêm lịch học"}
             </Button>
           </Stack>
-          {error && <Alert severity="error">{error}</Alert>}
         </Stack>
-      </Paper>
+      </Paper>}
+      {error && <Alert severity="error">{error}</Alert>}
       <Paper sx={{ overflow: "auto" }}>
         <Table size="small">
           <TableHead>
@@ -291,7 +324,13 @@ export function ClassSchedulePanel({
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((item) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  <CircularProgress size={24} sx={{ my: 2 }} />
+                </TableCell>
+              </TableRow>
+            ) : items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.classSubject?.subject.name || "-"}</TableCell>
                 <TableCell>{days[item.dayOfWeek]}</TableCell>
@@ -307,7 +346,7 @@ export function ClassSchedulePanel({
                       variant="outlined"
                       startIcon={<EditOutlinedIcon />}
                       onClick={() => openEditSchedule(item)}
-                      disabled={saving}
+                      disabled={readOnly || saving}
                     >
                       Sửa
                     </Button>
@@ -317,7 +356,7 @@ export function ClassSchedulePanel({
                       variant="outlined"
                       startIcon={<DeleteOutlineIcon />}
                       onClick={() => setRemoveTarget(item)}
-                      disabled={saving}
+                      disabled={readOnly || saving}
                     >
                       Gỡ lịch
                     </Button>
@@ -325,7 +364,7 @@ export function ClassSchedulePanel({
                   </TableCell>
               </TableRow>
             ))}
-            {!items.length && (
+            {!loading && !items.length && (
               <TableRow>
                 <TableCell colSpan={5}>
                   <Typography
@@ -357,7 +396,7 @@ export function ClassSchedulePanel({
         />
       </Paper>
       <ConfirmDialog
-        open={Boolean(removeTarget)}
+        open={!readOnly && Boolean(removeTarget)}
         title="Gỡ lịch học"
         message={`Bạn có chắc muốn gỡ lịch ${removeTarget ? `${days[removeTarget.dayOfWeek]} ${toTime(removeTarget.startMinute)}–${toTime(removeTarget.endMinute)}` : "này"}? Lịch sẽ được giữ lại trong lịch sử.`}
         onConfirm={() => {
@@ -367,6 +406,7 @@ export function ClassSchedulePanel({
         isLoading={saving}
         confirmLabel="Gỡ lịch"
       />
+      {Snackbar}
     </Stack>
   );
 }

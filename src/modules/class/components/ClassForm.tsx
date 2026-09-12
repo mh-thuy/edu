@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  TextField,
   Stack,
   Select,
   MenuItem,
@@ -15,6 +14,7 @@ import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import type { z } from "zod";
 import { type ReactElement } from "react";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -68,7 +68,7 @@ export function ClassForm({
           name="code"
           control={control}
           render={({ field, fieldState: { error } }) => (
-            <TextField
+            <AppTextField
               {...field}
               label="Mã lớp"
               error={!!error}
@@ -91,7 +91,7 @@ export function ClassForm({
           name="name"
           control={control}
           render={({ field, fieldState: { error } }) => (
-            <TextField
+            <AppTextField
               {...field}
               label="Tên lớp"
               error={!!error}

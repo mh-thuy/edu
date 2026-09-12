@@ -69,11 +69,11 @@ export function useList<T>(endpoint: string, options: UseListOptions = {}) {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  const setPageNumber = (p: number) => setPage(p);
-  const setPageSize = (nextPageSize: number) => {
+  const setPageNumber = useCallback((p: number) => setPage(p), []);
+  const setPageSize = useCallback((nextPageSize: number) => {
     setPageSizeState(nextPageSize);
     setPage(1);
-  };
+  }, []);
 
   return {
     data,

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
-import { assignStudentToClass, removeStudentFromClass, getClassStudents } from "@/modules/class/services/class.service";
+import { assignStudentToClass, removeStudentFromClass, getClassStudents, getClassStudentsPage } from "@/modules/class/services/class.service";
 
 const assignStudentRequestSchema = z.object({
   studentId: z.string().min(1, "studentId is required"),
@@ -38,8 +38,25 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const id = await getClassId(context);
-    const students = await getClassStudents(id);
-    return apiSuccess(students);
+    const searchParams = _request.nextUrl.searchParams;
+    const hasPagination = ["page", "pageSize", "search", "status", "subjectId", "month"].some((key) => searchParams.has(key));
+    if (!hasPagination) return apiSuccess(await getClassStudents(id));
+    const filters = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(20),
+      search: z.string().optional(),
+      status: z.enum(["ACTIVE", "PAUSED", "COMPLETED"]).optional(),
+      subjectId: z.string().uuid().optional(),
+      month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    }).parse({
+      page: searchParams.get("page") || undefined,
+      pageSize: searchParams.get("pageSize") || undefined,
+      search: searchParams.get("search") || undefined,
+      status: searchParams.get("status") || undefined,
+      subjectId: searchParams.get("subjectId") || undefined,
+      month: searchParams.get("month"),
+    });
+    return apiSuccess(await getClassStudentsPage(id, filters));
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);
     return handleApiError(error, "Failed to fetch class students");

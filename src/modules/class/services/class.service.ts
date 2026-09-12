@@ -176,10 +176,16 @@ export async function getClasses(filter: ClassFilter) {
       skip,
       take: pageSize,
       include: {
+        classSubjects: {
+          where: { status: "ACTIVE" },
+          select: { teacher: { select: { fullName: true } } },
+        },
         _count: {
           select: {
             students: true,
             schedules: { where: { deletedAt: null } },
+            classSubjects: true,
+            tuitionFees: true,
           },
         },
       },
@@ -189,7 +195,10 @@ export async function getClasses(filter: ClassFilter) {
   ]);
 
   return {
-    items: classes,
+    items: classes.map(({ classSubjects, ...classData }) => ({
+      ...classData,
+      teacherNames: [...new Set(classSubjects.map((item) => item.teacher?.fullName).filter(Boolean))],
+    })),
     total,
     page,
     pageSize,
@@ -1271,4 +1280,165 @@ export async function getClassStudents(
       }),
     }));
   });
+}
+
+function parseStudentListMonth(value: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
+  if (!match) throw new ConflictError("Kỳ học phí phải có định dạng YYYY-MM");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1)),
+    end: new Date(Date.UTC(year, month, 0)),
+    year,
+    month,
+  };
+}
+
+export async function getClassStudentsPage(
+  classId: string,
+  options: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    status?: "ACTIVE" | "PAUSED" | "COMPLETED";
+    subjectId?: string;
+    month: string;
+  },
+) {
+  const period = parseStudentListMonth(options.month);
+  const pauseWhere: Prisma.EnrollmentPauseWhereInput = {
+    status: "ACTIVE",
+    startMonth: { lte: period.end },
+    endMonth: { gte: period.start },
+  };
+  const statusWhere: Prisma.ClassStudentWhereInput =
+    options.status === "COMPLETED"
+      ? { status: "COMPLETED" }
+      : options.status === "PAUSED"
+        ? { status: "ACTIVE", pauses: { some: pauseWhere } }
+        : options.status === "ACTIVE"
+          ? { status: "ACTIVE", pauses: { none: pauseWhere } }
+          : { status: { in: ["ACTIVE", "COMPLETED"] } };
+  const where: Prisma.ClassStudentWhereInput = {
+    classId,
+    ...statusWhere,
+    ...(options.search?.trim() && {
+      student: {
+        OR: [
+          { code: { contains: options.search.trim(), mode: "insensitive" } },
+          { fullName: { contains: options.search.trim(), mode: "insensitive" } },
+          { phone: { contains: options.search.trim(), mode: "insensitive" } },
+        ],
+      },
+    }),
+    ...(options.subjectId && {
+      subjects: {
+        some: {
+          classSubjectId: options.subjectId,
+          status: { in: ["ACTIVE", "COMPLETED"] },
+        },
+      },
+    }),
+  };
+
+  const activeWhere: Prisma.ClassStudentWhereInput = {
+    classId,
+    status: "ACTIVE",
+    pauses: { none: pauseWhere },
+  };
+  const [students, total, active, paused, completed, activeWithFee] = await Promise.all([
+    prisma.classStudent.findMany({
+      where,
+      skip: (options.page - 1) * options.pageSize,
+      take: options.pageSize,
+      orderBy: { student: { fullName: "asc" } },
+      include: {
+        student: true,
+        subjects: {
+          where: { status: { in: ["ACTIVE", "COMPLETED"] } },
+          select: { classSubjectId: true },
+        },
+        tuitionFees: {
+          select: {
+            id: true,
+            status: true,
+            finalAmount: true,
+            dueDate: true,
+            billingYear: true,
+            billingMonth: true,
+            billingType: true,
+            items: { select: { classSubjectId: true } },
+          },
+        },
+        pauses: {
+          select: {
+            id: true,
+            startMonth: true,
+            endMonth: true,
+            reason: true,
+          },
+        },
+      },
+    }),
+    prisma.classStudent.count({ where }),
+    prisma.classStudent.count({ where: activeWhere }),
+    prisma.classStudent.count({ where: { classId, status: "ACTIVE", pauses: { some: pauseWhere } } }),
+    prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
+    prisma.classStudent.count({
+      where: {
+        ...activeWhere,
+        tuitionFees: {
+          some: {
+            billingType: "MONTHLY",
+            billingYear: period.year,
+            billingMonth: period.month,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const pauseIds = students.flatMap((student) => student.pauses.map((pause) => pause.id));
+  const pauseStatuses = pauseIds.length > 0
+    ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+        SELECT id, status::text AS status FROM enrollment_pauses
+        WHERE id = ANY(${pauseIds}::uuid[])
+      `
+    : [];
+  const statusById = new Map(pauseStatuses.map((pause) => [pause.id, pause.status]));
+  const items = students.map((student) => ({
+    ...student,
+    pauses: student.pauses.map((pause) => ({
+      ...pause,
+      status: statusById.get(pause.id) ?? "ACTIVE",
+    })),
+    tuitionFees: student.tuitionFees.map((fee) => {
+      const { dueDate, ...feeData } = fee;
+      return {
+        ...feeData,
+        status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
+      };
+    }),
+  }));
+
+  return {
+    items,
+    total,
+    page: options.page,
+    pageSize: options.pageSize,
+    pages: Math.ceil(total / options.pageSize),
+    pagination: {
+      page: options.page,
+      pageSize: options.pageSize,
+      total,
+      totalPages: Math.ceil(total / options.pageSize),
+    },
+    summary: {
+      active,
+      paused,
+      completed,
+      uncreated: Math.max(0, active - activeWithFee),
+    },
+  };
 }

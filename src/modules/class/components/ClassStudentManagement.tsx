@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -22,8 +22,8 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import Link from "next/link";
@@ -32,6 +32,8 @@ import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { getVietnamMonth } from "@/lib/vietnam-time";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
@@ -47,6 +49,7 @@ type EnrollmentPause = { id: string; status: "ACTIVE" | "CANCELLED"; startMonth:
 type Fee = {
   id: string;
   status: string;
+  finalAmount: number;
   billingYear: number;
   billingMonth: number;
   billingType: string;
@@ -61,13 +64,35 @@ type StudentRow = {
   tuitionFees: Fee[];
   pauses: EnrollmentPause[];
 };
+type StudentSummary = { active: number; paused: number; completed: number; uncreated: number };
+type StudentListResult = {
+  items: StudentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pages: number;
+  summary: StudentSummary;
+};
 
 const currentMonth = () => {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return getVietnamMonth();
 };
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 const monthValue = (value: string) => value.slice(0, 7);
+const feeStatusLabel: Record<string, string> = {
+  UNPAID: "Đã tạo",
+  PAID: "Đã thanh toán",
+  OVERDUE: "Quá hạn",
+  EXEMPTED: "Được miễn",
+  CANCELLED: "Đã hủy",
+};
+const feeStatusColor: Record<string, "warning" | "success" | "error" | "info" | "default"> = {
+  UNPAID: "warning",
+  PAID: "success",
+  OVERDUE: "error",
+  EXEMPTED: "info",
+  CANCELLED: "default",
+};
 
 export function ClassStudentManagement({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
@@ -77,6 +102,11 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [subjectFilter, setSubjectFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [studentPage, setStudentPage] = useState(0);
+  const [studentPageSize, setStudentPageSize] = useState(20);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [summary, setSummary] = useState<StudentSummary>({ active: 0, paused: 0, completed: 0, uncreated: 0 });
+  const requestVersion = useRef(0);
   const [error, setError] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
@@ -101,28 +131,34 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestVersion.current;
     setLoading(true);
     setError("");
     try {
       const [classResponse, studentsResponse] = await Promise.all([
         fetch(`/api/classes/${id}`),
-        fetch(`/api/classes/${id}/students`),
+        fetch(`/api/classes/${id}/students?page=${studentPage + 1}&pageSize=${studentPageSize}&search=${encodeURIComponent(search.trim())}&status=${statusFilter === "ALL" ? "" : statusFilter}&subjectId=${subjectFilter === "ALL" ? "" : subjectFilter}&month=${encodeURIComponent(month)}`),
       ]);
       if (!classResponse.ok) throw new Error(await extractApiErrorMessage(classResponse, "Không thể tải lớp học"));
       if (!studentsResponse.ok) throw new Error(await extractApiErrorMessage(studentsResponse, "Không thể tải danh sách học viên"));
       const [classResult, studentResult] = await Promise.all([
         unwrapApiResponse<ClassData>(classResponse),
-        unwrapApiResponse<StudentRow[]>(studentsResponse),
+        unwrapApiResponse<StudentListResult>(studentsResponse),
       ]);
+      if (currentRequest !== requestVersion.current) return;
       setClassData(classResult);
-      setStudents(studentResult);
-      setSelectedStudent((current) => current ? studentResult.find((item) => item.id === current.id) ?? null : null);
+      setStudents(studentResult.items);
+      setTotalStudents(studentResult.total);
+      setSummary(studentResult.summary);
+      setSelectedStudent((current) => current ? studentResult.items.find((item) => item.id === current.id) ?? null : null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể tải dữ liệu");
+      if (currentRequest === requestVersion.current) {
+        setError(reason instanceof Error ? reason.message : "Không thể tải dữ liệu");
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestVersion.current) setLoading(false);
     }
-  }, [id]);
+  }, [id, month, search, statusFilter, studentPage, studentPageSize, subjectFilter]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -132,17 +168,15 @@ export function ClassStudentManagement({ id }: { id: string }) {
     const [year, selectedMonth] = month.split("-").map(Number);
     return student.tuitionFees.find((fee) => fee.billingType === "MONTHLY" && fee.billingYear === year && fee.billingMonth === selectedMonth);
   };
-  const visibleStudents = students.filter((student) => {
-    const text = `${student.student.code} ${student.student.fullName} ${student.student.phone ?? ""}`.toLowerCase();
-    const subjectMatch = subjectFilter === "ALL" || student.subjects.some((item) => item.classSubjectId === subjectFilter);
-    const pause = getPause(student);
-    const status = student.status === "COMPLETED" ? "COMPLETED" : pause ? "PAUSED" : "ACTIVE";
-    return text.includes(search.trim().toLowerCase()) && subjectMatch && (statusFilter === "ALL" || status === statusFilter);
-  });
-  const activeCount = students.filter((student) => student.status === "ACTIVE" && !getPause(student)).length;
-  const pausedCount = students.filter((student) => student.status === "ACTIVE" && Boolean(getPause(student))).length;
-  const completedCount = students.filter((student) => student.status === "COMPLETED").length;
-  const uncreatedCount = activeCount - students.filter((student) => student.status === "ACTIVE" && !getPause(student) && Boolean(getFee(student))).length;
+  const pagedStudents = students;
+  const activeCount = summary.active;
+  const pausedCount = summary.paused;
+  const completedCount = summary.completed;
+  const uncreatedCount = summary.uncreated;
+
+  useEffect(() => {
+    setStudentPage(0);
+  }, [month, search, statusFilter, subjectFilter]);
 
   function openSubjectDialog(student: StudentItem, existing?: StudentRow) {
     const registered = existing?.subjects.map((item) => item.classSubjectId) ?? [];
@@ -280,6 +314,12 @@ export function ClassStudentManagement({ id }: { id: string }) {
   if (!classData && loading) return <Typography>Đang tải quản lý học viên...</Typography>;
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
   const classClosed = classData.status === "COMPLETED" || classData.status === "CANCELLED";
+  const hasActiveClassSubjects = classData.classSubjects.some((subject) => subject.subject.status !== "INACTIVE");
+  const selectedFee = selectedStudent ? getFee(selectedStudent) : null;
+  const selectedExpectedAmount = selectedStudent?.subjects.reduce(
+    (total, item) => total + Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0),
+    0,
+  ) ?? 0;
 
   return <Stack spacing={{ xs: 2, md: 3 }}>
     <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
@@ -296,19 +336,20 @@ export function ClassStudentManagement({ id }: { id: string }) {
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
-          <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={classClosed || !classData.classSubjects.length}>Đăng ký học viên</Button>
+          <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={classClosed || !hasActiveClassSubjects}>Đăng ký học viên</Button>
         </Stack>
       </Stack>
     </Paper>
     {error && <Alert severity="error">{error}</Alert>}
     {classClosed && <Alert severity="info">Lớp đã kết thúc hoặc đã hủy; thông tin đăng ký chỉ được xem.</Alert>}
+    {!classClosed && !hasActiveClassSubjects && <Alert severity="warning">Lớp chưa có môn đang hoạt động; hãy mở môn học trước khi đăng ký học viên.</Alert>}
     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-      {[["Tổng số", students.length], ["Đang học", activeCount], ["Tạm nghỉ", pausedCount], ["Đã hoàn thành", completedCount], ["Chưa tạo phí", Math.max(0, uncreatedCount)]].map(([label, value]) => <Paper key={String(label)} sx={{ p: 2, flex: 1 }}><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h5" fontWeight={700}>{value}</Typography></Paper>)}
+      {[["Tổng số", activeCount + pausedCount + completedCount], ["Đang học", activeCount], ["Tạm nghỉ", pausedCount], ["Đã hoàn thành", completedCount], ["Chưa tạo phí", Math.max(0, uncreatedCount)]].map(([label, value]) => <Paper key={String(label)} sx={{ p: 2, flex: 1 }}><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h5" fontWeight={700}>{value}</Typography></Paper>)}
     </Stack>
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}><FilterAltOutlinedIcon color="action" fontSize="small" /><Typography fontWeight={700}>Bộ lọc học viên</Typography></Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <TextField size="small" label="Tìm mã, tên, số điện thoại" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ minWidth: 280, flex: 1 }} />
+        <AppTextField size="small" label="Tìm mã, tên, số điện thoại" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ minWidth: 280, flex: 1 }} />
         <FormControl size="small" sx={{ minWidth: 150 }}><InputLabel>Trạng thái</InputLabel><Select label="Trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><MenuItem value="ALL">Tất cả</MenuItem><MenuItem value="ACTIVE">Đang học</MenuItem><MenuItem value="PAUSED">Tạm nghỉ</MenuItem><MenuItem value="COMPLETED">Đã hoàn thành</MenuItem></Select></FormControl>
         <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Môn học</InputLabel><Select label="Môn học" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}><MenuItem value="ALL">Tất cả môn</MenuItem>{classData.classSubjects.map((subject) => <MenuItem key={subject.id} value={subject.id}>{subject.subject.name}</MenuItem>)}</Select></FormControl>
         <MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} textFieldProps={{ size: "small" }} />
@@ -317,7 +358,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     <Paper sx={{ overflowX: "auto" }}>
       <Table sx={{ minWidth: 1050 }}>
         <TableHead><TableRow><TableCell>Mã HV</TableCell><TableCell>Học viên</TableCell><TableCell>Môn đăng ký</TableCell><TableCell>Trạng thái</TableCell><TableCell>Học phí {month}</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
-        <TableBody>{visibleStudents.map((student) => {
+        <TableBody>{pagedStudents.map((student) => {
           const pause = getPause(student);
           const fee = getFee(student);
           return <TableRow key={student.id} hover>
@@ -325,23 +366,69 @@ export function ClassStudentManagement({ id }: { id: string }) {
             <TableCell><Typography fontWeight={600}>{student.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{student.student.phone || "Chưa có số điện thoại"}</Typography></TableCell>
             <TableCell>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "-"}</TableCell>
             <TableCell>{student.status === "COMPLETED" ? <Chip size="small" color="default" label="Đã hoàn thành" /> : pause ? <Chip size="small" color="info" label={`Tạm nghỉ đến ${monthValue(pause.endMonth)}`} /> : <Chip size="small" color="success" label="Đang học" />}</TableCell>
-            <TableCell>{pause ? <Chip size="small" label="Không phát sinh" /> : fee ? <Chip size="small" color={fee.status === "PAID" ? "success" : fee.status === "OVERDUE" ? "error" : "warning"} label={fee.status === "PAID" ? "Đã thanh toán" : fee.status === "OVERDUE" ? "Quá hạn" : "Đã tạo"} /> : <Chip size="small" color="warning" label="Chưa tạo" />}</TableCell>
+            <TableCell>{pause ? <Chip size="small" label="Không phát sinh" /> : fee ? <Chip size="small" color={feeStatusColor[fee.status] ?? "default"} label={feeStatusLabel[fee.status] ?? fee.status} /> : <Chip size="small" color="warning" label="Chưa tạo" />}</TableCell>
             <TableCell align="right"><Stack direction="row" spacing={1} justifyContent="flex-end"><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Xem</Button><Button size="small" variant="outlined" disabled={classClosed || student.status === "COMPLETED"} onClick={() => openSubjectDialog({ id: student.studentId, code: student.student.code, fullName: student.student.fullName }, student)}>Quản lý môn</Button></Stack></TableCell>
           </TableRow>;
-        })}{!visibleStudents.length && <TableRow><TableCell colSpan={6}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học viên phù hợp</Typography></TableCell></TableRow>}</TableBody>
+        })}{!pagedStudents.length && <TableRow><TableCell colSpan={6}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{totalStudents ? "Không có học viên ở trang này" : "Không có học viên phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
       </Table>
+      <TablePagination
+        component="div"
+        count={totalStudents}
+        page={studentPage}
+        rowsPerPage={studentPageSize}
+        onPageChange={(_, nextPage) => setStudentPage(nextPage)}
+        onRowsPerPageChange={(event) => {
+          setStudentPageSize(Number(event.target.value));
+          setStudentPage(0);
+        }}
+        rowsPerPageOptions={[10, 20, 50, 100]}
+        labelRowsPerPage="Số dòng/trang"
+        labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count}`}
+      />
     </Paper>
     <StudentSelectDialog open={studentPickerOpen} onClose={() => setStudentPickerOpen(false)} onSelect={(student) => { setStudentPickerOpen(false); openSubjectDialog(student); }} excludeClassId={id} />
     <Dialog open={subjectDialogOpen} onClose={() => !busy && setSubjectDialogOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle>{registeredSubjectIds.length ? "Quản lý môn học" : "Đăng ký học viên"}</DialogTitle>
-      <DialogContent><Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>{pendingStudent?.fullName} — Chọn các môn đang học</Typography><Stack spacing={1}>{classData.classSubjects.filter((subject) => subject.subject.status !== "INACTIVE" || registeredSubjectIds.includes(subject.id)).map((subject) => { const checked = selectedSubjectIds.includes(subject.id); const registered = registeredSubjectIds.includes(subject.id); return <Button key={subject.id} variant={checked ? "contained" : "outlined"} color={registered ? "inherit" : "primary"} onClick={() => !registered && setSelectedSubjectIds((current) => checked ? current.filter((item) => item !== subject.id) : [...current, subject.id])} sx={{ justifyContent: "space-between" }}><span>{subject.subject.name}</span><span>{money(Number(subject.tuitionFee))}{registered ? " · Đang học" : ""}</span></Button>; })}</Stack></DialogContent>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          {pendingStudent?.fullName} — Chọn các môn đang học
+        </Typography>
+        {registeredSubjectIds.length > 0 && (
+          <Alert severity="info" sx={{ mb: 1.5 }}>
+            Môn đang học được giữ nguyên trong màn hình này. Muốn bỏ môn, dùng nút “Bỏ môn” trong chi tiết học viên để hệ thống kiểm tra học phí và lý do force cancel.
+          </Alert>
+        )}
+        <Stack spacing={1}>
+          {classData.classSubjects
+            .filter((subject) => subject.subject.status !== "INACTIVE" || registeredSubjectIds.includes(subject.id))
+            .map((subject) => {
+              const checked = selectedSubjectIds.includes(subject.id);
+              const registered = registeredSubjectIds.includes(subject.id);
+              return (
+                <Button
+                  key={subject.id}
+                  variant={checked ? "contained" : "outlined"}
+                  color={registered ? "inherit" : "primary"}
+                  disabled={registered}
+                  onClick={() => setSelectedSubjectIds((current) =>
+                    checked ? current.filter((item) => item !== subject.id) : [...current, subject.id],
+                  )}
+                  sx={{ justifyContent: "space-between" }}
+                >
+                  <span>{subject.subject.name}</span>
+                  <span>{money(Number(subject.tuitionFee))}{registered ? " · Đang học" : ""}</span>
+                </Button>
+              );
+            })}
+        </Stack>
+      </DialogContent>
       <DialogActions><Button variant="outlined" onClick={() => setSubjectDialogOpen(false)} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void submitSubjects()} disabled={busy || !selectedSubjectIds.length}>{busy ? "Đang lưu..." : "Lưu môn học"}</Button></DialogActions>
     </Dialog>
     <Drawer anchor="right" open={Boolean(selectedStudent)} onClose={() => setSelectedStudent(null)}>
       {selectedStudent && <Stack spacing={2} sx={{ width: { xs: "100vw", sm: 480 }, p: 3 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start"><Stack><Typography variant="h6" fontWeight={700}>{selectedStudent.student.fullName}</Typography><Typography color="text.secondary">{selectedStudent.student.code}</Typography></Stack><Button variant="text" size="small" onClick={() => setSelectedStudent(null)}>Đóng</Button></Stack>
         <Divider />
-        <Stack direction="row" spacing={1}><Button variant="outlined" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => { setEditingPauseId(null); setPauseStart(month); setPauseEnd(month); setPauseReason(""); setPauseTarget(selectedStudent); }}>Tạm nghỉ</Button><Button color="error" variant="outlined" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => { setDeleteReason(""); setDeleteTarget(selectedStudent); }}>Xóa khỏi lớp</Button></Stack>
+        <Stack direction="row" spacing={1}><Button variant="outlined" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => { setEditingPauseId(null); setPauseStart(month); setPauseEnd(month); setPauseReason(""); setPauseTarget(selectedStudent); }}>Tạm nghỉ</Button><Button color="error" variant="outlined" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => { setDeleteReason(""); setDeleteTarget(selectedStudent); }}>Rời lớp</Button></Stack>
         <Typography variant="subtitle1" fontWeight={700}>Môn đăng ký</Typography>
         {selectedStudent.subjects.map((item) => <Paper key={item.classSubjectId} variant="outlined" sx={{ p: 1.5 }}><Stack direction="row" justifyContent="space-between" alignItems="center"><Stack><Typography fontWeight={600}>{subjectName.get(item.classSubjectId)}</Typography><Typography variant="caption" color="text.secondary">{money(Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0))}/tháng</Typography></Stack><Button size="small" variant="outlined" color="error" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => selectedStudent.subjects.length === 1 ? (setDeleteReason(""), setDeleteTarget(selectedStudent)) : setDropTarget({ student: selectedStudent, subjectId: item.classSubjectId, hasFee: selectedStudent.tuitionFees.some((fee) => fee.items.some((feeItem) => feeItem.classSubjectId === item.classSubjectId)) })}>{selectedStudent.subjects.length === 1 ? "Rời lớp" : "Bỏ môn"}</Button></Stack></Paper>)}
         <Button variant="contained" disabled={classClosed || selectedStudent.status === "COMPLETED"} onClick={() => openSubjectDialog({ id: selectedStudent.studentId, code: selectedStudent.student.code, fullName: selectedStudent.student.fullName }, selectedStudent)}>Thêm môn</Button>
@@ -349,11 +436,11 @@ export function ClassStudentManagement({ id }: { id: string }) {
         {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5, opacity: pause.status === "CANCELLED" ? 0.65 : 1 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)} {pause.status === "CANCELLED" ? "· Đã hủy" : ""}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack>{pause.status === "ACTIVE" && <Stack direction="row"><Button size="small" disabled={classClosed} onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy || classClosed} onClick={() => setPauseCancelTarget({ student: selectedStudent, pauseId: pause.id })}>Hủy</Button></Stack>}</Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
         <Divider />
         <Typography variant="subtitle1" fontWeight={700}>Học phí {month}</Typography>
-        <Typography variant="h5">{money(selectedStudent.subjects.reduce((total, item) => total + Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0), 0))}</Typography>
+        {getPause(selectedStudent) ? <Chip color="info" label="Không phát sinh trong kỳ tạm nghỉ" /> : selectedFee ? <Stack spacing={0.5}><Typography variant="h5">{money(Number(selectedFee.finalAmount))}</Typography><Chip size="small" sx={{ alignSelf: "flex-start" }} color={feeStatusColor[selectedFee.status] ?? "default"} label={feeStatusLabel[selectedFee.status] ?? selectedFee.status} /></Stack> : <Stack spacing={0.5}><Typography variant="h5">{money(selectedExpectedAmount)}</Typography><Typography variant="body2" color="text.secondary">Dự kiến theo các môn đang đăng ký; chưa tạo khoản học phí.</Typography></Stack>}
         <Typography variant="body2" color="text.secondary">Đăng ký học viên và tạo học phí là hai thao tác độc lập.</Typography>
       </Stack>}
     </Drawer>
-    <Dialog open={Boolean(pauseTarget)} onClose={() => !busy && (setPauseTarget(null), setEditingPauseId(null))} fullWidth maxWidth="sm"><DialogTitle>{editingPauseId ? "Sửa thời gian tạm nghỉ" : "Tạm nghỉ học"}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}><Typography>{pauseTarget?.student.fullName}</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1}><MonthPickerField label="Từ tháng" value={pauseStart} onChange={setPauseStart} /><MonthPickerField label="Đến tháng" value={pauseEnd} onChange={setPauseEnd} /></Stack><TextField fullWidth label="Lý do" multiline minRows={2} value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} /></Stack></DialogContent><DialogActions><Button variant="outlined" onClick={() => { setPauseTarget(null); setEditingPauseId(null); }} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void pauseStudent()} disabled={busy}>{editingPauseId ? "Lưu thay đổi" : "Xác nhận tạm nghỉ"}</Button></DialogActions></Dialog>
+    <Dialog open={Boolean(pauseTarget)} onClose={() => !busy && (setPauseTarget(null), setEditingPauseId(null))} fullWidth maxWidth="sm"><DialogTitle>{editingPauseId ? "Sửa thời gian tạm nghỉ" : "Tạm nghỉ học"}</DialogTitle><DialogContent><Stack spacing={2} sx={{ pt: 1 }}><Typography>{pauseTarget?.student.fullName}</Typography><Stack direction={{ xs: "column", sm: "row" }} spacing={1}><MonthPickerField label="Từ tháng" value={pauseStart} onChange={setPauseStart} /><MonthPickerField label="Đến tháng" value={pauseEnd} onChange={setPauseEnd} /></Stack><AppTextField fullWidth label="Lý do" multiline minRows={2} value={pauseReason} onChange={(event) => setPauseReason(event.target.value)} /></Stack></DialogContent><DialogActions><Button variant="outlined" onClick={() => { setPauseTarget(null); setEditingPauseId(null); }} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void pauseStudent()} disabled={busy}>{editingPauseId ? "Lưu thay đổi" : "Xác nhận tạm nghỉ"}</Button></DialogActions></Dialog>
     <Dialog open={Boolean(dropTarget)} onClose={() => !busy && setDropTarget(null)} fullWidth maxWidth="sm">
       <DialogTitle>{dropTarget?.hasFee ? "Force cancel môn học" : "Bỏ môn học"}</DialogTitle>
       <DialogContent>
@@ -364,7 +451,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
           <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
             Học phí đã phát sinh sẽ được giữ nguyên cho kỳ hiện tại; các kỳ sau không tạo thêm phí môn này.
           </Typography>
-          <TextField fullWidth required label="Lý do force cancel" value={dropReason} onChange={(event) => setDropReason(event.target.value)} multiline minRows={2} inputProps={{ maxLength: 500 }} />
+          <AppTextField fullWidth required label="Lý do force cancel" value={dropReason} onChange={(event) => setDropReason(event.target.value)} multiline minRows={2} inputProps={{ maxLength: 500 }} />
         </>}
       </DialogContent>
       <DialogActions>
@@ -382,7 +469,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
           <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
             Học phí đã phát sinh sẽ được giữ nguyên để bảo toàn lịch sử. Thao tác force cần lý do.
           </Typography>
-          <TextField fullWidth required label="Lý do force rời lớp" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} multiline minRows={2} inputProps={{ maxLength: 500 }} />
+          <AppTextField fullWidth required label="Lý do force rời lớp" value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} multiline minRows={2} inputProps={{ maxLength: 500 }} />
         </> : null}
       </DialogContent>
       <DialogActions>
