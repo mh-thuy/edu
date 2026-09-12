@@ -562,8 +562,6 @@ Các API bắt buộc transaction:
 Create student fee + QR + bill
 
 Create payment + update fee status + receipt
-
-Approve payroll + payroll items
 ```
 
 Không commit từng bước riêng.
@@ -656,7 +654,7 @@ Query bắt buộc:
 month=YYYY-MM
 ```
 
-Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với kỳ đã chọn và các môn chưa có tuition fee item. Phí từng môn được tính trọn theo mức học phí tháng, không phụ thuộc số buổi hoặc điểm danh. Nếu học phí đã tồn tại, chỉ bổ sung môn chưa có item và không tạo trùng item.
+Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với kỳ đã chọn và các môn chưa có tuition fee item. Phí từng môn được tính trọn theo mức học phí tháng, không phụ thuộc số buổi. Nếu học phí đã tồn tại, chỉ bổ sung môn chưa có item và không tạo trùng item.
 
 ---
 
@@ -720,8 +718,6 @@ DELETE_NOT_ALLOWED
 PAYMENT_EXCEEDED
 
 SCHEDULE_CONFLICT
-
-ROOM_CONFLICT
 
 TEACHER_CONFLICT
 

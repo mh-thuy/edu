@@ -49,7 +49,6 @@ modules/
   student-fees/
   payments/
   receipts/
-  payroll/
 
 components/
   forms/
@@ -170,7 +169,6 @@ Bắt buộc transaction cho:
 ```text
 Create student fee + QR + bill
 Create payment + update fee status + receipt
-Approve payroll + payroll items
 ```
 
 Prisma:

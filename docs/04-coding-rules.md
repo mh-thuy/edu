@@ -110,7 +110,6 @@ Bắt buộc transaction cho:
 ```text
 create student_fee + QR + bill
 create payment + update fee status + receipt
-approve payroll + payroll items
 ```
 
 Không hard delete dữ liệu tài chính:
@@ -119,7 +118,6 @@ Không hard delete dữ liệu tài chính:
 student_fees
 payments
 receipts
-teacher_payrolls
 ```
 
 ---

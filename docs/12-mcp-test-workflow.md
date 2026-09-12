@@ -76,7 +76,6 @@ Bot must login before testing:
 - /student-fees
 - /payments
 - /receipts
-- /teacher-payrolls
 
 ---
 

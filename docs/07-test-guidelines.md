@@ -179,7 +179,6 @@ payment
 receipt
 QR
 bill tạm
-payroll
 ```
 
 Bắt buộc test kỹ hơn.
@@ -258,7 +257,6 @@ Nên test các hàm:
 formatCurrency
 formatDate
 checkScheduleConflict
-calculateTeacherPayroll
 ```
 
 ---
@@ -378,29 +376,7 @@ Tạo lịch start_time >= end_time
 
 ---
 
-# 10. Payroll test
-
-Khi sửa payroll, bắt buộc test:
-
-```text
-Tính doanh thu theo lớp
-
-Tính center_fee
-
-Tính salary_amount
-
-Không tạo trùng payroll teacher + month
-
-DRAFT -> APPROVED
-
-APPROVED -> PAID
-
-Không sửa payroll PAID
-```
-
----
-
-# 11. Regression checklist
+# 10. Regression checklist
 
 Sau khi sửa module A, kiểm tra module liên quan.
 
@@ -424,8 +400,6 @@ Kiểm tra thêm:
 Schedule
 Enrollment
 Student Fees
-Salary Rule
-Payroll
 ```
 
 ## Sửa Payment
@@ -441,7 +415,7 @@ Debt report
 
 ---
 
-# 12. Báo cáo kết quả test
+# 11. Báo cáo kết quả test
 
 Sau khi hoàn thành, AI/dev phải báo theo format:
 
@@ -469,7 +443,7 @@ Không được ghi chung chung:
 
 ---
 
-# 13. Rules for AI Coding Agent
+# 12. Rules for AI Coding Agent
 
 AI bắt buộc:
 

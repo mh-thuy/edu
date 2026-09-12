@@ -177,50 +177,9 @@ receipt. Student `INACTIVE` không được đăng ký mới vào lớp.
 
 ---
 
-# 5. Room Rules
+# 5. Class Rules
 
-## 5.1 Room Code
-
-Rule:
-
-```text
-room.code UNIQUE
-```
-
----
-
-## 5.2 Room Availability
-
-Không cho chọn phòng nếu:
-
-```text
-status = MAINTENANCE
-status = UNAVAILABLE
-```
-
-Khi tạo:
-
-```text
-class
-schedule
-```
-
----
-
-## 5.3 Room Delete
-
-Không cho xóa nếu phòng đã:
-
-```text
-Có class
-Có schedule
-```
-
----
-
-# 6. Class Rules
-
-## 6.1 Class Code
+## 5.1 Class Code
 
 Rule:
 
@@ -230,7 +189,7 @@ class.code UNIQUE
 
 ---
 
-## 6.2 Max Students
+## 5.2 Max Students
 
 Rule:
 
@@ -252,7 +211,7 @@ max_students = 20
 
 ---
 
-## 6.3 Class Delete
+## 5.3 Class Delete
 
 Không cho xóa nếu đã phát sinh:
 
@@ -267,7 +226,7 @@ và lưu `deleted_at`; không hard delete bản ghi lớp.
 
 ---
 
-## 6.4 Class Status
+## 5.4 Class Status
 
 Status hợp lệ:
 
@@ -301,9 +260,9 @@ DRAFT
 
 ---
 
-# 7. Enrollment Rules
+# 6. Enrollment Rules
 
-## 7.1 Duplicate Enrollment
+## 6.1 Duplicate Enrollment
 
 Không cho:
 
@@ -319,7 +278,7 @@ Unique:
 
 ---
 
-## 7.2 Enrollment Capacity
+## 6.2 Enrollment Capacity
 
 Trước khi enroll phải check:
 
@@ -329,7 +288,7 @@ student_count < max_students
 
 ---
 
-## 7.3 Enrollment Remove
+## 6.3 Enrollment Remove
 
 Không cho remove học viên nếu:
 
@@ -350,7 +309,7 @@ Nếu môn đã có học phí:
 
 Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; enrollment có thể được kích hoạt lại khi đăng ký lại môn phù hợp.
 
-## 7.4 Enrollment và Student Fee độc lập
+## 6.4 Enrollment và Student Fee độc lập
 
 Đăng ký học viên vào lớp hoặc môn học không tự động tạo `student_fee`.
 
@@ -367,9 +326,9 @@ Nếu học viên đăng ký thêm môn sau khi đã tạo học phí, thao tác
 
 ---
 
-# 8. Schedule Rules
+# 7. Schedule Rules
 
-## 8.1 Time Validation
+## 7.1 Time Validation
 
 Rule:
 
@@ -386,31 +345,7 @@ Không cho:
 
 ---
 
-## 8.2 Room Conflict
-
-Không cho trùng phòng.
-
-Ví dụ:
-
-```text
-Room R001
-
-Monday 18:00 - 20:00
-
-ENG001 đang dùng
-```
-
-Không cho tạo:
-
-```text
-JP001
-
-Monday 19:00 - 21:00
-```
-
----
-
-## 8.3 Teacher Conflict
+## 7.2 Teacher Conflict
 
 Không cho giáo viên dạy trùng giờ.
 
@@ -430,9 +365,9 @@ Monday 19:00 - 21:00
 
 ---
 
-# 9. Student Fee Rules
+# 8. Student Fee Rules
 
-## 9.1 Duplicate Monthly Fee
+## 8.1 Duplicate Monthly Fee
 
 Không cho tạo trùng:
 
@@ -454,7 +389,7 @@ Chỉ được tồn tại một lần.
 
 ---
 
-## 9.2 Amount Validation
+## 8.2 Amount Validation
 
 Rule:
 
@@ -471,7 +406,7 @@ Không cho:
 
 ---
 
-## 9.3 Discount Validation
+## 8.3 Discount Validation
 
 Rule:
 
@@ -490,7 +425,7 @@ discount = 1200000
 
 ---
 
-## 9.4 Actual Amount
+## 8.4 Actual Amount
 
 Công thức:
 
@@ -504,15 +439,15 @@ Không cho lưu:
 actual_amount < 0
 ```
 
-## 9.5 Student Fee Generation
+## 8.5 Student Fee Generation
 
 Không tự động tạo học phí khi enrollment được tạo hoặc đăng ký thêm môn.
 
 Học phí được tạo qua thao tác riêng và phải tham chiếu đến enrollment hiện có. Enrollment không có học phí vẫn là enrollment hợp lệ.
 
-## 9.6 Monthly Full-Month Tuition
+## 8.6 Monthly Full-Month Tuition
 
-Mức `ClassSubject.tuitionFee` là học phí chuẩn của một tháng. Khi tạo phí tháng, backend tính trọn mức phí cho từng môn đang đăng ký; không chia theo số buổi, số ngày, ngày đăng ký hoặc điểm danh.
+Mức `ClassSubject.tuitionFee` là học phí chuẩn của một tháng. Khi tạo phí tháng, backend tính trọn mức phí cho từng môn đang đăng ký; không chia theo số buổi, số ngày hoặc ngày đăng ký.
 
 ```text
 phí môn = phí tháng chuẩn
@@ -528,9 +463,9 @@ Enrollment có khoảng tạm nghỉ bao phủ tháng -> không tạo phí
 
 ---
 
-# 10. QR Payment Rules
+# 9. QR Payment Rules
 
-## 10.1 QR Generation
+## 9.1 QR Generation
 
 QR được tạo động theo `payment_batch` đang `PENDING`, sử dụng tài khoản ngân hàng
 đã gắn với batch, tổng `final_amount` và `batchNo` làm nội dung chuyển khoản.
@@ -541,16 +476,16 @@ QR được tạo động theo `payment_batch` đang `PENDING`, sử dụng tài
 
 Không lưu ảnh QR hoặc bản ghi QR riêng trong database.
 
-## 10.2 QR Validity
+## 9.2 QR Validity
 
 QR chỉ được tạo khi batch còn `PENDING` và tài khoản nhận tiền còn hoạt động.
 Batch `SUCCESS` hoặc `CANCELLED` không được tạo QR mới.
 
 ---
 
-# 11. Payment Notice Rules (Bill tạm)
+# 10. Payment Notice Rules (Bill tạm)
 
-## 11.1 Payment Notice Meaning
+## 10.1 Payment Notice Meaning
 
 Bill tạm:
 
@@ -566,7 +501,7 @@ Thông báo khoản cần thanh toán
 
 ---
 
-## 11.2 Payment Notice Regeneration
+## 10.2 Payment Notice Regeneration
 
 Nếu thay đổi:
 
@@ -581,16 +516,16 @@ Thì batch đang chờ phải được hủy hoặc thay thế trước khi tạ
 
 ---
 
-## 11.3 Bill History
+## 10.3 Bill History
 
 Cho phép xuất/in lại nhiều lần khi batch còn `PENDING`; hệ thống hiện chưa gửi
 email/SMS và chưa lưu lịch sử số lần xuất/in.
 
 ---
 
-# 12. Payment Rules
+# 11. Payment Rules
 
-## 12.1 Payment Amount
+## 11.1 Payment Amount
 
 Hệ thống chỉ hỗ trợ thanh toán đủ một lần cho từng học phí.
 
@@ -604,7 +539,7 @@ Nếu số tiền không khớp `final_amount`, trả lỗi `PAYMENT_AMOUNT_MISM
 
 ---
 
-## 12.2 Payment Methods
+## 11.2 Payment Methods
 
 Cho phép:
 
@@ -617,7 +552,7 @@ Không cho method khác.
 
 ---
 
-## 12.3 Payment Uniqueness
+## 11.3 Payment Uniqueness
 
 ```text
 1 student_fee chỉ có tối đa một payment SUCCESS
@@ -628,7 +563,7 @@ Payment `FAILED` hoặc `CANCELLED` vẫn được lưu để tra cứu lịch s
 
 ---
 
-## 12.4 Payment Status Update
+## 11.4 Payment Status Update
 
 Trạng thái học phí chỉ có hai trạng thái thanh toán chính:
 
@@ -641,9 +576,9 @@ Sau khi đã `PAID`, không cho tạo thêm payment SUCCESS.
 
 ---
 
-# 13. Receipt Rules
+# 12. Receipt Rules
 
-## 13.1 Receipt Creation
+## 12.1 Receipt Creation
 
 Receipt chỉ tạo khi:
 
@@ -655,7 +590,7 @@ Không cho tạo trực tiếp.
 
 ---
 
-## 13.2 Receipt Number
+## 12.2 Receipt Number
 
 Rule:
 
@@ -671,7 +606,7 @@ RC2026060001
 
 ---
 
-## 13.3 Receipt Edit
+## 12.3 Receipt Edit
 
 Không cho sửa:
 
@@ -684,7 +619,7 @@ Sau khi receipt đã phát hành.
 
 ---
 
-## 13.4 Receipt Delete
+## 12.4 Receipt Delete
 
 Không cho xóa receipt.
 
@@ -701,73 +636,7 @@ quan bị hủy, học phí được mở lại thành `UNPAID` hoặc `OVERDUE`
 
 ---
 
-# 14. Payroll Rules
-
-## 14.1 Monthly Payroll
-
-Rule:
-
-```text
-1 teacher + 1 month = 1 payroll
-```
-
-Unique:
-
-```text
-(teacher_id,month)
-```
-
----
-
-## 14.2 Salary Formula
-
-Công thức:
-
-```text
-center_fee = revenue × commission / 100
-
-salary = revenue - center_fee
-```
-
----
-
-## 14.3 Payroll Status
-
-Status:
-
-```text
-DRAFT
-APPROVED
-PAID
-```
-
-Flow:
-
-```text
-DRAFT
-→ APPROVED
-→ PAID
-```
-
-Không cho:
-
-```text
-DRAFT → PAID trực tiếp
-```
-
----
-
-## 14.4 Payroll Edit Restriction
-
-Không cho sửa nếu:
-
-```text
-status = PAID
-```
-
----
-
-# 15. Delete Policy
+# 13. Delete Policy
 
 Nguyên tắc:
 
@@ -781,7 +650,6 @@ Không xóa:
 student_fee
 payment
 receipt
-payroll
 ```
 
 Chỉ:
@@ -794,7 +662,7 @@ cancel
 
 ---
 
-# 16. Audit Log Rules
+# 14. Audit Log Rules
 
 Bắt buộc lưu audit log cho:
 
@@ -802,8 +670,6 @@ Bắt buộc lưu audit log cho:
 Payment created
 Payment updated
 Receipt created
-Payroll approved
-Payroll paid
 Student fee generated
 QR generated dynamically
 Bill generated dynamically
@@ -825,7 +691,7 @@ created_at
 
 ---
 
-# 17. API Rules
+# 15. API Rules
 
 Mọi API phải validate backend.
 
@@ -864,7 +730,7 @@ Lỗi:
 
 ---
 
-# 18. Transaction Rules
+# 16. Transaction Rules
 
 Các thao tác sau phải dùng database transaction.
 
@@ -873,14 +739,13 @@ Create student fee + QR + bill
 
 Create payment + update fee status + create receipt
 
-Approve payroll + create payroll items
 ```
 
 Không được commit từng bước riêng lẻ.
 
 ---
 
-# 19. Security Rules
+# 17. Security Rules
 
 Không cho:
 
@@ -902,7 +767,7 @@ Payment SUCCESS luôn có số tiền bằng `actual_amount`; không phát sinh
 
 ---
 
-# 20. Rules for AI Coding Agent
+# 18. Rules for AI Coding Agent
 
 AI không được:
 

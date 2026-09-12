@@ -6,6 +6,10 @@ Trạng thái triển khai hiện hành được tóm tắt tại [11-current-sy
 
 Mô hình truy cập hiện hành là một quyền dùng chung cho mọi user đã đăng nhập; chi tiết tại [09-permissions-matrix.md](./09-permissions-matrix.md).
 
+Các nghiệp vụ phòng học, điểm danh và bảng lương giáo viên đã được loại khỏi
+phạm vi sản phẩm. Mọi mô tả còn sót trong migration, báo cáo audit hoặc tài liệu
+refactor cũ chỉ là lịch sử kỹ thuật, không phải yêu cầu hiện hành.
+
 Mọi AI Coding Agent (Codex, GitHub Copilot, Claude Code…) bắt buộc đọc file này trước khi sửa code.
 
 ---

@@ -15,11 +15,9 @@ Các module chính:
 - Quản lý người dùng
 - Quản lý giáo viên
 - Quản lý học viên
-- Quản lý phòng học
 - Quản lý lớp học
 - Đăng ký học viên
 - Quản lý lịch học
-- Điểm danh học viên
 - Quản lý học phí
 - Tạo yêu cầu thanh toán
 - Sinh VietQR thanh toán
@@ -28,8 +26,6 @@ Các module chính:
 - Đối soát giao dịch
 - Quản lý thanh toán
 - Quản lý biên lai
-- Quản lý chia lương giáo viên
-- Quản lý bảng lương
 - Audit log hệ thống
 
 Luồng tổng quát:
@@ -58,8 +54,6 @@ Auto Reconciliation
 Create Payment
     ↓
 Generate Receipt
-    ↓
-Teacher Payroll
 ```
 
 ---
@@ -193,44 +187,7 @@ email optional unique
 
 ---
 
-# 5. Quản lý phòng học
-
-Bảng:
-
-```text
-rooms
-```
-
-Field:
-
-```text
-id
-code
-name
-capacity
-floor
-location
-status
-```
-
-Status:
-
-```text
-AVAILABLE
-MAINTENANCE
-UNAVAILABLE
-```
-
-Rule:
-
-```text
-room.code unique
-Không được chọn phòng inactive
-```
-
----
-
-# 6. Quản lý lớp học
+# 5. Quản lý lớp học
 
 Bảng:
 
@@ -245,7 +202,6 @@ id
 code
 name
 teacher_id
-room_id
 tuition_fee
 total_sessions
 max_students
@@ -273,7 +229,7 @@ Không cho xóa nếu đã phát sinh học phí
 
 ---
 
-# 7. Đăng ký học viên vào lớp
+# 6. Đăng ký học viên vào lớp
 
 Bảng:
 
@@ -308,7 +264,7 @@ Không vượt max_students
 
 ---
 
-# 8. Quản lý lịch học
+# 7. Quản lý lịch học
 
 Bảng:
 
@@ -322,7 +278,6 @@ Field:
 id
 class_id
 teacher_id
-room_id
 day_of_week
 start_time
 end_time
@@ -335,50 +290,12 @@ day_of_week = 1..7
 
 start_time < end_time
 
-Không trùng phòng
-
 Không trùng giáo viên
 ```
 
 ---
 
-# 9. Điểm danh học viên
-
-Bảng:
-
-```text
-attendances
-```
-
-Field:
-
-```text
-id
-class_id
-student_id
-schedule_id
-attendance_date
-status
-note
-```
-
-Status:
-
-```text
-PRESENT
-ABSENT
-MAKEUP
-```
-
-Rule:
-
-```text
-1 student chỉ có 1 attendance cho mỗi buổi học
-```
-
----
-
-# 10. Quản lý học phí
+# 8. Quản lý học phí
 
 Bảng:
 
@@ -435,11 +352,11 @@ Học phí theo tháng được tính trọn tháng theo từng môn:
 phí môn = phí tháng chuẩn
 ```
 
-Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học phí; enrollment còn `ACTIVE` phát sinh đủ phí tháng dù học viên vắng, đăng ký giữa tháng hoặc không có điểm danh.
+Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học phí; enrollment còn `ACTIVE` phát sinh đủ phí tháng dù học viên vắng hoặc đăng ký giữa tháng.
 
 ---
 
-# 11. Payment batch
+# 9. Payment batch
 
 Thanh toán bắt đầu từ một hoặc nhiều khoản học phí của cùng một học viên.
 Các khoản được gom vào một `payment_batch`; mỗi allocation phải bằng toàn bộ
@@ -474,7 +391,7 @@ BANK_TRANSFER tạo batch PENDING và chỉ hoàn tất sau đối soát.
 
 ---
 
-# 12. QR thanh toán động
+# 10. QR thanh toán động
 
 QR được sinh động từ payment batch và tài khoản ngân hàng đang hoạt động:
 
@@ -488,7 +405,7 @@ phương thức là `BANK_TRANSFER` và batch đã gắn tài khoản nhận ti�
 
 ---
 
-# 13. Thông báo và biên lai
+# 11. Thông báo và biên lai
 
 PDF thông báo học phí và biên lai được sinh động từ dữ liệu hiện tại/snapshot
 của payment batch. Không có luồng gửi email/SMS tự động trong phiên bản này.
@@ -506,7 +423,7 @@ và receipt liên quan, mở lại học phí về `UNPAID`/`OVERDUE`, chuyển 
 
 ---
 
-# 14. Import và đối soát sao kê ngân hàng
+# 12. Import và đối soát sao kê ngân hàng
 
 Sao kê chỉ được phân tích tạm trong response/token của phiên làm việc; không
 lưu lịch sử dòng sao kê. Chỉ giao dịch ghi có mới được đối soát.
@@ -532,96 +449,7 @@ hoặc giao dịch có số tiền không khớp tuyệt đối.
 
 ---
 
-# 18. Quy tắc chia lương giáo viên
-
-Bảng:
-
-```text
-class_salary_rules
-```
-
-Field:
-
-```text
-id
-class_id
-teacher_share_percentage
-created_at
-```
-
-Ví dụ:
-
-```text
-Revenue = 10,000,000
-
-teacher_share = 70%
-
-Teacher salary = 7,000,000
-
-Center revenue = 3,000,000
-```
-
-Rule:
-
-```text
-1 class có 1 salary rule
-```
-
----
-
-# 19. Bảng lương giáo viên
-
-Bảng:
-
-```text
-teacher_payrolls
-
-teacher_payroll_items
-```
-
-teacher_payrolls:
-
-```text
-id
-teacher_id
-month
-total_revenue
-center_fee
-salary_amount
-status
-approved_at
-paid_at
-```
-
-teacher_payroll_items:
-
-```text
-id
-payroll_id
-class_id
-revenue
-salary
-```
-
-Status:
-
-```text
-DRAFT
-APPROVED
-PAID
-```
-
-Rule:
-
-```text
-(teacher_id,month) unique
-
-Revenue chỉ tính payment CONFIRMED
-```
-
----
-
-# 20. Audit log
+# 13. Audit log
 
 Bảng:
 
@@ -656,7 +484,7 @@ FEE_CANCELLED
 
 ---
 
-# 21. Luồng phát sinh học phí hiện hành
+# 14. Luồng phát sinh học phí hiện hành
 
 ```text
 1. Nhân viên chọn học viên và các môn muốn đăng ký trong lớp.
@@ -672,7 +500,7 @@ Không tạo học phí độc lập ngoài enrollment; mọi khoản học phí
 
 ---
 
-# 22. Luồng thanh toán
+# 15. Luồng thanh toán
 
 ```text
 Parent chuyển khoản QR
@@ -684,7 +512,7 @@ Staff thu tiền mặt
 
 ---
 
-# 23. Luồng xác nhận thanh toán
+# 16. Luồng xác nhận thanh toán
 
 ```text
 1. Import bank statement
@@ -695,24 +523,6 @@ Staff thu tiền mặt
 6. Tạo tuition payment SUCCESS, cập nhật tuition fee PAID
 7. Sinh receipt theo khoản và receipt tổng hợp
 8. In hoặc xuất chứng từ
-```
-
----
-
-# 24. Luồng tính lương giáo viên
-
-```text
-1. Tổng hợp payment CONFIRMED theo lớp
-
-2. Group theo teacher
-
-3. Áp dụng salary rule
-
-4. Generate payroll
-
-5. Approve payroll
-
-6. Mark paid
 ```
 
 ---

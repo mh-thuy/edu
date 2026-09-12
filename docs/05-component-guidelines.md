@@ -87,7 +87,6 @@ src/components/dialogs
   StudentSelectDialog.tsx
   TeacherSelectDialog.tsx
   ClassSelectDialog.tsx
-  RoomSelectDialog.tsx
 
 src/components/feedback
   LoadingOverlay.tsx
@@ -213,8 +212,6 @@ Học phí
 Payment amount
 
 Discount
-
-Teacher salary
 
 Revenue
 
@@ -435,8 +432,6 @@ StudentSelectDialog
 TeacherSelectDialog
 
 ClassSelectDialog
-
-RoomSelectDialog
 
 StudentFeeSelectDialog
 ```

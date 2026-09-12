@@ -2,6 +2,12 @@
 
 Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo mô hình lớp có nhiều môn học.
 
+## Phạm vi sản phẩm
+
+- Không quản lý phòng học và không kiểm tra trùng phòng.
+- Không quản lý điểm danh.
+- Không quản lý quy tắc chia lương hoặc bảng lương giáo viên.
+
 ## Lớp học và môn học
 
 - `Class` chỉ chứa thông tin chung của lớp: mã, tên, thời gian và trạng thái.
@@ -17,7 +23,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Chi tiết lớp chỉ hiển thị tổng quan; nghiệp vụ học viên nằm ở `/admin/classes/{classId}/students` và học phí nằm ở `/admin/classes/{classId}/tuition`.
 - Trang học phí nhận một kỳ `YYYY-MM`; `Tạo học phí tháng` tạo phí riêng, còn `Tạo thanh toán & xuất thông báo` tạo payment batch và PDF.
 - Không tạo học phí độc lập ngoài enrollment.
-- Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng dù không có điểm danh; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
+- Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng, không phụ thuộc mức độ tham gia thực tế; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
 - Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.
 - Xóa học viên/giáo viên/lớp/lịch chỉ là soft delete hoặc chuyển trạng thái; không hard delete bản ghi.

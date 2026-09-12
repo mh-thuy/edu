@@ -20,7 +20,6 @@ Giao diện được thiết kế cho nhân viên trung tâm sử dụng hằng 
 - Bill tạm
 - Thanh toán
 - Biên lai
-- Bảng lương giáo viên
 - Báo cáo
 
 Nguyên tắc chính:
@@ -82,10 +81,6 @@ Tài chính
 - Thanh toán
 - Biên lai
 - Công nợ
-
-Lương giáo viên
-- Quy tắc chia lương
-- Bảng lương
 
 Hệ thống
 - Người dùng
@@ -344,7 +339,6 @@ Khi bấm `Chọn học viên`, mở dialog chọn.
 - StudentSelectDialog
 - TeacherSelectDialog
 - ClassSelectDialog
-- RoomSelectDialog
 - StudentFeeSelectDialog
 
 Cấu trúc:
@@ -369,7 +363,6 @@ Ví dụ:
 ST001 - Nguyễn Văn A
 GV001 - Trần Thị B
 ENG001 - English Beginner
-R001 - Phòng 1
 ```
 
 ---
@@ -461,7 +454,6 @@ Tổng số học viên
 Lớp đang học
 Học phí chưa thu
 Thanh toán hôm nay
-Lương giáo viên chờ duyệt
 ```
 
 Các khu vực gợi ý:
@@ -479,7 +471,6 @@ Ví dụ cảnh báo:
 ```text
 - 12 học viên chưa đóng học phí tháng 2026-06
 - 3 lớp chưa có lịch học
-- 2 bảng lương đang chờ duyệt
 ```
 
 ---
@@ -583,7 +574,7 @@ Trạng thái
 
 # 16. Module Lớp học
 
-## 17.1 List columns
+## 16.1 List columns
 
 ```text
 Mã lớp
@@ -595,7 +586,7 @@ Trạng thái
 Thao tác
 ```
 
-## 17.2 Form fields
+## 16.2 Form fields
 
 ```text
 Mã lớp
@@ -608,7 +599,7 @@ Ngày kết thúc
 Trạng thái
 ```
 
-## 17.3 UI rules
+## 16.3 UI rules
 
 - Giáo viên chọn qua TeacherSelectDialog.
 - Không dùng select dài.
@@ -617,7 +608,7 @@ Trạng thái
 
 ---
 
-# 18. Module Đăng ký học viên vào lớp
+# 17. Module Đăng ký học viên vào lớp
 
 Màn hình nên có:
 
@@ -641,9 +632,9 @@ Rule:
 
 ---
 
-# 19. Module Lịch học
+# 18. Module Lịch học
 
-## 19.1 List columns
+## 18.1 List columns
 
 ```text
 Lớp
@@ -654,7 +645,7 @@ Giờ kết thúc
 Thao tác
 ```
 
-## 19.2 Form fields
+## 18.2 Form fields
 
 ```text
 Lớp
@@ -664,7 +655,7 @@ Giờ bắt đầu
 Giờ kết thúc
 ```
 
-## 19.3 UI rules
+## 18.3 UI rules
 
 - Khi chọn lớp, tự gợi ý giáo viên mặc định.
 - Khi đổi giờ/giáo viên, gọi API check conflict.
@@ -679,7 +670,7 @@ Giáo viên đã có lớp khác trong cùng khung giờ.
 
 ---
 
-# 20. Module Học phí
+# 19. Module Học phí
 
 Học phí theo lớp được quản lý tại:
 
@@ -698,7 +689,7 @@ Tạo thanh toán & xuất thông báo
 
 Tạo học phí không tạo payment batch. Tạo thanh toán sẽ bổ sung các khoản còn thiếu, tạo payment batch và xuất PDF thông báo.
 
-## 20.1 List columns
+## 19.1 List columns
 
 ```text
 Mã học viên
@@ -712,7 +703,7 @@ Trạng thái
 Thao tác
 ```
 
-## 20.2 Actions
+## 19.2 Actions
 
 ```text
 Xem chi tiết
@@ -720,7 +711,7 @@ In bill tạm
 Ghi nhận thanh toán
 ```
 
-## 20.3 Học phí phát sinh từ đăng ký
+## 19.3 Học phí phát sinh từ đăng ký
 
 ```text
 Không có form tạo học phí độc lập theo từng khoản. Sau khi đăng ký môn, UI hiển thị trạng thái chưa tạo phí; thao tác `Tạo học phí tháng` của lớp sẽ tạo phí trước khi tạo payment batch.
@@ -731,7 +722,7 @@ Rule:
 - Chỉ tạo phí từ enrollment đã tồn tại.
 - Tạo phí là thao tác riêng, không chạy tự động khi đăng ký môn.
 - Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo thanh toán và xuất thông báo`.
-- Học phí được tính trọn tháng theo mức phí của từng môn, không theo số buổi hoặc điểm danh.
+- Học phí được tính trọn tháng theo mức phí của từng môn, không theo số buổi.
 - Chi tiết học phí hiển thị kỳ học phí và thông tin tính trọn tháng trong từng item.
 - Một học viên có thể học một phần môn trong lớp.
 - Không tạo trùng tuition fee item cho cùng một môn.
@@ -739,7 +730,7 @@ Rule:
 
 ---
 
-# 21. Module QR thanh toán
+# 20. Module QR thanh toán
 
 QR dialog hiển thị:
 
@@ -768,7 +759,7 @@ Rule:
 
 ---
 
-# 22. Module Bill tạm / Phiếu báo học phí
+# 21. Module Bill tạm / Phiếu báo học phí
 
 Bill tạm phải ghi rõ:
 
@@ -810,9 +801,9 @@ Rule:
 
 ---
 
-# 23. Module Thanh toán
+# 22. Module Thanh toán
 
-## 23.1 List columns
+## 22.1 List columns
 
 ```text
 Mã học phí
@@ -824,7 +815,7 @@ Ngày thanh toán
 Thao tác
 ```
 
-## 23.2 Form fields
+## 22.2 Form fields
 
 ```text
 Khoản học phí
@@ -835,7 +826,7 @@ Ngày thanh toán
 Ghi chú
 ```
 
-## 23.3 UI rules
+## 22.3 UI rules
 
 - Không hiển thị ô nhập số tiền thanh toán.
 - Hiển thị số tiền phải thanh toán bằng `finalAmount` ở chế độ chỉ đọc.
@@ -844,9 +835,9 @@ Ghi chú
 
 ---
 
-# 24. Module Biên lai
+# 23. Module Biên lai
 
-## 24.1 List columns
+## 23.1 List columns
 
 ```text
 Số biên lai
@@ -858,7 +849,7 @@ Ngày in
 Thao tác
 ```
 
-## 24.2 UI rules
+## 23.2 UI rules
 
 - Receipt chỉ có sau payment.
 - Không tạo receipt trực tiếp nếu chưa có payment.
@@ -874,64 +865,7 @@ Biên lai: xác nhận đã thu tiền
 
 ---
 
-# 25. Module Quy tắc chia lương
-
-List columns:
-
-```text
-Lớp
-Tỷ lệ trung tâm giữ lại
-Ngày tạo
-Thao tác
-```
-
-Form fields:
-
-```text
-Lớp
-Tỷ lệ trung tâm giữ lại (%)
-```
-
-Rule:
-
-- Mỗi lớp chỉ có một quy tắc chia lương.
-- Tỷ lệ phải từ 0 đến 100.
-
----
-
-# 26. Module Bảng lương giáo viên
-
-## 26.1 List columns
-
-```text
-Giáo viên
-Tháng
-Doanh thu
-Phí trung tâm
-Lương giáo viên
-Trạng thái
-Thao tác
-```
-
-## 26.2 Actions
-
-```text
-Tính lương
-Xem chi tiết
-Duyệt
-Đánh dấu đã trả
-```
-
-## 26.3 UI rules
-
-- Không cho sửa bảng lương khi status = PAID.
-- Chi tiết payroll hiển thị theo từng lớp.
-- Trước khi duyệt phải confirm.
-- Trước khi đánh dấu đã trả phải confirm.
-
----
-
-# 27. Snackbar / Toast
+# 24. Snackbar / Toast
 
 Thông báo thành công:
 
@@ -959,7 +893,7 @@ Không hiển thị lỗi kỹ thuật raw cho người dùng cuối.
 
 ---
 
-# 28. Confirm Dialog
+# 25. Confirm Dialog
 
 Các action bắt buộc confirm:
 
@@ -969,8 +903,6 @@ Các action bắt buộc confirm:
 - Tạo học phí riêng từ enrollment
 - Ghi nhận thanh toán
 - Tạo biên lai
-- Duyệt bảng lương
-- Đánh dấu đã trả lương
 
 Ví dụ:
 
@@ -981,7 +913,7 @@ Sau khi ghi nhận, trạng thái học phí sẽ được cập nhật.
 
 ---
 
-# 29. Access UI
+# 26. Access UI
 
 - Mọi user đã đăng nhập nhìn thấy cùng sidebar và cùng các action.
 - UI không ẩn hoặc disable action theo role.
@@ -989,7 +921,7 @@ Sau khi ghi nhận, trạng thái học phí sẽ được cập nhật.
 
 ---
 
-# 30. Responsive
+# 27. Responsive
 
 Ưu tiên desktop.
 
@@ -1003,7 +935,7 @@ Nhưng tablet/mobile phải dùng được cơ bản:
 
 ---
 
-# 31. Accessibility
+# 28. Accessibility
 
 Rule:
 
@@ -1016,7 +948,7 @@ Rule:
 
 ---
 
-# 32. Code organization
+# 29. Code organization
 
 Khuyến nghị cấu trúc:
 
@@ -1054,7 +986,7 @@ Không để một page quá dài.
 
 ---
 
-# 33. Quy tắc code UI
+# 30. Quy tắc code UI
 
 Không dùng:
 
@@ -1079,7 +1011,7 @@ Reusable components
 
 ---
 
-# 34. Checklist sau khi implement mỗi module
+# 31. Checklist sau khi implement mỗi module
 
 Phải kiểm tra:
 
@@ -1107,7 +1039,7 @@ Authentication
 
 ---
 
-# 35. Quy tắc dành cho Codex / AI coding agent
+# 32. Quy tắc dành cho Codex / AI coding agent
 
 Khi implement UI:
 
