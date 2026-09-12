@@ -22,12 +22,6 @@ export type ClassListItem = Prisma.ClassGetPayload<{
   };
 }>;
 
-export type TeacherWithUser = Prisma.TeacherGetPayload<{
-  include: {
-    user: true;
-  };
-}>;
-
 export type StudentWithClasses = Prisma.StudentGetPayload<{
   include: {
     enrollments: {

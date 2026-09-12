@@ -6,7 +6,6 @@ import type {
   TeacherFilter,
   TeacherUpdate,
 } from "@/modules/teacher/schemas/teacher.schema";
-import type { TeacherWithUser } from "@/types/prisma";
 
 function buildTeacherCreateInput(
   data: TeacherCreate,
@@ -61,11 +60,8 @@ export async function createTeacher(data: TeacherCreate): Promise<Teacher> {
 
 export async function getTeacherById(
   id: string,
-): Promise<TeacherWithUser | null> {
-  return prisma.teacher.findUnique({
-    where: { id },
-    include: { user: true },
-  });
+): Promise<Teacher | null> {
+  return prisma.teacher.findUnique({ where: { id } });
 }
 
 export async function getTeachers(filter: TeacherFilter) {
@@ -89,13 +85,6 @@ export async function getTeachers(filter: TeacherFilter) {
   const [teachers, total] = await Promise.all([
     prisma.teacher.findMany({
       where,
-      include: {
-        user: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
       skip,
       take: pageSize,
       orderBy: { createdAt: "desc" },
@@ -122,12 +111,7 @@ export async function updateTeacher(
   id: string,
   data: TeacherUpdate,
 ): Promise<Teacher> {
-  const currentTeacher = await prisma.teacher.findUnique({
-    where: { id },
-    select: {
-      userId: true,
-    },
-  });
+  const currentTeacher = await prisma.teacher.findUnique({ where: { id } });
 
   if (!currentTeacher) {
     throw new NotFoundError("Không tìm thấy giáo viên");

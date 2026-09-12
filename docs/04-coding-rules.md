@@ -115,7 +115,7 @@ create payment + update fee status + receipt
 Không hard delete dữ liệu tài chính:
 
 ```text
-student_fees
+tuition_fees
 payments
 receipts
 ```

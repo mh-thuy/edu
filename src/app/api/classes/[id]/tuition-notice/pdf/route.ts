@@ -3,7 +3,7 @@ import { apiError, handleApiError } from "@/lib/api";
 import { z } from "zod";
 import { createClassPaymentBatches, generateClassTuitionNoticePdf } from "@/modules/finance/tuition/services/class-tuition-notice-pdf.service";
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;

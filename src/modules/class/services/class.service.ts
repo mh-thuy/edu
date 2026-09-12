@@ -299,6 +299,12 @@ export async function assignStudentToClass(
       include: { student: true, class: true },
     });
 
+    if (existing && !["ACTIVE", "LEFT"].includes(existing.status)) {
+      throw new ConflictError(
+        "Chỉ có thể đăng ký thêm môn cho enrollment đang học hoặc đã rời lớp",
+      );
+    }
+
   const classData = await tx.class.findUnique({ where: { id: classId } });
   if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
   if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {

@@ -426,7 +426,6 @@ Ví dụ:
 ```text
 ACTIVE    -> Đang hoạt động
 INACTIVE  -> Ngừng hoạt động
-ON_LEAVE  -> Tạm nghỉ
 
 DRAFT     -> Nháp
 COMPLETED -> Hoàn thành
@@ -515,7 +514,7 @@ Mã GV
 Họ tên
 Số điện thoại
 Chuyên môn
-Có tài khoản
+Tỷ lệ trích (%)
 Trạng thái
 Thao tác
 ```
@@ -523,19 +522,20 @@ Thao tác
 ## 14.2 Form fields
 
 ```text
-Mã giáo viên
-Tài khoản liên kết
+Họ tên
 Số điện thoại
 Số tài khoản ngân hàng
 Chuyên môn
+Tỷ lệ trích (%)
 Trạng thái
 ```
 
 ## 14.3 UI rules
 
-- Giáo viên có thể có hoặc không có tài khoản đăng nhập.
-- Hiển thị rõ giáo viên có tài khoản login hay không.
-- Không cho người dùng nhập trùng mã giáo viên.
+- Giáo viên không liên kết tài khoản đăng nhập và không sử dụng email.
+- Mã giáo viên được hệ thống tự sinh và không được trùng.
+- Tỷ lệ trích nằm trong khoảng `0..100`, dùng cho báo cáo thu học phí theo
+  lớp/môn và không đại diện cho một bảng lương.
 
 ---
 

@@ -305,6 +305,10 @@ export async function updateClassSchedule(
       endMinute: data.endMinute ?? current.endMinute,
     };
 
+    if (merged.startMinute >= merged.endMinute) {
+      throw new ConflictError("Giờ kết thúc phải sau giờ bắt đầu");
+    }
+
     await lockScheduleResources(tx, merged);
     await lockClassSubject(tx, merged.classSubjectId);
     await assertScheduleRelations(merged, tx);

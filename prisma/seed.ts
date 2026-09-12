@@ -51,24 +51,14 @@ async function seedAuth() {
     },
   });
 
-  const teacherUser = await prisma.user.create({
-    data: {
-      email: "teacher@edu.local",
-      fullName: "Nguyễn Văn An",
-      passwordHash: defaultPasswordHash,
-      status: "ACTIVE",
-    },
-  });
-
-  return { adminUser, staffUser, teacherUser };
+  return { adminUser, staffUser };
 }
 
-async function seedMasters(teacherUserId: string) {
+async function seedMasters() {
   const teachers = await Promise.all([
     prisma.teacher.create({
       data: {
         code: "GV001",
-        userId: teacherUserId,
         fullName: "Nguyễn Văn An",
         phone: "0901000001",
         bankAccount: "0123456789",
@@ -92,7 +82,7 @@ async function seedMasters(teacherUserId: string) {
         fullName: "Lê Minh Cường",
         phone: "0901000003",
         specialty: "Vật lý",
-        status: "ON_LEAVE",
+        status: "INACTIVE",
       },
     }),
   ]);
@@ -339,8 +329,8 @@ async function main() {
 
   await cleanup();
 
-  const { adminUser, teacherUser } = await seedAuth();
-  // const { teachers, students } = await seedMasters(teacherUser.id);
+  const { adminUser } = await seedAuth();
+  // const { teachers, students } = await seedMasters();
   // const classes = await seedClasses(teachers, students);
   await seedBankAccounts(adminUser.id);
 

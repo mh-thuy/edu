@@ -6,14 +6,19 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 
 - Không quản lý phòng học và không kiểm tra trùng phòng.
 - Không quản lý điểm danh.
-- Không quản lý quy tắc chia lương hoặc bảng lương giáo viên.
+- Không quản lý kỳ lương, phiếu lương hoặc bảng lương giáo viên.
+- Báo cáo thu học phí theo lớp/môn vẫn tính phần doanh thu còn lại từ
+  `Teacher.commissionPercent`; đây là chỉ tiêu báo cáo thu, không phải bảng lương.
 
 ## Lớp học và môn học
 
 - `Class` chỉ chứa thông tin chung của lớp: mã, tên, thời gian và trạng thái.
 - `ClassSubject` là nơi lưu môn học thuộc lớp, giáo viên phụ trách, học phí, số buổi và giới hạn học viên.
+- Giới hạn học viên được kiểm tra riêng trên từng `ClassSubject`; lớp không có
+  một giới hạn sĩ số dùng chung.
 - Một học viên có thể đăng ký một hoặc nhiều `ClassSubject` trong cùng lớp; không bắt buộc học toàn bộ môn.
 - Lịch học phải gắn với môn học và lấy giáo viên theo môn đã phân công.
+- Thứ trong tuần của lịch học dùng `0..6` (`0` là Chủ nhật).
 - Giáo viên xem lớp thông qua các môn được phân công, không qua giáo viên cấp lớp.
 
 ## Học phí
@@ -45,6 +50,13 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Mọi người dùng đã đăng nhập dùng chung một quyền truy cập; không còn role hoặc màn hình phân quyền.
 - Xóa người dùng là khóa mềm tài khoản; không xóa vật lý.
 - API `/api/users` yêu cầu đăng nhập và không bao giờ trả về `passwordHash`.
+
+## Giáo viên và học viên
+
+- Giáo viên là hồ sơ độc lập, không liên kết tài khoản `User` và không sử dụng email.
+- Trạng thái giáo viên chỉ gồm `ACTIVE` và `INACTIVE`.
+- Giáo viên có tỷ lệ trích `0..100%` phục vụ báo cáo thu học phí theo lớp/môn.
+- Học viên không sử dụng email; thông tin liên hệ gồm số điện thoại và phụ huynh.
 
 ## Prisma và dữ liệu cũ
 

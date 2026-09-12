@@ -174,7 +174,7 @@ Relation load được
 Ví dụ:
 
 ```text
-student_fees
+tuition_fees
 payment
 receipt
 QR
@@ -367,7 +367,7 @@ Tạo lịch hợp lệ
 
 Tạo lịch trùng giáo viên
 
-Tạo lịch start_time >= end_time
+Tạo hoặc cập nhật lịch có start_time >= end_time
 
 Đổi giáo viên
 

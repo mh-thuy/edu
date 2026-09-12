@@ -116,7 +116,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   async function createPaymentNotice() {
     setBusy(true);
     try {
-      const response = await fetch(`/api/classes/${id}/tuition-notice/pdf?month=${encodeURIComponent(month)}`);
+      const response = await fetch(`/api/classes/${id}/tuition-notice/pdf?month=${encodeURIComponent(month)}`, { method: "POST" });
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo thanh toán và thông báo"));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);

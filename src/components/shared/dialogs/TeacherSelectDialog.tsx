@@ -66,7 +66,6 @@ export function TeacherSelectDialog({
         const map: Record<string, string> = {
           ACTIVE: "Hoạt động",
           INACTIVE: "Không hoạt động",
-          ON_LEAVE: "Tạm nghỉ",
         };
         return map[params.value as string] ?? "-";
       },

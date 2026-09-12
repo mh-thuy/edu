@@ -89,45 +89,38 @@ GV001
 
 ---
 
-## 3.2 Teacher Account
+## 3.2 Teacher Profile
 
-Teacher có thể:
+Teacher là hồ sơ nghiệp vụ độc lập:
 
 ```text
-Có account
-Không có account
+Không liên kết user
+Không sử dụng email
 ```
 
-Cho phép:
+Thông tin sử dụng:
 
 ```text
-teacher.user_id = null
+full_name
+phone
+bank_account
+specialty
+commission_percent
 ```
 
 ---
 
-## 3.3 Teacher Email
+## 3.3 Teacher Commission
 
 Rule:
 
-Nếu teacher liên kết với user:
-
 ```text
-teacher.user_id != null
+0 <= commission_percent <= 100
 ```
 
-Thì:
-
-```text
-teacher.email không được sửa riêng
-email lấy từ users.email
-```
-
-Nếu teacher không có user:
-
-```text
-teacher.email hoạt động độc lập
-```
+Tỷ lệ này chỉ dùng trong báo cáo thu học phí theo lớp và môn học để tính phần
+doanh thu còn lại sau tỷ lệ trích. Hệ thống không tạo kỳ lương, phiếu lương hoặc
+bảng lương giáo viên.
 
 ---
 
@@ -152,19 +145,13 @@ student.code UNIQUE
 
 ---
 
-## 4.2 Student Email
+## 4.2 Student Contact
 
 Rule:
 
 ```text
-Email không bắt buộc
-```
-
-Nhưng nếu nhập:
-
-```text
-Email phải unique
-Email đúng format
+Học viên không sử dụng email
+Thông tin liên hệ gồm số điện thoại và thông tin phụ huynh
 ```
 
 ---
@@ -189,20 +176,21 @@ class.code UNIQUE
 
 ---
 
-## 5.2 Max Students
+## 5.2 Subject Capacity
 
 Rule:
 
 ```text
-student_count <= max_students
+active_enrollment_subject_count <= class_subject.max_students
 ```
 
-Không cho enroll nếu vượt quá giới hạn.
+Giới hạn được áp dụng riêng cho từng môn trong lớp. `max_students = null` nghĩa
+là môn không giới hạn sĩ số. Không cho đăng ký môn nếu môn đó đã đủ giới hạn.
 
 Ví dụ:
 
 ```text
-max_students = 20
+class_subject.max_students = 20
 
 đã có 20
 
@@ -280,10 +268,10 @@ Unique:
 
 ## 6.2 Enrollment Capacity
 
-Trước khi enroll phải check:
+Trước khi đăng ký từng môn phải check:
 
 ```text
-student_count < max_students
+active_enrollment_subject_count < class_subject.max_students
 ```
 
 ---
@@ -307,7 +295,7 @@ Nếu môn đã có học phí:
     các kỳ sau không tạo thêm phí cho môn đó
 ```
 
-Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; enrollment có thể được kích hoạt lại khi đăng ký lại môn phù hợp.
+Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; chỉ enrollment `LEFT` mới có thể được kích hoạt lại khi đăng ký lại môn phù hợp. Enrollment `COMPLETED` hoặc `SUSPENDED` không được tự động mở lại.
 
 ## 6.4 Enrollment và Student Fee độc lập
 
@@ -327,6 +315,8 @@ Nếu học viên đăng ký thêm môn sau khi đã tạo học phí, thao tác
 ---
 
 # 7. Schedule Rules
+
+`day_of_week` dùng miền `0..6`, trong đó `0` là Chủ nhật và `6` là Thứ bảy.
 
 ## 7.1 Time Validation
 

@@ -26,6 +26,7 @@ Các module chính:
 - Đối soát giao dịch
 - Quản lý thanh toán
 - Quản lý biên lai
+- Báo cáo thu học phí theo lớp và môn học
 - Audit log hệ thống
 
 Luồng tổng quát:
@@ -102,15 +103,6 @@ Bảng:
 
 ```text
 teachers
-users
-```
-
-Thiết kế:
-
-```text
-Teacher có thể có hoặc không có account login
-
-teachers.user_id nullable
 ```
 
 Field:
@@ -118,11 +110,11 @@ Field:
 ```text
 id
 code
-user_id nullable
-email nullable
+full_name
 phone
 bank_account
 specialty
+commission_percent
 status
 ```
 
@@ -131,20 +123,15 @@ Status:
 ```text
 ACTIVE
 INACTIVE
-ON_LEAVE
 ```
 
 Rule:
 
 ```text
 teacher.code unique
-
-Nếu user_id != null:
-    email lấy từ users
-    teacher không sửa email riêng
-
-Nếu user_id == null:
-    teacher.email hoạt động độc lập
+teacher không liên kết tài khoản user và không sử dụng email
+commission_percent nằm trong khoảng 0..100
+commission_percent dùng cho báo cáo thu học phí theo lớp/môn
 ```
 
 ---
@@ -163,7 +150,6 @@ Field:
 id
 code
 full_name
-email
 phone
 birthday
 parent_name
@@ -182,7 +168,7 @@ Rule:
 
 ```text
 student.code unique
-email optional unique
+học viên không sử dụng email
 ```
 
 ---
@@ -193,6 +179,7 @@ Bảng:
 
 ```text
 classes
+class_subjects
 ```
 
 Field:
@@ -201,12 +188,17 @@ Field:
 id
 code
 name
-teacher_id
-tuition_fee
-total_sessions
-max_students
 start_date
 end_date
+status
+
+class_subjects:
+class_id
+subject_id
+teacher_id nullable
+tuition_fee
+total_sessions
+max_students nullable
 status
 ```
 
@@ -223,7 +215,8 @@ Rule:
 
 ```text
 class.code unique
-student_count <= max_students
+Sĩ số được giới hạn riêng theo từng class_subject
+active_subject_enrollment_count <= class_subject.max_students
 Không cho xóa nếu đã phát sinh học phí
 ```
 
@@ -250,8 +243,9 @@ Status:
 
 ```text
 ACTIVE
-DROPPED
+LEFT
 COMPLETED
+SUSPENDED
 ```
 
 Rule:
@@ -259,7 +253,7 @@ Rule:
 ```text
 (class_id,student_id) unique
 
-Không vượt max_students
+Không vượt max_students của từng môn được chọn
 ```
 
 ---
@@ -278,15 +272,16 @@ Field:
 id
 class_id
 teacher_id
+class_subject_id
 day_of_week
-start_time
-end_time
+start_minute
+end_minute
 ```
 
 Rule:
 
 ```text
-day_of_week = 1..7
+day_of_week = 0..6 (Chủ nhật..Thứ bảy)
 
 start_time < end_time
 
@@ -300,7 +295,7 @@ Không trùng giáo viên
 Bảng:
 
 ```text
-student_fees
+tuition_fees
 ```
 
 Field:
@@ -312,8 +307,9 @@ class_id
 billing_year
 billing_month
 enrollment_id
-amount
-discount
+original_amount
+discount_amount
+additional_amount
 final_amount
 due_date
 status

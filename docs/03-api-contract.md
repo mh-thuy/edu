@@ -645,7 +645,7 @@ API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông b�
 ## 19.1.5 Tạo học phí khi tạo thông báo theo lớp
 
 ```http
-GET /api/classes/{classId}/tuition-notice/pdf
+POST /api/classes/{classId}/tuition-notice/pdf
 ```
 
 Query bắt buộc:
@@ -700,7 +700,7 @@ Không trả:
 
 # 21. Error Code chuẩn
 
-Danh sách:
+Mã lỗi đang dùng:
 
 ```text
 VALIDATION_ERROR
@@ -709,19 +709,11 @@ UNAUTHORIZED
 
 NOT_FOUND
 
-DUPLICATE_DATA
-
-BUSINESS_RULE_ERROR
-
-DELETE_NOT_ALLOWED
-
-PAYMENT_EXCEEDED
-
-SCHEDULE_CONFLICT
-
-TEACHER_CONFLICT
+CONFLICT
 
 INTERNAL_ERROR
+
+BAD_REQUEST
 ```
 
 Không tự tạo error code lung tung.
