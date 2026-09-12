@@ -90,7 +90,7 @@ function addRow(
   }
   groups.set(key, {
     teacherName,
-    className: classSubject.class.code || classSubject.class.name,
+    className: classSubject.class.name,
     tuitionFee: Number(item.unitPrice),
     count: 1,
     total: paidAmount,
@@ -151,7 +151,7 @@ export async function getDailyPaymentReport(
       paymentDate: payment.paymentDate,
       studentName: payment.tuitionFee.student.fullName,
       studentCode: payment.tuitionFee.student.code,
-      className: payment.tuitionFee.class.code || payment.tuitionFee.class.name,
+      className: payment.tuitionFee.class.name,
       feeNo: payment.tuitionFee.feeNo,
       paymentMethod: formatMethod(payment.paymentMethod),
       amount: Number(payment.amount),

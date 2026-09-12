@@ -66,6 +66,7 @@ type ImportResult = {
 };
 type PendingConfirmation = {
   body: { confirmationToken: string; batchId: string };
+  itemToken: string;
   title: string;
   message: string;
 };
@@ -182,6 +183,7 @@ export function BankReconciliationPanel() {
   ) {
     setPendingConfirmation({
       body: { confirmationToken, ...selection },
+      itemToken: item.confirmationToken,
       title,
       message,
     });
@@ -200,7 +202,7 @@ export function BankReconciliationPanel() {
         throw new Error(
           await extractApiErrorMessage(response, "Không thể xác nhận đối soát"),
         );
-      const token = pendingConfirmation.body.confirmationToken;
+      const token = pendingConfirmation.itemToken;
       setItems((current) =>
         current.filter((item) => item.confirmationToken !== token),
       );
