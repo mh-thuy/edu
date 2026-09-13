@@ -37,6 +37,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 
 type ClassSubject = {
   id: string;
@@ -72,6 +73,11 @@ type StudentListResult = {
   pageSize: number;
   pages: number;
   summary: StudentSummary;
+};
+type ClassStudentImportResult = {
+  importedRows: number;
+  skippedRows: number;
+  errors: Array<{ rowNo: number; message: string }>;
 };
 
 const currentMonth = () => {
@@ -127,6 +133,10 @@ export function ClassStudentManagement({ id }: { id: string }) {
     student: StudentRow;
     pauseId: string;
   } | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importSubjectIds, setImportSubjectIds] = useState<string[]>([]);
+  const [importResult, setImportResult] = useState<ClassStudentImportResult | null>(null);
   const [busy, setBusy] = useState(false);
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
@@ -311,6 +321,45 @@ export function ClassStudentManagement({ id }: { id: string }) {
     }
   }
 
+  function openImportDialog() {
+    setImportFile(null);
+    setImportSubjectIds([]);
+    setImportResult(null);
+    setImportDialogOpen(true);
+  }
+
+  async function importStudents() {
+    if (!importFile) {
+      showError("Vui lòng chọn file Excel danh sách học viên");
+      return;
+    }
+    if (!importSubjectIds.length) {
+      showError("Vui lòng chọn ít nhất một môn học");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", importFile);
+      importSubjectIds.forEach((subjectId) => form.append("classSubjectIds", subjectId));
+      const response = await fetch("/api/classes/" + id + "/students/import", {
+        method: "POST",
+        body: form,
+      });
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể import học viên vào lớp"));
+
+      const result = await unwrapApiResponse<ClassStudentImportResult>(response);
+      setImportResult(result);
+      await load();
+      showSuccess("Đã đăng ký " + result.importedRows + " học viên, bỏ qua " + result.skippedRows + " dòng.");
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : "Không thể import học viên vào lớp");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!classData && loading) return <Typography>Đang tải quản lý học viên...</Typography>;
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
   const classClosed = classData.status === "COMPLETED" || classData.status === "CANCELLED";
@@ -336,6 +385,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+          <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={openImportDialog} disabled={classClosed || !hasActiveClassSubjects}>Import Excel</Button>
           <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={classClosed || !hasActiveClassSubjects}>Đăng ký học viên</Button>
         </Stack>
       </Stack>
@@ -387,6 +437,74 @@ export function ClassStudentManagement({ id }: { id: string }) {
       />
     </Paper>
     <StudentSelectDialog open={studentPickerOpen} onClose={() => setStudentPickerOpen(false)} onSelect={(student) => { setStudentPickerOpen(false); openSubjectDialog(student); }} excludeClassId={id} />
+    <Dialog open={importDialogOpen} onClose={() => !busy && setImportDialogOpen(false)} fullWidth maxWidth="sm">
+      <DialogTitle>Import học viên vào lớp</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
+          <Alert severity="info">
+            Chọn file Excel đã xuất từ danh sách học viên. Hệ thống dùng cột “MÃ HỌC VIÊN” để tìm học viên hiện có và đăng ký các môn được chọn bên dưới.
+          </Alert>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button variant="outlined" component="label" startIcon={<UploadFileOutlinedIcon />} disabled={busy}>
+              Chọn file .xlsx
+              <input
+                hidden
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  event.target.value = "";
+                  if (file && !file.name.toLocaleLowerCase().endsWith(".xlsx")) {
+                    showError("Chỉ hỗ trợ file Excel .xlsx");
+                    return;
+                  }
+                  setImportFile(file);
+                  setImportResult(null);
+                }}
+              />
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+              {importFile?.name ?? "Chưa chọn file"}
+            </Typography>
+          </Stack>
+          <Typography variant="subtitle2" fontWeight={700}>Môn học áp dụng cho danh sách import</Typography>
+          <Stack spacing={1}>
+            {classData.classSubjects
+              .filter((subject) => subject.subject.status !== "INACTIVE")
+              .map((subject) => {
+                const checked = importSubjectIds.includes(subject.id);
+                return (
+                  <Button
+                    key={subject.id}
+                    variant={checked ? "contained" : "outlined"}
+                    onClick={() => setImportSubjectIds((current) => checked ? current.filter((item) => item !== subject.id) : [...current, subject.id])}
+                    sx={{ justifyContent: "space-between" }}
+                    disabled={busy}
+                  >
+                    <span>{subject.subject.name}</span>
+                    <span>{money(Number(subject.tuitionFee))}{checked ? " · Đã chọn" : ""}</span>
+                  </Button>
+                );
+              })}
+          </Stack>
+          {importResult && (
+            <Alert severity={importResult.errors.length ? "warning" : "success"}>
+              <Typography variant="body2">Đã đăng ký {importResult.importedRows} học viên; bỏ qua {importResult.skippedRows} dòng.</Typography>
+              {importResult.errors.length > 0 && (
+                <Box component="ul" sx={{ mt: 1, mb: 0, pl: 2.5 }}>
+                  {importResult.errors.slice(0, 10).map((item) => <li key={String(item.rowNo) + item.message}>Dòng {item.rowNo}: {item.message}</li>)}
+                  {importResult.errors.length > 10 && <li>Còn {importResult.errors.length - 10} lỗi khác.</li>}
+                </Box>
+              )}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="outlined" onClick={() => setImportDialogOpen(false)} disabled={busy}>Đóng</Button>
+        <Button variant="contained" onClick={() => void importStudents()} disabled={busy || !importFile || !importSubjectIds.length}>{busy ? "Đang import..." : "Import vào lớp"}</Button>
+      </DialogActions>
+    </Dialog>
     <Dialog open={subjectDialogOpen} onClose={() => !busy && setSubjectDialogOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle>{registeredSubjectIds.length ? "Quản lý môn học" : "Đăng ký học viên"}</DialogTitle>
       <DialogContent>

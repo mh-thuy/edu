@@ -13,6 +13,7 @@ import {
   Select,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolIcon from "@mui/icons-material/School";
 import { GridColDef } from "@mui/x-data-grid";
@@ -164,6 +165,7 @@ export function StudentList(): ReactElement {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
@@ -262,6 +264,39 @@ export function StudentList(): ReactElement {
     },
     [editingStudent, refresh, showSuccess, showError],
   );
+
+  const exportExcel = useCallback(async () => {
+    try {
+      setIsExporting(true);
+      const query = new URLSearchParams({ export: "xlsx", status });
+      if (search.trim()) query.set("search", search.trim());
+
+      const response = await fetch(`/api/students?${query.toString()}`);
+      if (!response.ok) {
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể xuất danh sách học viên"),
+        );
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `danh-sach-hoc-vien-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : "Không thể xuất danh sách học viên",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  }, [search, status, showError]);
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
@@ -389,6 +424,15 @@ export function StudentList(): ReactElement {
                     }
                   }}
                 />
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadOutlinedIcon />}
+                onClick={() => void exportExcel()}
+                disabled={isSubmitting || isExporting}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                {isExporting ? "Đang xuất..." : "Xuất Excel"}
               </Button>
             </Stack>
             <Typography

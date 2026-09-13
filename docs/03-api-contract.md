@@ -203,6 +203,32 @@ pageSize mặc định = 20
 pageSize max = 100
 ```
 
+Xuất danh sách học viên theo bộ lọc hiện tại dùng file Excel `.xlsx`:
+
+```http
+GET /api/students?export=xlsx&search=nguyen&status=ACTIVE
+```
+
+Response thành công là file Excel với `Content-Type`:
+
+```text
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+```
+
+Import học viên từ file Excel vào một lớp dùng mã học viên trong cột MÃ HỌC VIÊN.
+Các môn học được chọn gửi lặp lại trong multipart form:
+
+POST /api/classes/{classId}/students/import
+Content-Type: multipart/form-data
+
+Form fields:
+
+file = danh-sach-hoc-vien.xlsx
+classSubjectIds = UUID môn học (có thể gửi nhiều lần)
+
+API áp dụng toàn bộ nghiệp vụ đăng ký hiện hành cho từng dòng; kết quả trả về số
+đăng ký thành công, số dòng bỏ qua và danh sách lỗi theo số dòng Excel.
+
 ---
 
 # 7. CRUD Pattern chuẩn
