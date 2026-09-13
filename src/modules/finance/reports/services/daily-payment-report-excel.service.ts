@@ -9,6 +9,7 @@ const border = {
 };
 const moneyFormat = "#,##0";
 const zeroAsDashMoneyFormat = "#,##0;[Red]-#,##0;-";
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const colors = {
   navy: "FF1F4E78",
   blue: "FFD9EAF7",
@@ -24,6 +25,12 @@ const colors = {
 function formatDate(value: string) {
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
+}
+
+function toVietnamExcelDate(value: Date) {
+  // ExcelJS serializes Date values without a timezone. Shift the instant so
+  // the displayed Excel clock represents Vietnam local time.
+  return new Date(value.getTime() + VIETNAM_OFFSET_MS);
 }
 
 function styleCell(cell: ExcelJS.Cell, alignment: Partial<ExcelJS.Alignment> = {}) {
@@ -275,7 +282,7 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     const row = detail.addRow({
       index: index + 1,
       paymentNo: item.paymentNo,
-      paymentDate: item.paymentDate,
+      paymentDate: toVietnamExcelDate(item.paymentDate),
       studentCode: item.studentCode,
       studentName: item.studentName,
       className: item.className,

@@ -9,6 +9,8 @@ import {
   Paper,
   Typography,
   InputAdornment,
+  MenuItem,
+  Select,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
@@ -145,6 +147,7 @@ const getColumns = (): GridColDef<StudentRow>[] => [
 
 export function StudentList(): ReactElement {
   const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("ALL");
 
   const {
     data,
@@ -155,7 +158,7 @@ export function StudentList(): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Student>("/api/students", { pageSize: 10, search });
+  } = useList<Student>("/api/students", { pageSize: 10, search, status });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -428,12 +431,30 @@ export function StudentList(): ReactElement {
               },
             }}
           />
+          <Select
+            size="small"
+            value={status}
+            displayEmpty
+            onChange={(event) => {
+              setStatus(event.target.value);
+              setPageNumber(1);
+            }}
+            sx={{ minWidth: 180 }}
+          >
+            <MenuItem value="ALL">Tất cả trạng thái</MenuItem>
+            <MenuItem value="ACTIVE">Đang hoạt động</MenuItem>
+            <MenuItem value="INACTIVE">Ngừng hoạt động</MenuItem>
+          </Select>
           <Button
             variant="outlined"
-            onClick={() => setSearch("")}
-            disabled={!search}
+            onClick={() => {
+              setSearch("");
+              setStatus("ALL");
+              setPageNumber(1);
+            }}
+            disabled={!search && status === "ALL"}
           >
-            Xóa tìm kiếm
+            Xóa bộ lọc
           </Button>
         </Stack>
       </Paper>

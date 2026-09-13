@@ -57,6 +57,8 @@ function addRow(
   },
   item: {
     amount: Prisma.Decimal;
+    itemName: string;
+    itemType: string;
     unitPrice: Prisma.Decimal;
     classSubject: {
       id: string;
@@ -65,10 +67,10 @@ function addRow(
       class: { code: string; name: string };
     } | null;
   },
+  feeClassName: string,
   paymentMethod: string,
 ) {
   const classSubject = item.classSubject;
-  if (!classSubject) return;
 
   const grossAmount = Number(item.amount);
   const originalAmount = Number(fee.originalAmount);
@@ -79,23 +81,31 @@ function addRow(
   );
   const finalAmount = Number(fee.finalAmount);
   const paidAmount = finalAmount > 0 ? paymentAmount * (itemFinalAmount / finalAmount) : 0;
-  const teacherName = classSubject.teacher?.fullName || "Chưa phân công";
-  const note = `${classSubject.subject.name} · ${formatMethod(paymentMethod)}`;
-  const key = `${classSubject.id}:${Number(item.unitPrice)}:${paymentMethod}`;
+  const teacherName = classSubject
+    ? classSubject.teacher?.fullName || "Chưa phân công"
+    : "Chưa phân bổ";
+  const className = classSubject?.class.name || feeClassName;
+  const note = classSubject
+    ? `${classSubject.subject.name} · ${formatMethod(paymentMethod)}`
+    : `${item.itemName} · ${formatMethod(paymentMethod)}`;
+  const key = classSubject
+    ? `${classSubject.id}:${Number(item.unitPrice)}:${paymentMethod}`
+    : `UNALLOCATED:${item.itemType}:${item.itemName}:${Number(item.unitPrice)}:${paymentMethod}`;
   const current = groups.get(key);
   if (current) {
     current.count += 1;
     current.total += paidAmount;
-    return;
+    return paidAmount;
   }
   groups.set(key, {
     teacherName,
-    className: classSubject.class.name,
+    className,
     tuitionFee: Number(item.unitPrice),
     count: 1,
     total: paidAmount,
     note,
   });
+  return paidAmount;
 }
 
 export async function getDailyPaymentReport(
@@ -125,6 +135,8 @@ export async function getDailyPaymentReport(
           items: {
             select: {
               amount: true,
+              itemName: true,
+              itemType: true,
               unitPrice: true,
               classSubject: {
                 select: {
@@ -143,8 +155,34 @@ export async function getDailyPaymentReport(
 
   const groups = new Map<string, DailyPaymentReportRow>();
   const details: DailyPaymentReportDetail[] = payments.map((payment) => {
+    let allocatedAmount = 0;
     for (const item of payment.tuitionFee.items) {
-      addRow(groups, Number(payment.amount), payment.tuitionFee, item, payment.paymentMethod);
+      allocatedAmount += addRow(
+        groups,
+        Number(payment.amount),
+        payment.tuitionFee,
+        item,
+        payment.tuitionFee.class.name,
+        payment.paymentMethod,
+      ) ?? 0;
+    }
+    const unallocatedAmount = Number(payment.amount) - allocatedAmount;
+    if (payment.tuitionFee.items.length === 0 || Math.abs(unallocatedAmount) >= 0.005) {
+      const key = `UNALLOCATED:RESIDUAL:${payment.tuitionFee.class.name}:${payment.paymentMethod}`;
+      const current = groups.get(key);
+      if (current) {
+        current.count += 1;
+        current.total += unallocatedAmount;
+      } else {
+        groups.set(key, {
+          teacherName: "Chưa phân bổ",
+          className: payment.tuitionFee.class.name,
+          tuitionFee: 0,
+          count: 1,
+          total: unallocatedAmount,
+          note: `Phần chưa gắn item · ${formatMethod(payment.paymentMethod)}`,
+        });
+      }
     }
     return {
       paymentNo: payment.paymentNo,

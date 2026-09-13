@@ -66,6 +66,7 @@ export async function getTeacherById(
 
 export async function getTeachers(filter: TeacherFilter) {
   const { search, status, page, pageSize } = filter;
+  const statusFilter = status === "ALL" ? undefined : status;
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.TeacherWhereInput = {
@@ -77,7 +78,7 @@ export async function getTeachers(filter: TeacherFilter) {
         { specialty: { contains: search, mode: "insensitive" } },
       ],
     }),
-    ...(status && { status }),
+    ...(statusFilter && { status: statusFilter }),
     ...(!status && { deletedAt: null }),
   };
 

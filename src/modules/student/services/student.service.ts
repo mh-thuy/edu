@@ -64,6 +64,7 @@ export async function getStudentById(id: string): Promise<StudentWithClasses | n
 
 export async function getStudents(filter: StudentFilter) {
   const { search, status, excludeClassId, page, pageSize } = filter;
+  const statusFilter = status === "ALL" ? undefined : status;
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.StudentWhereInput = {
@@ -73,7 +74,7 @@ export async function getStudents(filter: StudentFilter) {
         { fullName: { contains: search, mode: "insensitive" } },
       ],
     }),
-    ...(status && { status }),
+    ...(statusFilter && { status: statusFilter }),
     ...(!status && { deletedAt: null }),
     ...(excludeClassId && {
       enrollments: {

@@ -191,6 +191,11 @@ search = full text search đơn giản
 
 status = filter exact match
 
+Với danh sách học viên và giáo viên, `status` nhận `ACTIVE`, `INACTIVE` hoặc
+`ALL`. Giá trị `ALL` trả về cả hồ sơ đang hoạt động và hồ sơ inactive đã được
+soft-delete; bỏ qua `status` vẫn giữ mặc định chỉ trả về bản ghi chưa bị
+soft-delete.
+
 page mặc định = 1
 
 pageSize mặc định = 20
