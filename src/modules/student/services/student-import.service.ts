@@ -9,6 +9,7 @@ type ParsedStudentRow = {
   rowNo: number;
   fullName: string;
   phone: string | null;
+  address: string | null;
 };
 
 export type StudentImportResult = {
@@ -105,6 +106,14 @@ const PHONE_HEADERS = new Set([
   "mobile",
   "telephone",
 ]);
+const ADDRESS_HEADERS = new Set([
+  "dia chi",
+  "address",
+  "dang ky",
+  "ma dang ky",
+  "lop",
+  "class",
+]);
 
 function getHeaderMapping(columns: string[]) {
   const headers = columns.map(normalizeHeader);
@@ -112,12 +121,14 @@ function getHeaderMapping(columns: string[]) {
   const lastNameIndex = headers.findIndex((header) => LAST_NAME_HEADERS.has(header));
   const firstNameIndex = headers.findIndex((header) => FIRST_NAME_HEADERS.has(header));
   const phoneIndex = headers.findIndex((header) => PHONE_HEADERS.has(header));
+  const addressIndex = headers.findIndex((header) => ADDRESS_HEADERS.has(header));
   const hasHeader = headers.some(
     (header) =>
       FULL_NAME_HEADERS.has(header) ||
       LAST_NAME_HEADERS.has(header) ||
       FIRST_NAME_HEADERS.has(header) ||
       PHONE_HEADERS.has(header) ||
+      ADDRESS_HEADERS.has(header) ||
       header === "stt" ||
       header === "ma" ||
       header === "ma hoc vien",
@@ -135,6 +146,7 @@ function getHeaderMapping(columns: string[]) {
     lastNameIndex: lastNameIndex >= 0 ? lastNameIndex : null,
     firstNameIndex: firstNameIndex >= 0 ? firstNameIndex : null,
     phoneIndex: phoneIndex >= 0 ? phoneIndex : null,
+    addressIndex: addressIndex >= 0 ? addressIndex : null,
   };
 }
 
@@ -156,6 +168,7 @@ function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: St
     const columns = parseCsvLine(line, delimiter);
     let fullName: string;
     let phone: string | null;
+    let address: string | null;
 
     if (headerMapping) {
       const nameParts = headerMapping.fullNameIndex !== null
@@ -170,16 +183,31 @@ function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: St
           ? ""
           : columns[headerMapping.phoneIndex] ?? "",
       );
+      address = headerMapping.addressIndex === null
+        ? null
+        : (columns[headerMapping.addressIndex] ?? "").trim() || null;
+    } else if (
+      columns.length >= 5 &&
+      (columns[1] ?? "").trim() &&
+      !(columns[2] ?? "").trim() &&
+      !(columns[3] ?? "").trim()
+    ) {
+      // Registration-list format: đăng ký/lớp; họ tên; empty; empty; số điện thoại.
+      address = (columns[0] ?? "").trim() || null;
+      fullName = (columns[1] ?? "").trim();
+      phone = normalizePhone(columns[4] ?? "");
     } else if (columns.length >= 4) {
       // Backward-compatible format: STT, Họ, Tên, Số điện thoại.
       fullName = `${columns[1] ?? ""} ${columns[2] ?? ""}`
         .replace(/\s+/g, " ")
         .trim();
       phone = normalizePhone(columns[3] ?? "");
+      address = null;
     } else {
       // Headerless compact format: Họ tên, Số điện thoại.
       fullName = (columns[0] ?? "").trim();
       phone = normalizePhone(columns[1] ?? "");
+      address = null;
     }
 
     if (!fullName) {
@@ -187,7 +215,7 @@ function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: St
       return;
     }
 
-    rows.push({ rowNo, fullName, phone });
+    rows.push({ rowNo, fullName, phone, address });
   });
 
   if (rows.length === 0 && errors.length === 0) {
@@ -230,6 +258,7 @@ export async function importStudentsCsv(
             code,
             fullName: row.fullName,
             phone: row.phone,
+            address: row.address,
             status: "ACTIVE",
           },
         });
@@ -254,7 +283,7 @@ export async function importStudentsCsv(
   return {
     totalRows: rows.length + errors.length,
     importedRows,
-    skippedRows: rows.length - importedRows,
+    skippedRows: rows.length + errors.length - importedRows,
     errors,
   };
 }

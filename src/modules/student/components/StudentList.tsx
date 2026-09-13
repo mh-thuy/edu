@@ -397,7 +397,8 @@ export function StudentList(): ReactElement {
               sx={{ mt: 1, display: "block" }}
             >
               CSV hỗ trợ cột “Họ tên” và “Số điện thoại”, hoặc tách riêng “Họ”
-              và “Tên”.
+              và “Tên”. File danh sách đăng ký dạng cột 1 mã đăng ký/lớp, cột 2
+              họ tên, cột 5 số điện thoại sẽ đưa cột 1 vào “Địa chỉ”.
             </Typography>
           </Box>
         </Stack>
