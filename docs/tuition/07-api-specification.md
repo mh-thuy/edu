@@ -11,7 +11,7 @@ Root resources:
 /api/bank-reconciliations
 ```
 
-Thanh toán được tạo qua `POST /api/payment-batches`; backend lấy `finalAmount` của từng khoản học phí và không nhận số tiền tùy ý từ client. Batch chuyển khoản ở trạng thái `PENDING` sẽ được xác nhận qua đối soát ngân hàng hoặc hủy trước khi chuyển sang phương thức thanh toán khác.
+Thanh toán được tạo qua `POST /api/payment-batches`; backend lấy `finalAmount` của từng khoản học phí và không nhận số tiền tùy ý từ client. Phương thức `CASH` hoặc `BANK_TRANSFER` được chọn tại màn hình thu học phí. Riêng thao tác chủ động tạo thông báo chuyển khoản theo lớp mới tạo các batch `BANK_TRANSFER` `PENDING`; không tạo batch khi chỉ bấm `Tạo học phí tháng`. Batch chuyển khoản ở trạng thái `PENDING` sẽ được xác nhận qua đối soát ngân hàng hoặc hủy trước khi chuyển sang phương thức thanh toán khác.
 
 `POST /api/tuition-fees` không còn được hỗ trợ. Học phí được tạo trong transaction đăng ký môn tại API enrollment; client không được tự gửi số tiền để tạo fee.
 

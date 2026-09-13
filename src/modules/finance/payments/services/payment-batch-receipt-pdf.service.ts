@@ -44,6 +44,9 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId:
   const snapshot = parseBatchReceiptSnapshot(
     await getPaymentBatchReceiptSnapshot(receipt.id),
   );
+  if (snapshot?.status === "CANCELLED") {
+    throw new ConflictError("Biên lai tổng đã được hủy và không thể xuất PDF");
+  }
   const student = snapshot?.student ?? receipt.paymentBatch.student;
   const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
     feeNo: allocation.tuitionFee.feeNo,

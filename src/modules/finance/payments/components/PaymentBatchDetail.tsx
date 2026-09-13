@@ -244,13 +244,33 @@ export function PaymentBatchDetail({ id }: { id: string }) {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               {batch.status === "PENDING" && (
                 <>
-                  <Button
-                    variant="outlined"
-                    color="warning"
-                    onClick={() => setCashDialogOpen(true)}
-                  >
-                    Chuyển sang tiền mặt
-                  </Button>
+                  {batch.paymentMethod === "BANK_TRANSFER" && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        color="warning"
+                        onClick={() => setCashDialogOpen(true)}
+                      >
+                        Chuyển sang tiền mặt
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        href={`/api/payment-batches/${batch.id}/notice/pdf`}
+                      >
+                        Tải thông báo PDF
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<PrintOutlinedIcon />}
+                        component="a"
+                        href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Mở để in
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="outlined"
                     color="error"
@@ -261,22 +281,6 @@ export function PaymentBatchDetail({ id }: { id: string }) {
                     }}
                   >
                     Hủy thanh toán
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    href={`/api/payment-batches/${batch.id}/notice/pdf`}
-                  >
-                    Tải thông báo PDF
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={<PrintOutlinedIcon />}
-                    component="a"
-                    href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Mở để in
                   </Button>
                 </>
               )}

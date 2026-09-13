@@ -13,6 +13,7 @@ import type {
   PaymentRefundCreate,
 } from "../schemas/payment-refund.schema";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
 async function generateRefundNo(tx: Prisma.TransactionClient) {
   const prefix = `RF-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
@@ -328,6 +329,34 @@ export async function completePaymentRefund(
         where: { id: batchId },
         data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
       });
+      const batchReceipt = await tx.paymentBatchReceipt.findUnique({
+        where: { paymentBatchId: batchId },
+        select: { id: true, snapshot: true },
+      });
+      if (batchReceipt) {
+        await markPaymentBatchReceiptCancelled(
+          tx,
+          batchReceipt.id,
+          "Hoàn tiền toàn bộ batch",
+          actorId,
+          completedAt,
+        );
+        await tx.tuitionAuditLog.create({
+          data: {
+            entityType: "PAYMENT_BATCH_RECEIPT",
+            entityId: batchReceipt.id,
+            action: "CANCEL",
+            reason: "Hoàn tiền toàn bộ batch",
+            dataBefore: batchReceipt as unknown as Prisma.InputJsonValue,
+            dataAfter: {
+              status: "CANCELLED",
+              cancellationReason: "Hoàn tiền toàn bộ batch",
+              cancelledBy: actorId,
+            },
+            performedBy: actorId,
+          },
+        });
+      }
       await tx.tuitionAuditLog.create({
         data: {
           entityType: "PAYMENT_BATCH",

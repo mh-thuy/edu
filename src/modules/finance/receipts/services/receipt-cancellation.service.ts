@@ -7,6 +7,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
 export async function cancelTuitionReceipt(
   receiptId: string,
@@ -112,6 +113,28 @@ export async function cancelTuitionReceipt(
         where: { id: batch.id },
         data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
       });
+      const batchReceipt = await tx.paymentBatchReceipt.findUnique({
+        where: { paymentBatchId: batch.id },
+        select: { id: true, snapshot: true },
+      });
+      if (batchReceipt) {
+        await markPaymentBatchReceiptCancelled(tx, batchReceipt.id, reason, actorId);
+        await tx.tuitionAuditLog.create({
+          data: {
+            entityType: "PAYMENT_BATCH_RECEIPT",
+            entityId: batchReceipt.id,
+            action: "CANCEL",
+            reason,
+            dataBefore: batchReceipt as unknown as Prisma.InputJsonValue,
+            dataAfter: {
+              status: "CANCELLED",
+              cancellationReason: reason,
+              cancelledBy: actorId,
+            },
+            performedBy: actorId,
+          },
+        });
+      }
       await tx.tuitionAuditLog.create({
         data: {
           entityType: "PAYMENT_BATCH",

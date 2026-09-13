@@ -14,6 +14,7 @@ import {
   savePaymentBatchReceiptSnapshot,
   saveTuitionReceiptSnapshot,
   toFeeSnapshot,
+  type DocumentSnapshot,
 } from "./payment-document-snapshot";
 
 async function generateBatchNo(tx: Prisma.TransactionClient) {
@@ -313,16 +314,30 @@ export async function createPaymentBatch(
       throw new ConflictError("Thanh toán tiền mặt không được có mã giao dịch ngân hàng");
     if (data.paymentMethod === "BANK_TRANSFER" && !data.bankAccountId)
       throw new ConflictError("Thanh toán chuyển khoản phải có tài khoản nhận tiền");
+    let bankAccountSnapshot: DocumentSnapshot["bankAccount"];
     if (data.bankAccountId) {
       await tx.$executeRaw(
         Prisma.sql`SELECT id FROM bank_accounts WHERE id = ${data.bankAccountId}::uuid FOR UPDATE`,
       );
       const bankAccount = await tx.bankAccount.findUnique({
         where: { id: data.bankAccountId },
-        select: { id: true, isActive: true },
+        select: {
+          id: true,
+          isActive: true,
+          bankCode: true,
+          bankName: true,
+          accountNo: true,
+          accountName: true,
+        },
       });
       if (!bankAccount || !bankAccount.isActive)
         throw new ConflictError("Tài khoản ngân hàng không hoạt động");
+      bankAccountSnapshot = {
+        bankCode: bankAccount.bankCode,
+        bankName: bankAccount.bankName,
+        accountNo: bankAccount.accountNo,
+        accountName: bankAccount.accountName,
+      };
     }
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`,
@@ -436,6 +451,7 @@ export async function createPaymentBatch(
       version: 1,
       student: { code: fees[0]!.student.code, fullName: fees[0]!.student.fullName },
       fees: fees.map((fee) => toFeeSnapshot(fee)),
+      ...(bankAccountSnapshot ? { bankAccount: bankAccountSnapshot } : {}),
     });
     await tx.tuitionAuditLog.create({
       data: {
@@ -652,6 +668,10 @@ export async function convertPaymentBatchToCash(
     if (batch.status !== PaymentBatchStatus.PENDING)
       throw new ConflictError(
         "Chỉ có thể chuyển sang tiền mặt với đợt đang chờ xử lý",
+      );
+    if (batch.paymentMethod !== "BANK_TRANSFER")
+      throw new ConflictError(
+        "Chỉ có thể chuyển đợt thanh toán chuyển khoản sang tiền mặt",
       );
 
     await tx.paymentBatch.update({

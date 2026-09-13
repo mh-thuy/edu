@@ -195,7 +195,13 @@ Business test:
 
 ```text
 Đăng ký môn không tự động tạo học phí
-Tạo thanh toán và xuất thông báo tạo học phí cho item còn thiếu
+Tạo thông báo chuyển khoản tạo học phí cho item còn thiếu và payment batch `BANK_TRANSFER` `PENDING`
+Tạo thông báo chuyển khoản bắt buộc chọn tài khoản ngân hàng active
+Không cho chuyển batch `CASH` sang `CASH` qua API đổi phương thức
+Khoản phí thuộc batch chuyển khoản `PENDING` hiển thị nút `Xử lý đợt thu`; sau khi tạo batch mới, màn hình `Thu học phí` cho phép `Đổi sang tiền mặt` và phát hành biên lai
+Đổi từ chuyển khoản sang tiền mặt sau khi đã nhập mã giao dịch phải xóa mã giao dịch và hoàn tất được thanh toán
+Hủy/hoàn batch thành công phải đánh dấu snapshot biên lai tổng là `CANCELLED`
+In lại notice PENDING dùng snapshot tài khoản và không sinh QR nếu tài khoản inactive
 Tạo học phí không tạo item trùng
 Tính phí tháng trọn tháng theo mức phí của từng môn
 Enrollment tạm nghỉ không phát sinh học phí tháng

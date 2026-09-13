@@ -13,10 +13,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!month.success) {
       return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);
     }
-    const billingYear = Number(month.data.slice(0, 4));
-    const billingMonth = Number(month.data.slice(5, 7));
-    const period = { billingYear, billingMonth };
-    await createClassPaymentBatches(classId, user.id, period);
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      return apiError("VALIDATION_ERROR", "Tài khoản nhận tiền là bắt buộc", 400);
+    }
+    const body = z.object({ bankAccountId: z.string().uuid() }).safeParse(rawBody);
+    if (!body.success) {
+      return apiError("VALIDATION_ERROR", "Tài khoản nhận tiền là bắt buộc", 400);
+    }
+    const period = {
+      billingYear: Number(month.data.slice(0, 4)),
+      billingMonth: Number(month.data.slice(5, 7)),
+    };
+    await createClassPaymentBatches(classId, user.id, period, body.data.bankAccountId);
     const result = await generateClassTuitionNoticePdf(classId, user.fullName, user.id, period);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, {

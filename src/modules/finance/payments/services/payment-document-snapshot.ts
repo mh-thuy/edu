@@ -5,6 +5,12 @@ export type DocumentSnapshot = {
   version: 1;
   student: { code: string; fullName: string };
   fees: ReturnType<typeof toFeeSnapshot>[];
+  bankAccount?: {
+    bankCode: string;
+    bankName: string;
+    accountNo: string;
+    accountName: string;
+  };
 };
 
 export type ReceiptSnapshot = {
@@ -25,6 +31,10 @@ export type BatchReceiptSnapshot = {
   fees: ReturnType<typeof toFeeSnapshot>[];
   amount: string;
   paymentMethod: string;
+  status?: "ACTIVE" | "CANCELLED";
+  cancellationReason?: string;
+  cancelledBy?: string;
+  cancelledAt?: string;
 };
 
 type SnapshotFeeInput = {
@@ -71,7 +81,12 @@ export function toFeeSnapshot(fee: SnapshotFeeInput) {
 
 export function parseDocumentSnapshot(value: unknown): DocumentSnapshot | null {
   if (!value || typeof value !== "object") return null;
-  const snapshot = value as { version?: unknown; student?: unknown; fees?: unknown };
+  const snapshot = value as {
+    version?: unknown;
+    student?: unknown;
+    fees?: unknown;
+    bankAccount?: unknown;
+  };
   if (
     snapshot.version !== 1 ||
     !snapshot.student ||
@@ -80,6 +95,20 @@ export function parseDocumentSnapshot(value: unknown): DocumentSnapshot | null {
   ) return null;
   const student = snapshot.student as { code?: unknown; fullName?: unknown };
   if (typeof student.code !== "string" || typeof student.fullName !== "string") return null;
+  if (snapshot.bankAccount !== undefined) {
+    const account = snapshot.bankAccount as {
+      bankCode?: unknown;
+      bankName?: unknown;
+      accountNo?: unknown;
+      accountName?: unknown;
+    };
+    if (
+      typeof account.bankCode !== "string" ||
+      typeof account.bankName !== "string" ||
+      typeof account.accountNo !== "string" ||
+      typeof account.accountName !== "string"
+    ) return null;
+  }
   return snapshot as DocumentSnapshot;
 }
 
@@ -110,6 +139,11 @@ export function parseBatchReceiptSnapshot(value: unknown): BatchReceiptSnapshot 
     typeof snapshot.student.code !== "string" ||
     typeof snapshot.student.fullName !== "string" ||
     !Array.isArray(snapshot.fees)
+  ) return null;
+  if (
+    snapshot.status !== undefined &&
+    snapshot.status !== "ACTIVE" &&
+    snapshot.status !== "CANCELLED"
   ) return null;
   return snapshot;
 }
@@ -146,6 +180,25 @@ export async function saveTuitionReceiptSnapshot(client: DbClient, receiptId: st
 export async function savePaymentBatchReceiptSnapshot(client: DbClient, receiptId: string, snapshot: unknown) {
   await client.$executeRaw(
     Prisma.sql`UPDATE payment_batch_receipts SET snapshot = ${JSON.stringify(snapshot)}::jsonb WHERE id = ${receiptId}::uuid`,
+  );
+}
+
+export async function markPaymentBatchReceiptCancelled(
+  client: DbClient,
+  receiptId: string,
+  reason: string,
+  actorId: string,
+  cancelledAt = new Date(),
+) {
+  await client.$executeRaw(
+    Prisma.sql`UPDATE payment_batch_receipts
+      SET snapshot = COALESCE(snapshot, '{}'::jsonb) || jsonb_build_object(
+        'status', 'CANCELLED',
+        'cancellationReason', ${reason},
+        'cancelledBy', ${actorId},
+        'cancelledAt', ${cancelledAt.toISOString()}
+      )
+      WHERE id = ${receiptId}::uuid`,
   );
 }
 

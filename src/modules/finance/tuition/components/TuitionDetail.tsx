@@ -197,13 +197,24 @@ export function TuitionDetail({ id }: { id: string }) {
                 </Button>
               )}
               {pendingBatch && (
-                <Button
-                  component="a"
-                  href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`}
-                  variant="outlined"
-                >
-                  Xuất thông báo
-                </Button>
+                <>
+                  <Button
+                    component={Link}
+                    href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`}
+                    variant="contained"
+                    color="warning"
+                    sx={{ fontWeight: 700, boxShadow: 2 }}
+                  >
+                    Xử lý đợt thu
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`}
+                    variant="outlined"
+                  >
+                    Xuất thông báo
+                  </Button>
+                </>
               )}
               {!paid && !pendingBatch && fee.status !== "EXEMPTED" && fee.status !== "CANCELLED" && (
                 <Button

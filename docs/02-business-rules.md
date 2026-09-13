@@ -539,12 +539,18 @@ due_date
 Thì batch đang chờ phải được hủy hoặc thay thế trước khi tạo batch mới. PDF notice
 được tạo lại theo batch hiện hành và không lưu lịch sử bản PDF trong database.
 
+Việc tạo học phí tháng không tự tạo payment batch. Chỉ thao tác chủ động `Tạo
+thông báo chuyển khoản` mới tạo batch `BANK_TRANSFER` `PENDING`; nếu học viên
+nộp tiền mặt, nhân viên phải thu từ màn hình thanh toán với phương thức `CASH`.
+
 ---
 
 ## 10.3 Bill History
 
 Cho phép xuất/in lại nhiều lần khi batch còn `PENDING`; hệ thống hiện chưa gửi
-email/SMS và chưa lưu lịch sử số lần xuất/in.
+email/SMS và chưa lưu lịch sử số lần xuất/in. Notice dùng snapshot tài khoản đã
+gắn với batch; nếu tài khoản không còn active thì không sinh QR mới và PDF phải
+cảnh báo người nộp liên hệ trung tâm trước khi chuyển khoản.
 
 ---
 

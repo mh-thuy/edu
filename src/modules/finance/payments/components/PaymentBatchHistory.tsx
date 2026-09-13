@@ -428,32 +428,36 @@ export function PaymentBatchHistory() {
                               spacing={1}
                               sx={{ mt: 1 }}
                             >
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                href={`/api/payment-batches/${batch.id}/notice/pdf`}
-                              >
-                                Tải thông báo PDF
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<PrintOutlinedIcon />}
-                                component="a"
-                                href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                Mở để in
-                              </Button>
-                              <Button
-                                size="small"
-                                color="warning"
-                                variant="outlined"
-                                onClick={() => setCashTarget(batch)}
-                              >
-                                Chuyển sang tiền mặt
-                              </Button>
+                              {batch.paymentMethod === "BANK_TRANSFER" && (
+                                <>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    href={`/api/payment-batches/${batch.id}/notice/pdf`}
+                                  >
+                                    Tải thông báo PDF
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<PrintOutlinedIcon />}
+                                    component="a"
+                                    href={`/api/payment-batches/${batch.id}/notice/pdf?inline=1`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Mở để in
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    color="warning"
+                                    variant="outlined"
+                                    onClick={() => setCashTarget(batch)}
+                                  >
+                                    Chuyển sang tiền mặt
+                                  </Button>
+                                </>
+                              )}
                               <Button
                                 size="small"
                                 color="error"

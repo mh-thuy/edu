@@ -50,15 +50,16 @@ export async function generatePaymentBatchNoticePdf(
     );
   }
 
-  const account = await prisma.bankAccount.findFirst({
-    where: { id: batch.bankAccountId, isActive: true },
+  const accountRecord = await prisma.bankAccount.findUnique({
+    where: { id: batch.bankAccountId },
   });
-  if (!account) {
+  if (!accountRecord) {
     throw new ConflictError(
-      "Tài khoản ngân hàng của đợt thanh toán không còn hoạt động hoặc không tồn tại",
+      "Tài khoản ngân hàng của đợt thanh toán không còn tồn tại",
     );
   }
   const snapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id));
+  const account = snapshot?.bankAccount ?? accountRecord;
   const student = snapshot?.student ?? batch.student;
   const fees = snapshot?.fees ?? batch.allocations.map((allocation) => ({
     feeNo: allocation.tuitionFee.feeNo,
@@ -72,13 +73,15 @@ export async function generatePaymentBatchNoticePdf(
     discountAmount: allocation.tuitionFee.discountAmount.toString(),
     additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
   }));
-  const qrUrl = buildVietQrUrl({
-    bankCode: account.bankCode,
-    accountNo: account.accountNo,
-    accountName: account.accountName,
-    amount: Number(batch.totalAmount),
-    addInfo: `PB ${batch.batchNo}`,
-  });
+  const qrUrl = accountRecord.isActive
+    ? buildVietQrUrl({
+        bankCode: account.bankCode,
+        accountNo: account.accountNo,
+        accountName: account.accountName,
+        amount: Number(batch.totalAmount),
+        addInfo: `PB ${batch.batchNo}`,
+      })
+    : "";
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -173,6 +176,9 @@ export async function generatePaymentBatchNoticePdf(
   draw(`Ngân hàng: ${account?.bankName || "Chưa cấu hình"}`, 75, bankY - 28);
   draw(`Số tài khoản: ${account?.accountNo || "-"}`, 75, bankY - 50);
   draw(`Chủ tài khoản: ${account?.accountName || "-"}`, 75, bankY - 72);
+  if (!accountRecord.isActive) {
+    draw("Tài khoản đã ngừng hoạt động; vui lòng liên hệ trung tâm trước khi chuyển khoản.", 75, bankY - 94, 9, muted);
+  }
   if (qrUrl) {
     const qrResponse = await fetch(qrUrl);
     if (qrResponse.ok) {
@@ -196,7 +202,11 @@ export async function generatePaymentBatchNoticePdf(
       entityType: "PAYMENT_BATCH",
       entityId: batch.id,
       action: "NOTICE_PRINTED",
-      dataAfter: { batchNo: batch.batchNo, snapshotUsed: Boolean(snapshot) },
+      dataAfter: {
+        batchNo: batch.batchNo,
+        snapshotUsed: Boolean(snapshot),
+        bankAccountSnapshotUsed: Boolean(snapshot?.bankAccount),
+      },
       performedBy: exportedById,
     },
   });

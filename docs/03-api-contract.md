@@ -689,7 +689,7 @@ POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
 API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông báo. Mỗi môn ACTIVE được tính trọn mức `ClassSubject.tuitionFee` của tháng; enrollment được tạm nghỉ trong kỳ sẽ được bỏ qua.
 Kỳ yêu cầu phải từ tháng đăng ký hiện tại trở đi và nằm trong thời gian của lớp.
 
-## 19.1.5 Tạo học phí khi tạo thông báo theo lớp
+## 19.1.5 Tạo thông báo chuyển khoản theo lớp
 
 ```http
 POST /api/classes/{classId}/tuition-notice/pdf
@@ -701,7 +701,19 @@ Query bắt buộc:
 month=YYYY-MM
 ```
 
-Trước khi tạo payment batch và PDF, backend phải tạo học phí cho toàn bộ enrollment `ACTIVE` trong lớp đối với kỳ đã chọn và các môn chưa có tuition fee item. Phí từng môn được tính trọn theo mức học phí tháng, không phụ thuộc số buổi. Nếu học phí đã tồn tại, chỉ bổ sung môn chưa có item và không tạo trùng item.
+Body bắt buộc:
+
+```json
+{
+  "bankAccountId": "uuid"
+}
+```
+
+Đây là thao tác chủ động, tách khỏi `POST /api/classes/{classId}/tuition-fees`.
+Backend tạo hoặc bổ sung học phí còn thiếu, gom các khoản chưa thu theo từng học
+viên thành batch `BANK_TRANSFER` `PENDING`, rồi xuất PDF thông báo chuyển khoản.
+Không gọi endpoint này khi học viên dự kiến nộp tiền mặt; trường hợp đó phải mở
+màn hình thu học phí và chọn `CASH`.
 
 ---
 

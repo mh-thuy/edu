@@ -29,6 +29,7 @@ import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import Link from "next/link";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import {
   MasterSelectField,
@@ -52,7 +53,7 @@ type Fee = {
   student?: { code: string; fullName: string } | null;
   class?: { name: string } | null;
   paymentAllocations?: Array<{
-    paymentBatch: { batchNo: string; status: string };
+    paymentBatch: { id: string; batchNo: string; status: string };
   }>;
 };
 type BankAccount = {
@@ -100,6 +101,7 @@ export function TuitionPaymentWorkspace({
   const [bankAccountsError, setBankAccountsError] = useState("");
   const [bankAccountError, setBankAccountError] = useState("");
   const [pendingBatch, setPendingBatch] = useState<PendingBatch | null>(null);
+  const [cashDialogOpen, setCashDialogOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -175,7 +177,49 @@ export function TuitionPaymentWorkspace({
           name: fee.student.fullName,
         });
         setStudentCode(fee.student.code);
-        setFees([fee]);
+        return fetch(
+          `/api/tuition-fees?studentCode=${encodeURIComponent(fee.student.code)}&pageSize=100`,
+        ).then(async (studentFeesResponse) => {
+          if (!studentFeesResponse.ok)
+            throw new Error(
+              await extractApiErrorMessage(
+                studentFeesResponse,
+                "Không thể tải đầy đủ học phí của học viên",
+              ),
+            );
+          const result = await unwrapApiResponse<{
+            items: Fee[];
+            pagination?: { totalPages: number };
+          }>(studentFeesResponse);
+          const totalPages = result.pagination?.totalPages ?? 1;
+          const remainingPages = await Promise.all(
+            Array.from({ length: Math.max(totalPages - 1, 0) }, (_, index) =>
+              fetch(
+                `/api/tuition-fees?studentCode=${encodeURIComponent(fee.student.code)}&page=${index + 2}&pageSize=100`,
+              ).then(async (pageResponse) => {
+                if (!pageResponse.ok)
+                  throw new Error(
+                    await extractApiErrorMessage(
+                      pageResponse,
+                      "Không thể tải đầy đủ học phí của học viên",
+                    ),
+                  );
+                return unwrapApiResponse<{ items: Fee[] }>(pageResponse);
+              }),
+            ),
+          );
+          const allFees = [result.items, ...remainingPages.map((page) => page.items)].flat();
+          return {
+            fee,
+            fees: allFees.filter(
+              (studentFee) =>
+                studentFee.status === "UNPAID" || studentFee.status === "OVERDUE",
+            ),
+          };
+        });
+      })
+      .then(({ fee, fees: studentFees }) => {
+        setFees(studentFees);
         setSelectedIds([fee.id]);
         setStep(1);
       })
@@ -299,7 +343,8 @@ export function TuitionPaymentWorkspace({
           paymentMethod: method,
           bankAccountId: method === "BANK_TRANSFER" ? bankAccountId : undefined,
           payerName: payerName || undefined,
-          transactionReference: transactionReference || undefined,
+          transactionReference:
+            method === "BANK_TRANSFER" ? transactionReference || undefined : undefined,
         }),
       });
       if (!response.ok)
@@ -351,6 +396,40 @@ export function TuitionPaymentWorkspace({
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Thanh toán thất bại",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function convertPendingBatchToCash() {
+    if (!pendingBatch) return;
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/payment-batches/${pendingBatch.id}/cash`, {
+        method: "POST",
+      });
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể chuyển đợt thanh toán sang tiền mặt",
+          ),
+        );
+      const completed = await unwrapApiResponse<{
+        receipt?: { id: string } | null;
+      }>(response);
+      setCashDialogOpen(false);
+      setPendingBatch(null);
+      setReceiptId(completed.receipt?.id || null);
+      setQrError("");
+      showSuccess("Đã chuyển sang tiền mặt và phát hành biên lai");
+    } catch (reason) {
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : "Không thể chuyển đợt thanh toán sang tiền mặt",
       );
     } finally {
       setLoading(false);
@@ -512,49 +591,69 @@ export function TuitionPaymentWorkspace({
                         opacity: locked ? 0.65 : 1,
                       }}
                     >
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            disabled={locked}
-                            checked={selectedIds.includes(fee.id)}
-                            onChange={() =>
-                              setSelectedIds((current) =>
-                                current.includes(fee.id)
-                                  ? current.filter((id) => id !== fee.id)
-                                  : [...current, fee.id],
-                              )
-                            }
-                          />
-                        }
-                        label={
-                          <Box>
-                            <Stack
-                              direction={{ xs: "column", sm: "row" }}
-                              spacing={0.75}
-                              alignItems={{ sm: "center" }}
-                            >
-                              <Typography>
-                                {fee.feeNo} · {fee.class?.name || "Chưa có lớp"}
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        justifyContent="space-between"
+                        alignItems={{ sm: "center" }}
+                        gap={1}
+                      >
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              disabled={locked}
+                              checked={selectedIds.includes(fee.id)}
+                              onChange={() =>
+                                setSelectedIds((current) =>
+                                  current.includes(fee.id)
+                                    ? current.filter((id) => id !== fee.id)
+                                    : [...current, fee.id],
+                                )
+                              }
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Stack
+                                direction={{ xs: "column", sm: "row" }}
+                                spacing={0.75}
+                                alignItems={{ sm: "center" }}
+                              >
+                                <Typography>
+                                  {fee.feeNo} · {fee.class?.name || "Chưa có lớp"}
+                                </Typography>
+                                {!locked && (
+                                  <Chip
+                                    size="small"
+                                    color={feeStatusColors[fee.status] || "warning"}
+                                    label={feeStatusLabels[fee.status] || fee.status}
+                                  />
+                                )}
+                              </Stack>
+                              <Typography
+                                variant="caption"
+                                color={locked ? "warning.main" : "text.secondary"}
+                              >
+                                {locked
+                                  ? `Đang chờ thanh toán trong đợt ${batchNo}`
+                                  : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
                               </Typography>
-                              {!locked && (
-                                <Chip
-                                  size="small"
-                                  color={feeStatusColors[fee.status] || "warning"}
-                                  label={feeStatusLabels[fee.status] || fee.status}
-                                />
-                              )}
-                            </Stack>
-                            <Typography
-                              variant="caption"
-                              color={locked ? "warning.main" : "text.secondary"}
-                            >
-                              {locked
-                                ? `Đang chờ thanh toán trong đợt ${batchNo}`
-                                : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
-                            </Typography>
-                          </Box>
-                        }
-                      />
+                            </Box>
+                          }
+                        />
+                        {locked && fee.paymentAllocations?.[0]?.paymentBatch.id && (
+                          <Button
+                            component={Link}
+                            href={`/admin/tuition-fees/payment-history/${fee.paymentAllocations[0].paymentBatch.id}`}
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            startIcon={<ArrowBackIcon sx={{ transform: "rotate(180deg)" }} />}
+                            sx={{ fontWeight: 700, boxShadow: 2, whiteSpace: "nowrap" }}
+                          >
+                            Xử lý đợt thu
+                          </Button>
+                        )}
+                      </Stack>
                     </Paper>
                   );
                 })}
@@ -622,7 +721,10 @@ export function TuitionPaymentWorkspace({
                 onChange={(event) => {
                   setMethod(event.target.value);
                   setBankAccountError("");
-                  if (event.target.value === "CASH") setBankAccountId("");
+                  if (event.target.value === "CASH") {
+                    setBankAccountId("");
+                    setTransactionReference("");
+                  }
                 }}
               >
                 <MenuItem value="CASH">Tiền mặt</MenuItem>
@@ -828,6 +930,13 @@ export function TuitionPaymentWorkspace({
                     >
                       Mở để in
                     </Button>
+                    <Button
+                      variant="outlined"
+                      color="warning"
+                      onClick={() => setCashDialogOpen(true)}
+                    >
+                      Đổi sang tiền mặt
+                    </Button>
                   </Stack>
                 </>
               )}
@@ -886,6 +995,21 @@ export function TuitionPaymentWorkspace({
         confirmLabel="Ghi nhận thanh toán"
         cancelLabel="Quay lại"
         confirmColor="primary"
+      />
+      <ConfirmDialog
+        open={cashDialogOpen}
+        title="Đổi sang thanh toán tiền mặt"
+        message={
+          pendingBatch
+            ? `Xác nhận đã nhận ${money(pendingBatch.amount)} tiền mặt từ ${selectedStudent?.fullName || "học viên"}? Hệ thống sẽ hoàn tất toàn bộ đợt ${pendingBatch.batchNo} và phát hành biên lai.`
+            : ""
+        }
+        onConfirm={() => void convertPendingBatchToCash()}
+        onCancel={() => setCashDialogOpen(false)}
+        isLoading={loading}
+        confirmLabel="Xác nhận tiền mặt"
+        cancelLabel="Quay lại"
+        confirmColor="warning"
       />
       {Snackbar}
     </Stack>

@@ -19,6 +19,7 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  confirmDisabled?: boolean;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmColor?: ButtonProps["color"];
@@ -32,6 +33,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   isLoading = false,
+  confirmDisabled = false,
   confirmLabel = "Xác nhận",
   cancelLabel = "Hủy",
   confirmColor = "error",
@@ -51,7 +53,7 @@ export function ConfirmDialog({
           onClick={onConfirm}
           variant="contained"
           color={confirmColor}
-          disabled={isLoading}
+          disabled={isLoading || confirmDisabled}
         >
           {confirmLabel}
         </Button>

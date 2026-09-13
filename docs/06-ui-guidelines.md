@@ -689,10 +689,21 @@ Các thao tác được tách riêng:
 
 ```text
 Tạo học phí tháng
-Tạo thanh toán & xuất thông báo
+Tạo thông báo chuyển khoản
+Thu học phí
 ```
 
-Tạo học phí không tạo payment batch. Tạo thanh toán sẽ bổ sung các khoản còn thiếu, tạo payment batch và xuất PDF thông báo.
+`Tạo học phí tháng` không tạo payment batch. `Tạo thông báo chuyển khoản` là
+thao tác riêng, có xác nhận, chỉ dùng khi muốn lập batch `BANK_TRANSFER`
+`PENDING` cho cả lớp và xuất PDF; người dùng phải chọn tài khoản nhận tiền trong
+dialog xác nhận. Từ từng khoản chưa thu, nhân viên mở `Thu học phí` để chọn
+`CASH` hoặc `BANK_TRANSFER` khi thu trực tiếp.
+
+Nếu khoản phí đã thuộc batch chuyển khoản `PENDING`, khoản đó bị khóa để tránh
+tạo giao dịch trùng. UI hiển thị mã batch và nút `Xử lý đợt thu` để mở chi tiết
+batch; tại đó nhân viên có thể đối soát, hủy hoặc chuyển cả batch sang tiền mặt.
+Sau khi vừa tạo batch chuyển khoản trong màn hình `Thu học phí`, bước hoàn tất
+cũng hiển thị nút `Đổi sang tiền mặt` với xác nhận đã nhận đủ tiền mặt.
 
 ## 19.1 List columns
 
@@ -719,14 +730,17 @@ Ghi nhận thanh toán
 ## 19.3 Học phí phát sinh từ đăng ký
 
 ```text
-Không có form tạo học phí độc lập theo từng khoản. Sau khi đăng ký môn, UI hiển thị trạng thái chưa tạo phí; thao tác `Tạo học phí tháng` của lớp sẽ tạo phí trước khi tạo payment batch.
+Không có form tạo học phí độc lập theo từng khoản. Sau khi đăng ký môn, UI hiển
+thị trạng thái chưa tạo phí; thao tác `Tạo học phí tháng` của lớp chỉ tạo phí.
+Nếu cần thông báo chuyển khoản hàng loạt, người dùng phải bấm riêng `Tạo thông
+báo chuyển khoản` và xác nhận trước khi tạo payment batch.
 ```
 
 Rule:
 
 - Chỉ tạo phí từ enrollment đã tồn tại.
 - Tạo phí là thao tác riêng, không chạy tự động khi đăng ký môn.
-- Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo thanh toán và xuất thông báo`.
+- Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo học phí tháng`; tạo thông báo chuyển khoản là thao tác riêng và có xác nhận.
 - Học phí được tính trọn tháng theo mức phí của từng môn, không theo số buổi.
 - Chi tiết học phí hiển thị kỳ học phí và thông tin tính trọn tháng trong từng item.
 - Một học viên có thể học một phần môn trong lớp.

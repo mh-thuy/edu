@@ -15,17 +15,17 @@ export async function createClassPaymentBatches(
   classId: string,
   actorId: string,
   period: TuitionBillingPeriod,
+  bankAccountId: string,
 ) {
   return prisma.$transaction(async (tx) => {
     await TuitionService.createClassTuitionFees(classId, period, actorId, tx);
 
-    const bankAccount = await tx.bankAccount.findFirst({
-      where: { isActive: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
+    const bankAccount = await tx.bankAccount.findUnique({
+      where: { id: bankAccountId },
+      select: { id: true, isActive: true },
     });
-    if (!bankAccount) {
-      throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
+    if (!bankAccount || !bankAccount.isActive) {
+      throw new ConflictError("Tài khoản nhận tiền không hoạt động hoặc không tồn tại");
     }
 
     const fees = await tx.tuitionFee.findMany({
