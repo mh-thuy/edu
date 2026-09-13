@@ -7,8 +7,8 @@ const border = {
   bottom: { style: "thin" as const, color: { argb: "FF000000" } },
   right: { style: "thin" as const, color: { argb: "FF000000" } },
 };
-const moneyFormat = "#,##0";
-const zeroAsDashMoneyFormat = "#,##0;[Red]-#,##0;-";
+const moneyFormat = '#,##0 "₫"';
+const zeroAsDashMoneyFormat = '#,##0 "₫";[Red]-#,##0 "₫";-';
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const colors = {
   navy: "FF1F4E78",
