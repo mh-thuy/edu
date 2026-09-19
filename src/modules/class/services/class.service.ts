@@ -1358,6 +1358,14 @@ export async function getClassStudentsPage(
   },
 ) {
   const period = parseStudentListMonth(options.month);
+  const nextPeriodStart = new Date(Date.UTC(period.year, period.month, 1));
+  const subjectForPeriodWhere: Prisma.EnrollmentSubjectWhereInput = {
+    enrolledAt: { lt: nextPeriodStart },
+    OR: [
+      { status: { in: ["ACTIVE", "COMPLETED"] } },
+      { droppedAt: { gte: period.start } },
+    ],
+  };
   const pauseWhere: Prisma.EnrollmentPauseWhereInput = {
     status: "ACTIVE",
     startMonth: { lte: period.end },
@@ -1390,8 +1398,8 @@ export async function getClassStudentsPage(
     ...(options.subjectId && {
       subjects: {
         some: {
+          ...subjectForPeriodWhere,
           classSubjectId: options.subjectId,
-          status: { in: ["ACTIVE", "COMPLETED"] },
         },
       },
     }),
@@ -1403,7 +1411,6 @@ export async function getClassStudentsPage(
     currentPeriodStart: { lte: period.end },
     pauses: { none: pauseWhere },
   };
-  const nextPeriodStart = new Date(Date.UTC(period.year, period.month, 1));
   const [students, total, active, paused, completed, activeWithFee] = await Promise.all([
     prisma.classStudent.findMany({
       where,
@@ -1413,7 +1420,7 @@ export async function getClassStudentsPage(
       include: {
         student: true,
         subjects: {
-          where: { status: { in: ["ACTIVE", "COMPLETED"] } },
+          where: subjectForPeriodWhere,
           select: { classSubjectId: true },
         },
         tuitionFees: {

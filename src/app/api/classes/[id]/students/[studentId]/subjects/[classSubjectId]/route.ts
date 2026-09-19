@@ -8,6 +8,12 @@ const removeSubjectSchema = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+const routeParamsSchema = z.object({
+  id: z.string().uuid("Mã lớp học không hợp lệ"),
+  studentId: z.string().uuid("Mã học viên không hợp lệ"),
+  classSubjectId: z.string().uuid("Mã môn học trong lớp không hợp lệ"),
+});
+
 type Params = Promise<{
   id: string;
   studentId: string;
@@ -21,7 +27,7 @@ export async function DELETE(
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const { id, studentId, classSubjectId } = await context.params;
+    const { id, studentId, classSubjectId } = routeParamsSchema.parse(await context.params);
     let body: unknown = {};
     try {
       body = await request.json();

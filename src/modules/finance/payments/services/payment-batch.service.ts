@@ -130,11 +130,13 @@ export async function completePaymentBatch(
   const paymentDate = data?.paymentDate || batch.paymentDate;
   const bankAccountId = data?.bankAccountId ?? batch.bankAccountId;
   const bankTransactionNo = data?.bankTransactionNo?.trim() || batch.bankTransactionNo?.trim() || null;
+  const transactionReference =
+    data?.transactionReference?.trim() || batch.transactionReference?.trim() || null;
   if (batch.paymentMethod === "BANK_TRANSFER" && !bankAccountId) {
     throw new ConflictError("Thanh toán chuyển khoản phải có tài khoản nhận tiền");
   }
-  if (batch.paymentMethod === "BANK_TRANSFER" && !bankTransactionNo) {
-    throw new ConflictError("Thanh toán chuyển khoản phải có mã giao dịch ngân hàng");
+  if (batch.paymentMethod === "BANK_TRANSFER" && !bankTransactionNo && !transactionReference) {
+    throw new ConflictError("Thanh toán chuyển khoản phải có mã giao dịch hoặc mã tham chiếu");
   }
   if (
     batch.paymentMethod === "BANK_TRANSFER" &&
@@ -168,7 +170,7 @@ export async function completePaymentBatch(
         transactionReference:
           batch.paymentMethod === "CASH"
             ? undefined
-            : data?.transactionReference || batch.transactionReference,
+            : transactionReference,
         payerName: batch.payerName,
         paymentContent: data?.paymentContent || batch.paymentContent,
         receivedBy: actorId,
@@ -288,7 +290,7 @@ export async function completePaymentBatch(
       transactionReference:
         batch.paymentMethod === "CASH"
           ? null
-          : data?.transactionReference || batch.transactionReference,
+          : transactionReference,
       paymentContent: data?.paymentContent || batch.paymentContent,
       confirmedBy: actorId,
       confirmedAt: new Date(),

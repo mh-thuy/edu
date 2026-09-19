@@ -22,6 +22,11 @@ const deletePauseSchema = z.object({
   pauseId: z.string().uuid(),
 });
 
+const routeParamsSchema = z.object({
+  id: z.string().uuid("Mã lớp học không hợp lệ"),
+  studentId: z.string().uuid("Mã học viên không hợp lệ"),
+});
+
 type Params = Promise<{
   id: string;
   studentId: string;
@@ -34,7 +39,7 @@ export async function POST(
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const { id, studentId } = await context.params;
+    const { id, studentId } = routeParamsSchema.parse(await context.params);
     const data = pauseSchema.parse(await request.json());
     const result = await pauseStudentEnrollment(id, studentId, data, user.id);
     return apiSuccess(result, 201);
@@ -50,7 +55,7 @@ export async function PATCH(
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const { id, studentId } = await context.params;
+    const { id, studentId } = routeParamsSchema.parse(await context.params);
     const { pauseId, ...data } = updatePauseSchema.parse(await request.json());
     const result = await updateEnrollmentPause(
       id,
@@ -72,7 +77,7 @@ export async function DELETE(
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const { id, studentId } = await context.params;
+    const { id, studentId } = routeParamsSchema.parse(await context.params);
     const { pauseId } = deletePauseSchema.parse(await request.json());
     const result = await deleteEnrollmentPause(id, studentId, pauseId, user.id);
     return apiSuccess(result);

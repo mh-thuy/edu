@@ -9,6 +9,11 @@ type Params = Promise<{
   studentId: string;
 }>;
 
+const routeParamsSchema = z.object({
+  id: z.string().uuid("Mã lớp học không hợp lệ"),
+  studentId: z.string().uuid("Mã học viên không hợp lệ"),
+});
+
 export async function POST(
   _request: NextRequest,
   context: { params?: Params },
@@ -17,7 +22,10 @@ export async function POST(
     const user = await requireApiUser();
     if (user instanceof Response) return user;
 
-    const routeParams = await context.params;
+    const rawRouteParams = await context.params;
+    const routeParams = rawRouteParams
+      ? routeParamsSchema.parse(rawRouteParams)
+      : undefined;
     if (!routeParams?.id || !routeParams.studentId) {
       return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc học viên", 400);
     }
