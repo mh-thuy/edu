@@ -585,7 +585,10 @@ export class TuitionService {
           performedBy: actorId,
         },
       });
-      return updated;
+      return {
+        ...updated,
+        status: getEffectiveTuitionFeeStatus(updated.status, updated.dueDate),
+      };
     });
   }
 
