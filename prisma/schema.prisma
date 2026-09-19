@@ -48,6 +48,7 @@ enum SubjectStatus {
 enum ClassSubjectStatus {
   ACTIVE
   INACTIVE
+  COMPLETED
 
   @@map("class_subject_status")
 }

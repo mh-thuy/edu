@@ -81,7 +81,6 @@ export async function getClassTuitionReport(
     where: {
       id: input.classSubjectId,
       classId: input.classId,
-      status: "ACTIVE",
     },
     include: {
       class: { select: { code: true, name: true } },
@@ -98,7 +97,7 @@ export async function getClassTuitionReport(
     },
   });
 
-  if (!classSubject) {
+  if (!classSubject || !["ACTIVE", "COMPLETED"].includes(classSubject.status)) {
     throw new NotFoundError("Không tìm thấy môn học thuộc lớp đã chọn");
   }
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { TuitionPaymentStatus } from "@prisma/client";
 import type { Prisma, Teacher } from "@prisma/client";
 import type {
   TeacherCreate,
@@ -115,6 +116,28 @@ export async function updateTeacher(
 
   if (!currentTeacher) {
     throw new NotFoundError("Không tìm thấy giáo viên");
+  }
+
+  const reportIdentityChanged =
+    (data.fullName !== undefined && data.fullName !== currentTeacher.fullName) ||
+    (data.code !== undefined && data.code !== currentTeacher.code) ||
+    (data.commissionPercent !== undefined &&
+      data.commissionPercent !== Number(currentTeacher.commissionPercent));
+  if (reportIdentityChanged) {
+    const hasPaidHistory = await prisma.tuitionFeeItem.findFirst({
+      where: {
+        classSubject: { teacherId: id },
+        tuitionFee: {
+          payments: { some: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
+        },
+      },
+      select: { id: true },
+    });
+    if (hasPaidHistory) {
+      throw new ConflictError(
+        "Không thể thay đổi thông tin giáo viên đã có doanh thu trong báo cáo",
+      );
+    }
   }
 
   return prisma.teacher.update({

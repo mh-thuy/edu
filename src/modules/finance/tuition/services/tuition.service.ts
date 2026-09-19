@@ -518,6 +518,14 @@ export class TuitionService {
       if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
       if (current.version !== data.version)
         throw new ConflictError("Khoản học phí đã thay đổi, vui lòng tải lại");
+      if (
+        current.status !== TuitionFeeStatus.UNPAID &&
+        current.status !== TuitionFeeStatus.OVERDUE
+      ) {
+        throw new ConflictError(
+          "Chỉ có thể sửa khoản học phí chưa thu hoặc quá hạn",
+        );
+      }
       if (current.payments.length)
         throw new ConflictError("Không thể sửa khoản học phí đã thanh toán");
       if (current.paymentAllocations.length)

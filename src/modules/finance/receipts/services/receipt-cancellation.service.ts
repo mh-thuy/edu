@@ -3,6 +3,7 @@ import {
   Prisma,
   ReceiptStatus,
   TuitionPaymentStatus,
+  TuitionRefundStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
@@ -17,13 +18,32 @@ export async function cancelTuitionReceipt(
   return prisma.$transaction(async (tx) => {
     const receipt = await tx.tuitionReceipt.findUnique({
       where: { id: receiptId },
-      include: { payment: { include: { paymentBatch: true, tuitionFee: true } } },
+      include: {
+        payment: {
+          include: {
+            paymentBatch: true,
+            tuitionFee: true,
+            refunds: {
+              where: {
+                status: {
+                  notIn: [TuitionRefundStatus.REJECTED, TuitionRefundStatus.CANCELLED],
+                },
+              },
+              select: { id: true },
+            },
+          },
+        },
+      },
     });
     if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
     if (receipt.status === ReceiptStatus.CANCELLED)
       throw new ConflictError("Biên lai đã được hủy");
     if (receipt.payment.paymentStatus !== TuitionPaymentStatus.SUCCESS)
       throw new ConflictError("Chỉ có thể hủy biên lai của thanh toán thành công");
+    if (receipt.payment.refunds.length > 0)
+      throw new ConflictError(
+        "Không thể hủy biên lai khi thanh toán đang có yêu cầu hoàn tiền",
+      );
 
     const batchId = receipt.payment.paymentBatchId;
     if (batchId) {
@@ -37,13 +57,29 @@ export async function cancelTuitionReceipt(
 
       const payments = await tx.tuitionPayment.findMany({
         where: { paymentBatchId: batch.id },
-        include: { receipt: true, tuitionFee: true },
+        include: {
+          receipt: true,
+          tuitionFee: true,
+          refunds: {
+            where: {
+              status: {
+                notIn: [TuitionRefundStatus.REJECTED, TuitionRefundStatus.CANCELLED],
+              },
+            },
+            select: { id: true },
+          },
+        },
       });
       if (
         payments.length === 0 ||
         payments.some((payment) => payment.paymentStatus !== TuitionPaymentStatus.SUCCESS)
       )
         throw new ConflictError("Đợt thanh toán không còn nhất quán để hoàn tác");
+      if (payments.some((payment) => payment.refunds.length > 0)) {
+        throw new ConflictError(
+          "Không thể hủy biên lai khi batch đang có yêu cầu hoàn tiền",
+        );
+      }
 
       for (const payment of payments) {
         const cancelledPayment = await tx.tuitionPayment.update({

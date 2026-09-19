@@ -18,6 +18,7 @@ import type {
   ClassWithRelations,
 } from "@/types/prisma";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { getVietnamCalendarDateStart } from "@/lib/vietnam-time";
 
 function toNullableDate(value?: string): Date | undefined {
   return value ? new Date(value) : undefined;
@@ -60,6 +61,7 @@ export type ClassSubjectView = {
   tuitionFee: Prisma.Decimal;
   totalSessions: number;
   maxStudents: number | null;
+  status: "ACTIVE" | "INACTIVE" | "COMPLETED";
   subject: { id: string; name: string; status: "ACTIVE" | "INACTIVE" };
   teacher: { id: string; code: string; fullName: string } | null;
 };
@@ -67,9 +69,14 @@ export type ClassSubjectView = {
 async function queryClassSubjects(
   client: Prisma.TransactionClient | typeof prisma,
   classId: string,
+  options?: { includeCompleted?: boolean },
 ): Promise<ClassSubjectView[]> {
+  const statusFilter = options?.includeCompleted
+    ? Prisma.sql`cs.status IN ('ACTIVE'::class_subject_status, 'COMPLETED'::class_subject_status)`
+    : Prisma.sql`cs.status = 'ACTIVE'::class_subject_status`;
   return client.$queryRaw<ClassSubjectView[]>`
     SELECT cs.id, cs.teacher_id AS "teacherId", cs.tuition_fee AS "tuitionFee", cs.total_sessions AS "totalSessions",
+           cs.status AS "status",
            cs.max_students AS "maxStudents",
            json_build_object('id', s.id, 'name', s.name, 'status', s.status) AS subject,
            CASE WHEN t.id IS NULL THEN NULL ELSE json_build_object(
@@ -78,7 +85,7 @@ async function queryClassSubjects(
     FROM class_subjects cs
     JOIN subjects s ON s.id = cs.subject_id
     LEFT JOIN teachers t ON t.id = cs.teacher_id
-    WHERE cs.class_id = ${classId}::uuid AND cs.status = 'ACTIVE'::class_subject_status
+    WHERE cs.class_id = ${classId}::uuid AND ${statusFilter}
     ORDER BY cs.created_at ASC
   `;
 }
@@ -152,7 +159,10 @@ export async function getClassById(
     },
   });
   if (!classData) return null;
-  return { ...classData, classSubjects: await queryClassSubjects(prisma, id) };
+  return {
+    ...classData,
+    classSubjects: await queryClassSubjects(prisma, id, { includeCompleted: true }),
+  };
 }
 
 export async function getClasses(filter: ClassFilter) {
@@ -280,6 +290,13 @@ export async function updateClass(
     }
 
     if (data.status === "COMPLETED" && current.status !== "COMPLETED") {
+      await tx.$executeRaw`
+        UPDATE class_subjects
+        SET status = 'COMPLETED'::class_subject_status,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE class_id = ${id}::uuid
+          AND status = 'ACTIVE'::class_subject_status
+      `;
       const activeEnrollments = await tx.classStudent.findMany({
         where: { classId: id, status: "ACTIVE" },
         select: { id: true, studentId: true },
@@ -438,8 +455,7 @@ export async function assignStudentToClass(
       throw new ConflictError("Học viên đã đăng ký các môn học được chọn");
     }
 
-    const reactivationStart = new Date();
-    reactivationStart.setUTCHours(0, 0, 0, 0);
+    const reactivationStart = getVietnamCalendarDateStart();
     const reactivationMonthStart = new Date(Date.UTC(
       reactivationStart.getUTCFullYear(),
       reactivationStart.getUTCMonth(),
@@ -772,6 +788,7 @@ export async function updateEnrollmentPause(
       where: {
         id: pauseId,
         enrollment: { classId, studentId, status: "ACTIVE" },
+        status: "ACTIVE",
       },
     });
     if (!pause) throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ");
@@ -1037,6 +1054,15 @@ export async function updateClassSubject(
       if (activeSchedule) {
         throw new ConflictError(
           "Không thể đổi giáo viên khi môn học đang có lịch; hãy xóa lịch học trước",
+        );
+      }
+      const existingFeeItem = await tx.tuitionFeeItem.findFirst({
+        where: { classSubjectId },
+        select: { id: true },
+      });
+      if (existingFeeItem) {
+        throw new ConflictError(
+          "Không thể đổi giáo viên sau khi môn học đã phát sinh học phí",
         );
       }
     }

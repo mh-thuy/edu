@@ -46,24 +46,31 @@ export async function updateBankAccount(id: string, data: BankAccountUpdate, act
       where: { bankAccountId: id, status: "PENDING" },
       select: { batchNo: true },
     });
+    const successfulBatch = await tx.paymentBatch.findFirst({
+      where: { bankAccountId: id, status: "SUCCESS" },
+      select: { batchNo: true },
+    });
     if (pendingBatch && data.isActive === false) {
       throw new ConflictError(
         `Không thể ngưng tài khoản đang gắn với đợt thanh toán ${pendingBatch.batchNo}`,
       );
     }
-    if (
-      pendingBatch &&
-      [
+    const accountDetailsChanged = [
         "bankCode",
         "bankName",
         "accountNo",
         "accountName",
         "branchName",
         "currencyCode",
-      ].some((field) => data[field as keyof BankAccountUpdate] !== undefined)
-    ) {
+      ].some((field) => data[field as keyof BankAccountUpdate] !== undefined);
+    if (pendingBatch && accountDetailsChanged) {
       throw new ConflictError(
         `Không thể thay đổi thông tin tài khoản đang gắn với đợt thanh toán ${pendingBatch.batchNo}`,
+      );
+    }
+    if (successfulBatch && accountDetailsChanged) {
+      throw new ConflictError(
+        `Không thể thay đổi thông tin tài khoản đã được sử dụng trong đợt thanh toán ${successfulBatch.batchNo}`,
       );
     }
 

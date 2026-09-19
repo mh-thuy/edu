@@ -114,6 +114,7 @@ export async function importStudentsToClass(
   }
 
   const { rows, errors } = await readStudentCodes(buffer);
+  const totalRows = rows.length + errors.length;
   const students = await prisma.student.findMany({
     where: { code: { in: rows.map((row) => row.code) } },
     select: { id: true, code: true },
@@ -147,9 +148,9 @@ export async function importStudentsToClass(
   }
 
   return {
-    totalRows: rows.length + errors.length,
+    totalRows,
     importedRows,
-    skippedRows: rows.length + errors.length - importedRows,
+    skippedRows: totalRows - importedRows,
     errors,
   };
 }

@@ -41,6 +41,18 @@ export function getVietnamDayStart(asOf = new Date()): Date {
   return new Date(calendarDate.getTime() - VIETNAM_OFFSET_MS);
 }
 
+/** Return the current Vietnam calendar date represented at UTC midnight. */
+export function getVietnamCalendarDateStart(asOf = new Date()): Date {
+  const vietnamNow = new Date(asOf.getTime() + VIETNAM_OFFSET_MS);
+  return new Date(
+    Date.UTC(
+      vietnamNow.getUTCFullYear(),
+      vietnamNow.getUTCMonth(),
+      vietnamNow.getUTCDate(),
+    ),
+  );
+}
+
 /** Return the current Vietnam calendar month as YYYY-MM. */
 export function getVietnamMonth(asOf = new Date()): string {
   const vietnamNow = new Date(asOf.getTime() + VIETNAM_OFFSET_MS);
