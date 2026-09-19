@@ -136,16 +136,12 @@ export async function buildClassTuitionReportExcel(
   const lastDataRow = Math.max(firstDataRow, firstDataRow + report.rows.length - 1);
   const totalRow = lastDataRow + 1;
   const remainingRow = totalRow + 1;
-  const photoRow = totalRow + 2;
-  const payableRow = totalRow + 3;
-  const closedDateRow = totalRow + 4;
+  const closedDateRow = totalRow + 2;
 
   worksheet.mergeCells(`A${totalRow}:C${totalRow}`);
   worksheet.mergeCells(`A${remainingRow}:C${remainingRow}`);
-  worksheet.mergeCells(`A${photoRow}:C${photoRow}`);
-  worksheet.mergeCells(`A${payableRow}:C${payableRow}`);
   worksheet.mergeCells(`A${closedDateRow}:C${closedDateRow}`);
-  [totalRow, remainingRow, photoRow, payableRow, closedDateRow].forEach((rowNumber) => {
+  [totalRow, remainingRow, closedDateRow].forEach((rowNumber) => {
     const row = worksheet.getRow(rowNumber);
     row.eachCell({ includeEmpty: true }, (cell) => {
       cell.font = { name: "Arial", size: 11, bold: true };
@@ -166,32 +162,25 @@ export async function buildClassTuitionReportExcel(
     formula: `D${totalRow}*(100-${report.commissionPercent})/100`,
     result: report.rows.reduce((total, row) => total + row.paidAmount, 0) * (100 - report.commissionPercent) / 100,
   };
-  worksheet.getCell(`A${photoRow}`).value = "CHI PHÍ PHOTO (NHẬP NẾU CÓ)";
-  worksheet.getCell(`D${photoRow}`).value = null;
-  worksheet.getCell(`A${payableRow}`).value = "SỐ TIỀN CẦN THANH";
-  worksheet.getCell(`D${payableRow}`).value = {
-    formula: `D${remainingRow}-IF(D${photoRow}=\"\",0,D${photoRow})`,
-    result: report.rows.reduce((total, row) => total + row.paidAmount, 0) * (100 - report.commissionPercent) / 100,
-  };
   worksheet.getCell(`A${closedDateRow}`).value = "NGÀY XUẤT BÁO CÁO";
   worksheet.getCell(`D${closedDateRow}`).value = toVietnamExcelDate(new Date());
   worksheet.getCell(`D${closedDateRow}`).numFmt = "dd/mm/yyyy";
 
-  [totalRow, remainingRow, photoRow, payableRow].forEach((rowNumber) => {
+  [totalRow, remainingRow].forEach((rowNumber) => {
     worksheet.getCell(`D${rowNumber}`).numFmt = moneyFormat;
     worksheet.getCell(`D${rowNumber}`).alignment = { horizontal: "right", vertical: "middle" };
   });
   worksheet.getCell(`D${closedDateRow}`).alignment = { horizontal: "right", vertical: "middle" };
-  [totalRow, remainingRow, photoRow, payableRow, closedDateRow].forEach((rowNumber, index) => {
+  [totalRow, remainingRow, closedDateRow].forEach((rowNumber, index) => {
     worksheet.getCell(`A${rowNumber}`).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: [colors.green, colors.blue, colors.yellow, colors.orange, colors.gray][index] },
+      fgColor: { argb: [colors.green, colors.blue, colors.gray][index] },
     };
     worksheet.getCell(`D${rowNumber}`).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: [colors.green, colors.blue, colors.yellow, colors.orange, colors.gray][index] },
+      fgColor: { argb: [colors.green, colors.blue, colors.gray][index] },
     };
   });
   worksheet.pageSetup.printArea = `A1:E${closedDateRow}`;

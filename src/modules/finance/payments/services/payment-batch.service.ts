@@ -79,6 +79,23 @@ export async function completePaymentBatch(
   if (!allocationTotal.equals(batch.totalAmount))
     throw new ConflictError("Tổng phân bổ không khớp tổng thanh toán");
 
+  const teacherIds = [
+    ...new Set(
+      batch.allocations.flatMap((allocation) =>
+        allocation.tuitionFee.items
+          .map((item) => item.classSubject?.teacherId)
+          .filter((teacherId): teacherId is string => Boolean(teacherId)),
+      ),
+    ),
+  ].sort();
+  for (const teacherId of teacherIds) {
+    // Keep teacher identity/commission updates serialized with payment
+    // completion so report data cannot change mid-transaction.
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM teachers WHERE id = ${teacherId}::uuid FOR UPDATE`,
+    );
+  }
+
   for (const allocation of batch.allocations) {
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${allocation.tuitionFeeId}::uuid FOR UPDATE`,
@@ -112,8 +129,12 @@ export async function completePaymentBatch(
   const paymentReceiptIssuedAt = new Date();
   const paymentDate = data?.paymentDate || batch.paymentDate;
   const bankAccountId = data?.bankAccountId ?? batch.bankAccountId;
+  const bankTransactionNo = data?.bankTransactionNo?.trim() || batch.bankTransactionNo?.trim() || null;
   if (batch.paymentMethod === "BANK_TRANSFER" && !bankAccountId) {
     throw new ConflictError("Thanh toán chuyển khoản phải có tài khoản nhận tiền");
+  }
+  if (batch.paymentMethod === "BANK_TRANSFER" && !bankTransactionNo) {
+    throw new ConflictError("Thanh toán chuyển khoản phải có mã giao dịch ngân hàng");
   }
   if (
     batch.paymentMethod === "BANK_TRANSFER" &&
@@ -143,7 +164,7 @@ export async function completePaymentBatch(
         paymentMethod: batch.paymentMethod,
         paymentStatus: TuitionPaymentStatus.SUCCESS,
         bankAccountId,
-        bankTransactionNo: batch.paymentMethod === "CASH" ? undefined : data?.bankTransactionNo,
+        bankTransactionNo: batch.paymentMethod === "CASH" ? undefined : bankTransactionNo,
         transactionReference:
           batch.paymentMethod === "CASH"
             ? undefined
@@ -263,7 +284,7 @@ export async function completePaymentBatch(
       status: PaymentBatchStatus.SUCCESS,
       paymentDate,
       bankAccountId,
-      bankTransactionNo: batch.paymentMethod === "CASH" ? null : data?.bankTransactionNo,
+      bankTransactionNo: batch.paymentMethod === "CASH" ? null : bankTransactionNo,
       transactionReference:
         batch.paymentMethod === "CASH"
           ? null

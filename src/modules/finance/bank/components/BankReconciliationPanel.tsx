@@ -67,6 +67,7 @@ type ImportResult = {
   matchedRows: number;
   unmatchedRows: number;
   ignoredRows: number;
+  invalidRowErrors: Array<{ rowNo: number; message: string }>;
   items: Transaction[];
 };
 type PendingConfirmation = {
@@ -255,7 +256,7 @@ export function BankReconciliationPanel() {
       setFile(null);
       setStep(2);
       setMessage({
-        text: `Đã phân tích ${result.validRows} dòng. Khớp ${result.matchedRows}, chưa khớp ${result.unmatchedRows}, bỏ qua ${result.ignoredRows}, trùng ${result.duplicatedRows}. Chỉ dòng được xác nhận mới được lưu.`,
+        text: `Đã phân tích ${result.totalRows} dòng: hợp lệ ${result.validRows}, lỗi ${result.invalidRows}. Khớp ${result.matchedRows}, chưa khớp ${result.unmatchedRows}, bỏ qua ${result.ignoredRows}, trùng ${result.duplicatedRows}. Chỉ dòng được xác nhận mới được lưu.`,
         severity: "success",
       });
     } catch (reason) {

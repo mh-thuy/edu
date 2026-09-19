@@ -92,8 +92,11 @@ async function queryClassSubjects(
 
 async function assertClassCanManageSubjects(
   classId: string,
-  client: typeof prisma | Prisma.TransactionClient = prisma,
+  client: Prisma.TransactionClient,
 ) {
+  await client.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${classId}`}))`,
+  );
   const classData = await client.class.findUnique({
     where: { id: classId },
     select: { id: true, status: true },
@@ -338,41 +341,47 @@ export async function updateClass(
 }
 
 export async function deleteClass(id: string): Promise<Class> {
-  const classData = await prisma.class.findUnique({
-    where: { id },
-    select: {
-      _count: {
-        select: {
-          students: true,
-          classSubjects: true,
-          schedules: { where: { deletedAt: null } },
-          tuitionFees: true,
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${id}`}))`,
+    );
+
+    const classData = await tx.class.findUnique({
+      where: { id },
+      select: {
+        _count: {
+          select: {
+            students: true,
+            classSubjects: true,
+            schedules: { where: { deletedAt: null } },
+            tuitionFees: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!classData) {
-    throw new NotFoundError("Không tìm thấy lớp học");
-  }
+    if (!classData) {
+      throw new NotFoundError("Không tìm thấy lớp học");
+    }
 
-  if (classData._count.tuitionFees > 0) {
-    throw new ConflictError("Không thể xóa lớp học đã phát sinh học phí");
-  }
+    if (classData._count.tuitionFees > 0) {
+      throw new ConflictError("Không thể xóa lớp học đã phát sinh học phí");
+    }
 
-  if (
-    classData._count.students > 0 ||
-    classData._count.classSubjects > 0 ||
-    classData._count.schedules > 0
-  ) {
-    throw new ConflictError(
-      "Không thể xóa lớp đã có học viên, môn học hoặc lịch học; hãy chuyển trạng thái lớp thay vì xóa",
-    );
-  }
+    if (
+      classData._count.students > 0 ||
+      classData._count.classSubjects > 0 ||
+      classData._count.schedules > 0
+    ) {
+      throw new ConflictError(
+        "Không thể xóa lớp đã có học viên, môn học hoặc lịch học; hãy chuyển trạng thái lớp thay vì xóa",
+      );
+    }
 
-  return prisma.class.update({
-    where: { id },
-    data: { status: "CANCELLED", deletedAt: new Date() },
+    return tx.class.update({
+      where: { id },
+      data: { status: "CANCELLED", deletedAt: new Date() },
+    });
   });
 }
 
@@ -971,17 +980,22 @@ export async function createSubject(data: SubjectCreate) {
 }
 
 export async function updateSubject(id: string, data: SubjectUpdate) {
-  const rows = await prisma.$queryRaw<
-    Array<{ id: string; name: string; status: string }>
-  >`
-    UPDATE subjects
-    SET name = ${data.name}, status = ${data.status}::subject_status,
-        updated_at = CURRENT_TIMESTAMP, deleted_at = CASE WHEN ${data.status} = 'INACTIVE' THEN COALESCE(deleted_at, CURRENT_TIMESTAMP) ELSE NULL END
-    WHERE id = ${id}::uuid
-    RETURNING id, name, status
-  `;
-  if (!rows[0]) throw new NotFoundError("Không tìm thấy môn học");
-  return rows[0];
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM subjects WHERE id = ${id}::uuid FOR UPDATE`,
+    );
+    const rows = await tx.$queryRaw<
+      Array<{ id: string; name: string; status: string }>
+    >`
+      UPDATE subjects
+      SET name = ${data.name}, status = ${data.status}::subject_status,
+          updated_at = CURRENT_TIMESTAMP, deleted_at = CASE WHEN ${data.status} = 'INACTIVE' THEN COALESCE(deleted_at, CURRENT_TIMESTAMP) ELSE NULL END
+      WHERE id = ${id}::uuid
+      RETURNING id, name, status
+    `;
+    if (!rows[0]) throw new NotFoundError("Không tìm thấy môn học");
+    return rows[0];
+  });
 }
 
 export async function getClassSubjects(classId: string) {
@@ -995,6 +1009,9 @@ export async function addClassSubject(
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClassCanManageSubjects(classId, tx);
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM subjects WHERE id = ${data.subjectId}::uuid FOR UPDATE`,
+    );
     const subject = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM subjects WHERE id = ${data.subjectId}::uuid AND status = 'ACTIVE'::subject_status
     `;
@@ -1037,10 +1054,10 @@ export async function updateClassSubject(
   actorId: string,
 ) {
   return prisma.$transaction(async (tx) => {
+    await assertClassCanManageSubjects(classId, tx);
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-subject:${classSubjectId}`}))`,
     );
-    await assertClassCanManageSubjects(classId, tx);
     const existing = (await queryClassSubjects(tx, classId)).find(
       (item) => item.id === classSubjectId,
     );
@@ -1124,10 +1141,10 @@ export async function removeClassSubject(
   actorId: string,
 ) {
   await prisma.$transaction(async (tx) => {
+    await assertClassCanManageSubjects(classId, tx);
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-subject:${classSubjectId}`}))`,
     );
-    await assertClassCanManageSubjects(classId, tx);
     const existing = (await queryClassSubjects(tx, classId)).find(
       (item) => item.id === classSubjectId,
     );
@@ -1381,6 +1398,7 @@ export async function getClassStudentsPage(
     status: "ACTIVE",
     pauses: { none: pauseWhere },
   };
+  const nextPeriodStart = new Date(Date.UTC(period.year, period.month, 1));
   const [students, total, active, paused, completed, activeWithFee] = await Promise.all([
     prisma.classStudent.findMany({
       where,
@@ -1419,18 +1437,47 @@ export async function getClassStudentsPage(
     prisma.classStudent.count({ where: activeWhere }),
     prisma.classStudent.count({ where: { classId, status: "ACTIVE", pauses: { some: pauseWhere } } }),
     prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
-    prisma.classStudent.count({
-      where: {
-        ...activeWhere,
-        tuitionFees: {
-          some: {
-            billingType: "MONTHLY",
-            billingYear: period.year,
-            billingMonth: period.month,
-          },
-        },
-      },
-    }),
+    prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*)::bigint AS count
+      FROM class_students cs
+      WHERE cs.class_id = ${classId}::uuid
+        AND cs.status = 'ACTIVE'::enrollment_status
+        AND cs.current_period_start <= ${period.end}::date
+        AND NOT EXISTS (
+          SELECT 1
+          FROM enrollment_pauses ep
+          WHERE ep.enrollment_id = cs.id
+            AND ep.status = 'ACTIVE'::enrollment_pause_status
+            AND ep.start_month <= ${period.end}::date
+            AND ep.end_month >= ${period.start}::date
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM tuition_fees tf
+          WHERE tf.enrollment_id = cs.id
+            AND tf.class_id = ${classId}::uuid
+            AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+            AND tf.billing_year = ${period.year}
+            AND tf.billing_month = ${period.month}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM enrollment_subjects es
+              JOIN class_subjects csu ON csu.id = es.class_subject_id
+              JOIN subjects s ON s.id = csu.subject_id
+              WHERE es.enrollment_id = cs.id
+                AND es.status = 'ACTIVE'::enrollment_subject_status
+                AND es.enrolled_at::date < ${nextPeriodStart}::date
+                AND csu.status = 'ACTIVE'::class_subject_status
+                AND s.status = 'ACTIVE'::subject_status
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM tuition_fee_items tfi
+                  WHERE tfi.tuition_fee_id = tf.id
+                    AND tfi.class_subject_id = es.class_subject_id
+                )
+            )
+        )
+    `.then((rows) => Number(rows[0]?.count ?? 0)),
   ]);
 
   const pauseIds = students.flatMap((student) => student.pauses.map((pause) => pause.id));

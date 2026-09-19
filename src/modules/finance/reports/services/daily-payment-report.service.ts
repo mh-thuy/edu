@@ -128,6 +128,7 @@ export async function getDailyPaymentReport(
       paymentDate: true,
       paymentMethod: true,
       amount: true,
+      bankAccountId: true,
       bankTransactionNo: true,
       transactionReference: true,
       paymentContent: true,
@@ -171,6 +172,23 @@ export async function getDailyPaymentReport(
     },
   });
 
+  const bankAccountIds = [
+    ...new Set(
+      payments
+        .map((payment) => payment.bankAccountId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const bankAccounts = bankAccountIds.length
+    ? await prisma.bankAccount.findMany({
+        where: { id: { in: bankAccountIds } },
+        select: { id: true, bankName: true, accountNo: true },
+      })
+    : [];
+  const bankAccountById = new Map(
+    bankAccounts.map((account) => [account.id, account]),
+  );
+
   const groups = new Map<string, DailyPaymentReportRow>();
   const details: DailyPaymentReportDetail[] = payments.map((payment) => {
     let allocatedAmount = 0;
@@ -211,8 +229,14 @@ export async function getDailyPaymentReport(
       feeNo: payment.tuitionFee.feeNo,
       paymentMethod: formatMethod(payment.paymentMethod),
       amount: Number(payment.amount),
-      bankName: payment.paymentBatch?.bankAccount?.bankName ?? null,
-      bankAccountNo: payment.paymentBatch?.bankAccount?.accountNo ?? null,
+      bankName:
+        bankAccountById.get(payment.bankAccountId ?? "")?.bankName ??
+        payment.paymentBatch?.bankAccount?.bankName ??
+        null,
+      bankAccountNo:
+        bankAccountById.get(payment.bankAccountId ?? "")?.accountNo ??
+        payment.paymentBatch?.bankAccount?.accountNo ??
+        null,
       bankTransactionNo: payment.bankTransactionNo,
       transactionReference: payment.transactionReference,
       paymentContent: payment.paymentContent,

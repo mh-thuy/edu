@@ -105,7 +105,7 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId:
     let itemY = y - 17;
     for (const item of allocation.items) {
       if (itemY < 220) {
-        page = pdf.addPage([595, 842]);
+        page = pdf.addPage(A5_PAGE_SIZE);
         draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 790, 15);
         draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
         itemY = 725;

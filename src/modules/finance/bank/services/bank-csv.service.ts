@@ -15,6 +15,17 @@ export type ParsedBankRow = {
   raw: string;
 };
 
+type ParsedBankRowError = {
+  rowNo: number;
+  message: string;
+};
+
+type ParsedBankRows = {
+  rows: ParsedBankRow[];
+  errors: ParsedBankRowError[];
+  totalRows: number;
+};
+
 type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "IGNORED" | "DUPLICATED";
 
 type ReconciliationTokenPayload = {
@@ -67,6 +78,7 @@ export type BankImportResult = {
   matchedRows: number;
   unmatchedRows: number;
   ignoredRows: number;
+  invalidRowErrors: ParsedBankRowError[];
   items: BankImportItem[];
 };
 
@@ -200,6 +212,8 @@ function parseExcelDate(value: unknown, text: string): Date {
 
 function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: number; columns: BidvTableColumns }) {
   const rows: ParsedBankRow[] = [];
+  const errors: ParsedBankRowError[] = [];
+  let totalRows = 0;
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber <= header.rowNumber) return;
     const dateCell = row.getCell(header.columns.date);
@@ -207,18 +221,26 @@ function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: numbe
     if (!dateText) return;
     const amountText = row.getCell(header.columns.amount).text.trim();
     if (!amountText) return;
-    rows.push({
-      rowNo: rowNumber,
-      transactionDate: parseExcelDate(dateCell.value, dateText),
-      description: row.getCell(header.columns.description).text.trim(),
-      amount: parseMoney(amountText),
-      balance: parseMoney(row.getCell(header.columns.balance).text),
-      transactionNo: row.getCell(header.columns.transactionNo).text.trim() || null,
-      raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
-    });
+    totalRows += 1;
+    try {
+      rows.push({
+        rowNo: rowNumber,
+        transactionDate: parseExcelDate(dateCell.value, dateText),
+        description: row.getCell(header.columns.description).text.trim(),
+        amount: parseMoney(amountText),
+        balance: parseMoney(row.getCell(header.columns.balance).text),
+        transactionNo: row.getCell(header.columns.transactionNo).text.trim() || null,
+        raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
+      });
+    } catch (error) {
+      errors.push({
+        rowNo: rowNumber,
+        message: error instanceof Error ? error.message : "Dòng sao kê không hợp lệ",
+      });
+    }
   });
-  if (!rows.length) throw new Error("File Excel BIDV không có dữ liệu giao dịch");
-  return rows;
+  if (!totalRows) throw new Error("File Excel BIDV không có dữ liệu giao dịch");
+  return { rows, errors, totalRows };
 }
 
 function findTechcombankTableHeader(worksheet: ExcelJS.Worksheet) {
@@ -249,6 +271,8 @@ function parseTechcombankTable(
   header: { rowNumber: number; columns: TechcombankTableColumns },
 ) {
   const rows: ParsedBankRow[] = [];
+  const errors: ParsedBankRowError[] = [];
+  let totalRows = 0;
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber <= header.rowNumber) return;
     const dateCell = row.getCell(header.columns.date);
@@ -258,30 +282,38 @@ function parseTechcombankTable(
     const debitText = row.getCell(header.columns.debit).text.trim();
     const creditText = row.getCell(header.columns.credit).text.trim();
     if (!debitText && !creditText) return;
-    const debit = debitText ? parseMoney(debitText) : new Prisma.Decimal(0);
-    const credit = creditText ? parseMoney(creditText) : new Prisma.Decimal(0);
-    if (debit.greaterThan(0) && credit.greaterThan(0)) {
-      throw new Error(`Dòng ${rowNumber} trong file Techcombank có cả ghi nợ và ghi có`);
+    totalRows += 1;
+    try {
+      const debit = debitText ? parseMoney(debitText) : new Prisma.Decimal(0);
+      const credit = creditText ? parseMoney(creditText) : new Prisma.Decimal(0);
+      if (debit.greaterThan(0) && credit.greaterThan(0)) {
+        throw new Error(`Dòng ${rowNumber} trong file Techcombank có cả ghi nợ và ghi có`);
+      }
+      const detail = row.getCell(header.columns.detail).text.trim();
+      const description = [row.getCell(header.columns.description).text.trim(), detail]
+        .filter(Boolean)
+        .join(" | ");
+      rows.push({
+        rowNo: rowNumber,
+        transactionDate: parseExcelDate(dateCell.value, dateText),
+        description,
+        amount: credit.greaterThan(0) ? credit : debit.mul(-1),
+        balance: parseMoney(row.getCell(header.columns.balance).text),
+        transactionNo: detail || null,
+        raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
+      });
+    } catch (error) {
+      errors.push({
+        rowNo: rowNumber,
+        message: error instanceof Error ? error.message : "Dòng sao kê không hợp lệ",
+      });
     }
-    const detail = row.getCell(header.columns.detail).text.trim();
-    const description = [row.getCell(header.columns.description).text.trim(), detail]
-      .filter(Boolean)
-      .join(" | ");
-    rows.push({
-      rowNo: rowNumber,
-      transactionDate: parseExcelDate(dateCell.value, dateText),
-      description,
-      amount: credit.greaterThan(0) ? credit : debit.mul(-1),
-      balance: parseMoney(row.getCell(header.columns.balance).text),
-      transactionNo: detail || null,
-      raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
-    });
   });
-  if (!rows.length) throw new Error("File Excel Techcombank không có dữ liệu giao dịch");
-  return rows;
+  if (!totalRows) throw new Error("File Excel Techcombank không có dữ liệu giao dịch");
+  return { rows, errors, totalRows };
 }
 
-export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRow[]> {
+export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRows> {
   const workbook = new ExcelJS.Workbook();
   const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(excelBuffer);
@@ -293,7 +325,7 @@ export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRow[]> {
   return parseBidvTable(worksheet, tableHeader);
 }
 
-export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankRow[]> {
+export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankRows> {
   const workbook = new ExcelJS.Workbook();
   const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(excelBuffer);
@@ -432,7 +464,8 @@ export async function importBankStatement(args: {
   });
   if (!bank) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
   if (!bank.isActive) throw new ConflictError("Tài khoản ngân hàng đã ngừng hoạt động");
-  const rows = await parseBankStatement(args.buffer, bank.bankCode);
+  const parsed = await parseBankStatement(args.buffer, bank.bankCode);
+  const { rows, errors: invalidRowErrors } = parsed;
 
   const rowHashes = rows.map((row) => getTransactionHashes(args.bankAccountId, row));
   const transactionHashes = rowHashes.map(({ transactionHash }) => transactionHash);
@@ -586,13 +619,14 @@ export async function importBankStatement(args: {
 
   const result = {
     fileName: args.fileName,
-    totalRows: rows.length,
+    totalRows: parsed.totalRows,
     validRows: rows.length,
-    invalidRows: 0,
+    invalidRows: invalidRowErrors.length,
     duplicatedRows,
     matchedRows,
     unmatchedRows,
     ignoredRows,
+    invalidRowErrors,
     items,
   };
   await prisma.tuitionAuditLog.create({
@@ -608,6 +642,7 @@ export async function importBankStatement(args: {
         unmatchedRows: result.unmatchedRows,
         duplicatedRows: result.duplicatedRows,
         ignoredRows: result.ignoredRows,
+        invalidRows: result.invalidRows,
       },
       performedBy: args.actorId,
     },

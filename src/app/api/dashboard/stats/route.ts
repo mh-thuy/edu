@@ -76,7 +76,15 @@ export async function GET(request: Request) {
             status: "ACTIVE",
           },
         }),
-        prisma.student.count({ where: { status: "ACTIVE" } }),
+        prisma.$queryRaw<Array<{ count: bigint }>>`
+          SELECT COUNT(DISTINCT cs.student_id)::bigint AS count
+          FROM class_students cs
+          JOIN classes c ON c.id = cs.class_id
+          JOIN students s ON s.id = cs.student_id
+          WHERE cs.status = 'ACTIVE'::enrollment_status
+            AND c.status = 'ACTIVE'::class_status
+            AND s.status = 'ACTIVE'::student_status
+        `.then((rows) => Number(rows[0]?.count ?? 0)),
         prisma.paymentBatch.count({ where: { status: "PENDING" } }),
       ]);
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);

@@ -59,18 +59,26 @@ async function assertScheduleRelations(
   ]);
 
   if (!classData) {
-    throw new Error("Không tìm thấy lớp học");
+    throw new NotFoundError("Không tìm thấy lớp học");
   }
 
-  if (classData.status === "CANCELLED" || classData.status === "COMPLETED") throw new Error("Không thể tạo lịch cho lớp đã kết thúc hoặc đã hủy");
+  if (classData.status === "CANCELLED" || classData.status === "COMPLETED") {
+    throw new ConflictError(
+      "Không thể tạo lịch cho lớp đã kết thúc hoặc đã hủy",
+    );
+  }
 
   if (!teacher) {
-    throw new Error("Không tìm thấy giáo viên");
+    throw new NotFoundError("Không tìm thấy giáo viên");
   }
-  if (teacher.status !== "ACTIVE") throw new Error("Giáo viên đã ngừng hoạt động");
-  if (!classSubject) throw new Error("Môn học không thuộc lớp hoặc đã ngừng mở");
+  if (teacher.status !== "ACTIVE") {
+    throw new ConflictError("Giáo viên đã ngừng hoạt động");
+  }
+  if (!classSubject) {
+    throw new ConflictError("Môn học không thuộc lớp hoặc đã ngừng mở");
+  }
   if (classSubject.subject.status !== "ACTIVE") {
-    throw new Error("Môn học đã ngừng hoạt động");
+    throw new ConflictError("Môn học đã ngừng hoạt động");
   }
   if (!classSubject.teacherId) {
     throw new ConflictError("Môn học chưa được phân công giáo viên");
@@ -188,6 +196,9 @@ export async function createClassSchedule(data: ClassScheduleCreate): Promise<{
   conflicts: ScheduleConflict[];
 }> {
   return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
+    );
     await lockScheduleResources(tx, data);
     await lockClassSubject(tx, data.classSubjectId);
     await assertScheduleRelations(data, tx);
@@ -311,6 +322,9 @@ export async function updateClassSchedule(
       throw new ConflictError("Giờ kết thúc phải sau giờ bắt đầu");
     }
 
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${merged.classId}`}))`,
+    );
     await lockScheduleResources(tx, merged);
     await lockClassSubject(tx, merged.classSubjectId);
     await assertScheduleRelations(merged, tx);

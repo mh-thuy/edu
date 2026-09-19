@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
-import type { Prisma, Student } from "@prisma/client";
+import { Prisma, type Student } from "@prisma/client";
 import type {
   StudentCreate,
   StudentFilter,
@@ -44,15 +44,28 @@ function buildStudentUpdateInput(data: StudentUpdate): Prisma.StudentUpdateInput
     }),
     ...(data.address !== undefined && { address: data.address || null }),
     ...(data.status !== undefined && { status: data.status }),
+    ...(data.status === "INACTIVE" && { deletedAt: new Date() }),
     ...(data.status === "ACTIVE" && { deletedAt: null }),
   };
 }
 
 export async function createStudent(data: StudentCreate): Promise<Student> {
-  const code = await generateStudentCode(prisma);
-  return prisma.student.create({
-    data: { ...buildStudentCreateInput(data), code },
-  });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = await generateStudentCode(prisma);
+    try {
+      return await prisma.student.create({
+        data: { ...buildStudentCreateInput(data), code },
+      });
+    } catch (error: unknown) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== "P2002"
+      ) {
+        throw error;
+      }
+    }
+  }
+  throw new ConflictError("Không thể tạo mã học viên tự động, vui lòng thử lại");
 }
 
 export async function getStudentById(id: string): Promise<StudentWithClasses | null> {
