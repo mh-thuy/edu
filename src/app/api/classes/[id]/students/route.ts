@@ -6,12 +6,12 @@ import { requireApiUser } from "@/lib/api-auth";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents, getClassStudentsPage } from "@/modules/class/services/class.service";
 
 const assignStudentRequestSchema = z.object({
-  studentId: z.string().min(1, "studentId is required"),
+  studentId: z.string().uuid("studentId không hợp lệ"),
   classSubjectIds: z.array(z.string().uuid()).min(1, "Hãy chọn ít nhất một môn học"),
 });
 
 const removeStudentRequestSchema = z.object({
-  studentId: z.string().min(1, "studentId is required"),
+  studentId: z.string().uuid("studentId không hợp lệ"),
   force: z.boolean().optional(),
   reason: z.string().trim().max(500).optional(),
 }).superRefine((data, ctx) => {
@@ -31,7 +31,7 @@ type Params = Promise<{
 async function getClassId(context: { params?: Params }) {
   const routeParams = await context.params;
   if (!routeParams?.id) throw new BadRequestError("CLASS_ID_REQUIRED");
-  return routeParams.id;
+  return z.string().uuid("Mã lớp học không hợp lệ").parse(routeParams.id);
 }
 
 export async function GET(_request: NextRequest, context: { params?: Params }) {

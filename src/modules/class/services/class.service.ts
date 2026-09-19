@@ -1363,14 +1363,18 @@ export async function getClassStudentsPage(
     startMonth: { lte: period.end },
     endMonth: { gte: period.start },
   };
+  const activeInPeriod: Prisma.ClassStudentWhereInput = {
+    status: "ACTIVE",
+    currentPeriodStart: { lte: period.end },
+  };
   const statusWhere: Prisma.ClassStudentWhereInput =
     options.status === "COMPLETED"
       ? { status: "COMPLETED" }
       : options.status === "PAUSED"
-        ? { status: "ACTIVE", pauses: { some: pauseWhere } }
+        ? { ...activeInPeriod, pauses: { some: pauseWhere } }
         : options.status === "ACTIVE"
-          ? { status: "ACTIVE", pauses: { none: pauseWhere } }
-          : { status: { in: ["ACTIVE", "COMPLETED"] } };
+          ? { ...activeInPeriod, pauses: { none: pauseWhere } }
+          : { OR: [activeInPeriod, { status: "COMPLETED" }] };
   const where: Prisma.ClassStudentWhereInput = {
     classId,
     ...statusWhere,
@@ -1436,7 +1440,14 @@ export async function getClassStudentsPage(
     }),
     prisma.classStudent.count({ where }),
     prisma.classStudent.count({ where: activeWhere }),
-    prisma.classStudent.count({ where: { classId, status: "ACTIVE", pauses: { some: pauseWhere } } }),
+    prisma.classStudent.count({
+      where: {
+        classId,
+        status: "ACTIVE",
+        currentPeriodStart: { lte: period.end },
+        pauses: { some: pauseWhere },
+      },
+    }),
     prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
     prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count
