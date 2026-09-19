@@ -138,13 +138,10 @@ export async function createPaymentRefund(
   return transaction ? execute(transaction) : prisma.$transaction(execute);
 }
 
-async function getRefundWithPayment(
+async function findRefundWithPayment(
   tx: Prisma.TransactionClient,
   refundId: string,
 ) {
-  await tx.$executeRaw(
-    Prisma.sql`SELECT id FROM payment_refunds WHERE id = ${refundId}::uuid FOR UPDATE`,
-  );
   const refund = await tx.paymentRefund.findUnique({
     where: { id: refundId },
     include: { payment: { include: { tuitionFee: true, paymentBatch: true } } },
@@ -153,15 +150,74 @@ async function getRefundWithPayment(
   return refund;
 }
 
+async function lockRefund(tx: Prisma.TransactionClient, refundId: string) {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM payment_refunds WHERE id = ${refundId}::uuid FOR UPDATE`,
+  );
+}
+
 async function getRefundGroup(
   tx: Prisma.TransactionClient,
   refundId: string,
 ) {
-  const refund = await getRefundWithPayment(tx, refundId);
+  const initialRefund = await findRefundWithPayment(tx, refundId);
+  const paymentBatchId = initialRefund.payment.paymentBatchId;
+
+  if (!paymentBatchId) {
+    // Receipt cancellation uses payment -> refund lock order. Keep the same
+    // order here so approval cannot race a receipt cancellation.
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${initialRefund.paymentId}::uuid FOR UPDATE`,
+    );
+    await lockRefund(tx, refundId);
+    const refund = await findRefundWithPayment(tx, refundId);
+    return [refund];
+  }
+
+  const paymentRows = await tx.tuitionPayment.findMany({
+    where: { paymentBatchId },
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
+  if (!paymentRows.length) {
+    throw new ConflictError("Payment batch không có payment");
+  }
+  for (const payment of paymentRows) {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${payment.id}::uuid FOR UPDATE`,
+    );
+  }
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM payment_batches WHERE id = ${paymentBatchId}::uuid FOR UPDATE`,
+  );
+  await lockRefund(tx, refundId);
+  const refund = await findRefundWithPayment(tx, refundId);
   if (!refund.payment.paymentBatchId) return [refund];
-  return tx.paymentRefund.findMany({
+  if (
+    refund.status === TuitionRefundStatus.REJECTED ||
+    refund.status === TuitionRefundStatus.CANCELLED
+  ) {
+    return [refund];
+  }
+  const batch = await tx.paymentBatch.findUnique({
+    where: { id: paymentBatchId },
+    select: { status: true },
+  });
+  if (!batch || batch.status !== PaymentBatchStatus.SUCCESS) {
+    throw new ConflictError("Payment batch không còn ở trạng thái thành công");
+  }
+
+  const payments = await tx.tuitionPayment.findMany({
+    where: { paymentBatchId },
+    select: { id: true, paymentStatus: true },
+  });
+  if (payments.some((payment) => payment.paymentStatus !== TuitionPaymentStatus.SUCCESS)) {
+    throw new ConflictError("Payment batch không còn nhất quán để hoàn tiền");
+  }
+
+  const refunds = await tx.paymentRefund.findMany({
     where: {
-      payment: { paymentBatchId: refund.payment.paymentBatchId },
+      payment: { paymentBatchId },
       status: {
         notIn: [TuitionRefundStatus.REJECTED, TuitionRefundStatus.CANCELLED],
       },
@@ -169,6 +225,16 @@ async function getRefundGroup(
     include: { payment: { include: { tuitionFee: true, paymentBatch: true } } },
     orderBy: { createdAt: "asc" },
   });
+  const refundPaymentIds = new Set(refunds.map((item) => item.paymentId));
+  if (
+    refunds.length !== payments.length ||
+    payments.some((payment) => !refundPaymentIds.has(payment.id))
+  ) {
+    throw new ConflictError(
+      "Yêu cầu hoàn tiền của payment batch chưa bao phủ toàn bộ payment",
+    );
+  }
+  return refunds;
 }
 
 export async function approvePaymentRefund(refundId: string, actorId: string) {

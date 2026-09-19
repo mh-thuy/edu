@@ -1396,6 +1396,7 @@ export async function getClassStudentsPage(
   const activeWhere: Prisma.ClassStudentWhereInput = {
     classId,
     status: "ACTIVE",
+    currentPeriodStart: { lte: period.end },
     pauses: { none: pauseWhere },
   };
   const nextPeriodStart = new Date(Date.UTC(period.year, period.month, 1));

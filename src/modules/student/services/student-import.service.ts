@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ConflictError } from "@/lib/errors";
+import { BadRequestError, ConflictError } from "@/lib/errors";
 import { generateStudentCode } from "@/modules/student/services/student.service";
 
 type CsvDelimiter = "," | ";" | "\t";
@@ -152,7 +152,7 @@ function getHeaderMapping(columns: string[]) {
 
 function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: StudentImportResult["errors"] } {
   const lines = decodeCsv(buffer).split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length === 0) throw new Error("File CSV không có dữ liệu");
+  if (lines.length === 0) throw new BadRequestError("File CSV không có dữ liệu");
 
   const delimiter = detectDelimiter(lines[0]!);
   const rows: ParsedStudentRow[] = [];
@@ -219,7 +219,7 @@ function parseStudentCsv(buffer: Buffer): { rows: ParsedStudentRow[]; errors: St
   });
 
   if (rows.length === 0 && errors.length === 0) {
-    throw new Error("File CSV không có dữ liệu học viên");
+    throw new BadRequestError("File CSV không có dữ liệu học viên");
   }
 
   return { rows, errors };

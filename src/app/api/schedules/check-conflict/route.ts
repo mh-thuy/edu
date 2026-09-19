@@ -6,12 +6,12 @@ import { getScheduleConflicts } from "@/modules/schedule/services/schedule.servi
 
 const checkScheduleConflictSchema = z
   .object({
-    teacherId: z.string().min(1, "teacherId is invalid").optional(),
-    classId: z.string().min(1, "classId is invalid").optional(),
+    teacherId: z.string().uuid("teacherId is invalid").optional(),
+    classId: z.string().uuid("classId is invalid").optional(),
     dayOfWeek: z.number().int().min(0).max(6),
     startMinute: z.number().int().min(0).max(1439),
     endMinute: z.number().int().min(0).max(1439),
-    excludeScheduleId: z.string().optional(),
+    excludeScheduleId: z.string().uuid().optional(),
   })
   .refine((data) => Boolean(data.teacherId), {
     message: "teacherId là bắt buộc",

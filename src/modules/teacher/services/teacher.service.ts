@@ -19,6 +19,7 @@ function buildTeacherCreateInput(
     specialty: data.specialty || null,
     commissionPercent: data.commissionPercent,
     status: data.status,
+    deletedAt: data.status === "INACTIVE" ? new Date() : null,
   };
 }
 

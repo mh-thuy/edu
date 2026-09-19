@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { BadRequestError } from "@/lib/errors";
 import { requireApiUser } from "@/lib/api-auth";
 import { classSubjectUpdateSchema } from "@/modules/class/schemas/class-subject.schema";
 import { removeClassSubject, updateClassSubject } from "@/modules/class/services/class.service";
@@ -8,7 +9,7 @@ type Params = Promise<{ id: string; subjectId: string }>;
 
 async function getIds(context: { params?: Params }) {
   const params = await context.params;
-  if (!params?.id || !params.subjectId) throw new Error("CLASS_SUBJECT_IDS_REQUIRED");
+  if (!params?.id || !params.subjectId) throw new BadRequestError("CLASS_SUBJECT_IDS_REQUIRED");
   return params;
 }
 

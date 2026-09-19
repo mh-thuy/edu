@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { importStudentsCsv } from "@/modules/student/services/student-import.service";
+import { BadRequestError } from "@/lib/errors";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      throw new Error("Vui lòng chọn file CSV");
+      throw new BadRequestError("Vui lòng chọn file CSV");
     }
 
     const result = await importStudentsCsv(Buffer.from(await file.arrayBuffer()));

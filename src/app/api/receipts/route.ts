@@ -10,11 +10,22 @@ export async function GET(request: Request) {
     if (user instanceof Response) return user;
 
     const params = new URL(request.url).searchParams;
-    const page = Math.max(Number(params.get("page") || 1), 1);
-    const pageSize = Math.min(Math.max(Number(params.get("pageSize") || 20), 1), 100);
+    const rawPage = params.get("page");
+    const rawPageSize = params.get("pageSize");
+    const page = rawPage ? Number(rawPage) : 1;
+    const pageSize = rawPageSize ? Number(rawPageSize) : 20;
+    if (!Number.isInteger(page) || page < 1) {
+      return apiError("VALIDATION_ERROR", "Trang không hợp lệ", 422);
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      return apiError("VALIDATION_ERROR", "Kích thước trang không hợp lệ", 422);
+    }
     const search = params.get("search")?.trim();
     const rawStatus = params.get("status");
-    const status = rawStatus && Object.values(ReceiptStatus).includes(rawStatus as ReceiptStatus) ? rawStatus as ReceiptStatus : undefined;
+    if (rawStatus && !Object.values(ReceiptStatus).includes(rawStatus as ReceiptStatus)) {
+      return apiError("VALIDATION_ERROR", "Trạng thái biên lai không hợp lệ", 422);
+    }
+    const status = rawStatus ? rawStatus as ReceiptStatus : undefined;
     const dateFrom = params.get("dateFrom");
     const dateTo = params.get("dateTo");
     const issuedAt: { gte?: Date; lt?: Date } = {};

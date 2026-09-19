@@ -1,7 +1,7 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
-import { PaymentBatchStatus } from "@prisma/client";
+import { PaymentBatchStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
@@ -18,7 +18,52 @@ export async function generatePaymentBatchNoticePdf(
   exportedByName: string,
   exportedById: string,
 ) {
-  const batch = await prisma.paymentBatch.findUnique({
+  const data = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+    );
+    return loadPaymentBatchNoticeData(tx, batchId);
+  });
+
+  const pdf = await renderPaymentBatchNoticePdf(data, exportedByName);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+    );
+    const current = await tx.paymentBatch.findUnique({
+      where: { id: batchId },
+      select: { status: true },
+    });
+    if (!current) throw new NotFoundError("Không tìm thấy đợt thanh toán");
+    if (current.status !== PaymentBatchStatus.PENDING) {
+      throw new ConflictError(
+        "Chỉ có thể xuất thông báo cho đợt thanh toán đang chờ đối soát",
+      );
+    }
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "PAYMENT_BATCH",
+        entityId: batchId,
+        action: "NOTICE_PRINTED",
+        dataAfter: {
+          batchNo: data.batch.batchNo,
+          snapshotUsed: Boolean(data.snapshot),
+          bankAccountSnapshotUsed: Boolean(data.snapshot?.bankAccount),
+        },
+        performedBy: exportedById,
+      },
+    });
+  });
+
+  return { pdf, batchNo: data.batch.batchNo };
+}
+
+async function loadPaymentBatchNoticeData(
+  client: Prisma.TransactionClient,
+  batchId: string,
+) {
+  const batch = await client.paymentBatch.findUnique({
     where: { id: batchId },
     include: {
       student: true,
@@ -50,7 +95,7 @@ export async function generatePaymentBatchNoticePdf(
     );
   }
 
-  const accountRecord = await prisma.bankAccount.findUnique({
+  const accountRecord = await client.bankAccount.findUnique({
     where: { id: batch.bankAccountId },
   });
   if (!accountRecord) {
@@ -58,7 +103,7 @@ export async function generatePaymentBatchNoticePdf(
       "Tài khoản ngân hàng của đợt thanh toán không còn tồn tại",
     );
   }
-  const snapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id));
+  const snapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id, client));
   const account = snapshot?.bankAccount ?? accountRecord;
   const student = snapshot?.student ?? batch.student;
   const fees = snapshot?.fees ?? batch.allocations.map((allocation) => ({
@@ -73,6 +118,15 @@ export async function generatePaymentBatchNoticePdf(
     discountAmount: allocation.tuitionFee.discountAmount.toString(),
     additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
   }));
+
+  return { batch, accountRecord, account, student, fees, snapshot };
+}
+
+async function renderPaymentBatchNoticePdf(
+  data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
+  exportedByName: string,
+) {
+  const { batch, accountRecord, account, student, fees } = data;
   const qrUrl = accountRecord.isActive
     ? buildVietQrUrl({
         bankCode: account.bankCode,
@@ -197,18 +251,5 @@ export async function generatePaymentBatchNoticePdf(
     muted,
   );
   const pdfBuffer = Buffer.from(await pdf.save());
-  await prisma.tuitionAuditLog.create({
-    data: {
-      entityType: "PAYMENT_BATCH",
-      entityId: batch.id,
-      action: "NOTICE_PRINTED",
-      dataAfter: {
-        batchNo: batch.batchNo,
-        snapshotUsed: Boolean(snapshot),
-        bankAccountSnapshotUsed: Boolean(snapshot?.bankAccount),
-      },
-      performedBy: exportedById,
-    },
-  });
-  return { pdf: pdfBuffer, batchNo: batch.batchNo };
+  return pdfBuffer;
 }

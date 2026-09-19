@@ -17,6 +17,7 @@ function buildStudentCreateInput(data: StudentCreate): Prisma.StudentCreateInput
     parentName: data.parentName || null,
     address: data.address || null,
     status: data.status,
+    deletedAt: data.status === "INACTIVE" ? new Date() : null,
   };
 }
 

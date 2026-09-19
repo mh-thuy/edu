@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { requireApiUser } from "@/lib/api-auth";
 import { classScheduleUpdateSchema } from "@/modules/schedule/schemas/schedule.schema";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { BadRequestError } from "@/lib/errors";
 import {
   getClassScheduleById,
   updateClassSchedule,
@@ -13,7 +14,7 @@ type Params = Promise<{ id: string }>;
 
 async function getScheduleId(context: { params?: Params }) {
   const routeParams = await context.params;
-  if (!routeParams?.id) throw new Error("SCHEDULE_ID_REQUIRED");
+  if (!routeParams?.id) throw new BadRequestError("SCHEDULE_ID_REQUIRED");
   return routeParams.id;
 }
 

@@ -723,46 +723,50 @@ export async function convertPaymentBatchToCash(
 }
 
 export async function getPaymentBatchQr(batchId: string, actorId: string) {
-  const batch = await prisma.paymentBatch.findUnique({
-    where: { id: batchId },
-    include: { student: true },
-  });
-  if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
-  if (batch.status !== PaymentBatchStatus.PENDING)
-    throw new ConflictError("Đợt thanh toán không còn hiệu lực");
-  if (batch.paymentMethod !== "BANK_TRANSFER")
-    throw new ConflictError("Chỉ payment batch chuyển khoản mới có mã QR");
-  if (!batch.bankAccountId)
-    throw new ConflictError("Đợt thanh toán chưa gắn tài khoản ngân hàng");
-  const account = await prisma.bankAccount.findFirst({
-    where: { id: batch.bankAccountId, isActive: true },
-  });
-  if (!account)
-    throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
-  const qrUrl = buildVietQrUrl({
-    bankCode: account.bankCode,
-    accountNo: account.accountNo,
-    accountName: account.accountName,
-    amount: Number(batch.totalAmount),
-    addInfo: `PB ${batch.batchNo}`,
-  });
-  await prisma.tuitionAuditLog.create({
-    data: {
-      entityType: "PAYMENT_BATCH",
-      entityId: batch.id,
-      action: "QR_GENERATED",
-      dataAfter: {
-        batchNo: batch.batchNo,
-        amount: batch.totalAmount.toString(),
-        bankAccountId: account.id,
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+    );
+    const batch = await tx.paymentBatch.findUnique({
+      where: { id: batchId },
+    });
+    if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
+    if (batch.status !== PaymentBatchStatus.PENDING)
+      throw new ConflictError("Đợt thanh toán không còn hiệu lực");
+    if (batch.paymentMethod !== "BANK_TRANSFER")
+      throw new ConflictError("Chỉ payment batch chuyển khoản mới có mã QR");
+    if (!batch.bankAccountId)
+      throw new ConflictError("Đợt thanh toán chưa gắn tài khoản ngân hàng");
+    const account = await tx.bankAccount.findFirst({
+      where: { id: batch.bankAccountId, isActive: true },
+    });
+    if (!account)
+      throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
+    const qrUrl = buildVietQrUrl({
+      bankCode: account.bankCode,
+      accountNo: account.accountNo,
+      accountName: account.accountName,
+      amount: Number(batch.totalAmount),
+      addInfo: `PB ${batch.batchNo}`,
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "PAYMENT_BATCH",
+        entityId: batch.id,
+        action: "QR_GENERATED",
+        dataAfter: {
+          batchNo: batch.batchNo,
+          amount: batch.totalAmount.toString(),
+          bankAccountId: account.id,
+        },
+        performedBy: actorId,
       },
-      performedBy: actorId,
-    },
+    });
+    return {
+      batchNo: batch.batchNo,
+      amount: batch.totalAmount,
+      account,
+      qrUrl,
+    };
   });
-  return {
-    batchNo: batch.batchNo,
-    amount: batch.totalAmount,
-    account,
-    qrUrl,
-  };
 }

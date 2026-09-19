@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import ExcelJS from "exceljs";
 import { Prisma, PaymentBatchStatus, TuitionPaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "@/lib/errors";
 import { completePaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
 
 export type ParsedBankRow = {
@@ -12,6 +12,7 @@ export type ParsedBankRow = {
   amount: Prisma.Decimal;
   balance: Prisma.Decimal | null;
   transactionNo: string | null;
+  transactionNoIsExplicit?: boolean;
   raw: string;
 };
 
@@ -230,6 +231,7 @@ function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: numbe
         amount: parseMoney(amountText),
         balance: parseMoney(row.getCell(header.columns.balance).text),
         transactionNo: row.getCell(header.columns.transactionNo).text.trim() || null,
+        transactionNoIsExplicit: true,
         raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
       });
     } catch (error) {
@@ -239,7 +241,7 @@ function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: numbe
       });
     }
   });
-  if (!totalRows) throw new Error("File Excel BIDV không có dữ liệu giao dịch");
+  if (!totalRows) throw new BadRequestError("File Excel BIDV không có dữ liệu giao dịch");
   return { rows, errors, totalRows };
 }
 
@@ -299,7 +301,9 @@ function parseTechcombankTable(
         description,
         amount: credit.greaterThan(0) ? credit : debit.mul(-1),
         balance: parseMoney(row.getCell(header.columns.balance).text),
+        // Techcombank's CHI TIET is narrative content, not a transaction ID.
         transactionNo: detail || null,
+        transactionNoIsExplicit: false,
         raw: Array.from({ length: row.cellCount }, (_, index) => row.getCell(index + 1).text).join("|"),
       });
     } catch (error) {
@@ -309,7 +313,7 @@ function parseTechcombankTable(
       });
     }
   });
-  if (!totalRows) throw new Error("File Excel Techcombank không có dữ liệu giao dịch");
+  if (!totalRows) throw new BadRequestError("File Excel Techcombank không có dữ liệu giao dịch");
   return { rows, errors, totalRows };
 }
 
@@ -318,10 +322,10 @@ export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRows> {
   const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(excelBuffer);
   const worksheet = workbook.worksheets[0];
-  if (!worksheet) throw new Error("File Excel BIDV không có worksheet");
+  if (!worksheet) throw new BadRequestError("File Excel BIDV không có worksheet");
 
   const tableHeader = findBidvTableHeader(worksheet);
-  if (!tableHeader) throw new Error("File Excel BIDV không đúng format bảng hiện tại");
+  if (!tableHeader) throw new BadRequestError("File Excel BIDV không đúng format bảng hiện tại");
   return parseBidvTable(worksheet, tableHeader);
 }
 
@@ -330,9 +334,9 @@ export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankR
   const excelBuffer = buffer as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(excelBuffer);
   const worksheet = workbook.worksheets[0];
-  if (!worksheet) throw new Error("File Excel Techcombank không có worksheet");
+  if (!worksheet) throw new BadRequestError("File Excel Techcombank không có worksheet");
   const tableHeader = findTechcombankTableHeader(worksheet);
-  if (!tableHeader) throw new Error("Không tìm thấy bảng giao dịch trong file Excel Techcombank");
+  if (!tableHeader) throw new BadRequestError("Không tìm thấy bảng giao dịch trong file Excel Techcombank");
   return parseTechcombankTable(worksheet, tableHeader);
 }
 
@@ -356,12 +360,27 @@ function normalizeBatchReference(value: string) {
   return normalize(value).replace(/[^a-z0-9]/g, "");
 }
 
+function getBankTransactionNo(row: ParsedBankRow) {
+  return row.transactionNoIsExplicit === false ? null : row.transactionNo?.trim() || null;
+}
+
+function hashTransactionIdentity(identity: string) {
+  return crypto.createHash("sha256").update(identity).digest("hex");
+}
+
 function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
-  const identity = row.transactionNo?.trim()
-    ? `${bankAccountId}:transaction-no:${row.transactionNo.trim()}`
+  const transactionNo = getBankTransactionNo(row);
+  const identity = transactionNo
+    ? `${bankAccountId}:transaction-no:${transactionNo}`
     : `${bankAccountId}:row:${row.raw}`;
-  const transactionHash = crypto.createHash("sha256").update(identity).digest("hex");
-  return { transactionHash };
+  const transactionHash = hashTransactionIdentity(identity);
+  // Preserve duplicate protection for TCB rows imported before CHI TIET was
+  // correctly treated as narrative rather than as a transaction number.
+  const legacyTransactionHash =
+    row.transactionNoIsExplicit === false && row.transactionNo?.trim()
+      ? hashTransactionIdentity(`${bankAccountId}:transaction-no:${row.transactionNo.trim()}`)
+      : null;
+  return { transactionHash, legacyTransactionHash };
 }
 
 function getTokenSecret() {
@@ -429,7 +448,7 @@ function createTokenPayload(
     transactionHash,
     rowNo: row.rowNo,
     transactionDate: row.transactionDate.toISOString(),
-    bankTransactionNo: row.transactionNo,
+    bankTransactionNo: getBankTransactionNo(row),
     description: row.description,
     creditAmount: row.amount.toString(),
     debitAmount: row.amount.isNegative() ? row.amount.abs().toString() : "0",
@@ -468,9 +487,12 @@ export async function importBankStatement(args: {
   const { rows, errors: invalidRowErrors } = parsed;
 
   const rowHashes = rows.map((row) => getTransactionHashes(args.bankAccountId, row));
-  const transactionHashes = rowHashes.map(({ transactionHash }) => transactionHash);
+  const transactionHashes = rowHashes.flatMap(({ transactionHash, legacyTransactionHash }) => [
+    transactionHash,
+    ...(legacyTransactionHash ? [legacyTransactionHash] : []),
+  ]);
   const transactionNumbers = rows
-    .map((row) => row.transactionNo?.trim())
+    .map((row) => getBankTransactionNo(row))
     .filter((value): value is string => Boolean(value));
   const existingPayments = await prisma.tuitionPayment.findMany({
     where: {
@@ -544,7 +566,7 @@ export async function importBankStatement(args: {
 
   for (const [index, row] of rows.entries()) {
     const { transactionHash } = rowHashes[index]!;
-    const transactionNumber = row.transactionNo?.trim() || null;
+    const transactionNumber = getBankTransactionNo(row);
     const isCredit = row.amount.greaterThan(0);
     const baseItem = {
       confirmationToken: createConfirmationToken(
@@ -563,6 +585,8 @@ export async function importBankStatement(args: {
     };
     if (
       importedHashes.has(transactionHash) ||
+      (rowHashes[index]!.legacyTransactionHash !== null &&
+        importedHashes.has(rowHashes[index]!.legacyTransactionHash)) ||
       existingReferences.has(transactionHash) ||
       (transactionNumber !== null && existingReferences.has(transactionNumber))
     ) {

@@ -484,16 +484,25 @@ export class TuitionService {
             billingMonth: period.billingMonth,
             billingType: TuitionFeeBillingType.MONTHLY,
           },
-          select: { id: true },
+          select: {
+            id: true,
+            items: { select: { id: true } },
+          },
         });
-        await TuitionService.createFromEnrollment(
+        const result = await TuitionService.createFromEnrollment(
           { classId, studentId: enrollment.studentId, ...period },
           actorId,
           tx,
           { allowExistingComplete: true },
         );
-        if (existingFee) skipped += 1;
-        else created += 1;
+        if (
+          existingFee &&
+          result.items.length === existingFee.items.length
+        ) {
+          skipped += 1;
+        } else {
+          created += 1;
+        }
       }
       return { created, skipped };
     };

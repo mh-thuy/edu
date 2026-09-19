@@ -1,6 +1,7 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import {
@@ -14,7 +15,36 @@ const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
 export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId: string) {
-  const receipt = await prisma.paymentBatchReceipt.findUnique({
+  const receiptRef = await prisma.paymentBatchReceipt.findUnique({
+    where: { id: receiptId },
+    select: { paymentBatchId: true },
+  });
+  if (!receiptRef) throw new NotFoundError("Không tìm thấy biên lai tổng");
+
+  return prisma.$transaction(async (tx) => {
+    const paymentRows = await tx.tuitionPayment.findMany({
+      where: { paymentBatchId: receiptRef.paymentBatchId },
+      select: { id: true },
+      orderBy: { id: "asc" },
+    });
+    for (const payment of paymentRows) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${payment.id}::uuid FOR UPDATE`,
+      );
+    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${receiptRef.paymentBatchId}::uuid FOR UPDATE`,
+    );
+    return generatePaymentBatchReceiptPdfWithClient(tx, receiptId, actorId);
+  });
+}
+
+async function generatePaymentBatchReceiptPdfWithClient(
+  client: Prisma.TransactionClient,
+  receiptId: string,
+  actorId: string,
+) {
+  const receipt = await client.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
     include: {
       paymentBatch: {
@@ -42,7 +72,7 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId:
     throw new ConflictError("Biên lai tổng đã bị hủy và không thể xuất PDF");
   }
   const snapshot = parseBatchReceiptSnapshot(
-    await getPaymentBatchReceiptSnapshot(receipt.id),
+    await getPaymentBatchReceiptSnapshot(receipt.id, client),
   );
   if (snapshot?.status === "CANCELLED") {
     throw new ConflictError("Biên lai tổng đã được hủy và không thể xuất PDF");
@@ -149,7 +179,7 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId:
     9,
   );
   const pdfBuffer = Buffer.from(await pdf.save());
-  await prisma.tuitionAuditLog.create({
+  await client.tuitionAuditLog.create({
     data: {
       entityType: "PAYMENT_BATCH",
       entityId: receipt.paymentBatchId,

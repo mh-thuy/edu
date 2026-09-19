@@ -33,9 +33,9 @@ export const classScheduleUpdateSchema = requiredClassScheduleSchema
   );
 
 export const scheduleFilterSchema = z.object({
-  classId: z.string().optional(),
+  classId: z.string().uuid().optional(),
   classSubjectId: z.string().uuid().optional(),
-  dayOfWeek: z.number().optional(),
+  dayOfWeek: z.number().int().min(0).max(6).optional(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(20),
 });

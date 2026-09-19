@@ -28,6 +28,56 @@ export async function createClassPaymentBatches(
       throw new ConflictError("Tài khoản nhận tiền không hoạt động hoặc không tồn tại");
     }
 
+    const existingPendingBatches = await tx.paymentBatch.findMany({
+      where: {
+        status: PaymentBatchStatus.PENDING,
+        allocations: {
+          some: {
+            tuitionFee: {
+              classId,
+              billingYear: period.billingYear,
+              billingMonth: period.billingMonth,
+              billingType: TuitionFeeBillingType.MONTHLY,
+            },
+          },
+        },
+      },
+      select: {
+        batchNo: true,
+        paymentMethod: true,
+        bankAccountId: true,
+        allocations: {
+          select: {
+            tuitionFee: {
+              select: {
+                classId: true,
+                billingYear: true,
+                billingMonth: true,
+                billingType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    const incompatibleBatch = existingPendingBatches.find(
+      (batch) =>
+        batch.paymentMethod !== "BANK_TRANSFER" ||
+        batch.bankAccountId !== bankAccount.id ||
+        batch.allocations.some(
+          ({ tuitionFee }) =>
+            tuitionFee.classId !== classId ||
+            tuitionFee.billingYear !== period.billingYear ||
+            tuitionFee.billingMonth !== period.billingMonth ||
+            tuitionFee.billingType !== TuitionFeeBillingType.MONTHLY,
+        ),
+    );
+    if (incompatibleBatch) {
+      throw new ConflictError(
+        `Đợt ${incompatibleBatch.batchNo} đã chờ xử lý nhưng không phù hợp với tài khoản, phương thức hoặc phạm vi lớp/kỳ đang chọn`,
+      );
+    }
+
     const fees = await tx.tuitionFee.findMany({
     where: {
       classId,
@@ -89,6 +139,7 @@ export async function generateClassTuitionNoticePdf(
   const batches = await prisma.paymentBatch.findMany({
     where: {
       status: PaymentBatchStatus.PENDING,
+      paymentMethod: "BANK_TRANSFER",
       allocations: {
         every: {
           tuitionFee: {

@@ -3,14 +3,15 @@ import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { bankStatementImportSchema } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
 import { importBankStatement } from "@/modules/finance/bank/services/bank-csv.service";
+import { BadRequestError } from "@/lib/errors";
 
 export async function POST(request: NextRequest) {
   try {
     const user = await requireApiUser(); if (user instanceof Response) return user;
     const form = await request.formData();
     const file = form.get("file");
-    if (!(file instanceof File) || file.size === 0) throw new Error("File Excel sao kê là bắt buộc");
-    if (!file.name.toLowerCase().endsWith(".xlsx")) throw new Error("File sao kê phải là .xlsx");
+    if (!(file instanceof File) || file.size === 0) throw new BadRequestError("File Excel sao kê là bắt buộc");
+    if (!file.name.toLowerCase().endsWith(".xlsx")) throw new BadRequestError("File sao kê phải là .xlsx");
     const { bankAccountId } = bankStatementImportSchema.parse({
       bankAccountId: String(form.get("bankAccountId") || ""),
     });

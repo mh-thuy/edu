@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { ConflictError, NotFoundError } from "@/lib/errors";
+import { BadRequestError, ConflictError, NotFoundError } from "@/lib/errors";
 import { serializeDecimals } from "@/lib/decimal";
 import { Prisma } from "@prisma/client";
 
@@ -72,6 +72,10 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
     return apiError("NOT_FOUND", error.message, 404);
   }
 
+  if (error instanceof BadRequestError) {
+    return apiError("BAD_REQUEST", error.message, 400);
+  }
+
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     console.error("Prisma error:", error.code, error.meta);
     switch (error.code) {
@@ -85,6 +89,6 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
     }
   }
 
-  const message = error instanceof Error ? error.message : fallback;
-  return apiError("BAD_REQUEST", message, 400);
+  console.error("Unhandled API error:", error);
+  return apiError("INTERNAL_ERROR", fallback, 500);
 }

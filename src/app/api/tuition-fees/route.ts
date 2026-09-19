@@ -10,9 +10,15 @@ export async function GET(request: NextRequest) {
     const user = await requireApiUser(); if (user instanceof Response) return user;
     const params = request.nextUrl.searchParams;
     const rawStatus = params.get("status");
-    const status = rawStatus && Object.values(TuitionFeeStatus).includes(rawStatus as TuitionFeeStatus) ? rawStatus as TuitionFeeStatus : undefined;
+    if (rawStatus && !Object.values(TuitionFeeStatus).includes(rawStatus as TuitionFeeStatus)) {
+      return apiError("VALIDATION_ERROR", "Trạng thái học phí không hợp lệ", 422);
+    }
+    const status = rawStatus ? rawStatus as TuitionFeeStatus : undefined;
     const rawBillingType = params.get("billingType");
-    const billingType = rawBillingType && Object.values(TuitionFeeBillingType).includes(rawBillingType as TuitionFeeBillingType) ? rawBillingType as TuitionFeeBillingType : undefined;
+    if (rawBillingType && !Object.values(TuitionFeeBillingType).includes(rawBillingType as TuitionFeeBillingType)) {
+      return apiError("VALIDATION_ERROR", "Loại học phí không hợp lệ", 422);
+    }
+    const billingType = rawBillingType ? rawBillingType as TuitionFeeBillingType : undefined;
     const rawMonth = params.get("month");
     const month = rawMonth ? z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).safeParse(rawMonth) : null;
     if (rawMonth && (!month || !month.success)) return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);

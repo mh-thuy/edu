@@ -150,22 +150,22 @@ export function parseBatchReceiptSnapshot(value: unknown): BatchReceiptSnapshot 
 
 type DbClient = typeof prisma | PrismaTypes.TransactionClient;
 
-export async function getTuitionReceiptSnapshot(receiptId: string) {
-  const rows = await prisma.$queryRaw<Array<{ snapshot: unknown }>>(
+export async function getTuitionReceiptSnapshot(receiptId: string, client: DbClient = prisma) {
+  const rows = await client.$queryRaw<Array<{ snapshot: unknown }>>(
     Prisma.sql`SELECT snapshot FROM tuition_receipts WHERE id = ${receiptId}::uuid`,
   );
   return rows[0]?.snapshot ?? null;
 }
 
-export async function getPaymentBatchReceiptSnapshot(receiptId: string) {
-  const rows = await prisma.$queryRaw<Array<{ snapshot: unknown }>>(
+export async function getPaymentBatchReceiptSnapshot(receiptId: string, client: DbClient = prisma) {
+  const rows = await client.$queryRaw<Array<{ snapshot: unknown }>>(
     Prisma.sql`SELECT snapshot FROM payment_batch_receipts WHERE id = ${receiptId}::uuid`,
   );
   return rows[0]?.snapshot ?? null;
 }
 
-export async function getPaymentBatchNoticeSnapshot(batchId: string) {
-  const rows = await prisma.$queryRaw<Array<{ notice_snapshot: unknown }>>(
+export async function getPaymentBatchNoticeSnapshot(batchId: string, client: DbClient = prisma) {
+  const rows = await client.$queryRaw<Array<{ notice_snapshot: unknown }>>(
     Prisma.sql`SELECT notice_snapshot FROM payment_batches WHERE id = ${batchId}::uuid`,
   );
   return rows[0]?.notice_snapshot ?? null;

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
+import { BadRequestError } from "@/lib/errors";
 import { requireApiUser } from "@/lib/api-auth";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents, getClassStudentsPage } from "@/modules/class/services/class.service";
 
@@ -29,7 +30,7 @@ type Params = Promise<{
 
 async function getClassId(context: { params?: Params }) {
   const routeParams = await context.params;
-  if (!routeParams?.id) throw new Error("CLASS_ID_REQUIRED");
+  if (!routeParams?.id) throw new BadRequestError("CLASS_ID_REQUIRED");
   return routeParams.id;
 }
 

@@ -1,6 +1,7 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { readFile } from "node:fs/promises";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import {
@@ -14,7 +15,26 @@ const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
 export async function generateTuitionReceiptPdf(receiptId: string, actorId: string) {
-  const receipt = await prisma.tuitionReceipt.findUnique({
+  const receiptRef = await prisma.tuitionReceipt.findUnique({
+    where: { id: receiptId },
+    select: { paymentId: true },
+  });
+  if (!receiptRef) throw new NotFoundError("Không tìm thấy biên lai");
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${receiptRef.paymentId}::uuid FOR UPDATE`,
+    );
+    return generateTuitionReceiptPdfWithClient(tx, receiptId, actorId);
+  });
+}
+
+async function generateTuitionReceiptPdfWithClient(
+  client: Prisma.TransactionClient,
+  receiptId: string,
+  actorId: string,
+) {
+  const receipt = await client.tuitionReceipt.findUnique({
     where: { id: receiptId },
     include: {
       payment: {
@@ -36,7 +56,9 @@ export async function generateTuitionReceiptPdf(receiptId: string, actorId: stri
   if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
   if (receipt.status === "CANCELLED")
     throw new ConflictError("Biên lai đã được hủy và không thể xuất PDF");
-  const snapshot = parseReceiptSnapshot(await getTuitionReceiptSnapshot(receipt.id));
+  const snapshot = parseReceiptSnapshot(
+    await getTuitionReceiptSnapshot(receipt.id, client),
+  );
   const student = snapshot?.student ?? receipt.payment.tuitionFee.student;
   const fee = snapshot?.tuitionFee ?? {
     className: receipt.payment.tuitionFee.class.name,
@@ -121,7 +143,7 @@ export async function generateTuitionReceiptPdf(receiptId: string, actorId: stri
   draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
   draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
   const pdfBuffer = Buffer.from(await pdf.save());
-  await prisma.tuitionAuditLog.create({
+  await client.tuitionAuditLog.create({
     data: {
       entityType: "TUITION_RECEIPT",
       entityId: receipt.id,
