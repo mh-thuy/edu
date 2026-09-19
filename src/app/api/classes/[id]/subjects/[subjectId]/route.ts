@@ -1,16 +1,15 @@
 import { NextRequest } from "next/server";
-import { apiError, apiSuccess, handleApiError } from "@/lib/api";
-import { BadRequestError } from "@/lib/errors";
+import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
+import { z } from "zod";
 import { classSubjectUpdateSchema } from "@/modules/class/schemas/class-subject.schema";
 import { removeClassSubject, updateClassSubject } from "@/modules/class/services/class.service";
 
 type Params = Promise<{ id: string; subjectId: string }>;
+const routeParamsSchema = z.object({ id: z.string().uuid(), subjectId: z.string().uuid() });
 
 async function getIds(context: { params?: Params }) {
-  const params = await context.params;
-  if (!params?.id || !params.subjectId) throw new BadRequestError("CLASS_SUBJECT_IDS_REQUIRED");
-  return params;
+  return routeParamsSchema.parse(await context.params);
 }
 
 export async function PATCH(request: NextRequest, context: { params?: Params }) {
@@ -26,10 +25,7 @@ export async function PATCH(request: NextRequest, context: { params?: Params }) 
         user.id,
       ),
     );
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === "CLASS_SUBJECT_IDS_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc môn học", 400);
-    return handleApiError(error, "Không thể cập nhật môn học");
-  }
+  } catch (error: unknown) { return handleApiError(error, "Không thể cập nhật môn học"); }
 }
 
 export async function DELETE(_request: NextRequest, context: { params?: Params }) {
@@ -39,8 +35,5 @@ export async function DELETE(_request: NextRequest, context: { params?: Params }
     const { id, subjectId } = await getIds(context);
     await removeClassSubject(id, subjectId, user.id);
     return apiSuccess({ id: subjectId });
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === "CLASS_SUBJECT_IDS_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc môn học", 400);
-    return handleApiError(error, "Không thể xóa môn học");
-  }
+  } catch (error: unknown) { return handleApiError(error, "Không thể xóa môn học"); }
 }

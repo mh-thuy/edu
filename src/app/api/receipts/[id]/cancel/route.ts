@@ -6,6 +6,7 @@ import { cancelTuitionReceipt } from "@/modules/finance/receipts/services/receip
 const cancelSchema = z.object({
   reason: z.string().trim().min(1, "Lý do hủy là bắt buộc").max(500),
 });
+const routeParamsSchema = z.object({ id: z.string().uuid() });
 
 export async function POST(
   request: Request,
@@ -15,7 +16,7 @@ export async function POST(
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { reason } = cancelSchema.parse(await request.json());
-    const id = (await params).id;
+    const { id } = routeParamsSchema.parse(await params);
 
     const receipt = await cancelTuitionReceipt(id, user.id, reason);
 

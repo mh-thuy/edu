@@ -1,13 +1,17 @@
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+const routeParamsSchema = z.object({ id: z.string().uuid() });
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
+    const { id } = routeParamsSchema.parse(await params);
     const receipt = await prisma.tuitionReceipt.findUnique({
-      where: { id: (await params).id },
+      where: { id },
       include: {
         payment: {
           include: {

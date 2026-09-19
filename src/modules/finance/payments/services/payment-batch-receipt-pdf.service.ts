@@ -166,9 +166,15 @@ async function generatePaymentBatchReceiptPdfWithClient(
   draw("TỔNG CỘNG", 75, y - 35, 13);
   draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13);
   draw(`Phương thức: ${receipt.paymentBatch.paymentMethod}`, 75, y - 75);
-  if (receipt.paymentBatch.transactionReference)
+  if (receipt.paymentBatch.bankTransactionNo)
     draw(
-      `Mã giao dịch: ${receipt.paymentBatch.transactionReference}`,
+      `Mã giao dịch NH: ${receipt.paymentBatch.bankTransactionNo}`,
+      75,
+      y - 97,
+    );
+  else if (receipt.paymentBatch.transactionReference)
+    draw(
+      `Mã tham chiếu: ${receipt.paymentBatch.transactionReference}`,
       75,
       y - 97,
     );

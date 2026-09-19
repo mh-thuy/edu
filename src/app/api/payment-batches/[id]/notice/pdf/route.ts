@@ -1,12 +1,16 @@
 import { requireApiUser } from "@/lib/api-auth";
 import { handleApiError } from "@/lib/api";
+import { z } from "zod";
 import { generatePaymentBatchNoticePdf } from "@/modules/finance/payments/services/payment-batch-notice-pdf.service";
+
+const routeParamsSchema = z.object({ id: z.string().uuid() });
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const result = await generatePaymentBatchNoticePdf((await params).id, user.fullName, user.id);
+    const { id } = routeParamsSchema.parse(await params);
+    const result = await generatePaymentBatchNoticePdf(id, user.fullName, user.id);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `${inline ? "inline" : "attachment"}; filename=thong-bao-${result.batchNo}.pdf`, "Cache-Control": "no-store" } });
   } catch (error) {

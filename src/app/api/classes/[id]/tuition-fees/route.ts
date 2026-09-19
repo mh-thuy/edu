@@ -4,6 +4,8 @@ import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
 
+const routeParamsSchema = z.object({ id: z.string().uuid() });
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -20,8 +22,9 @@ export async function POST(
       billingYear: Number(month.data.slice(0, 4)),
       billingMonth: Number(month.data.slice(5, 7)),
     };
+    const { id } = routeParamsSchema.parse(await params);
     const result = await TuitionService.createClassTuitionFees(
-      (await params).id,
+      id,
       period,
       user.id,
     );
