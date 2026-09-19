@@ -1,14 +1,36 @@
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
-import { bankReconciliationConfirmSchema } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
-import { confirmBankReconciliation } from "@/modules/finance/bank/services/bank-csv.service";
+import {
+  bankReconciliationBulkConfirmSchema,
+  bankReconciliationConfirmSchema,
+} from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
+import {
+  confirmBankReconciliation,
+  confirmBankReconciliations,
+} from "@/modules/finance/bank/services/bank-csv.service";
 
 export async function POST(request: Request) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const body = bankReconciliationConfirmSchema.parse(await request.json());
-    return apiSuccess(await confirmBankReconciliation({ ...body, actorId: user.id }));
+    const body: unknown = await request.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "confirmations" in body
+    ) {
+      const bulkBody = bankReconciliationBulkConfirmSchema.parse(body);
+      return apiSuccess(
+        await confirmBankReconciliations({
+          confirmations: bulkBody.confirmations,
+          actorId: user.id,
+        }),
+      );
+    }
+    const singleBody = bankReconciliationConfirmSchema.parse(body);
+    return apiSuccess(
+      await confirmBankReconciliation({ ...singleBody, actorId: user.id }),
+    );
   } catch (error) {
     return handleApiError(error, "Không thể xác nhận đối soát");
   }

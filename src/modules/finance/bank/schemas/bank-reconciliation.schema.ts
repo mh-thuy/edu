@@ -9,6 +9,17 @@ export const bankReconciliationConfirmSchema = z.object({
   batchId: z.string().uuid(),
 });
 
+export const bankReconciliationBulkConfirmSchema = z.object({
+  confirmations: z
+    .array(bankReconciliationConfirmSchema)
+    .min(1)
+    .max(100),
+});
+
 export type BankReconciliationConfirm = z.infer<
   typeof bankReconciliationConfirmSchema
+>;
+
+export type BankReconciliationBulkConfirm = z.infer<
+  typeof bankReconciliationBulkConfirmSchema
 >;

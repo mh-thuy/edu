@@ -477,6 +477,32 @@ export async function importBankStatement(args: {
     : [];
 
   const importedHashes = new Set<string>();
+  const autoMatchCandidatesByRow = new Map<number, PaymentBatchMatch>();
+  const autoMatchCandidateCounts = new Map<string, number>();
+
+  for (const [index, row] of rows.entries()) {
+    if (!row.amount.greaterThan(0)) continue;
+    const description = normalizeBatchReference(row.description);
+    const candidates = pendingBatches.filter(
+      (candidate) =>
+        candidate.totalAmount.equals(row.amount) &&
+        description.includes(normalizeBatchReference(candidate.batchNo)),
+    );
+    if (candidates.length === 1) {
+      const candidate = candidates[0]!;
+      autoMatchCandidatesByRow.set(index, candidate);
+      autoMatchCandidateCounts.set(
+        candidate.id,
+        (autoMatchCandidateCounts.get(candidate.id) || 0) + 1,
+      );
+    }
+  }
+  const reservedAutoMatchedBatchIds = new Set(
+    [...autoMatchCandidateCounts.entries()]
+      .filter(([, count]) => count === 1)
+      .map(([batchId]) => batchId),
+  );
+
   const items: BankImportItem[] = [];
   let duplicatedRows = 0;
   let matchedRows = 0;
@@ -519,12 +545,11 @@ export async function importBankStatement(args: {
       continue;
     }
 
-    const description = normalizeBatchReference(row.description);
-    const batch = pendingBatches.find(
-      (candidate) =>
-        candidate.totalAmount.equals(row.amount) &&
-        description.includes(normalizeBatchReference(candidate.batchNo)),
-    );
+    const autoMatchCandidate = autoMatchCandidatesByRow.get(index);
+    const batch =
+      autoMatchCandidate &&
+      autoMatchCandidateCounts.get(autoMatchCandidate.id) === 1 &&
+      autoMatchCandidate;
     if (batch) {
       matchedRows += 1;
       const paymentBatch = toPaymentBatchMatch(batch);
@@ -541,7 +566,11 @@ export async function importBankStatement(args: {
     unmatchedRows += 1;
 
     const paymentBatchCandidates = pendingBatches
-      .filter((candidate) => candidate.totalAmount.equals(row.amount))
+      .filter(
+        (candidate) =>
+          candidate.totalAmount.equals(row.amount) &&
+          !reservedAutoMatchedBatchIds.has(candidate.id),
+      )
       .map((candidate) => ({
         ...toPaymentBatchMatch(candidate),
         confirmationToken: createConfirmationToken(
@@ -590,9 +619,10 @@ async function confirmPaymentBatch(
   payload: ReconciliationTokenPayload,
   batchId: string,
   actorId: string,
+  transaction?: Prisma.TransactionClient,
 ) {
   if (payload.paymentBatchId !== batchId) throw new ConflictError("Đợt thanh toán không thuộc giao dịch ngân hàng này");
-  return prisma.$transaction(async (tx) => {
+  const execute = async (tx: Prisma.TransactionClient) => {
     await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`);
     if (payload.bankTransactionNo) {
       await tx.$executeRaw(
@@ -628,7 +658,8 @@ async function confirmPaymentBatch(
       transactionReference: payload.transactionHash,
       paymentContent: payload.description,
     });
-  });
+  };
+  return transaction ? execute(transaction) : prisma.$transaction(execute);
 }
 
 export async function confirmBankReconciliation(args: {
@@ -639,4 +670,32 @@ export async function confirmBankReconciliation(args: {
   const payload = verifyConfirmationToken(args.confirmationToken);
   if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
   return confirmPaymentBatch(payload, args.batchId, args.actorId);
+}
+
+export async function confirmBankReconciliations(args: {
+  confirmations: Array<{ confirmationToken: string; batchId: string }>;
+  actorId: string;
+}) {
+  const payloads = args.confirmations.map((confirmation) => {
+    const payload = verifyConfirmationToken(confirmation.confirmationToken);
+    if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) {
+      throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
+    }
+    return { ...confirmation, payload };
+  });
+
+  return prisma.$transaction(async (tx) => {
+    const completed = [];
+    for (const confirmation of payloads) {
+      completed.push(
+        await confirmPaymentBatch(
+          confirmation.payload,
+          confirmation.batchId,
+          args.actorId,
+          tx,
+        ),
+      );
+    }
+    return { confirmedCount: completed.length, batches: completed };
+  });
 }

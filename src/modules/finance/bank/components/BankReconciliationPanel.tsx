@@ -27,6 +27,7 @@ import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import DoneAllOutlinedIcon from "@mui/icons-material/DoneAllOutlined";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Account = {
@@ -134,6 +135,7 @@ export function BankReconciliationPanel() {
   const [hasAnalysis, setHasAnalysis] = useState(false);
   const [pendingConfirmation, setPendingConfirmation] =
     useState<PendingConfirmation | null>(null);
+  const [bulkConfirmationOpen, setBulkConfirmationOpen] = useState(false);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountError, setAccountError] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
@@ -196,6 +198,15 @@ export function BankReconciliationPanel() {
       confirmed: displayedItems.filter((item) => item.reconciliationStatus === "CONFIRMED").length,
       creditAmount: displayedItems.reduce((total, item) => total + item.creditAmount, 0),
     }),
+    [displayedItems],
+  );
+  const autoMatchedItems = useMemo(
+    () =>
+      displayedItems.filter(
+        (item) =>
+          item.reconciliationStatus === "AUTO_MATCHED" &&
+          item.paymentBatch !== null,
+      ),
     [displayedItems],
   );
 
@@ -298,6 +309,49 @@ export function BankReconciliationPanel() {
           reason instanceof Error
             ? reason.message
             : "Không thể xác nhận đối soát",
+        severity: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function confirmAllAutoMatched() {
+    const confirmations = autoMatchedItems.map((item) => ({
+      confirmationToken: item.confirmationToken,
+      batchId: item.paymentBatch!.id,
+    }));
+    if (!confirmations.length) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/bank-reconciliations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmations }),
+      });
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể xác nhận các giao dịch khớp tự động",
+          ),
+        );
+      setConfirmedTokens(
+        (current) =>
+          new Set([
+            ...current,
+            ...autoMatchedItems.map((item) => item.confirmationToken),
+          ]),
+      );
+      setBulkConfirmationOpen(false);
+      showSuccess(`Đã xác nhận ${confirmations.length} giao dịch khớp tự động`);
+    } catch (reason) {
+      setMessage({
+        text:
+          reason instanceof Error
+            ? reason.message
+            : "Không thể xác nhận các giao dịch khớp tự động",
         severity: "error",
       });
     } finally {
@@ -417,6 +471,18 @@ export function BankReconciliationPanel() {
             </Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+            {autoMatchedItems.length > 0 && (
+              <Button
+                size="small"
+                variant="contained"
+                color="success"
+                startIcon={<DoneAllOutlinedIcon />}
+                onClick={() => setBulkConfirmationOpen(true)}
+                disabled={loading}
+              >
+                Xác nhận khớp tự động ({autoMatchedItems.length})
+              </Button>
+            )}
             {items.length > 0 && (
               <Button
                 size="small"
@@ -609,6 +675,17 @@ export function BankReconciliationPanel() {
         }
         onConfirm={() => void confirm()}
         onCancel={() => setPendingConfirmation(null)}
+        isLoading={loading}
+      />
+      <ConfirmDialog
+        open={bulkConfirmationOpen}
+        title="Xác nhận giao dịch khớp tự động"
+        message={`Hệ thống đã khớp chính xác ${autoMatchedItems.length} giao dịch theo mã đợt, tài khoản ngân hàng và số tiền. Xác nhận để tạo payment và biên lai cho tất cả giao dịch này?`}
+        confirmLabel="Xác nhận tất cả"
+        cancelLabel="Kiểm tra lại"
+        confirmColor="success"
+        onConfirm={() => void confirmAllAutoMatched()}
+        onCancel={() => setBulkConfirmationOpen(false)}
         isLoading={loading}
       />
       <ConfirmDialog
