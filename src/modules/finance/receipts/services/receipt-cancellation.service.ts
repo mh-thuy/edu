@@ -10,32 +10,66 @@ import { ConflictError, NotFoundError } from "@/lib/errors";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
+async function findReceiptForCancellation(
+  tx: Prisma.TransactionClient,
+  receiptId: string,
+) {
+  return tx.tuitionReceipt.findUnique({
+    where: { id: receiptId },
+    include: {
+      payment: {
+        include: {
+          paymentBatch: true,
+          tuitionFee: true,
+          refunds: {
+            where: {
+              status: {
+                notIn: [TuitionRefundStatus.REJECTED, TuitionRefundStatus.CANCELLED],
+              },
+            },
+            select: { id: true },
+          },
+        },
+      },
+    },
+  });
+}
+
 export async function cancelTuitionReceipt(
   receiptId: string,
   actorId: string,
   reason: string,
 ) {
   return prisma.$transaction(async (tx) => {
-    const receipt = await tx.tuitionReceipt.findUnique({
-      where: { id: receiptId },
-      include: {
-        payment: {
-          include: {
-            paymentBatch: true,
-            tuitionFee: true,
-            refunds: {
-              where: {
-                status: {
-                  notIn: [TuitionRefundStatus.REJECTED, TuitionRefundStatus.CANCELLED],
-                },
-              },
-              select: { id: true },
-            },
-          },
-        },
-      },
-    });
+    let receipt = await findReceiptForCancellation(tx, receiptId);
     if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
+
+    if (receipt.payment.paymentBatchId) {
+      // Refund creation locks payment before batch. Lock every payment in a
+      // stable order before the batch to avoid races and lock-order deadlocks.
+      const batchPayments = await tx.tuitionPayment.findMany({
+        where: { paymentBatchId: receipt.payment.paymentBatchId },
+        select: { id: true },
+        orderBy: { id: "asc" },
+      });
+      for (const payment of batchPayments) {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${payment.id}::uuid FOR UPDATE`,
+        );
+      }
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM payment_batches WHERE id = ${receipt.payment.paymentBatchId}::uuid FOR UPDATE`,
+      );
+    } else {
+      // Refund creation locks payment before checking active refunds. Use the
+      // same lock order here and re-read all state after waiting for the lock.
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${receipt.payment.id}::uuid FOR UPDATE`,
+      );
+    }
+    receipt = await findReceiptForCancellation(tx, receiptId);
+    if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
+
     if (receipt.status === ReceiptStatus.CANCELLED)
       throw new ConflictError("Biên lai đã được hủy");
     if (receipt.payment.paymentStatus !== TuitionPaymentStatus.SUCCESS)
@@ -47,9 +81,6 @@ export async function cancelTuitionReceipt(
 
     const batchId = receipt.payment.paymentBatchId;
     if (batchId) {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
-      );
       const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
       if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
       if (batch.status !== PaymentBatchStatus.SUCCESS)

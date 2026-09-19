@@ -784,7 +784,7 @@ export async function updateEnrollmentPause(
 
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
-    const pause = await tx.enrollmentPause.findFirst({
+    let pause = await tx.enrollmentPause.findFirst({
       where: {
         id: pauseId,
         enrollment: { classId, studentId, status: "ACTIVE" },
@@ -796,6 +796,14 @@ export async function updateEnrollmentPause(
     await tx.$executeRaw(
       Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${pause.enrollmentId}`}))`,
     );
+    pause = await tx.enrollmentPause.findFirst({
+      where: {
+        id: pauseId,
+        enrollment: { classId, studentId, status: "ACTIVE" },
+        status: "ACTIVE",
+      },
+    });
+    if (!pause) throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ đang hoạt động");
     const enrollment = await tx.classStudent.findUnique({
       where: { id: pause.enrollmentId },
       include: { class: true },

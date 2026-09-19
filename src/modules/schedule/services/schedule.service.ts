@@ -338,22 +338,43 @@ export async function updateClassSchedule(
 }
 
 export async function deleteClassSchedule(id: string): Promise<ClassSchedule> {
-  const schedule = await prisma.classSchedule.findFirst({
-    where: { id, deletedAt: null },
-    select: {
-      id: true,
-      class: { select: { status: true } },
-    },
-  });
-  if (!schedule) {
-    throw new NotFoundError("Không tìm thấy lịch học");
-  }
-  if (schedule.class.status === "COMPLETED" || schedule.class.status === "CANCELLED") {
-    throw new ConflictError("Không thể thay đổi lịch của lớp đã kết thúc hoặc đã hủy");
-  }
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM class_schedules WHERE id = ${id}::uuid FOR UPDATE`,
+    );
+    const schedule = await tx.classSchedule.findFirst({
+      where: { id, deletedAt: null },
+      select: {
+        id: true,
+        classId: true,
+        classSubjectId: true,
+        teacherId: true,
+        dayOfWeek: true,
+      },
+    });
+    if (!schedule) {
+      throw new NotFoundError("Không tìm thấy lịch học");
+    }
 
-  return prisma.classSchedule.update({
-    where: { id },
-    data: { deletedAt: new Date() },
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${schedule.classId}`}))`,
+    );
+    await lockScheduleResources(tx, schedule);
+    await lockClassSubject(tx, schedule.classSubjectId);
+    const classData = await tx.class.findUnique({
+      where: { id: schedule.classId },
+      select: { status: true },
+    });
+    if (!classData) {
+      throw new NotFoundError("Không tìm thấy lớp học");
+    }
+    if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
+      throw new ConflictError("Không thể thay đổi lịch của lớp đã kết thúc hoặc đã hủy");
+    }
+
+    return tx.classSchedule.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   });
 }
