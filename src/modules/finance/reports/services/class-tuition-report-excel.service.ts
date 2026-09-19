@@ -173,7 +173,7 @@ export async function buildClassTuitionReportExcel(
     formula: `D${remainingRow}-IF(D${photoRow}=\"\",0,D${photoRow})`,
     result: report.rows.reduce((total, row) => total + row.paidAmount, 0) * (100 - report.commissionPercent) / 100,
   };
-  worksheet.getCell(`A${closedDateRow}`).value = "CHỐT THANH NGÀY";
+  worksheet.getCell(`A${closedDateRow}`).value = "NGÀY XUẤT BÁO CÁO";
   worksheet.getCell(`D${closedDateRow}`).value = toVietnamExcelDate(new Date());
   worksheet.getCell(`D${closedDateRow}`).numFmt = "dd/mm/yyyy";
 

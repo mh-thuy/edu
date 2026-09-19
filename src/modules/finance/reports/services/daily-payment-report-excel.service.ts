@@ -82,7 +82,7 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     };
   });
 
-  const headers = ["STT", "GIÁO VIÊN", "LỚP", "HỌC PHÍ", "LƯỢT", "THÀNH TIỀN", "", "GHI CHÚ"];
+  const headers = ["STT", "GIÁO VIÊN", "LỚP", "HỌC PHÍ", "DÒNG THU", "THÀNH TIỀN", "", "GHI CHÚ"];
   headers.forEach((value, index) => {
     const cell = sheet.getRow(4).getCell(index + 1);
     cell.value = value;
@@ -271,6 +271,11 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     { header: "Lớp", key: "className", width: 18 },
     { header: "Mã học phí", key: "feeNo", width: 24 },
     { header: "Phương thức", key: "paymentMethod", width: 18 },
+    { header: "Ngân hàng", key: "bankName", width: 24 },
+    { header: "Tài khoản nhận", key: "bankAccountNo", width: 20 },
+    { header: "Mã giao dịch NH", key: "bankTransactionNo", width: 24 },
+    { header: "Mã tham chiếu", key: "transactionReference", width: 24 },
+    { header: "Nội dung thu", key: "paymentContent", width: 32 },
     { header: "Số tiền", key: "amount", width: 18 },
   ];
   detail.getRow(1).eachCell((cell) => {
@@ -288,11 +293,16 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
       className: item.className,
       feeNo: item.feeNo,
       paymentMethod: item.paymentMethod,
+      bankName: item.bankName ?? "",
+      bankAccountNo: item.bankAccountNo ?? "",
+      bankTransactionNo: item.bankTransactionNo ?? "",
+      transactionReference: item.transactionReference ?? "",
+      paymentContent: item.paymentContent ?? "",
       amount: item.amount,
     });
     row.getCell("paymentDate").numFmt = "dd/mm/yyyy hh:mm";
     row.getCell("amount").numFmt = moneyFormat;
-    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => styleCell(cell, { horizontal: [1, 9].includes(columnNumber) ? "right" : "left" }));
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => styleCell(cell, { horizontal: [1, 14].includes(columnNumber) ? "right" : "left" }));
     if ((index + 1) % 2 === 0) {
       row.eachCell({ includeEmpty: true }, (cell) => setFill(cell, colors.lightBlue));
     }

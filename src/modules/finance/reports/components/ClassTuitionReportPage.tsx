@@ -134,8 +134,8 @@ export function ClassTuitionReportPage() {
               >
                 <MenuItem value=""><em>Chọn môn học</em></MenuItem>
                 {subjects.map((subject) => (
-                  <MenuItem key={subject.id} value={subject.id}>
-                    {subject.subject.name}
+                  <MenuItem key={subject.id} value={subject.id} disabled={!subject.teacher}>
+                    {subject.subject.name}{subject.teacher ? "" : " · Chưa phân công giáo viên"}
                   </MenuItem>
                 ))}
               </Select>
@@ -149,7 +149,7 @@ export function ClassTuitionReportPage() {
             />
           </Box>
           <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="contained" onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !month}>
+            <Button variant="contained" onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
               {exporting ? "Đang xuất..." : "Xuất Excel"}
             </Button>
           </Box>

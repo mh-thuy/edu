@@ -23,6 +23,11 @@ export type DailyPaymentReportDetail = {
   feeNo: string;
   paymentMethod: string;
   amount: number;
+  bankName: string | null;
+  bankAccountNo: string | null;
+  bankTransactionNo: string | null;
+  transactionReference: string | null;
+  paymentContent: string | null;
 };
 
 export type DailyPaymentReport = {
@@ -123,6 +128,19 @@ export async function getDailyPaymentReport(
       paymentDate: true,
       paymentMethod: true,
       amount: true,
+      bankTransactionNo: true,
+      transactionReference: true,
+      paymentContent: true,
+      paymentBatch: {
+        select: {
+          bankAccount: {
+            select: {
+              bankName: true,
+              accountNo: true,
+            },
+          },
+        },
+      },
       tuitionFee: {
         select: {
           feeNo: true,
@@ -193,6 +211,11 @@ export async function getDailyPaymentReport(
       feeNo: payment.tuitionFee.feeNo,
       paymentMethod: formatMethod(payment.paymentMethod),
       amount: Number(payment.amount),
+      bankName: payment.paymentBatch?.bankAccount?.bankName ?? null,
+      bankAccountNo: payment.paymentBatch?.bankAccount?.accountNo ?? null,
+      bankTransactionNo: payment.bankTransactionNo,
+      transactionReference: payment.transactionReference,
+      paymentContent: payment.paymentContent,
     };
   });
   const totalCollected = payments.reduce((total, payment) => total + Number(payment.amount), 0);

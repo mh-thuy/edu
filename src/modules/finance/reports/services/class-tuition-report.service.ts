@@ -156,21 +156,23 @@ export async function getClassTuitionReport(
     teacherName: classSubject.teacher.fullName,
     commissionPercent: Number(classSubject.teacher.commissionPercent),
     month: input.month,
-    rows: enrollments.map((enrollment) => {
-      const { givenName, familyName } = splitStudentName(
-        enrollment.student.fullName,
-      );
-      const paidAmount = enrollment.tuitionFees.reduce(
-        (total, fee) => total + getSubjectPaidAmount(fee, input.classSubjectId),
-        0,
-      );
+    rows: enrollments
+      .map((enrollment) => {
+        const { givenName, familyName } = splitStudentName(
+          enrollment.student.fullName,
+        );
+        const paidAmount = enrollment.tuitionFees.reduce(
+          (total, fee) => total + getSubjectPaidAmount(fee, input.classSubjectId),
+          0,
+        );
 
-      return {
-        studentCode: enrollment.student.code,
-        givenName,
-        familyName,
-        paidAmount,
-      };
-    }),
+        return {
+          studentCode: enrollment.student.code,
+          givenName,
+          familyName,
+          paidAmount,
+        };
+      })
+      .filter((row) => row.paidAmount > 0),
   };
 }
