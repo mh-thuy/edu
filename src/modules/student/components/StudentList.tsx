@@ -3,7 +3,6 @@
 import {
   Box,
   Stack,
-  TextField,
   Button,
   Chip,
   Paper,
@@ -13,9 +12,12 @@ import {
   Select,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolIcon from "@mui/icons-material/School";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
@@ -29,6 +31,7 @@ import type { ReactElement } from "react";
 import type { z } from "zod";
 import { studentCreateSchema } from "@/modules/student/schemas/student.schema";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type StudentFormData = z.infer<typeof studentCreateSchema>;
 
@@ -60,6 +63,31 @@ const getColumns = (): GridColDef<StudentRow>[] => [
     headerName: "Họ tên",
     minWidth: 180,
     flex: 1,
+  },
+  {
+    field: "address",
+    headerName: "Địa chỉ",
+    minWidth: 220,
+    flex: 1.2,
+    renderCell: (params) => (
+      <Box
+        sx={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <Typography
+          variant="body2"
+          color={params.value ? "text.primary" : "text.disabled"}
+          noWrap
+          title={params.value || "Chưa cập nhật"}
+        >
+          {params.value || "Chưa cập nhật"}
+        </Typography>
+      </Box>
+    ),
   },
   {
     field: "phone",
@@ -123,6 +151,7 @@ const getColumns = (): GridColDef<StudentRow>[] => [
         <Button
           size="small"
           variant="outlined"
+          startIcon={<ManageAccountsOutlinedIcon fontSize="small" />}
           onClick={() => params.row._onEdit?.(params.row)}
           sx={{
             minWidth: 64,
@@ -135,9 +164,10 @@ const getColumns = (): GridColDef<StudentRow>[] => [
           size="small"
           variant="outlined"
           color="error"
+          startIcon={<BlockOutlinedIcon fontSize="small" />}
           onClick={() => params.row._onDelete?.(params.row)}
           sx={{
-            minWidth: 64,
+            minWidth: 162,
           }}
         >
           Ngừng hoạt động
@@ -316,40 +346,43 @@ export function StudentList(): ReactElement {
       <Paper
         elevation={0}
         sx={{
-          p: { xs: 2, md: 3 },
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.paper",
+          p: { xs: 0, md: 0.5 },
+          border: 0,
+          bgcolor: "transparent",
         }}
       >
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={2}
-          alignItems={{ xs: "stretch", md: "center" }}
+          alignItems={{ xs: "stretch", md: "flex-end" }}
           justifyContent="space-between"
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
             <Box
               sx={{
-                width: 44,
-                height: 44,
-                borderRadius: 2,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                bgcolor: "primary.main",
-                color: "primary.contrastText",
+                width: 48,
+                height: 48,
+                flexShrink: 0,
+                borderRadius: 2.5,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "primary.light",
+                color: "primary.dark",
               }}
             >
               <SchoolIcon />
             </Box>
 
             <Box>
-              <Typography variant="h6" fontWeight={700}>
+              <Typography
+                variant="h4"
+                fontWeight={800}
+                letterSpacing="-0.025em"
+                sx={{ lineHeight: 1.15 }}
+              >
                 Quản lý học viên
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 Danh sách học sinh, thông tin liên hệ và trạng thái
               </Typography>
             </Box>
@@ -454,13 +487,65 @@ export function StudentList(): ReactElement {
         </Stack>
       </Paper>
 
-      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+      <Paper
+        elevation={0}
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 3,
+          border: "1px solid",
+          borderColor: "divider",
+        }}
+      >
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
           alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+          sx={{ mb: 1.75 }}
         >
-          <TextField
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: 1.75,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "action.hover",
+                color: "primary.main",
+              }}
+            >
+              <TuneOutlinedIcon fontSize="small" />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800}>
+                Tra cứu học viên
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Lọc nhanh danh sách theo thông tin và trạng thái
+              </Typography>
+            </Box>
+          </Stack>
+          <Chip
+            size="small"
+            variant="outlined"
+            color={status === "ALL" ? "default" : "primary"}
+            label={
+              status === "ALL"
+                ? "Tất cả trạng thái"
+                : status === "ACTIVE"
+                  ? "Đang hoạt động"
+                  : "Ngừng hoạt động"
+            }
+          />
+        </Stack>
+
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={1.25}
+          alignItems={{ md: "center" }}
+        >
+          <AppTextField
             placeholder="Tìm theo mã học sinh, họ tên hoặc số điện thoại..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -475,7 +560,7 @@ export function StudentList(): ReactElement {
             }}
             sx={{
               flex: 1,
-              maxWidth: 520,
+              minWidth: 240,
               "& .MuiOutlinedInput-root": {
                 borderRadius: 2,
                 bgcolor: "background.default",
@@ -509,6 +594,26 @@ export function StudentList(): ReactElement {
           </Button>
         </Stack>
       </Paper>
+
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1}
+        alignItems={{ sm: "center" }}
+        justifyContent="space-between"
+        sx={{ px: { xs: 0.25, md: 0.5 } }}
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={800}>
+            Danh sách học viên
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {data?.total || 0} học viên trong kết quả hiện tại
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary">
+          Có thể chỉnh sửa hoặc ngừng hoạt động ngay trên từng dòng
+        </Typography>
+      </Stack>
 
       <BaseTable
         columns={getColumns()}

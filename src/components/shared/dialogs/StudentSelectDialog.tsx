@@ -2,12 +2,14 @@
 
 import type { ReactElement } from "react";
 import { type GridColDef } from "@mui/x-data-grid";
+import { Typography } from "@mui/material";
 import { BaseSelectDialog } from "@/components/shared/dialogs/BaseSelectDialog";
 
 export interface StudentItem {
   id: string;
   code: string;
   fullName: string;
+  className?: string;
   phone?: string;
   status?: string;
 }
@@ -28,6 +30,22 @@ export function StudentSelectDialog({
   const columns: GridColDef<StudentItem>[] = [
     { field: "code", headerName: "Mã học viên", width: 120 },
     { field: "fullName", headerName: "Tên học viên", flex: 1, minWidth: 200 },
+    {
+      field: "className",
+      headerName: "Lớp",
+      flex: 1,
+      minWidth: 220,
+      renderCell: (params) => (
+        <Typography
+          variant="body2"
+          color={params.value ? "text.primary" : "text.disabled"}
+          noWrap
+          title={params.value || "Chưa xếp lớp"}
+        >
+          {params.value || "Chưa xếp lớp"}
+        </Typography>
+      ),
+    },
     {
       field: "phone",
       headerName: "Số điện thoại",

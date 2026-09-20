@@ -100,15 +100,35 @@ export async function getStudents(filter: StudentFilter) {
     }),
   };
 
-  const [students, total] = await Promise.all([
+  const [studentRows, total] = await Promise.all([
     prisma.student.findMany({
       where,
       skip,
       take: pageSize,
       orderBy: { createdAt: "desc" },
+      include: {
+        enrollments: {
+          where: { status: { in: ["ACTIVE", "COMPLETED", "SUSPENDED"] } },
+          select: {
+            class: {
+              select: {
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
     }),
     prisma.student.count({ where }),
   ]);
+
+  const students = studentRows.map(({ enrollments, ...student }) => ({
+    ...student,
+    className: enrollments
+      .map(({ class: classItem }) => `${classItem.code} — ${classItem.name}`)
+      .join(", "),
+  }));
 
   return {
     items: students,
