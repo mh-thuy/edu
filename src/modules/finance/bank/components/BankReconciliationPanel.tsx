@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  Divider,
+  Drawer,
   FormControl,
+  InputAdornment,
   InputLabel,
+  IconButton,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -15,11 +20,15 @@ import {
   Step,
   StepLabel,
   Stepper,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
+  TableContainer,
   TableRow,
+  Tabs,
+  TextField,
   Typography,
 } from "@mui/material";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
@@ -28,6 +37,9 @@ import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlin
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import DoneAllOutlinedIcon from "@mui/icons-material/DoneAllOutlined";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import ClearOutlinedIcon from "@mui/icons-material/ClearOutlined";
+import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Account = {
@@ -86,6 +98,11 @@ type ResultFilter =
 
 const money = (value: number) =>
   new Intl.NumberFormat("vi-VN").format(Number(value));
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 const formatTransactionDate = (value: string) => {
   const date = new Date(value);
   const datePart = date.toLocaleDateString("vi-VN", {
@@ -120,6 +137,7 @@ const reconciliationColors: Record<string, "default" | "warning" | "info" | "suc
 };
 
 export function BankReconciliationPanel() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountId, setAccountId] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -140,6 +158,8 @@ export function BankReconciliationPanel() {
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountError, setAccountError] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const { showSuccess, Snackbar } = useSnackbar();
 
@@ -189,16 +209,49 @@ export function BankReconciliationPanel() {
     [displayedItems, resultFilter],
   );
 
+  const searchedItems = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase("vi-VN");
+    if (!normalizedSearchTerm) return filteredItems;
+
+    return filteredItems.filter((item) =>
+      [
+        item.bankTransactionNo,
+        item.description,
+        item.paymentBatch?.batchNo,
+        item.paymentBatch?.student.code,
+        item.paymentBatch?.student.fullName,
+        ...item.paymentBatchCandidates.flatMap((candidate) => [
+          candidate.batchNo,
+          candidate.student.code,
+          candidate.student.fullName,
+        ]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("vi-VN")
+        .includes(normalizedSearchTerm),
+    );
+  }, [filteredItems, searchTerm]);
+
+  const selectedItem = useMemo(
+    () => searchedItems.find((item) => item.confirmationToken === selectedToken) || null,
+    [searchedItems, selectedToken],
+  );
+
   const summary = useMemo(
-    () => ({
-      total: displayedItems.length,
-      matched: displayedItems.filter((item) => item.reconciliationStatus === "AUTO_MATCHED").length,
-      unmatched: displayedItems.filter((item) => item.reconciliationStatus === "UNMATCHED").length,
-      ignored: displayedItems.filter((item) => item.reconciliationStatus === "IGNORED").length,
-      duplicated: displayedItems.filter((item) => item.reconciliationStatus === "DUPLICATED").length,
-      confirmed: displayedItems.filter((item) => item.reconciliationStatus === "CONFIRMED").length,
-      creditAmount: displayedItems.reduce((total, item) => total + item.creditAmount, 0),
-    }),
+    () => displayedItems.reduce(
+      (result, item) => {
+        result.total += 1;
+        result.creditAmount += item.creditAmount;
+        if (item.reconciliationStatus === "AUTO_MATCHED") result.matched += 1;
+        if (item.reconciliationStatus === "UNMATCHED") result.unmatched += 1;
+        if (item.reconciliationStatus === "IGNORED") result.ignored += 1;
+        if (item.reconciliationStatus === "DUPLICATED") result.duplicated += 1;
+        if (item.reconciliationStatus === "CONFIRMED") result.confirmed += 1;
+        return result;
+      },
+      { total: 0, matched: 0, unmatched: 0, ignored: 0, duplicated: 0, confirmed: 0, creditAmount: 0 },
+    ),
     [displayedItems],
   );
   const autoMatchedItems = useMemo(
@@ -216,13 +269,21 @@ export function BankReconciliationPanel() {
     if (nextFile) setStep(1);
   }
 
-  function resetSession() {
+  function clearFileSelection() {
     setFile(null);
+    setStep(0);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function resetSession() {
+    clearFileSelection();
     setItems([]);
     setConfirmedTokens(new Set());
     setHasAnalysis(false);
     setPendingConfirmation(null);
     setResultFilter("ALL");
+    setSearchTerm("");
+    setSelectedToken(null);
     setStep(0);
     setMessage({ text: "", severity: "info" });
     setResetDialogOpen(false);
@@ -253,7 +314,10 @@ export function BankReconciliationPanel() {
       setItems(result.items);
       setHasAnalysis(true);
       setResultFilter("ALL");
+      setSearchTerm("");
+      setSelectedToken(null);
       setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       setStep(2);
       setMessage({
         text: `Đã phân tích ${result.totalRows} dòng: hợp lệ ${result.validRows}, lỗi ${result.invalidRows}. Khớp ${result.matchedRows}, chưa khớp ${result.unmatchedRows}, bỏ qua ${result.ignoredRows}, trùng ${result.duplicatedRows}. Chỉ dòng được xác nhận mới được lưu.`,
@@ -363,31 +427,50 @@ export function BankReconciliationPanel() {
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
       <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
-            <AccountBalanceOutlinedIcon />
-          </Box>
-          <Box>
-            <Typography variant="h5" fontWeight={700}>Phân tích và đối soát sao kê</Typography>
-            <Typography variant="body2" color="text.secondary">Chỉ giao dịch được xác nhận mới tạo thanh toán và biên lai.</Typography>
-          </Box>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} justifyContent="space-between">
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+              <AccountBalanceOutlinedIcon />
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight={700}>Phân tích và đối soát sao kê</Typography>
+              <Typography variant="body2" color="text.secondary">Chỉ giao dịch được xác nhận mới tạo thanh toán và biên lai.</Typography>
+            </Box>
+          </Stack>
+          {items.length > 0 && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshOutlinedIcon />}
+              onClick={() => setResetDialogOpen(true)}
+              disabled={loading}
+            >
+              Phiên mới
+            </Button>
+          )}
         </Stack>
-      </Paper>
-      <Paper sx={{ p: { xs: 1, md: 2 } }}>
-        <Stepper activeStep={step} alternativeLabel>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+        <Box sx={{ mt: { xs: 2, md: 3 }, pt: { xs: 2, md: 2.5 }, borderTop: "1px solid", borderColor: "divider" }}>
+          <Stepper activeStep={step} alternativeLabel>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </Box>
       </Paper>
       <Paper sx={{ p: { xs: 1.5, md: 2 } }}>
         <Stack spacing={2}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={700}>Bước 1 · Chọn nguồn sao kê</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Chọn tài khoản nhận tiền và file Excel cần phân tích.
+            </Typography>
+          </Box>
           <Stack
             direction={{ xs: "column", md: "row" }}
             spacing={2}
-            alignItems="center"
+            alignItems={{ xs: "stretch", md: "center" }}
           >
             <FormControl fullWidth sx={{ minWidth: { md: 300 }, flex: 1 }}>
               <InputLabel id="reconciliation-bank-account-label">Tài khoản nhận</InputLabel>
@@ -411,8 +494,9 @@ export function BankReconciliationPanel() {
               startIcon={<UploadFileOutlinedIcon />}
               disabled={loading || items.length > 0}
             >
-              {file?.name || "Chọn file Excel sao kê"}
+              {file ? "Đổi file sao kê" : "Chọn file Excel sao kê"}
               <input
+                ref={fileInputRef}
                 hidden
                 type="file"
                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -442,20 +526,32 @@ export function BankReconciliationPanel() {
             <Stack
               direction={{ xs: "column", md: "row" }}
               spacing={2}
-              alignItems="center"
+              alignItems={{ xs: "stretch", md: "center" }}
+              justifyContent="space-between"
             >
-              <Typography>
-                Đã chọn {file.name}. Có thể phân tích ngay.
-              </Typography>
-              <Button
-                variant="contained"
-                onClick={() => void importFile()}
-                disabled={loading || !accountId}
-              >
-                {loading ? "Đang phân tích..." : "Phân tích sao kê"}
-              </Button>
+              <Box>
+                <Typography fontWeight={600} noWrap>
+                  {file.name}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {formatFileSize(file.size)} · Sẵn sàng phân tích
+                </Typography>
+              </Box>
+              <Stack direction={{ xs: "column-reverse", sm: "row" }} spacing={1}>
+                <Button variant="text" onClick={clearFileSelection} disabled={loading}>
+                  Bỏ chọn
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => void importFile()}
+                  disabled={loading || !accountId}
+                >
+                  {loading ? "Đang phân tích..." : "Phân tích sao kê"}
+                </Button>
+              </Stack>
             </Stack>
           )}
+          {loading && <LinearProgress />}
           {message.text && (
             <Alert severity={message.severity}>{message.text}</Alert>
           )}
@@ -464,7 +560,7 @@ export function BankReconciliationPanel() {
       <Paper sx={{ overflow: "hidden" }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={0.5} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
           <Box>
-            <Typography variant="subtitle1" fontWeight={700}>Kết quả phân tích</Typography>
+            <Typography variant="subtitle1" fontWeight={700}>Bước 3 · Đối soát giao dịch</Typography>
             <Typography variant="body2" color="text.secondary">
               {items.length
                 ? `${items.length} giao dịch trong phiên · ${money(summary.creditAmount)} VND ghi có`
@@ -484,48 +580,85 @@ export function BankReconciliationPanel() {
                 Xác nhận khớp tự động ({autoMatchedItems.length})
               </Button>
             )}
-            {items.length > 0 && (
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<RefreshOutlinedIcon />}
-                onClick={() => setResetDialogOpen(true)}
-                disabled={loading}
-              >
-                Phiên mới
-              </Button>
-            )}
             {items.length > 0 && <Chip size="small" color="warning" label={`${summary.unmatched} chưa khớp`} />}
           </Stack>
         </Stack>
         {items.length > 0 && (
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ px: 2, pb: 2 }}>
-            <Chip size="small" variant="outlined" label={`Tất cả: ${summary.total}`} />
-            <Chip size="small" color="info" variant="outlined" label={`Khớp tự động: ${summary.matched}`} />
-            <Chip size="small" color="warning" variant="outlined" label={`Cần kiểm tra: ${summary.unmatched}`} />
-            <Chip size="small" variant="outlined" label={`Bỏ qua: ${summary.ignored}`} />
-            <Chip size="small" variant="outlined" label={`Trùng: ${summary.duplicated}`} />
-            <Chip size="small" color="success" variant="outlined" label={`Đã xác nhận: ${summary.confirmed}`} />
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel id="reconciliation-result-filter-label">Lọc trạng thái</InputLabel>
-              <Select
-                labelId="reconciliation-result-filter-label"
+          <Stack spacing={1.5} sx={{ px: 2, pb: 2 }}>
+            <Stack spacing={1} sx={{ px: 2, pt: 2 }}>
+              <TextField
+                size="small"
+                fullWidth
+                label="Tìm giao dịch"
+                placeholder="Mã giao dịch, nội dung, học viên..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlinedIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setSearchTerm("")}
+                      >
+                        <ClearOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : undefined,
+                }}
+              />
+              <Tabs
                 value={resultFilter}
-                label="Lọc trạng thái"
-                onChange={(event) => setResultFilter(event.target.value as ResultFilter)}
+                onChange={(_, value: ResultFilter) => setResultFilter(value)}
+                variant="scrollable"
+                scrollButtons="auto"
+                allowScrollButtonsMobile
+                aria-label="Phân loại giao dịch đối soát"
+                sx={{ minHeight: 44, borderBottom: 1, borderColor: "divider" }}
               >
-                <MenuItem value="ALL">Tất cả</MenuItem>
-                <MenuItem value="AUTO_MATCHED">Khớp tự động</MenuItem>
-                <MenuItem value="UNMATCHED">Cần kiểm tra</MenuItem>
-                <MenuItem value="IGNORED">Bỏ qua</MenuItem>
-                <MenuItem value="DUPLICATED">Trùng giao dịch</MenuItem>
-                <MenuItem value="CONFIRMED">Đã xác nhận</MenuItem>
-              </Select>
-            </FormControl>
+                <Tab value="ALL" label={`Tất cả (${summary.total})`} />
+                <Tab value="UNMATCHED" label={`Cần kiểm tra (${summary.unmatched})`} />
+                <Tab value="AUTO_MATCHED" label={`Khớp tự động (${summary.matched})`} />
+                <Tab value="CONFIRMED" label={`Đã xác nhận (${summary.confirmed})`} />
+                <Tab value="IGNORED" label={`Bỏ qua (${summary.ignored})`} />
+                <Tab value="DUPLICATED" label={`Trùng (${summary.duplicated})`} />
+              </Tabs>
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+              <Typography variant="body2" color="text.secondary">
+                Tổng tiền ghi có: <strong>{money(summary.creditAmount)} VND</strong>
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Đang hiển thị <strong>{searchedItems.length}</strong>/{filteredItems.length} dòng
+              </Typography>
+            </Stack>
           </Stack>
         )}
-        <Box sx={{ overflowX: "auto" }}>
-        <Table size="small">
+        <TableContainer sx={{ maxHeight: 640, overflowX: "auto" }}>
+        <Table
+          size="small"
+          stickyHeader
+          sx={{
+            minWidth: 1080,
+            "& tbody tr:nth-of-type(even)": { bgcolor: "action.hover" },
+            "& th:last-of-type, & td:last-of-type": {
+              position: "sticky",
+              right: 0,
+              bgcolor: "background.paper",
+              boxShadow: "-4px 0 8px rgba(0, 0, 0, 0.04)",
+            },
+            "& th:last-of-type": { zIndex: 3 },
+            "& td:last-of-type": { zIndex: 1 },
+            "& tbody tr:nth-of-type(even) td:last-of-type": {
+              bgcolor: "action.hover",
+            },
+          }}
+        >
           <TableHead>
             <TableRow>
               <TableCell>Dòng</TableCell>
@@ -535,22 +668,26 @@ export function BankReconciliationPanel() {
               <TableCell align="right">Ghi có</TableCell>
               <TableCell align="right">Ghi nợ</TableCell>
               <TableCell>Trạng thái</TableCell>
-              <TableCell>Đối tượng đối soát</TableCell>
+              <TableCell>Chi tiết đối soát</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredItems.map((item) => (
-              <TableRow key={item.confirmationToken}>
-                <TableCell>{item.rowNo}</TableCell>
-                <TableCell>
+            {searchedItems.map((item) => (
+              <TableRow
+                hover
+                selected={selectedToken === item.confirmationToken}
+                key={item.confirmationToken}
+              >
+                <TableCell sx={{ width: 64 }}>{item.rowNo}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }}>
                   {formatTransactionDate(item.transactionDate)}
                 </TableCell>
-                <TableCell>{item.bankTransactionNo || "-"}</TableCell>
-                <TableCell sx={{ minWidth: 300 }}>{item.description}</TableCell>
-                <TableCell align="right">
+                <TableCell sx={{ minWidth: 150, whiteSpace: "nowrap" }}>{item.bankTransactionNo || "-"}</TableCell>
+                <TableCell sx={{ minWidth: 280, maxWidth: 360, whiteSpace: "normal", wordBreak: "break-word" }}>{item.description}</TableCell>
+                <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                   {money(item.creditAmount)} VND
                 </TableCell>
-                <TableCell align="right">
+                <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                   {money(item.debitAmount)} VND
                 </TableCell>
                 <TableCell>
@@ -566,76 +703,34 @@ export function BankReconciliationPanel() {
                     }
                   />
                 </TableCell>
-                <TableCell>
-                  {confirmedTokens.has(item.confirmationToken) ? (
-                    <Typography variant="body2" color="success.main">
-                      Đã xác nhận và tạo payment/biên lai trong phiên này
-                    </Typography>
-                  ) : item.paymentBatch ? (
-                    <Box>
-                      <Typography variant="body2">
-                        <strong>{item.paymentBatch.batchNo}</strong> ·{" "}
-                        {item.paymentBatch.student.code} —{" "}
-                        {item.paymentBatch.student.fullName}
+                <TableCell sx={{ minWidth: 190 }}>
+                  <Stack spacing={0.75}>
+                    {confirmedTokens.has(item.confirmationToken) ? (
+                      <Typography variant="body2" color="success.main" noWrap>
+                        Đã xác nhận
                       </Typography>
-                      <Typography variant="body2">
-                        {item.paymentBatch.allocations.length} khoản ·{" "}
-                        {money(item.paymentBatch.totalAmount)} VND
+                    ) : item.paymentBatch ? (
+                      <Typography variant="body2" noWrap>
+                        <strong>{item.paymentBatch.batchNo}</strong> · {item.paymentBatch.student.code}
                       </Typography>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={loading}
-                        onClick={() =>
-                          requestConfirm(
-                            item,
-                            { batchId: item.paymentBatch!.id },
-                            "Xác nhận đợt thanh toán",
-                            `Xác nhận ${item.paymentBatch!.batchNo} cho ${item.paymentBatch!.student.code} — ${item.paymentBatch!.student.fullName}, số tiền ${money(item.creditAmount)} VND, giao dịch ${item.bankTransactionNo || "không có mã"} lúc ${formatTransactionDate(item.transactionDate)} và tạo biên lai?`,
-                          )
-                        }
-                      >
-                        Xác nhận đợt thanh toán
-                      </Button>
-                    </Box>
-                  ) : (
-                    item.reconciliationStatus === "IGNORED" ? (
-                      "Giao dịch ghi nợ, không đối soát"
-                    ) : item.reconciliationStatus === "DUPLICATED" ? (
-                      "Giao dịch đã được xác nhận trước đó"
                     ) : item.paymentBatchCandidates.length ? (
-                      <Stack spacing={1}>
-                        <Typography variant="body2" color="text.secondary">
-                          Có {item.paymentBatchCandidates.length} đợt cùng số tiền, hãy chọn đúng học viên:
-                        </Typography>
-                        {item.paymentBatchCandidates.map((candidate) => (
-                          <Box key={candidate.id}>
-                            <Typography variant="body2">
-                              <strong>{candidate.batchNo}</strong> · {candidate.student.code} — {candidate.student.fullName}
-                            </Typography>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={loading}
-                              onClick={() =>
-                                requestConfirm(
-                                  item,
-                                  { batchId: candidate.id },
-                                  "Xác nhận đợt thanh toán thủ công",
-                                  `Xác nhận giao dịch ${item.bankTransactionNo || "không có mã"} số tiền ${money(item.creditAmount)} VND lúc ${formatTransactionDate(item.transactionDate)} cho ${candidate.batchNo} — ${candidate.student.code} — ${candidate.student.fullName} và tạo biên lai?`,
-                                  candidate.confirmationToken,
-                                )
-                              }
-                            >
-                              Chọn đợt này
-                            </Button>
-                          </Box>
-                        ))}
-                      </Stack>
+                      <Typography variant="body2" color="warning.main" noWrap>
+                        {item.paymentBatchCandidates.length} ứng viên phù hợp
+                      </Typography>
                     ) : (
-                      "Không tìm thấy đợt thanh toán cùng số tiền"
-                    )
-                  )}
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {item.reconciliationStatus === "IGNORED" ? "Giao dịch ghi nợ" : "Chưa có đối tượng"}
+                      </Typography>
+                    )}
+                    <Button
+                      size="small"
+                      variant={selectedToken === item.confirmationToken ? "contained" : "outlined"}
+                      onClick={() => setSelectedToken(item.confirmationToken)}
+                      disabled={loading}
+                    >
+                      Xem chi tiết
+                    </Button>
+                  </Stack>
                 </TableCell>
               </TableRow>
             ))}
@@ -663,9 +758,165 @@ export function BankReconciliationPanel() {
                 </TableCell>
               </TableRow>
             )}
+            {filteredItems.length > 0 && !searchedItems.length && (
+              <TableRow>
+                <TableCell colSpan={8}>
+                  <Typography sx={{ p: 3 }} color="text.secondary" textAlign="center">
+                    Không tìm thấy giao dịch phù hợp với từ khóa “{searchTerm}”
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
-        </Box>
+        </TableContainer>
+        {items.length > 0 && (
+          <Drawer
+            anchor="right"
+            open={Boolean(selectedItem)}
+            onClose={() => setSelectedToken(null)}
+            PaperProps={{
+              sx: {
+                width: { xs: "100%", sm: 440 },
+                display: "flex",
+                flexDirection: "column",
+              },
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="space-between"
+              sx={{ px: 2, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}
+            >
+              <Box>
+                <Typography variant="subtitle1" fontWeight={700}>Chi tiết đối soát</Typography>
+                <Typography variant="caption" color="text.secondary">Thông tin và thao tác giao dịch</Typography>
+              </Box>
+              <IconButton aria-label="Đóng chi tiết đối soát" onClick={() => setSelectedToken(null)}>
+                <CloseOutlinedIcon />
+              </IconButton>
+            </Stack>
+            <Box sx={{ p: 2, overflowY: "auto", flex: 1, bgcolor: "background.default" }}>
+          {selectedItem ? (
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="overline" color="text.secondary">
+                  Giao dịch đang chọn
+                </Typography>
+                <Typography variant="subtitle1" fontWeight={700} noWrap>
+                  {selectedItem.bankTransactionNo || "Không có mã giao dịch"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Dòng {selectedItem.rowNo} · {formatTransactionDate(selectedItem.transactionDate)}
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                <Chip
+                  size="small"
+                  color={reconciliationColors[selectedItem.reconciliationStatus] || "default"}
+                  label={reconciliationLabels[selectedItem.reconciliationStatus] || selectedItem.reconciliationStatus}
+                />
+                <Typography variant="body2" fontWeight={700}>
+                  {money(selectedItem.creditAmount)} VND ghi có
+                </Typography>
+              </Stack>
+              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  {selectedItem.description}
+                </Typography>
+              </Box>
+              <Divider />
+              {confirmedTokens.has(selectedItem.confirmationToken) ? (
+                <Alert severity="success">
+                  Đã xác nhận và tạo payment/biên lai trong phiên này.
+                </Alert>
+              ) : selectedItem.paymentBatch ? (
+                <Stack spacing={1.25}>
+                  <Typography variant="subtitle2" fontWeight={700}>Đợt thanh toán khớp</Typography>
+                  <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
+                    <Typography variant="body2" fontWeight={700}>
+                      {selectedItem.paymentBatch.batchNo} · {selectedItem.paymentBatch.student.code}
+                    </Typography>
+                    <Typography variant="body2">
+                      {selectedItem.paymentBatch.student.fullName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {selectedItem.paymentBatch.allocations.length} khoản · {money(selectedItem.paymentBatch.totalAmount)} VND
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    disabled={loading}
+                    onClick={() =>
+                      requestConfirm(
+                        selectedItem,
+                        { batchId: selectedItem.paymentBatch!.id },
+                        "Xác nhận đợt thanh toán",
+                        `Xác nhận ${selectedItem.paymentBatch!.batchNo} cho ${selectedItem.paymentBatch!.student.code} — ${selectedItem.paymentBatch!.student.fullName}, số tiền ${money(selectedItem.creditAmount)} VND, giao dịch ${selectedItem.bankTransactionNo || "không có mã"} lúc ${formatTransactionDate(selectedItem.transactionDate)} và tạo biên lai?`,
+                      )
+                    }
+                  >
+                    Xác nhận đợt thanh toán
+                  </Button>
+                </Stack>
+              ) : selectedItem.reconciliationStatus === "IGNORED" ? (
+                <Alert severity="info">Giao dịch ghi nợ, không cần đối soát.</Alert>
+              ) : selectedItem.reconciliationStatus === "DUPLICATED" ? (
+                <Alert severity="warning">Giao dịch đã được xác nhận trước đó.</Alert>
+              ) : selectedItem.paymentBatchCandidates.length ? (
+                <Stack spacing={1.25}>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700}>Chọn đối tượng đối soát</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Có {selectedItem.paymentBatchCandidates.length} đợt cùng số tiền. Chọn đúng học viên để xác nhận.
+                    </Typography>
+                  </Box>
+                  {selectedItem.paymentBatchCandidates.map((candidate) => (
+                    <Box key={candidate.id} sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
+                      <Typography variant="body2" fontWeight={700}>
+                        {candidate.batchNo} · {candidate.student.code}
+                      </Typography>
+                      <Typography variant="body2">{candidate.student.fullName}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {candidate.allocations.length} khoản · {money(candidate.totalAmount)} VND
+                      </Typography>
+                      <Button
+                        sx={{ mt: 1 }}
+                        size="small"
+                        variant="outlined"
+                        fullWidth
+                        disabled={loading}
+                        onClick={() =>
+                          requestConfirm(
+                            selectedItem,
+                            { batchId: candidate.id },
+                            "Xác nhận đợt thanh toán thủ công",
+                            `Xác nhận giao dịch ${selectedItem.bankTransactionNo || "không có mã"} số tiền ${money(selectedItem.creditAmount)} VND lúc ${formatTransactionDate(selectedItem.transactionDate)} cho ${candidate.batchNo} — ${candidate.student.code} — ${candidate.student.fullName} và tạo biên lai?`,
+                            candidate.confirmationToken,
+                          )
+                        }
+                      >
+                        Chọn đợt này
+                      </Button>
+                    </Box>
+                  ))}
+                </Stack>
+              ) : (
+                <Alert severity="info">Không tìm thấy đợt thanh toán cùng số tiền.</Alert>
+              )}
+            </Stack>
+          ) : (
+            <Stack spacing={1} sx={{ py: 5 }} alignItems="center" textAlign="center">
+              <Typography variant="subtitle2">Chọn một giao dịch để xem chi tiết</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Danh sách ứng viên và thao tác xác nhận sẽ hiển thị tại đây.
+              </Typography>
+            </Stack>
+          )}
+          </Box>
+          </Drawer>
+        )}
       </Paper>
       <ConfirmDialog
         open={!!pendingConfirmation}
