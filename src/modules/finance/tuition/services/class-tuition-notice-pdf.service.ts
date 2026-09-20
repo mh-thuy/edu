@@ -1,6 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import type { AuditContext } from "@/lib/audit";
 import { PaymentBatchStatus } from "@prisma/client";
 import { TuitionFeeStatus } from "@prisma/client";
 import { TuitionFeeBillingType } from "@prisma/client";
@@ -16,9 +17,10 @@ export async function createClassPaymentBatches(
   actorId: string,
   period: TuitionBillingPeriod,
   bankAccountId: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
-    await TuitionService.createClassTuitionFees(classId, period, actorId, tx);
+    await TuitionService.createClassTuitionFees(classId, period, actorId, tx, auditContext);
 
     const bankAccount = await tx.bankAccount.findUnique({
       where: { id: bankAccountId },
@@ -118,6 +120,7 @@ export async function createClassPaymentBatches(
         },
         actorId,
         tx,
+        auditContext,
       );
     }
   }
@@ -129,6 +132,7 @@ export async function generateClassTuitionNoticePdf(
   exportedByName: string,
   exportedById: string,
   period: TuitionBillingPeriod,
+  auditContext?: AuditContext,
 ) {
   const classData = await prisma.class.findUnique({
     where: { id: classId },
@@ -171,6 +175,7 @@ export async function generateClassTuitionNoticePdf(
       batch.id,
       exportedByName,
       exportedById,
+      auditContext,
     );
     const sourcePdf = await PDFDocument.load(notice.pdf);
     const pages = await combinedPdf.copyPages(

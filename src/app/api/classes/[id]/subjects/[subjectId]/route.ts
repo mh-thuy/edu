@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
+import { getAuditContext } from "@/lib/audit";
 import { z } from "zod";
 import { classSubjectUpdateSchema } from "@/modules/class/schemas/class-subject.schema";
 import { removeClassSubject, updateClassSubject } from "@/modules/class/services/class.service";
@@ -23,17 +24,18 @@ export async function PATCH(request: NextRequest, context: { params?: Params }) 
         subjectId,
         classSubjectUpdateSchema.parse(await request.json()),
         user.id,
+        getAuditContext(request),
       ),
     );
   } catch (error: unknown) { return handleApiError(error, "Không thể cập nhật môn học"); }
 }
 
-export async function DELETE(_request: NextRequest, context: { params?: Params }) {
+export async function DELETE(request: NextRequest, context: { params?: Params }) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id, subjectId } = await getIds(context);
-    await removeClassSubject(id, subjectId, user.id);
+    await removeClassSubject(id, subjectId, user.id, getAuditContext(request));
     return apiSuccess({ id: subjectId });
   } catch (error: unknown) { return handleApiError(error, "Không thể xóa môn học"); }
 }

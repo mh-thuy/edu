@@ -2,6 +2,7 @@ import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { z } from "zod";
 import { cancelTuitionReceipt } from "@/modules/finance/receipts/services/receipt-cancellation.service";
+import { getAuditContext } from "@/lib/audit";
 
 const cancelSchema = z.object({
   reason: z.string().trim().min(1, "Lý do hủy là bắt buộc").max(500),
@@ -18,7 +19,7 @@ export async function POST(
     const { reason } = cancelSchema.parse(await request.json());
     const { id } = routeParamsSchema.parse(await params);
 
-    const receipt = await cancelTuitionReceipt(id, user.id, reason);
+    const receipt = await cancelTuitionReceipt(id, user.id, reason, getAuditContext(request));
 
     return apiSuccess(receipt);
   } catch (error) {

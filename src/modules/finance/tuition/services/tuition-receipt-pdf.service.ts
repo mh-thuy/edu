@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import {
   getTuitionReceiptSnapshot,
   parseReceiptSnapshot,
@@ -14,7 +15,11 @@ const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
-export async function generateTuitionReceiptPdf(receiptId: string, actorId: string) {
+export async function generateTuitionReceiptPdf(
+  receiptId: string,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   const receiptRef = await prisma.tuitionReceipt.findUnique({
     where: { id: receiptId },
     select: { paymentId: true },
@@ -25,7 +30,7 @@ export async function generateTuitionReceiptPdf(receiptId: string, actorId: stri
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${receiptRef.paymentId}::uuid FOR UPDATE`,
     );
-    return generateTuitionReceiptPdfWithClient(tx, receiptId, actorId);
+    return generateTuitionReceiptPdfWithClient(tx, receiptId, actorId, auditContext);
   });
 }
 
@@ -33,6 +38,7 @@ async function generateTuitionReceiptPdfWithClient(
   client: Prisma.TransactionClient,
   receiptId: string,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   const receipt = await client.tuitionReceipt.findUnique({
     where: { id: receiptId },
@@ -150,6 +156,7 @@ async function generateTuitionReceiptPdfWithClient(
       action: "PDF_PRINTED",
       dataAfter: { receiptNo: receipt.receiptNo, snapshotUsed: Boolean(snapshot) },
       performedBy: actorId,
+      ...auditFields(auditContext),
     },
   });
   return pdfBuffer;

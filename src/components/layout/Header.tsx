@@ -78,7 +78,7 @@ export function Header({ user, onToggleSidebar, currentTitle = "Dashboard", curr
             {user.fullName}
           </Typography>
         </Box>
-        <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small">
+        <IconButton onClick={(event) => setAnchorEl(event.currentTarget)} size="small" aria-label="Mở menu tài khoản">
           <Avatar sx={{ width: 38, height: 38, bgcolor: "primary.main", fontWeight: 700 }}>{initials}</Avatar>
         </IconButton>
         <Menu

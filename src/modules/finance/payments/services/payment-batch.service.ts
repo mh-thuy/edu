@@ -6,6 +6,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
@@ -43,6 +44,7 @@ export async function completePaymentBatch(
     transactionReference?: string;
     paymentContent?: string;
   },
+  auditContext?: AuditContext,
 ) {
   // Serialize completion of the same batch before creating payments/receipts.
   await tx.$executeRaw(
@@ -210,6 +212,7 @@ export async function completePaymentBatch(
           amount: receipt.amount.toString(),
         },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     await tx.tuitionFee.update({
@@ -233,6 +236,7 @@ export async function completePaymentBatch(
           paymentBatchId: batch.id,
         },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     await tx.tuitionAuditLog.create({
@@ -246,6 +250,7 @@ export async function completePaymentBatch(
           status: TuitionFeeStatus.PAID,
         },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
   }
@@ -278,6 +283,7 @@ export async function completePaymentBatch(
         amount: batchReceipt.amount.toString(),
       },
       performedBy: actorId,
+      ...auditFields(auditContext),
     },
   });
   const completed = await tx.paymentBatch.update({
@@ -311,6 +317,7 @@ export async function completePaymentBatch(
         allocationCount: completed.allocations.length,
       },
       performedBy: actorId,
+      ...auditFields(auditContext),
     },
   });
   return completed;
@@ -320,6 +327,7 @@ export async function createPaymentBatch(
   data: PaymentBatchCreate,
   actorId: string,
   transaction?: Prisma.TransactionClient,
+  auditContext?: AuditContext,
 ) {
   const execute = async (tx: Prisma.TransactionClient) => {
     const feeRefs = await tx.tuitionFee.findMany({
@@ -488,10 +496,11 @@ export async function createPaymentBatch(
           tuitionFeeIds: data.tuitionFeeIds,
         },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     if (data.paymentMethod === "CASH")
-      return completePaymentBatch(tx, batch.id, actorId);
+      return completePaymentBatch(tx, batch.id, actorId, undefined, auditContext);
     return batch;
   };
   return transaction ? execute(transaction) : prisma.$transaction(execute);
@@ -642,6 +651,7 @@ export async function cancelPaymentBatch(
   batchId: string,
   actorId: string,
   reason: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
@@ -669,6 +679,7 @@ export async function cancelPaymentBatch(
         dataBefore: batch as unknown as Prisma.InputJsonValue,
         dataAfter: cancelled as unknown as Prisma.InputJsonValue,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return cancelled;
@@ -678,6 +689,7 @@ export async function cancelPaymentBatch(
 export async function convertPaymentBatchToCash(
   batchId: string,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
@@ -715,16 +727,21 @@ export async function convertPaymentBatchToCash(
         dataBefore: { paymentMethod: batch.paymentMethod },
         dataAfter: { paymentMethod: "CASH", reason: "Chuyển sang thanh toán tiền mặt" },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return completePaymentBatch(tx, batchId, actorId, {
       paymentDate: new Date(),
       paymentContent: "Thanh toán tiền mặt",
-    });
+    }, auditContext);
   });
 }
 
-export async function getPaymentBatchQr(batchId: string, actorId: string) {
+export async function getPaymentBatchQr(
+  batchId: string,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
@@ -762,6 +779,7 @@ export async function getPaymentBatchQr(batchId: string, actorId: string) {
           bankAccountId: account.id,
         },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return {

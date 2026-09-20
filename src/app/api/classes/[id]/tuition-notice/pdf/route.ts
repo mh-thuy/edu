@@ -2,6 +2,7 @@ import { requireApiUser } from "@/lib/api-auth";
 import { apiError, handleApiError } from "@/lib/api";
 import { z } from "zod";
 import { createClassPaymentBatches, generateClassTuitionNoticePdf } from "@/modules/finance/tuition/services/class-tuition-notice-pdf.service";
+import { getAuditContext } from "@/lib/audit";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,8 +28,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       billingYear: Number(month.data.slice(0, 4)),
       billingMonth: Number(month.data.slice(5, 7)),
     };
-    await createClassPaymentBatches(classId, user.id, period, body.data.bankAccountId);
-    const result = await generateClassTuitionNoticePdf(classId, user.fullName, user.id, period);
+    const auditContext = getAuditContext(request);
+    await createClassPaymentBatches(classId, user.id, period, body.data.bankAccountId, auditContext);
+    const result = await generateClassTuitionNoticePdf(classId, user.fullName, user.id, period, auditContext);
     const inline = new URL(request.url).searchParams.get("inline") === "1";
     return new Response(result.pdf, {
       headers: {

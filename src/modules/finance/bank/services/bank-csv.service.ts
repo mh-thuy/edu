@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { Prisma, PaymentBatchStatus, TuitionPaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import { completePaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
 
 export type ParsedBankRow = {
@@ -476,6 +477,7 @@ export async function importBankStatement(args: {
   fileName: string;
   bankAccountId: string;
   actorId: string;
+  auditContext?: AuditContext;
 }): Promise<BankImportResult> {
   const bank = await prisma.bankAccount.findUnique({
     where: { id: args.bankAccountId },
@@ -653,6 +655,24 @@ export async function importBankStatement(args: {
     invalidRowErrors,
     items,
   };
+  await prisma.tuitionAuditLog.createMany({
+    data: items.map((item, index) => ({
+      entityType: "BANK_ACCOUNT",
+      entityId: args.bankAccountId,
+      action: `STATEMENT_ROW_${item.reconciliationStatus}`,
+      dataAfter: {
+        fileName: args.fileName,
+        rowNo: item.rowNo,
+        transactionHash: rowHashes[index]?.transactionHash ?? null,
+        bankTransactionNo: item.bankTransactionNo,
+        creditAmount: item.creditAmount.toString(),
+        debitAmount: item.debitAmount.toString(),
+        paymentBatchId: item.paymentBatch?.id ?? null,
+      },
+      performedBy: args.actorId,
+      ...auditFields(args.auditContext),
+    })),
+  });
   await prisma.tuitionAuditLog.create({
     data: {
       entityType: "BANK_ACCOUNT",
@@ -669,6 +689,7 @@ export async function importBankStatement(args: {
         invalidRows: result.invalidRows,
       },
       performedBy: args.actorId,
+      ...auditFields(args.auditContext),
     },
   });
   return result;
@@ -679,6 +700,7 @@ async function confirmPaymentBatch(
   batchId: string,
   actorId: string,
   transaction?: Prisma.TransactionClient,
+  auditContext?: AuditContext,
 ) {
   if (payload.paymentBatchId !== batchId) throw new ConflictError("Đợt thanh toán không thuộc giao dịch ngân hàng này");
   const execute = async (tx: Prisma.TransactionClient) => {
@@ -710,13 +732,31 @@ async function confirmPaymentBatch(
     if (batch.bankAccountId !== payload.bankAccountId)
       throw new ConflictError("Tài khoản ngân hàng không khớp với đợt thanh toán");
     if (!new Prisma.Decimal(payload.creditAmount).equals(batch.totalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
-    return completePaymentBatch(tx, batchId, actorId, {
+    const completed = await completePaymentBatch(tx, batchId, actorId, {
       paymentDate: new Date(payload.transactionDate),
       bankAccountId: payload.bankAccountId,
       bankTransactionNo: payload.bankTransactionNo || undefined,
       transactionReference: payload.transactionHash,
       paymentContent: payload.description,
+    }, auditContext);
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "PAYMENT_BATCH",
+        entityId: batchId,
+        action: "BANK_RECONCILIATION_CONFIRMED",
+        dataAfter: {
+          transactionHash: payload.transactionHash,
+          bankAccountId: payload.bankAccountId,
+          bankTransactionNo: payload.bankTransactionNo,
+          rowNo: payload.rowNo,
+          transactionDate: payload.transactionDate,
+          creditAmount: payload.creditAmount,
+        },
+        performedBy: actorId,
+        ...auditFields(auditContext),
+      },
     });
+    return completed;
   };
   return transaction ? execute(transaction) : prisma.$transaction(execute);
 }
@@ -725,15 +765,23 @@ export async function confirmBankReconciliation(args: {
   confirmationToken: string;
   batchId: string;
   actorId: string;
+  auditContext?: AuditContext;
 }) {
   const payload = verifyConfirmationToken(args.confirmationToken);
   if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
-  return confirmPaymentBatch(payload, args.batchId, args.actorId);
+  return confirmPaymentBatch(
+    payload,
+    args.batchId,
+    args.actorId,
+    undefined,
+    args.auditContext,
+  );
 }
 
 export async function confirmBankReconciliations(args: {
   confirmations: Array<{ confirmationToken: string; batchId: string }>;
   actorId: string;
+  auditContext?: AuditContext;
 }) {
   const payloads = args.confirmations.map((confirmation) => {
     const payload = verifyConfirmationToken(confirmation.confirmationToken);
@@ -752,6 +800,7 @@ export async function confirmBankReconciliations(args: {
           confirmation.batchId,
           args.actorId,
           tx,
+          args.auditContext,
         ),
       );
     }

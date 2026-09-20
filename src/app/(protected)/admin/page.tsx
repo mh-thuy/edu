@@ -132,6 +132,8 @@ export default function AdminPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [appliedDateFrom, setAppliedDateFrom] = useState("");
+  const [appliedDateTo, setAppliedDateTo] = useState("");
   const [dailyReportDate, setDailyReportDate] = useState(currentVietnamDate);
   const [exportingDailyReport, setExportingDailyReport] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -143,8 +145,8 @@ export default function AdminPage() {
 
     try {
       const params = new URLSearchParams();
-      if (dateFrom) params.set("dateFrom", dateFrom);
-      if (dateTo) params.set("dateTo", dateTo);
+      if (appliedDateFrom) params.set("dateFrom", appliedDateFrom);
+      if (appliedDateTo) params.set("dateTo", appliedDateTo);
       const response = await fetch(`/api/dashboard/stats?${params}`);
 
       if (!response.ok) throw new Error("Không thể tải dữ liệu dashboard");
@@ -158,7 +160,7 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [appliedDateFrom, appliedDateTo]);
 
   useEffect(() => {
     void loadStats();
@@ -167,6 +169,18 @@ export default function AdminPage() {
   const clearFilters = () => {
     setDateFrom("");
     setDateTo("");
+    setAppliedDateFrom("");
+    setAppliedDateTo("");
+  };
+
+  const applyFilters = () => {
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setError("Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
+      return;
+    }
+    setError(null);
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
   };
 
   const exportDailyReport = async () => {
@@ -236,24 +250,34 @@ export default function AdminPage() {
                 là số hiện tại
               </Typography>
             </Box>
-            <Stack direction="row" spacing={1}>
-              <DatePickerField
-                label="Từ ngày"
-                value={dateFrom}
-                onChange={setDateFrom}
-                textFieldProps={{ size: "small" }}
-              />
-              <DatePickerField
-                label="Đến ngày"
-                value={dateTo}
-                onChange={setDateTo}
-                textFieldProps={{ size: "small" }}
-              />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: "100%" }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <DatePickerField
+                  label="Từ ngày"
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  textFieldProps={{ size: "small" }}
+                />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <DatePickerField
+                  label="Đến ngày"
+                  value={dateTo}
+                  onChange={setDateTo}
+                  textFieldProps={{
+                    size: "small",
+                    error: Boolean(dateFrom && dateTo && dateFrom > dateTo),
+                    helperText: dateFrom && dateTo && dateFrom > dateTo
+                      ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc"
+                      : undefined,
+                  }}
+                />
+              </Box>
 
               <Button
                 variant="contained"
-                sx={{ minWidth: 120 }}
-                onClick={() => void loadStats()}
+                sx={{ minWidth: 120, width: { xs: "100%", sm: "auto" } }}
+                onClick={applyFilters}
               >
                 Áp dụng
               </Button>
@@ -261,7 +285,7 @@ export default function AdminPage() {
                 variant="outlined"
                 onClick={clearFilters}
                 disabled={!dateFrom && !dateTo}
-                sx={{ minWidth: 120 }}
+                sx={{ minWidth: 120, width: { xs: "100%", sm: "auto" } }}
               >
                 Xóa lọc
               </Button>
@@ -270,18 +294,20 @@ export default function AdminPage() {
         </CardContent>
       </Card>
 
-      <Stack direction="row" spacing={1}>
-        <DatePickerField
-          label="Ngày báo cáo Excel"
-          value={dailyReportDate}
-          onChange={setDailyReportDate}
-          textFieldProps={{ size: "small" }}
-        />
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: "100%" }}>
+        <Box sx={{ flex: { sm: "0 1 220px" }, minWidth: 0 }}>
+          <DatePickerField
+            label="Ngày báo cáo Excel"
+            value={dailyReportDate}
+            onChange={setDailyReportDate}
+            textFieldProps={{ size: "small" }}
+          />
+        </Box>
         <Button
           variant="outlined"
           startIcon={<DownloadIcon />}
           onClick={() => void exportDailyReport()}
-          sx={{ minWidth: 300 }}
+          sx={{ minWidth: { sm: 300 }, width: { xs: "100%", sm: "auto" } }}
           disabled={exportingDailyReport || !dailyReportDate}
         >
           {exportingDailyReport ? "Đang xuất..." : "Xuất báo cáo ngày"}

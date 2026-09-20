@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { BadRequestError } from "@/lib/errors";
 import { requireApiUser } from "@/lib/api-auth";
+import { getAuditContext } from "@/lib/audit";
 import { addClassSubject, getClassSubjects } from "@/modules/class/services/class.service";
 import { classSubjectCreateSchema } from "@/modules/class/schemas/class-subject.schema";
 
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest, context: { params?: Params }) {
         id,
         classSubjectCreateSchema.parse(await request.json()),
         user.id,
+        getAuditContext(request),
       ),
       201,
     );

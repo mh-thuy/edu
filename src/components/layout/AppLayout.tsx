@@ -21,6 +21,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
   const routeMeta = [
     { prefix: "/admin/tuition-fees/payment-history", title: "Giao dịch thu học phí", section: "Tài chính" },
     { prefix: "/admin/tuition-fees/payment", title: "Thu học phí", section: "Tài chính" },
+    { prefix: "/admin/tuition-fees/", title: "Chi tiết học phí", section: "Tài chính" },
     { prefix: "/admin/tuition-fees", title: "Các khoản học phí", section: "Tài chính" },
     { prefix: "/admin/bank-reconciliation", title: "Đối soát ngân hàng", section: "Tài chính" },
     { prefix: "/admin/bank-accounts", title: "Tài khoản nhận tiền", section: "Tài chính" },
@@ -29,6 +30,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
     { prefix: "/admin/users", title: "Người dùng", section: "Hệ thống" },
     { prefix: "/admin/teachers", title: "Giáo viên", section: "Đào tạo" },
     { prefix: "/admin/students", title: "Học viên", section: "Đào tạo" },
+    { prefix: "/admin/classes/", title: "Chi tiết lớp học", section: "Đào tạo" },
     { prefix: "/admin/classes", title: "Lớp học", section: "Đào tạo" },
     { prefix: "/admin/subjects", title: "Môn học", section: "Đào tạo" },
     { prefix: "/admin", title: "Dashboard", section: "Tổng quan" },

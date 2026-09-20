@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
+import { getAuditContext } from "@/lib/audit";
 import { classUpdateSchema } from "@/modules/class/schemas/class.schema";
 import { getClassById, updateClass, deleteClass } from "@/modules/class/services/class.service";
 
@@ -31,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Params }
     const body = await request.json();
     const data = classUpdateSchema.parse(body);
 
-    const classData = await updateClass(id, data, user.id);
+    const classData = await updateClass(id, data, user.id, getAuditContext(request));
     return apiSuccess(classData);
   } catch (error: unknown) {
     return handleApiError(error, "Failed to update class");

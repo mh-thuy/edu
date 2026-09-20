@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
@@ -39,6 +40,7 @@ export async function cancelTuitionReceipt(
   receiptId: string,
   actorId: string,
   reason: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     let receipt = await findReceiptForCancellation(tx, receiptId);
@@ -173,7 +175,9 @@ export async function cancelTuitionReceipt(
             performedBy: actorId,
           });
         }
-        await tx.tuitionAuditLog.createMany({ data: auditRows });
+        await tx.tuitionAuditLog.createMany({
+          data: auditRows.map((row) => ({ ...row, ...auditFields(auditContext) })),
+        });
       }
 
       const cancelledBatch = await tx.paymentBatch.update({
@@ -199,6 +203,7 @@ export async function cancelTuitionReceipt(
               cancelledBy: actorId,
             },
             performedBy: actorId,
+            ...auditFields(auditContext),
           },
         });
       }
@@ -274,7 +279,7 @@ export async function cancelTuitionReceipt(
           dataAfter: cancelledReceipt as unknown as Prisma.InputJsonValue,
           performedBy: actorId,
         },
-      ],
+      ].map((row) => ({ ...row, ...auditFields(auditContext) })),
     });
     return cancelledReceipt;
   });

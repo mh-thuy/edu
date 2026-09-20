@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import type { BankAccountCreate, BankAccountUpdate } from "../schemas/bank-account.schema";
 
 export function listBankAccounts(includeInactive = false) {
@@ -9,7 +10,11 @@ export function listBankAccounts(includeInactive = false) {
   });
 }
 
-export function createBankAccount(data: BankAccountCreate, actorId: string) {
+export function createBankAccount(
+  data: BankAccountCreate,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   return prisma.$transaction(async (tx) => {
     const created = await tx.bankAccount.create({
       data: {
@@ -26,13 +31,19 @@ export function createBankAccount(data: BankAccountCreate, actorId: string) {
         action: "CREATED",
         dataAfter: created,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return created;
   });
 }
 
-export async function updateBankAccount(id: string, data: BankAccountUpdate, actorId: string) {
+export async function updateBankAccount(
+  id: string,
+  data: BankAccountUpdate,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`
       SELECT id FROM bank_accounts WHERE id = ${id}::uuid FOR UPDATE
@@ -92,6 +103,7 @@ export async function updateBankAccount(id: string, data: BankAccountUpdate, act
         dataBefore: existing,
         dataAfter: updated,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return updated;

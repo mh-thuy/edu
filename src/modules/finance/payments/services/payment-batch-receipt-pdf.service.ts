@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import {
   getPaymentBatchReceiptSnapshot,
   parseBatchReceiptSnapshot,
@@ -14,7 +15,11 @@ const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
-export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId: string) {
+export async function generatePaymentBatchReceiptPdf(
+  receiptId: string,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   const receiptRef = await prisma.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
     select: { paymentBatchId: true },
@@ -35,7 +40,7 @@ export async function generatePaymentBatchReceiptPdf(receiptId: string, actorId:
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM payment_batches WHERE id = ${receiptRef.paymentBatchId}::uuid FOR UPDATE`,
     );
-    return generatePaymentBatchReceiptPdfWithClient(tx, receiptId, actorId);
+    return generatePaymentBatchReceiptPdfWithClient(tx, receiptId, actorId, auditContext);
   });
 }
 
@@ -43,6 +48,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   client: Prisma.TransactionClient,
   receiptId: string,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   const receipt = await client.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
@@ -192,6 +198,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
       action: "RECEIPT_PDF_PRINTED",
       dataAfter: { receiptNo: receipt.receiptNo, snapshotUsed: Boolean(snapshot) },
       performedBy: actorId,
+      ...auditFields(auditContext),
     },
   });
   return {

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import { Prisma, type Class } from "@prisma/client";
 import type {
   ClassCreate,
@@ -229,6 +230,7 @@ export async function updateClass(
   id: string,
   data: ClassUpdate,
   actorId: string,
+  auditContext?: AuditContext,
 ): Promise<Class> {
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
@@ -331,6 +333,7 @@ export async function updateClass(
               status: "COMPLETED",
             },
             performedBy: actorId,
+            ...auditFields(auditContext),
           })),
         });
       }
@@ -390,6 +393,7 @@ export async function assignStudentToClass(
   studentId: string,
   classSubjectIds: string[],
   actorId?: string,
+  auditContext?: AuditContext,
 ): Promise<ClassStudentWithRelations> {
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
@@ -514,6 +518,7 @@ export async function assignStudentToClass(
           },
           reason: "Hủy khoảng tạm nghỉ khi học viên tái đăng ký",
           performedBy: actorId || studentId,
+          ...auditFields(auditContext),
         })),
       });
     }
@@ -581,6 +586,7 @@ export async function assignStudentToClass(
           clearedPauseIds,
         },
         performedBy,
+        ...auditFields(auditContext),
       },
     });
     return enrollment;
@@ -593,6 +599,7 @@ export async function removeSubjectFromEnrollment(
   classSubjectId: string,
   actorId: string,
   options?: { force?: boolean; reason?: string },
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
@@ -669,6 +676,7 @@ export async function removeSubjectFromEnrollment(
         },
         reason: options?.reason?.trim(),
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return { dropped: true, feeAlreadyCreated: Boolean(feeItem) };
@@ -686,6 +694,7 @@ export async function pauseStudentEnrollment(
   studentId: string,
   data: { startMonth: string; endMonth: string; reason?: string },
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   const startMonth = parseBillingMonth(data.startMonth);
   const endMonth = parseBillingMonth(data.endMonth);
@@ -772,6 +781,7 @@ export async function pauseStudentEnrollment(
         dataAfter: pause as unknown as Prisma.InputJsonValue,
         reason: pause.reason,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return pause;
@@ -784,6 +794,7 @@ export async function updateEnrollmentPause(
   pauseId: string,
   data: { startMonth: string; endMonth: string; reason?: string },
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   const startMonth = parseBillingMonth(data.startMonth);
   const endMonth = parseBillingMonth(data.endMonth);
@@ -882,6 +893,7 @@ export async function updateEnrollmentPause(
         dataAfter: updated as unknown as Prisma.InputJsonValue,
         reason: updated.reason,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return updated;
@@ -893,6 +905,7 @@ export async function deleteEnrollmentPause(
   studentId: string,
   pauseId: string,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
@@ -927,6 +940,7 @@ export async function deleteEnrollmentPause(
         dataAfter: cancelled[0] as unknown as Prisma.InputJsonValue,
         reason: "Hủy thời gian tạm nghỉ",
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return { deleted: true };
@@ -1006,6 +1020,7 @@ export async function addClassSubject(
   classId: string,
   data: ClassSubjectCreate,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClassCanManageSubjects(classId, tx);
@@ -1041,6 +1056,7 @@ export async function addClassSubject(
         action: "CREATED",
         dataAfter: created as unknown as Prisma.InputJsonValue,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return created;
@@ -1052,6 +1068,7 @@ export async function updateClassSubject(
   classSubjectId: string,
   data: ClassSubjectUpdate,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     await assertClassCanManageSubjects(classId, tx);
@@ -1129,6 +1146,7 @@ export async function updateClassSubject(
         dataBefore: existing as unknown as Prisma.InputJsonValue,
         dataAfter: updated as unknown as Prisma.InputJsonValue,
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
     return updated;
@@ -1139,6 +1157,7 @@ export async function removeClassSubject(
   classId: string,
   classSubjectId: string,
   actorId: string,
+  auditContext?: AuditContext,
 ) {
   await prisma.$transaction(async (tx) => {
     await assertClassCanManageSubjects(classId, tx);
@@ -1177,6 +1196,7 @@ export async function removeClassSubject(
         dataBefore: existing as unknown as Prisma.InputJsonValue,
         dataAfter: { status: "INACTIVE" },
         performedBy: actorId,
+        ...auditFields(auditContext),
       },
     });
   });
@@ -1187,6 +1207,7 @@ export async function removeStudentFromClass(
   studentId: string,
   options?: { force?: boolean; reason?: string },
   actorId?: string,
+  auditContext?: AuditContext,
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
@@ -1249,6 +1270,7 @@ export async function removeStudentFromClass(
             forced: options?.force === true,
           },
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
     }

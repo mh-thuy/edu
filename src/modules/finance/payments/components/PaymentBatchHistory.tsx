@@ -7,6 +7,7 @@ import {
   Button,
   Chip,
   Collapse,
+  LinearProgress,
   MenuItem,
   Paper,
   Stack,
@@ -256,7 +257,7 @@ export function PaymentBatchHistory() {
             size="small"
             select
             label="Trạng thái"
-            value={status}
+            value={pendingStatus}
             onChange={(event) => setPendingStatus(event.target.value)}
             sx={{ minWidth: 180 }}
           >
@@ -289,6 +290,7 @@ export function PaymentBatchHistory() {
           </Box>
           <Chip size="small" label={status ? statusLabels[status] : "Tất cả trạng thái"} variant="outlined" />
         </Stack>
+        {loading && <LinearProgress />}
         <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 1040 }} size="small">
           <TableHead>
@@ -372,6 +374,8 @@ export function PaymentBatchHistory() {
                         size="small"
                         variant="outlined"
                         startIcon={<ExpandMoreIcon />}
+                        aria-expanded={expanded === batch.id}
+                        aria-controls={`batch-details-${batch.id}`}
                         onClick={() =>
                           setExpanded(expanded === batch.id ? null : batch.id)
                         }
@@ -382,7 +386,7 @@ export function PaymentBatchHistory() {
                   </TableRow>
                   <TableRow key={`${batch.id}-detail`}>
                     <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
-                      <Collapse in={expanded === batch.id}>
+                      <Collapse in={expanded === batch.id} id={`batch-details-${batch.id}`}>
                         <Box sx={{ p: 2, bgcolor: "action.hover" }}>
                           <Stack
                             direction={{ xs: "column", sm: "row" }}

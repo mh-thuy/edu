@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  CircularProgress,
   Typography,
   type ButtonProps,
 } from "@mui/material";
@@ -55,7 +56,7 @@ export function ConfirmDialog({
           color={confirmColor}
           disabled={isLoading || confirmDisabled}
         >
-          {confirmLabel}
+          {isLoading ? <CircularProgress size={18} color="inherit" /> : confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>

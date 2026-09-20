@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { BadRequestError } from "@/lib/errors";
 import { requireApiUser } from "@/lib/api-auth";
+import { getAuditContext } from "@/lib/audit";
 import { assignStudentToClass, removeStudentFromClass, getClassStudents, getClassStudentsPage } from "@/modules/class/services/class.service";
 
 const assignStudentRequestSchema = z.object({
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest, context: { params?: Params }) {
     const body: unknown = await request.json();
     const { studentId, classSubjectIds } = assignStudentRequestSchema.parse(body);
 
-    const result = await assignStudentToClass(id, studentId, classSubjectIds, user.id);
+    const result = await assignStudentToClass(id, studentId, classSubjectIds, user.id, getAuditContext(request));
     return apiSuccess(result, 201);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);
@@ -91,7 +92,7 @@ export async function DELETE(request: NextRequest, context: { params?: Params })
     await removeStudentFromClass(id, studentId, {
       force,
       reason,
-    }, user.id);
+    }, user.id, getAuditContext(request));
     return apiSuccess({ deleted: true });
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "CLASS_ID_REQUIRED") return apiError("BAD_REQUEST", "Thiếu mã lớp học", 400);

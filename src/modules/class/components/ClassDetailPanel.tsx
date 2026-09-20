@@ -109,6 +109,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
   const classLocked = classData?.status === "COMPLETED" || classData?.status === "CANCELLED";
   const load = useCallback(async () => {
     setLoadingRelated(true);
+    setError("");
     try {
       const response = await fetch(`/api/classes/${id}`);
       if (!response.ok) {
@@ -291,7 +292,24 @@ export function ClassDetailPanel({ id }: { id: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-  if (error && !classData) return <Alert severity="error">{error}</Alert>;
+  if (error && !classData)
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => void load()}
+            disabled={loadingRelated}
+          >
+            Thử lại
+          </Button>
+        }
+      >
+        {error}
+      </Alert>
+    );
   if (!classData) return <Typography>Đang tải lớp học...</Typography>;
 
   const statusLabel: Record<string, string> = {

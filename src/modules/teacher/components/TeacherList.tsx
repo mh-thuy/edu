@@ -16,7 +16,7 @@ import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import { GridColDef } from "@mui/x-data-grid";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
@@ -26,6 +26,7 @@ import { TeacherForm } from "./TeacherForm";
 import type { ReactElement } from "react";
 import type { z } from "zod";
 import { teacherCreateSchema } from "@/modules/teacher/schemas/teacher.schema";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 type TeacherFormData = z.infer<typeof teacherCreateSchema>;
 
@@ -160,6 +161,7 @@ const getColumns = (): GridColDef<TeacherRow>[] => [
 export function TeacherList(): ReactElement {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
+  const debouncedSearch = useDebouncedValue(search.trim());
 
   const {
     data,
@@ -170,7 +172,11 @@ export function TeacherList(): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Teacher>("/api/teachers", { pageSize: 10, search, status });
+  } = useList<Teacher>("/api/teachers", { pageSize: 10, search: debouncedSearch, status });
+
+  useEffect(() => {
+    setPageNumber(1);
+  }, [debouncedSearch, setPageNumber]);
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

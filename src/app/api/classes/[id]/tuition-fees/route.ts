@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
+import { getAuditContext } from "@/lib/audit";
 
 const routeParamsSchema = z.object({ id: z.string().uuid() });
 
@@ -27,6 +28,8 @@ export async function POST(
       id,
       period,
       user.id,
+      undefined,
+      getAuditContext(request),
     );
     return apiSuccess(result, 201);
   } catch (error: unknown) {

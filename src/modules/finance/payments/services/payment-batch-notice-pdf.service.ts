@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { PaymentBatchStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getPaymentBatchNoticeSnapshot,
@@ -17,6 +18,7 @@ export async function generatePaymentBatchNoticePdf(
   batchId: string,
   exportedByName: string,
   exportedById: string,
+  auditContext?: AuditContext,
 ) {
   const data = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
@@ -52,6 +54,7 @@ export async function generatePaymentBatchNoticePdf(
           bankAccountSnapshotUsed: Boolean(data.snapshot?.bankAccount),
         },
         performedBy: exportedById,
+        ...auditFields(auditContext),
       },
     });
   });

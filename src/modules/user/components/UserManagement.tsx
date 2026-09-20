@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  FormHelperText,
   InputLabel,
   MenuItem,
   Paper,
@@ -31,6 +32,9 @@ import AddIcon from "@mui/icons-material/Add";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { userCreateSchema, userUpdateSchema } from "@/modules/user/schemas/user.schema";
 
 type User = {
   id: string;
@@ -44,6 +48,7 @@ type FormState = {
   password: string;
   status: User["status"];
 };
+type FormErrors = Partial<Record<keyof FormState, string>>;
 const emptyForm: FormState = {
   email: "",
   fullName: "",
@@ -64,13 +69,16 @@ export function UserManagement() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim());
   const [status, setStatus] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState<FormErrors>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -79,7 +87,7 @@ export function UserManagement() {
         page: String(page + 1),
         pageSize: String(pageSize),
       });
-      if (search) params.set("search", search);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (status) params.set("status", status);
       const response = await fetch(`/api/users?${params}`);
       if (!response.ok)
@@ -99,13 +107,14 @@ export function UserManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, status]);
+  }, [page, pageSize, debouncedSearch, status]);
   useEffect(() => {
     void load();
   }, [load]);
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm });
+    setFieldErrors({});
     setError("");
     setOpen(true);
   };
@@ -117,10 +126,33 @@ export function UserManagement() {
       password: "",
       status: user.status,
     });
+    setFieldErrors({});
     setError("");
     setOpen(true);
   };
   const submit = async () => {
+    const payload = editing && !form.password ? { ...form, password: undefined } : form;
+    const parsed = (editing ? userUpdateSchema : userCreateSchema).safeParse(payload);
+    if (!parsed.success) {
+      const nextErrors: FormErrors = {};
+      const messages: Record<keyof FormState, string> = {
+        email: "Email không hợp lệ hoặc vượt quá 255 ký tự",
+        fullName: "Họ tên là bắt buộc và không quá 255 ký tự",
+        password: "Mật khẩu phải từ 8 đến 100 ký tự",
+        status: "Trạng thái không hợp lệ",
+      };
+      for (const issue of parsed.error.issues) {
+        const field = issue.path[0];
+        if (typeof field === "string" && field in emptyForm) {
+          const key = field as keyof FormState;
+          if (!nextErrors[key]) nextErrors[key] = messages[key];
+        }
+      }
+      setError("");
+      setFieldErrors(nextErrors);
+      return;
+    }
+    setFieldErrors({});
     setLoading(true);
     setError("");
     try {
@@ -129,10 +161,7 @@ export function UserManagement() {
         {
           method: editing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...form,
-            ...(editing && !form.password ? { password: undefined } : {}),
-          }),
+          body: JSON.stringify(parsed.data),
         },
       );
       if (!response.ok)
@@ -150,11 +179,11 @@ export function UserManagement() {
       setLoading(false);
     }
   };
-  const deactivate = async (user: User) => {
-    if (!window.confirm(`Khóa tài khoản ${user.email}?`)) return;
+  const deactivate = async () => {
+    if (!deactivateTarget) return;
     setLoading(true);
     try {
-      const response = await fetch(`/api/users/${user.id}`, {
+      const response = await fetch(`/api/users/${deactivateTarget.id}`, {
         method: "DELETE",
       });
       if (!response.ok)
@@ -162,6 +191,7 @@ export function UserManagement() {
           await extractApiErrorMessage(response, "Không thể khóa người dùng"),
         );
       setMessage("Đã khóa người dùng");
+      setDeactivateTarget(null);
       await load();
     } catch (reason) {
       setError(
@@ -294,7 +324,7 @@ export function UserManagement() {
                       size="small"
                       color="error"
                       variant="outlined"
-                      onClick={() => void deactivate(user)}
+                      onClick={() => setDeactivateTarget(user)}
                       disabled={user.status === "INACTIVE" || loading}
                     >
                       Khóa
@@ -339,18 +369,24 @@ export function UserManagement() {
               label="Họ tên"
               required
               value={form.fullName}
-              onChange={(event) =>
-                setForm({ ...form, fullName: event.target.value })
-              }
+              error={Boolean(fieldErrors.fullName)}
+              helperText={fieldErrors.fullName}
+              onChange={(event) => {
+                setForm({ ...form, fullName: event.target.value });
+                setFieldErrors((current) => ({ ...current, fullName: undefined }));
+              }}
             />
             <TextField
               label="Email"
               required
               type="email"
               value={form.email}
-              onChange={(event) =>
-                setForm({ ...form, email: event.target.value })
-              }
+              error={Boolean(fieldErrors.email)}
+              helperText={fieldErrors.email}
+              onChange={(event) => {
+                setForm({ ...form, email: event.target.value });
+                setFieldErrors((current) => ({ ...current, email: undefined }));
+              }}
             />
             <TextField
               label={
@@ -359,21 +395,22 @@ export function UserManagement() {
               required={!editing}
               type="password"
               value={form.password}
-              onChange={(event) =>
-                setForm({ ...form, password: event.target.value })
-              }
+              error={Boolean(fieldErrors.password)}
+              helperText={fieldErrors.password || (editing ? "Để trống nếu không đổi mật khẩu" : "Tối thiểu 8 ký tự")}
+              onChange={(event) => {
+                setForm({ ...form, password: event.target.value });
+                setFieldErrors((current) => ({ ...current, password: undefined }));
+              }}
             />
-            <FormControl>
+            <FormControl error={Boolean(fieldErrors.status)}>
               <InputLabel>Trạng thái</InputLabel>
               <Select
                 label="Trạng thái"
                 value={form.status}
-                onChange={(event) =>
-                  setForm({
-                    ...form,
-                    status: event.target.value as FormState["status"],
-                  })
-                }
+                onChange={(event) => {
+                  setForm({ ...form, status: event.target.value as FormState["status"] });
+                  setFieldErrors((current) => ({ ...current, status: undefined }));
+                }}
               >
                 {Object.entries(statusLabel).map(([key, label]) => (
                   <MenuItem key={key} value={key}>
@@ -381,6 +418,7 @@ export function UserManagement() {
                   </MenuItem>
                 ))}
               </Select>
+              {fieldErrors.status && <FormHelperText>{fieldErrors.status}</FormHelperText>}
             </FormControl>
           </Stack>
         </DialogContent>
@@ -397,6 +435,15 @@ export function UserManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={Boolean(deactivateTarget)}
+        title="Khóa tài khoản"
+        message={deactivateTarget ? `Tài khoản ${deactivateTarget.email} sẽ không thể đăng nhập. Bạn có muốn tiếp tục?` : "Bạn có chắc chắn muốn khóa tài khoản này không?"}
+        confirmLabel="Khóa tài khoản"
+        onConfirm={() => void deactivate()}
+        onCancel={() => setDeactivateTarget(null)}
+        isLoading={loading}
+      />
     </Stack>
   );
 }

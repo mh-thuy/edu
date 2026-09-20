@@ -26,6 +26,7 @@ import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 type Subject = {
   id: string;
@@ -36,6 +37,7 @@ type Subject = {
 export function SubjectManagement() {
   const [items, setItems] = useState<Subject[]>([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Subject | null>(null);
   const [name, setName] = useState("");
@@ -49,7 +51,7 @@ export function SubjectManagement() {
     setError("");
     try {
       const response = await fetch(
-        `/api/subjects?includeInactive=true${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+        `/api/subjects?includeInactive=true${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ""}`,
       );
       if (!response.ok) {
         throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách môn học"));
@@ -60,7 +62,7 @@ export function SubjectManagement() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     void load();

@@ -4,6 +4,7 @@ import { requireApiUser } from "@/lib/api-auth";
 import { bankStatementImportSchema } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
 import { importBankStatement } from "@/modules/finance/bank/services/bank-csv.service";
 import { BadRequestError } from "@/lib/errors";
+import { getAuditContext } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       fileName: file.name,
       bankAccountId,
       actorId: user.id,
+      auditContext: getAuditContext(request),
     });
     return apiSuccess(result, 201);
   } catch (error) { return handleApiError(error, "Không thể import sao kê ngân hàng"); }

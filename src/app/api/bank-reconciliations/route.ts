@@ -8,6 +8,7 @@ import {
   confirmBankReconciliation,
   confirmBankReconciliations,
 } from "@/modules/finance/bank/services/bank-csv.service";
+import { getAuditContext } from "@/lib/audit";
 
 export async function POST(request: Request) {
   try {
@@ -24,12 +25,13 @@ export async function POST(request: Request) {
         await confirmBankReconciliations({
           confirmations: bulkBody.confirmations,
           actorId: user.id,
+          auditContext: getAuditContext(request),
         }),
       );
     }
     const singleBody = bankReconciliationConfirmSchema.parse(body);
     return apiSuccess(
-      await confirmBankReconciliation({ ...singleBody, actorId: user.id }),
+      await confirmBankReconciliation({ ...singleBody, actorId: user.id, auditContext: getAuditContext(request) }),
     );
   } catch (error) {
     return handleApiError(error, "Không thể xác nhận đối soát");

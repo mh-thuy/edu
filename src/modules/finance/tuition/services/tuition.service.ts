@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import {
   PaymentBatchStatus,
   Prisma,
@@ -149,6 +150,7 @@ export class TuitionService {
     actorId: string,
     transaction?: Prisma.TransactionClient,
     options: { allowExistingComplete?: boolean } = {},
+    auditContext?: AuditContext,
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
       const periodStart = new Date(
@@ -368,6 +370,7 @@ export class TuitionService {
             calculationMode: "FULL_MONTH",
           },
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       await tx.tuitionAuditLog.create({
@@ -388,6 +391,7 @@ export class TuitionService {
             finalAmount: fee.finalAmount.toString(),
           },
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
 
@@ -406,6 +410,7 @@ export class TuitionService {
     period: TuitionBillingPeriod,
     actorId: string,
     transaction?: Prisma.TransactionClient,
+    auditContext?: AuditContext,
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw(
@@ -494,6 +499,7 @@ export class TuitionService {
           actorId,
           tx,
           { allowExistingComplete: true },
+          auditContext,
         );
         if (
           existingFee &&
@@ -509,7 +515,12 @@ export class TuitionService {
     return transaction ? execute(transaction) : prisma.$transaction(execute);
   }
 
-  static async updateFee(id: string, data: TuitionFeeUpdate, actorId: string) {
+  static async updateFee(
+    id: string,
+    data: TuitionFeeUpdate,
+    actorId: string,
+    auditContext?: AuditContext,
+  ) {
     return prisma.$transaction(async (tx) => {
       await tx.$executeRaw(
         Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
@@ -583,6 +594,7 @@ export class TuitionService {
           dataBefore: current as unknown as Prisma.InputJsonValue,
           dataAfter: updated as unknown as Prisma.InputJsonValue,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       return {
@@ -596,6 +608,7 @@ export class TuitionService {
     id: string,
     data: TuitionFeeStatusUpdate,
     actorId: string,
+    auditContext?: AuditContext,
   ) {
     return prisma.$transaction(async (tx) => {
       await tx.$executeRaw(
@@ -647,6 +660,7 @@ export class TuitionService {
           dataBefore: current as unknown as Prisma.InputJsonValue,
           dataAfter: updated as unknown as Prisma.InputJsonValue,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       return updated;

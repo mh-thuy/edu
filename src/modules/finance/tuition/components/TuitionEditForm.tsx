@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Paper,
+  Skeleton,
   Stack,
   TextField,
   Typography,
@@ -42,46 +43,91 @@ export function TuitionEditForm({
   const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  useEffect(() => {
-    void fetch(`/api/tuition-fees/${id}`)
-      .then(async (r) => (r.ok ? unwrapApiResponse<Fee>(r) : null))
-      .then((data) => {
-        if (data) {
-          setFee(data);
-          setDiscount(Number(data.discountAmount));
-          setAdditional(Number(data.additionalAmount));
-          setDueDate(data.dueDate?.slice(0, 10) || "");
-          setNote(data.note || "");
-        }
-      });
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/tuition-fees/${id}`);
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể tải học phí"),
+        );
+      const data = await unwrapApiResponse<Fee>(response);
+      setFee(data);
+      setDiscount(Number(data.discountAmount));
+      setAdditional(Number(data.additionalAmount));
+      setDueDate(data.dueDate?.slice(0, 10) || "");
+      setNote(data.note || "");
+    } catch (reason) {
+      setFee(null);
+      setError(reason instanceof Error ? reason.message : "Không thể tải học phí");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   async function submit() {
     if (!fee || !reason.trim()) {
       setError("Lý do thay đổi là bắt buộc");
       return;
     }
     setSaving(true);
-    const response = await fetch(`/api/tuition-fees/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        discountAmount: discount,
-        additionalAmount: additional,
-        dueDate: dueDate || null,
-        note: note || null,
-        version: fee.version,
-        reason,
-      }),
-    });
-    if (!response.ok)
+    setError("");
+    try {
+      const response = await fetch(`/api/tuition-fees/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          discountAmount: discount,
+          additionalAmount: additional,
+          dueDate: dueDate || null,
+          note: note || null,
+          version: fee.version,
+          reason: reason.trim(),
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(response, "Không thể cập nhật học phí"),
+        );
+      onSuccess();
+    } catch (reason) {
       setError(
-        await extractApiErrorMessage(response, "Không thể cập nhật học phí"),
+        reason instanceof Error
+          ? reason.message
+          : "Không thể cập nhật học phí",
       );
-    else onSuccess();
-    setSaving(false);
+    } finally {
+      setSaving(false);
+    }
   }
-  if (!fee) return <Typography>Đang tải học phí...</Typography>;
+  if (loading)
+    return (
+      <Stack spacing={1.5}>
+        <Skeleton variant="text" width={260} height={42} />
+        <Skeleton variant="rounded" height={360} />
+      </Stack>
+    );
+  if (error && !fee)
+    return (
+      <Alert
+        severity="error"
+        action={
+          <Button color="inherit" size="small" onClick={() => void load()}>
+            Thử lại
+          </Button>
+        }
+      >
+        {error}
+      </Alert>
+    );
+  if (!fee) return <Alert severity="error">Không tìm thấy học phí</Alert>;
   if (fee.status === "PAID")
     return (
       <Alert severity="warning">Học phí đã thanh toán và không thể sửa.</Alert>

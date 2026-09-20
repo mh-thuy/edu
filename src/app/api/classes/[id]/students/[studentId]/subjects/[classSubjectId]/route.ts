@@ -1,5 +1,6 @@
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
+import { getAuditContext } from "@/lib/audit";
 import { removeSubjectFromEnrollment } from "@/modules/class/services/class.service";
 import { z } from "zod";
 
@@ -41,6 +42,7 @@ export async function DELETE(
       classSubjectId,
       user.id,
       options,
+      getAuditContext(request),
     );
     return apiSuccess(result);
   } catch (error: unknown) {

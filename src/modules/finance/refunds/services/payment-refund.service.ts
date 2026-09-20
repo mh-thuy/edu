@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { auditFields, type AuditContext } from "@/lib/audit";
 import type {
   PaymentRefundComplete,
   PaymentRefundCreate,
@@ -97,6 +98,7 @@ export async function createPaymentRefund(
   data: PaymentRefundCreate,
   actorId: string,
   transaction?: Prisma.TransactionClient,
+  auditContext?: AuditContext,
 ) {
   const execute = async (tx: Prisma.TransactionClient) => {
     const payments = await getPaymentGroup(tx, data.paymentId);
@@ -129,6 +131,7 @@ export async function createPaymentRefund(
           },
           reason: data.reason,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       refunds.push(refund);
@@ -237,7 +240,11 @@ async function getRefundGroup(
   return refunds;
 }
 
-export async function approvePaymentRefund(refundId: string, actorId: string) {
+export async function approvePaymentRefund(
+  refundId: string,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
   return prisma.$transaction(async (tx) => {
     const refunds = await getRefundGroup(tx, refundId);
     if (!refunds.length) throw new NotFoundError("Không tìm thấy yêu cầu hoàn tiền");
@@ -258,6 +265,7 @@ export async function approvePaymentRefund(refundId: string, actorId: string) {
           dataBefore: { status: refund.status },
           dataAfter: { status: item.status, approvedBy: actorId },
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       approved.push(item);
@@ -270,6 +278,7 @@ export async function completePaymentRefund(
   refundId: string,
   actorId: string,
   data: PaymentRefundComplete,
+  auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
     const refunds = await getRefundGroup(tx, refundId);
@@ -352,6 +361,7 @@ export async function completePaymentRefund(
           dataAfter: updatedReceipt as unknown as Prisma.InputJsonValue,
           reason: refund.reason,
           performedBy: actorId,
+          ...auditFields(auditContext),
         });
       }
       auditRows.push(
@@ -363,6 +373,7 @@ export async function completePaymentRefund(
           dataAfter: completedRefund as unknown as Prisma.InputJsonValue,
           reason: refund.reason,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
         {
           entityType: "TUITION_PAYMENT",
@@ -372,6 +383,7 @@ export async function completePaymentRefund(
           dataAfter: updatedPayment as unknown as Prisma.InputJsonValue,
           reason: refund.reason,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
         {
           entityType: "TUITION_FEE",
@@ -381,6 +393,7 @@ export async function completePaymentRefund(
           dataAfter: reopenedFee as unknown as Prisma.InputJsonValue,
           reason: refund.reason,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       );
       await tx.tuitionAuditLog.createMany({
@@ -420,6 +433,7 @@ export async function completePaymentRefund(
               cancelledBy: actorId,
             },
             performedBy: actorId,
+            ...auditFields(auditContext),
           },
         });
       }
@@ -432,6 +446,7 @@ export async function completePaymentRefund(
           dataAfter: cancelledBatch as unknown as Prisma.InputJsonValue,
           reason: "Hoàn tiền toàn bộ batch",
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
     }

@@ -14,6 +14,7 @@ import {
   Drawer,
   FormControl,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -34,6 +35,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
@@ -105,6 +107,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim());
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [subjectFilter, setSubjectFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
@@ -147,7 +150,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     try {
       const [classResponse, studentsResponse] = await Promise.all([
         fetch(`/api/classes/${id}`),
-        fetch(`/api/classes/${id}/students?page=${studentPage + 1}&pageSize=${studentPageSize}&search=${encodeURIComponent(search.trim())}&status=${statusFilter === "ALL" ? "" : statusFilter}&subjectId=${subjectFilter === "ALL" ? "" : subjectFilter}&month=${encodeURIComponent(month)}`),
+        fetch(`/api/classes/${id}/students?page=${studentPage + 1}&pageSize=${studentPageSize}&search=${encodeURIComponent(debouncedSearch)}&status=${statusFilter === "ALL" ? "" : statusFilter}&subjectId=${subjectFilter === "ALL" ? "" : subjectFilter}&month=${encodeURIComponent(month)}`),
       ]);
       if (!classResponse.ok) throw new Error(await extractApiErrorMessage(classResponse, "Không thể tải lớp học"));
       if (!studentsResponse.ok) throw new Error(await extractApiErrorMessage(studentsResponse, "Không thể tải danh sách học viên"));
@@ -168,7 +171,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     } finally {
       if (currentRequest === requestVersion.current) setLoading(false);
     }
-  }, [id, month, search, statusFilter, studentPage, studentPageSize, subjectFilter]);
+  }, [id, month, debouncedSearch, statusFilter, studentPage, studentPageSize, subjectFilter]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -186,7 +189,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
 
   useEffect(() => {
     setStudentPage(0);
-  }, [month, search, statusFilter, subjectFilter]);
+  }, [month, debouncedSearch, statusFilter, subjectFilter]);
 
   function openSubjectDialog(student: StudentItem, existing?: StudentRow) {
     const registered = existing?.subjects.map((item) => item.classSubjectId) ?? [];
@@ -269,6 +272,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
 
   async function pauseStudent() {
     if (!pauseTarget) return;
+    const wasEditing = Boolean(editingPauseId);
     if (!pauseStart || !pauseEnd) {
       showError("Vui lòng chọn đủ tháng bắt đầu và tháng kết thúc");
       return;
@@ -294,7 +298,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
       setEditingPauseId(null);
       setPauseReason("");
       await load();
-      showSuccess(editingPauseId ? "Đã cập nhật thời gian tạm nghỉ" : "Đã ghi nhận thời gian tạm nghỉ");
+      showSuccess(wasEditing ? "Đã cập nhật thời gian tạm nghỉ" : "Đã ghi nhận thời gian tạm nghỉ");
     } catch (reason) {
       showError(reason instanceof Error ? reason.message : "Không thể tạo thời gian tạm nghỉ");
     } finally {
@@ -406,6 +410,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
       </Stack>
     </Paper>
     <Paper sx={{ overflowX: "auto" }}>
+      {loading && <LinearProgress />}
       <Table sx={{ minWidth: 1050 }}>
         <TableHead><TableRow><TableCell>Mã HV</TableCell><TableCell>Học viên</TableCell><TableCell>Môn đăng ký</TableCell><TableCell>Trạng thái</TableCell><TableCell>Học phí {month}</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
         <TableBody>{pagedStudents.map((student) => {

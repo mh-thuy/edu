@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
+import { getAuditContext } from "@/lib/audit";
 
 type Params = Promise<{
   id: string;
@@ -15,7 +16,7 @@ const routeParamsSchema = z.object({
 });
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params?: Params },
 ) {
   try {
@@ -29,7 +30,7 @@ export async function POST(
     if (!routeParams?.id || !routeParams.studentId) {
       return apiError("BAD_REQUEST", "Thiếu mã lớp hoặc học viên", 400);
     }
-    const rawMonth = new URL(_request.url).searchParams.get("month");
+    const rawMonth = new URL(request.url).searchParams.get("month");
     const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).safeParse(rawMonth);
     if (!month.success) {
       return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);
@@ -45,6 +46,9 @@ export async function POST(
         billingMonth,
       },
       user.id,
+      undefined,
+      undefined,
+      getAuditContext(request),
     );
     return apiSuccess(fee, 201);
   } catch (error: unknown) {
