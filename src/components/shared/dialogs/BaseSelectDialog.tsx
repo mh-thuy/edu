@@ -101,17 +101,19 @@ export function BaseSelectDialog<T extends SelectableItem>({
         // reset state for next open
         setSearchInput("");
         setCommittedSearch(undefined);
+        setPageNumber(1);
         onClose();
       }
     },
-    [data, onSelect, onClose],
+    [data, onSelect, onClose, setPageNumber],
   );
 
   const handleClose = useCallback(() => {
     setSearchInput("");
     setCommittedSearch(undefined);
+    setPageNumber(1);
     onClose();
-  }, [onClose]);
+  }, [onClose, setPageNumber]);
 
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -195,9 +197,6 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 loading={isLoading}
                 disableRowSelectionOnClick
                 onRowClick={(params) => handleRowClick(params.row.id as string)}
-                onRowDoubleClick={(params) =>
-                  handleRowClick(params.row.id as string)
-                }
                 sx={{
                   border: "none",
                   cursor: "pointer",

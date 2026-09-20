@@ -56,7 +56,7 @@ type Batch = {
   allocations: Array<{
     tuitionFeeId: string;
     amount: number;
-    tuitionFee: { feeNo: string };
+    tuitionFee: { feeNo: string; class: { name: string } };
   }>;
 };
 type Transaction = {
@@ -159,7 +159,9 @@ export function BankReconciliationPanel() {
   const [accountError, setAccountError] = useState("");
   const [resultFilter, setResultFilter] = useState<ResultFilter>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [studentSearchTerm, setStudentSearchTerm] = useState("");
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [drawerStudentSearchTerm, setDrawerStudentSearchTerm] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const { showSuccess, Snackbar } = useSnackbar();
 
@@ -191,6 +193,10 @@ export function BankReconciliationPanel() {
     void loadAccounts();
   }, [loadAccounts]);
 
+  useEffect(() => {
+    setDrawerStudentSearchTerm("");
+  }, [selectedToken]);
+
   const displayedItems = useMemo(
     () =>
       items.map((item) =>
@@ -211,32 +217,63 @@ export function BankReconciliationPanel() {
 
   const searchedItems = useMemo(() => {
     const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase("vi-VN");
-    if (!normalizedSearchTerm) return filteredItems;
+    const normalizedStudentSearchTerm = studentSearchTerm.trim().toLocaleLowerCase("vi-VN");
+    if (!normalizedSearchTerm && !normalizedStudentSearchTerm) return filteredItems;
 
-    return filteredItems.filter((item) =>
-      [
-        item.bankTransactionNo,
-        item.description,
-        item.paymentBatch?.batchNo,
-        item.paymentBatch?.student.code,
+    return filteredItems.filter((item) => {
+      const studentNames = [
         item.paymentBatch?.student.fullName,
-        ...item.paymentBatchCandidates.flatMap((candidate) => [
-          candidate.batchNo,
-          candidate.student.code,
-          candidate.student.fullName,
-        ]),
+        ...item.paymentBatchCandidates.map((candidate) => candidate.student.fullName),
       ]
         .filter(Boolean)
         .join(" ")
-        .toLocaleLowerCase("vi-VN")
-        .includes(normalizedSearchTerm),
-    );
-  }, [filteredItems, searchTerm]);
+        .toLocaleLowerCase("vi-VN");
+      const matchesStudent =
+        !normalizedStudentSearchTerm || studentNames.includes(normalizedStudentSearchTerm);
+      const matchesGeneral =
+        !normalizedSearchTerm ||
+        [
+          item.bankTransactionNo,
+          item.description,
+          item.paymentBatch?.batchNo,
+          item.paymentBatch?.student.code,
+          item.paymentBatch?.student.fullName,
+          ...item.paymentBatchCandidates.flatMap((candidate) => [
+            candidate.batchNo,
+            candidate.student.code,
+            candidate.student.fullName,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("vi-VN")
+          .includes(normalizedSearchTerm);
+      return matchesStudent && matchesGeneral;
+    });
+  }, [filteredItems, searchTerm, studentSearchTerm]);
 
   const selectedItem = useMemo(
     () => searchedItems.find((item) => item.confirmationToken === selectedToken) || null,
     [searchedItems, selectedToken],
   );
+
+  const selectedClassNames = useMemo(() => {
+    if (!selectedItem) return [];
+    const allocations = [
+      ...(selectedItem.paymentBatch?.allocations || []),
+      ...selectedItem.paymentBatchCandidates.flatMap((candidate) => candidate.allocations),
+    ];
+    return [...new Set(allocations.map((allocation) => allocation.tuitionFee.class.name))];
+  }, [selectedItem]);
+
+  const filteredDrawerCandidates = useMemo(() => {
+    const candidates = selectedItem?.paymentBatchCandidates || [];
+    const normalizedSearch = drawerStudentSearchTerm.trim().toLocaleLowerCase("vi-VN");
+    if (!normalizedSearch) return candidates;
+    return candidates.filter((candidate) =>
+      candidate.student.fullName.toLocaleLowerCase("vi-VN").includes(normalizedSearch),
+    );
+  }, [drawerStudentSearchTerm, selectedItem]);
 
   const summary = useMemo(
     () => displayedItems.reduce(
@@ -585,12 +622,12 @@ export function BankReconciliationPanel() {
         </Stack>
         {items.length > 0 && (
           <Stack spacing={1.5} sx={{ px: 2, pb: 2 }}>
-            <Stack spacing={1} sx={{ px: 2, pt: 2 }}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ px: 2, pt: 2 }}>
               <TextField
                 size="small"
                 fullWidth
                 label="Tìm giao dịch"
-                placeholder="Mã giao dịch, nội dung, học viên..."
+                placeholder="Mã giao dịch, nội dung..."
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 InputProps={{
@@ -603,7 +640,7 @@ export function BankReconciliationPanel() {
                     <InputAdornment position="end">
                       <IconButton
                         size="small"
-                        aria-label="Xóa tìm kiếm"
+                        aria-label="Xóa tìm kiếm giao dịch"
                         onClick={() => setSearchTerm("")}
                       >
                         <ClearOutlinedIcon fontSize="small" />
@@ -612,6 +649,33 @@ export function BankReconciliationPanel() {
                   ) : undefined,
                 }}
               />
+              <TextField
+                size="small"
+                fullWidth
+                label="Tìm theo tên học viên"
+                placeholder="Nhập tên học viên..."
+                value={studentSearchTerm}
+                onChange={(event) => setStudentSearchTerm(event.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchOutlinedIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: studentSearchTerm ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        aria-label="Xóa tìm kiếm học viên"
+                        onClick={() => setStudentSearchTerm("")}
+                      >
+                        <ClearOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : undefined,
+                }}
+              />
+            </Stack>
               <Tabs
                 value={resultFilter}
                 onChange={(_, value: ResultFilter) => setResultFilter(value)}
@@ -628,7 +692,6 @@ export function BankReconciliationPanel() {
                 <Tab value="IGNORED" label={`Bỏ qua (${summary.ignored})`} />
                 <Tab value="DUPLICATED" label={`Trùng (${summary.duplicated})`} />
               </Tabs>
-            </Stack>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
               <Typography variant="body2" color="text.secondary">
                 Tổng tiền ghi có: <strong>{money(summary.creditAmount)} VND</strong>
@@ -842,6 +905,9 @@ export function BankReconciliationPanel() {
                       {selectedItem.paymentBatch.student.fullName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
+                      Lớp: {selectedClassNames.join(", ") || "Chưa xác định"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
                       {selectedItem.paymentBatch.allocations.length} khoản · {money(selectedItem.paymentBatch.totalAmount)} VND
                     </Typography>
                   </Box>
@@ -872,12 +938,44 @@ export function BankReconciliationPanel() {
                       Có {selectedItem.paymentBatchCandidates.length} đợt cùng số tiền. Chọn đúng học viên để xác nhận.
                     </Typography>
                   </Box>
-                  {selectedItem.paymentBatchCandidates.map((candidate) => (
+                  <TextField
+                    size="small"
+                    fullWidth
+                    label="Tìm học viên trong danh sách"
+                    placeholder="Nhập tên học viên..."
+                    value={drawerStudentSearchTerm}
+                    onChange={(event) => setDrawerStudentSearchTerm(event.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchOutlinedIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: drawerStudentSearchTerm ? (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            aria-label="Xóa tìm học viên trong drawer"
+                            onClick={() => setDrawerStudentSearchTerm("")}
+                          >
+                            <ClearOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : undefined,
+                    }}
+                  />
+                  <Typography variant="caption" color="text.secondary">
+                    Hiển thị {filteredDrawerCandidates.length}/{selectedItem.paymentBatchCandidates.length} học viên
+                  </Typography>
+                  {filteredDrawerCandidates.map((candidate) => (
                     <Box key={candidate.id} sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
                       <Typography variant="body2" fontWeight={700}>
                         {candidate.batchNo} · {candidate.student.code}
                       </Typography>
                       <Typography variant="body2">{candidate.student.fullName}</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Lớp: {[...new Set(candidate.allocations.map((allocation) => allocation.tuitionFee.class.name))].join(", ") || "Chưa xác định"}
+                      </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {candidate.allocations.length} khoản · {money(candidate.totalAmount)} VND
                       </Typography>
@@ -901,6 +999,9 @@ export function BankReconciliationPanel() {
                       </Button>
                     </Box>
                   ))}
+                  {!filteredDrawerCandidates.length && (
+                    <Alert severity="info">Không tìm thấy học viên phù hợp.</Alert>
+                  )}
                 </Stack>
               ) : (
                 <Alert severity="info">Không tìm thấy đợt thanh toán cùng số tiền.</Alert>

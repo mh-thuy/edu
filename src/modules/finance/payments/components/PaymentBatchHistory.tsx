@@ -546,6 +546,7 @@ export function PaymentBatchHistory() {
           setPendingStudentCode(item.code);
           studentDialog.onClose();
         }}
+        title="Chọn học viên xem lịch sử thanh toán"
       />
       <ConfirmDialog
         open={!!cancelTarget}

@@ -19,6 +19,7 @@ export interface StudentSelectDialogProps {
   onClose: () => void;
   onSelect: (studentItem: StudentItem) => void;
   excludeClassId?: string;
+  title: string;
 }
 
 export function StudentSelectDialog({
@@ -26,6 +27,7 @@ export function StudentSelectDialog({
   onClose,
   onSelect,
   excludeClassId,
+  title,
 }: StudentSelectDialogProps): ReactElement {
   const columns: GridColDef<StudentItem>[] = [
     { field: "code", headerName: "Mã học viên", width: 120 },
@@ -73,7 +75,7 @@ export function StudentSelectDialog({
       onClose={onClose}
       onSelect={onSelect}
       endpoint="/api/students"
-      title="Chọn học viên để đăng ký"
+      title={title}
       columns={columns}
       searchPlaceholder="Nhập mã hoặc tên học viên"
       maxWidth="lg"

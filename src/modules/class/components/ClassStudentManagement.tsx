@@ -445,7 +445,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
         labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count}`}
       />
     </Paper>
-    <StudentSelectDialog open={studentPickerOpen} onClose={() => setStudentPickerOpen(false)} onSelect={(student) => { setStudentPickerOpen(false); openSubjectDialog(student); }} excludeClassId={id} />
+    <StudentSelectDialog open={studentPickerOpen} onClose={() => setStudentPickerOpen(false)} onSelect={(student) => { setStudentPickerOpen(false); openSubjectDialog(student); }} excludeClassId={id} title="Chọn học viên để đăng ký" />
     <Dialog open={importDialogOpen} onClose={() => !busy && setImportDialogOpen(false)} fullWidth maxWidth="sm">
       <DialogTitle>Import học viên vào lớp</DialogTitle>
       <DialogContent>

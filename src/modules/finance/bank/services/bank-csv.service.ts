@@ -53,7 +53,7 @@ type PaymentBatchMatch = {
   allocations: Array<{
     tuitionFeeId: string;
     amount: Prisma.Decimal;
-    tuitionFee: { feeNo: string };
+    tuitionFee: { feeNo: string; class: { name: string } };
   }>;
 };
 
@@ -475,7 +475,10 @@ function toPaymentBatchMatch(batch: PaymentBatchMatch): PaymentBatchMatch {
     allocations: batch.allocations.map((allocation) => ({
       tuitionFeeId: allocation.tuitionFeeId,
       amount: allocation.amount,
-      tuitionFee: { feeNo: allocation.tuitionFee.feeNo },
+      tuitionFee: {
+        feeNo: allocation.tuitionFee.feeNo,
+        class: allocation.tuitionFee.class,
+      },
     })),
   };
 }
@@ -537,7 +540,14 @@ export async function importBankStatement(args: {
           bankAccountId: args.bankAccountId,
           totalAmount: { in: amounts },
         },
-        include: { student: true, allocations: { include: { tuitionFee: true } } },
+        include: {
+          student: true,
+          allocations: {
+            include: {
+              tuitionFee: { include: { class: { select: { name: true } } } },
+            },
+          },
+        },
       })
     : [];
 

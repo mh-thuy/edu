@@ -1155,6 +1155,7 @@ export function TuitionPaymentWorkspace({
         open={studentDialog.open}
         onClose={studentDialog.onClose}
         onSelect={selectStudent}
+        title="Chọn học viên để thu học phí"
       />
       <ConfirmDialog
         open={confirmOpen}
