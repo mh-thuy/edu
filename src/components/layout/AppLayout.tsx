@@ -19,23 +19,53 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const routeMeta = [
-    { prefix: "/admin/tuition-fees/payment-history", title: "Giao dịch thu học phí", section: "Tài chính" },
-    { prefix: "/admin/tuition-fees/payment", title: "Thu học phí", section: "Tài chính" },
-    { prefix: "/admin/tuition-fees/", title: "Chi tiết học phí", section: "Tài chính" },
-    { prefix: "/admin/tuition-fees", title: "Các khoản học phí", section: "Tài chính" },
-    { prefix: "/admin/bank-reconciliation", title: "Đối soát ngân hàng", section: "Tài chính" },
-    { prefix: "/admin/bank-accounts", title: "Tài khoản nhận tiền", section: "Tài chính" },
+    {
+      prefix: "/admin/tuition-fees/payment-history",
+      title: "Giao dịch thu học phí",
+      section: "Tài chính",
+    },
+    {
+      prefix: "/admin/tuition-fees/payment",
+      title: "Thu học phí",
+      section: "Tài chính",
+    },
+    {
+      prefix: "/admin/tuition-fees/",
+      title: "Chi tiết học phí",
+      section: "Tài chính",
+    },
+    {
+      prefix: "/admin/tuition-fees",
+      title: "Các khoản học phí",
+      section: "Tài chính",
+    },
+    {
+      prefix: "/admin/bank-reconciliation",
+      title: "Đối soát ngân hàng",
+      section: "Tài chính",
+    },
+    {
+      prefix: "/admin/bank-accounts",
+      title: "Tài khoản nhận tiền",
+      section: "Tài chính",
+    },
     { prefix: "/admin/receipts", title: "Biên lai", section: "Tài chính" },
     { prefix: "/admin/reports", title: "Báo cáo", section: "Tài chính" },
     { prefix: "/admin/users", title: "Người dùng", section: "Hệ thống" },
     { prefix: "/admin/teachers", title: "Giáo viên", section: "Đào tạo" },
     { prefix: "/admin/students", title: "Học viên", section: "Đào tạo" },
-    { prefix: "/admin/classes/", title: "Chi tiết lớp học", section: "Đào tạo" },
+    {
+      prefix: "/admin/classes/",
+      title: "Chi tiết lớp học",
+      section: "Đào tạo",
+    },
     { prefix: "/admin/classes", title: "Lớp học", section: "Đào tạo" },
     { prefix: "/admin/subjects", title: "Môn học", section: "Đào tạo" },
     { prefix: "/admin", title: "Dashboard", section: "Tổng quan" },
   ] as const;
-  const currentRoute = routeMeta.find((route) => pathname.startsWith(route.prefix));
+  const currentRoute = routeMeta.find((route) =>
+    pathname.startsWith(route.prefix),
+  );
   const currentTitle = currentRoute?.title ?? "Dashboard";
   const currentSection = currentRoute?.section ?? "Tổng quan";
 
@@ -49,7 +79,10 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
   };
 
   const sidebar = (
-    <Sidebar collapsed={isDesktop && desktopCollapsed} onNavigate={() => setMobileOpen(false)} />
+    <Sidebar
+      collapsed={isDesktop && desktopCollapsed}
+      onNavigate={() => setMobileOpen(false)}
+    />
   );
 
   return (
@@ -73,7 +106,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       >
         {sidebar}
       </Box>
-      
+
       {/* Mobile drawer */}
       <Drawer
         open={mobileOpen}
@@ -88,14 +121,25 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       >
         <Sidebar onNavigate={() => setMobileOpen(false)} />
       </Drawer>
-      
+
       {/* Main content */}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Header user={user} onToggleSidebar={toggleSidebar} currentTitle={currentTitle} currentSection={currentSection} />
-        <Box component="main" sx={{ minHeight: "calc(100vh - 72px)", px: { xs: 1.5, sm: 2.5, md: 3.5 }, py: { xs: 2, md: 3.5 }, bgcolor: "background.default" }}>
-          <Box sx={{ width: "100%" }}>
-            {children}
-          </Box>
+        <Header
+          user={user}
+          onToggleSidebar={toggleSidebar}
+          currentTitle={currentTitle}
+          currentSection={currentSection}
+        />
+        <Box
+          component="main"
+          sx={{
+            minHeight: "calc(100vh - 72px)",
+            px: { xs: 1.5, sm: 2.5, md: 3.5 },
+            py: { xs: 2, md: 3.5 },
+            bgcolor: "background.default",
+          }}
+        >
+          <Box sx={{ width: "100%" }}>{children}</Box>
         </Box>
       </Box>
     </Box>

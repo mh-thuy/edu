@@ -10,7 +10,7 @@ interface CurrencyInputProps {
   label: string;
   value: number | undefined | null;
   onChange?: (value: number) => void;
-  error?: FieldError;
+  error?: FieldError | string;
   disabled?: boolean;
   readOnly?: boolean;
   helperText?: string;
@@ -27,6 +27,8 @@ export function CurrencyInput({
   helperText,
   sx,
 }: CurrencyInputProps) {
+  const errorMessage = typeof error === "string" ? error : error?.message;
+
   return (
     <TextField
       label={label}
@@ -43,7 +45,7 @@ export function CurrencyInput({
         onChange?.(raw ? Number(raw) : 0);
       }}
       error={!!error}
-      helperText={error?.message || helperText}
+      helperText={errorMessage || helperText}
       sx={{
         "& input": {
           textAlign: "right",
@@ -67,7 +69,7 @@ export function CurrencyInput({
                 fontWeight: 500,
               }}
             >
-              VND
+              ₫
             </span>
           </InputAdornment>
         ),

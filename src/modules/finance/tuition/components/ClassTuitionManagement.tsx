@@ -10,6 +10,7 @@ import {
   FormControl,
   FormHelperText,
   InputLabel,
+  InputAdornment,
   LinearProgress,
   MenuItem,
   Paper,
@@ -32,12 +33,14 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 
 type ClassData = {
@@ -81,6 +84,7 @@ const classStatusColor: Record<ClassData["status"], "default" | "success" | "inf
 export function ClassTuitionManagement({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [fees, setFees] = useState<Fee[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [month, setMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -127,13 +131,21 @@ export function ClassTuitionManagement({ id }: { id: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  const filteredFees = useMemo(() => {
+    const query = studentSearch.trim().toLocaleLowerCase("vi-VN");
+    if (!query) return fees;
+    return fees.filter((fee) =>
+      fee.student.fullName.toLocaleLowerCase("vi-VN").includes(query),
+    );
+  }, [fees, studentSearch]);
+
   const totals = useMemo(() => ({
-    amount: fees
+    amount: filteredFees
       .filter((fee) => fee.status !== "EXEMPTED" && fee.status !== "CANCELLED")
       .reduce((sum, fee) => sum + Number(fee.finalAmount), 0),
-    paid: fees.filter((fee) => fee.status === "PAID").length,
-    unpaid: fees.filter((fee) => fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE").length,
-  }), [fees]);
+    paid: filteredFees.filter((fee) => fee.status === "PAID").length,
+    unpaid: filteredFees.filter((fee) => fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE").length,
+  }), [filteredFees]);
 
   async function createFees() {
     setBusy(true);
@@ -299,19 +311,38 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     </Box>
 
     <Paper sx={{ overflow: "hidden" }}>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5} sx={{ p: { xs: 2, md: 2.5 }, borderBottom: "1px solid", borderColor: "divider" }}>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={1.5} sx={{ p: { xs: 2, md: 2.5 }, borderBottom: "1px solid", borderColor: "divider" }}>
         <Box>
           <Typography variant="h6" fontWeight={800}>Danh sách khoản phí</Typography>
           <Typography variant="body2" color="text.secondary">Theo dõi số tiền và trạng thái thu của từng học viên trong kỳ.</Typography>
         </Box>
-        <Chip size="small" variant="outlined" label={`${fees.length} khoản phí`} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+          <AppTextField
+            size="small"
+            placeholder="Tìm theo tên học viên..."
+            value={studentSearch}
+            onChange={(event) => setStudentSearch(event.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchOutlinedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              width: { xs: "100%", sm: 270 },
+              "& .MuiOutlinedInput-root": { borderRadius: 2 },
+            }}
+          />
+          <Chip size="small" variant="outlined" label={`${filteredFees.length} khoản phí`} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
+        </Stack>
       </Stack>
       {loading && <LinearProgress />}
       <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 900 }}>
           <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
           <TableBody>
-            {fees.map((fee) => {
+            {filteredFees.map((fee) => {
               const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
               const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status];
               const feeColor = pendingBatch ? "warning" : statusColor[fee.status];
@@ -332,7 +363,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
                 </TableRow>
               );
             })}
-            {!loading && !fees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>Chưa có học phí cho kỳ {month}</Typography><Typography variant="body2">Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu.</Typography></Stack></TableCell></TableRow>}
+            {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{studentSearch.trim() ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{studentSearch.trim() ? "Thử tìm bằng tên khác hoặc xóa nội dung tìm kiếm." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
           </TableBody>
         </Table>
       </Box>

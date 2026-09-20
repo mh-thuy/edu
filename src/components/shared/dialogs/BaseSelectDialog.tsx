@@ -125,7 +125,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
       <DialogContent sx={{ pt: 2 }} dividers>
         <Stack spacing={2}>
           {/* Search bar */}
-          <Stack direction="row" spacing={1}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <TextField
               size="small"
               fullWidth
@@ -141,22 +141,25 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 ),
               }}
             />
-            <Button
-              variant="contained"
-              onClick={handleSearch}
-              sx={{ whiteSpace: "nowrap" }}
-            >
-              Tìm
-            </Button>
-            {(searchInput || committedSearch) && (
+            <Stack direction="row" spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
               <Button
-                variant="outlined"
-                onClick={handleClear}
-                startIcon={<ClearIcon />}
+                variant="contained"
+                onClick={handleSearch}
+                sx={{ whiteSpace: "nowrap", flex: { xs: 1, sm: "initial" } }}
               >
-                Xóa
+                Tìm
               </Button>
-            )}
+              {(searchInput || committedSearch) && (
+                <Button
+                  variant="outlined"
+                  onClick={handleClear}
+                  startIcon={<ClearIcon />}
+                  sx={{ whiteSpace: "nowrap", flex: { xs: 1, sm: "initial" } }}
+                >
+                  Xóa
+                </Button>
+              )}
+            </Stack>
           </Stack>
 
           {/* Error state */}
@@ -186,6 +189,15 @@ export function BaseSelectDialog<T extends SelectableItem>({
               <DataGrid
                 rows={rows}
                 columns={columns}
+                localeText={{
+                  noRowsLabel: "Không có dữ liệu",
+                  noResultsOverlayLabel: "Không tìm thấy dữ liệu phù hợp",
+                  footerRowSelected: (count) => `${count} dòng đã chọn`,
+                  footerTotalRows: "Tổng số dòng:",
+                  paginationRowsPerPage: "Số dòng/trang:",
+                  paginationDisplayedRows: ({ from, to, count }) =>
+                    `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`,
+                }}
                 pageSizeOptions={[5, 10, 25]}
                 paginationModel={{ page: page - 1, pageSize }}
                 onPaginationModelChange={(model) => {

@@ -77,7 +77,7 @@ type PendingBatch = {
   account: BankAccount;
   qrUrl: string;
 };
-const steps = ["Tìm học sinh", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
+const steps = ["Tìm học viên", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
 const feeStatusLabels: Record<string, string> = {
   UNPAID: "Chưa thanh toán",
   PARTIAL: "Đã thu một phần",
@@ -119,8 +119,10 @@ export function TuitionPaymentWorkspace({
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [newPaymentConfirmOpen, setNewPaymentConfirmOpen] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
   const [error, setError] = useState("");
   const paymentIdempotencyKeyRef = useRef<string | null>(null);
   const paymentAttemptFingerprintRef = useRef<string | null>(null);
@@ -130,10 +132,17 @@ export function TuitionPaymentWorkspace({
   const selectedFee = selectedFees[0];
   const getRemaining = (fee: Fee) => Number(fee.remainingAmount ?? fee.finalAmount);
   const getAmount = (fee: Fee) => amounts[fee.id] ?? getRemaining(fee);
+  const getAmountError = (fee: Fee) => {
+    const amount = getAmount(fee);
+    if (amount <= 0) return "Số tiền phải lớn hơn 0";
+    if (amount > getRemaining(fee)) return "Không được vượt số tiền còn nợ";
+    return "";
+  };
   const total = useMemo(
     () => selectedFees.reduce((sum, fee) => sum + (amounts[fee.id] ?? Number(fee.remainingAmount ?? fee.finalAmount)), 0),
     [selectedFees, amounts],
   );
+  const hasInvalidAmount = selectedFees.some((fee) => Boolean(getAmountError(fee)));
   const selectedStudent = fees[0]?.student;
 
   const loadBankAccounts = useCallback(async () => {
@@ -168,6 +177,8 @@ export function TuitionPaymentWorkspace({
 
   useEffect(() => {
     if (!initialTuitionFeeId) return;
+    setInitialLoading(true);
+    setError("");
     void fetch(`/api/tuition-fees/${initialTuitionFeeId}`)
       .then(async (response) => {
         if (!response.ok)
@@ -250,12 +261,13 @@ export function TuitionPaymentWorkspace({
             ? reason.message
             : "Không thể tải khoản học phí",
         ),
-      );
+      )
+      .finally(() => setInitialLoading(false));
   }, [initialTuitionFeeId]);
 
   async function lookupStudent() {
     if (!studentCode) {
-      setError("Mã học sinh là bắt buộc");
+      setError("Mã học viên là bắt buộc");
       return;
     }
     setLoading(true);
@@ -553,6 +565,14 @@ export function TuitionPaymentWorkspace({
     setQrError("");
   }
 
+  function startNewPayment() {
+    if (pendingBatch) {
+      setNewPaymentConfirmOpen(true);
+      return;
+    }
+    reset();
+  }
+
   function continueWithSameStudent() {
     clearPaymentAttempt();
     setStep(0);
@@ -635,7 +655,7 @@ export function TuitionPaymentWorkspace({
           </Typography>
         </Box>
         {step > 0 && (
-          <Button variant="outlined" onClick={reset} sx={{ flexShrink: 0 }}>
+          <Button variant="outlined" onClick={startNewPayment} sx={{ flexShrink: 0 }}>
             Bắt đầu lượt thu mới
           </Button>
         )}
@@ -649,7 +669,16 @@ export function TuitionPaymentWorkspace({
           bgcolor: "background.paper",
         }}
       >
-        <Stepper activeStep={step} alternativeLabel>
+        <Stepper
+          activeStep={step}
+          alternativeLabel
+          sx={{
+            "& .MuiStepLabel-label": {
+              fontSize: { xs: "0.68rem", sm: "0.875rem" },
+              lineHeight: 1.2,
+            },
+          }}
+        >
           {steps.map((label) => (
             <Step key={label}>
               <StepLabel>{label}</StepLabel>
@@ -659,6 +688,11 @@ export function TuitionPaymentWorkspace({
       </Paper>
 
       {error && <Alert severity="error">{error}</Alert>}
+      {initialLoading && (
+        <Alert severity="info" icon={<CircularProgress size={18} />}>
+          Đang tải khoản học phí được chọn...
+        </Alert>
+      )}
 
       {step === 0 && (
         <Box
@@ -683,8 +717,9 @@ export function TuitionPaymentWorkspace({
                 label="Học viên"
                 value={student}
                 onOpen={studentDialog.onOpen}
+                disabled={initialLoading}
                 required
-                codeLabel="Mã học sinh"
+                codeLabel="Mã học viên"
                 nameLabel="Họ tên"
               />
               <Button
@@ -692,10 +727,10 @@ export function TuitionPaymentWorkspace({
                 variant="contained"
                 size="large"
                 startIcon={
-                  loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />
+                  loading || initialLoading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />
                 }
                 onClick={() => void lookupStudent()}
-                disabled={loading || !studentCode}
+                disabled={loading || initialLoading || !studentCode}
               >
                 Tra cứu học phí
               </Button>
@@ -743,7 +778,7 @@ export function TuitionPaymentWorkspace({
         <Stack spacing={2}>
           <Paper
             variant="outlined"
-            sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, bgcolor: "primary.50" }}
+            sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, bgcolor: "primary.light" }}
           >
             <Stack
               direction={{ xs: "column", sm: "row" }}
@@ -755,7 +790,7 @@ export function TuitionPaymentWorkspace({
                 <Typography variant="overline" color="primary.main" fontWeight={700}>
                   Học viên đang thu
                 </Typography>
-                <Typography variant="h6" fontWeight={800} noWrap>
+                <Typography variant="h6" fontWeight={800} noWrap title={selectedStudent?.fullName || student?.name || "-"}>
                   {selectedStudent?.fullName || student?.name || "-"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -848,6 +883,7 @@ export function TuitionPaymentWorkspace({
                         label="Số tiền thu lần này"
                         value={getAmount(selectedFee)}
                         onChange={(value) => setAmounts((current) => ({ ...current, [selectedFee.id]: value }))}
+                        error={getAmountError(selectedFee) || undefined}
                         helperText="Mặc định là toàn bộ số tiền còn nợ."
                       />
                     </Stack>
@@ -886,7 +922,7 @@ export function TuitionPaymentWorkspace({
                             sx={{
                               p: { xs: 1.25, sm: 1.5 },
                               borderColor: selected ? "primary.main" : "divider",
-                              bgcolor: selected ? "primary.50" : "background.paper",
+                              bgcolor: selected ? "primary.light" : "background.paper",
                               opacity: locked ? 0.65 : 1,
                               borderRadius: 1.5,
                             }}
@@ -911,7 +947,7 @@ export function TuitionPaymentWorkspace({
                                       <Typography fontWeight={700}>{fee.feeNo}</Typography>
                                       {!locked && <Chip size="small" color={feeStatusColors[fee.status] || "warning"} label={feeStatusLabels[fee.status] || fee.status} />}
                                     </Stack>
-                                    <Typography variant="body2" color="text.secondary" noWrap>
+                                    <Typography variant="body2" color="text.secondary" noWrap title={fee.class?.name || "Chưa có lớp"}>
                                       {fee.class?.name || "Chưa có lớp"}
                                     </Typography>
                                     <Typography variant="caption" color={locked ? "warning.main" : "text.secondary"}>
@@ -926,6 +962,7 @@ export function TuitionPaymentWorkspace({
                                     label="Số tiền lần này"
                                     value={getAmount(fee)}
                                     onChange={(value) => setAmounts((current) => ({ ...current, [fee.id]: value }))}
+                                    error={getAmountError(fee) || undefined}
                                     helperText={`Còn nợ: ${money(getRemaining(fee))}`}
                                   />
                                 </Box>
@@ -954,7 +991,7 @@ export function TuitionPaymentWorkspace({
 
             <Paper
               variant="outlined"
-              sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 16 } }}
+              sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 88 } }}
             >
               <Typography variant="subtitle1" fontWeight={800}>
                 Tóm tắt lượt thu
@@ -977,7 +1014,7 @@ export function TuitionPaymentWorkspace({
                   variant="contained"
                   size="large"
                   onClick={() => setStep(2)}
-                  disabled={!selectedIds.length}
+                  disabled={!selectedIds.length || hasInvalidAmount}
                   sx={{ mt: 0.5 }}
                 >
                   Tiếp tục chọn phương thức
@@ -1038,7 +1075,11 @@ export function TuitionPaymentWorkspace({
                     label="Ngày nhận tiền"
                     value={cashPaymentDate}
                     onChange={setCashPaymentDate}
-                    textFieldProps={{ required: true }}
+                    textFieldProps={{
+                      required: true,
+                      error: !cashPaymentDate,
+                      helperText: !cashPaymentDate ? "Ngày nhận tiền là bắt buộc" : undefined,
+                    }}
                   />
                 )}
                 {method === "BANK_TRANSFER" && (
@@ -1113,7 +1154,7 @@ export function TuitionPaymentWorkspace({
               </Stack>
             </Paper>
 
-            <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 16 } }}>
+            <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 88 } }}>
               <Typography variant="subtitle1" fontWeight={800}>Tóm tắt thanh toán</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>
                 {selectedStudent?.fullName || student?.name || "-"}
@@ -1217,7 +1258,7 @@ export function TuitionPaymentWorkspace({
             )}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" sx={{ width: "100%" }}>
               {!pendingBatch && <Button variant="contained" onClick={continueWithSameStudent}>Thu tiếp cho học viên này</Button>}
-              <Button variant="outlined" onClick={reset}>Thu học phí cho học viên khác</Button>
+              <Button variant="outlined" onClick={startNewPayment}>Thu học phí cho học viên khác</Button>
             </Stack>
           </Stack>
         </Paper>
@@ -1274,7 +1315,11 @@ export function TuitionPaymentWorkspace({
               label="Ngày nhận tiền"
               value={cashPaymentDate}
               onChange={setCashPaymentDate}
-              textFieldProps={{ required: true }}
+              textFieldProps={{
+                required: true,
+                error: !cashPaymentDate,
+                helperText: !cashPaymentDate ? "Ngày nhận tiền là bắt buộc" : undefined,
+              }}
             />
             <AppTextField
               fullWidth
@@ -1292,6 +1337,19 @@ export function TuitionPaymentWorkspace({
         isLoading={loading}
         confirmLabel="Xác nhận tiền mặt"
         cancelLabel="Quay lại"
+        confirmColor="warning"
+      />
+      <ConfirmDialog
+        open={newPaymentConfirmOpen}
+        title="Bắt đầu lượt thu mới?"
+        message={`Đợt ${pendingBatch?.batchNo || "thanh toán"} vẫn đang chờ đối soát. Nếu tiếp tục, màn hình QR và thao tác xử lý đợt này sẽ được đóng.`}
+        onConfirm={() => {
+          setNewPaymentConfirmOpen(false);
+          reset();
+        }}
+        onCancel={() => setNewPaymentConfirmOpen(false)}
+        confirmLabel="Tiếp tục lượt mới"
+        cancelLabel="Ở lại xử lý đợt thu"
         confirmColor="warning"
       />
       {Snackbar}
