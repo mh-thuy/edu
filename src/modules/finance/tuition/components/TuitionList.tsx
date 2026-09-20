@@ -1,13 +1,16 @@
 "use client";
 
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  Collapse,
   FormControl,
   InputLabel,
   MenuItem,
@@ -98,6 +101,7 @@ export function TuitionList() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,55 +195,91 @@ export function TuitionList() {
 
       <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack spacing={1.5}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <SearchOutlinedIcon color="primary" fontSize="small" />
-            <Typography fontWeight={700}>Tìm kiếm và lọc</Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <SearchOutlinedIcon color="primary" fontSize="small" />
+              <Box>
+                <Typography fontWeight={800}>Tra cứu học phí</Typography>
+                <Typography variant="caption" color="text.secondary">Lọc nhanh theo kỳ và trạng thái thanh toán</Typography>
+              </Box>
+            </Stack>
+            <Button
+              size="small"
+              variant="text"
+              color="inherit"
+              startIcon={<TuneOutlinedIcon />}
+              endIcon={<ExpandMoreOutlinedIcon sx={{ transform: showAdvancedFilters ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }} />}
+              onClick={() => setShowAdvancedFilters((current) => !current)}
+              sx={{ color: "text.secondary", alignSelf: { xs: "flex-start", sm: "center" } }}
+            >
+              Bộ lọc nâng cao
+            </Button>
           </Stack>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ xs: "stretch", md: "center" }}>
-            <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: { md: 230 } }} />
-            <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" sx={{ flex: 1, minWidth: { md: 230 } }} />
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "center" }}>
             <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={setBillingMonth} textFieldProps={{ size: "small" }} />
-            <FormControl size="small" sx={{ minWidth: 185 }}>
+            <FormControl size="small" sx={{ minWidth: { sm: 210 }, flex: { sm: 1 } }}>
               <InputLabel id="tuition-status-label">Trạng thái</InputLabel>
               <Select labelId="tuition-status-label" label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Tất cả trạng thái</MenuItem>
                 {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 165 }}>
-              <InputLabel id="tuition-type-label">Loại phí</InputLabel>
-              <Select labelId="tuition-type-label" label="Loại phí" value={billingType} onChange={(event) => setBillingType(event.target.value)}>
-                <MenuItem value="">Tất cả loại phí</MenuItem>
-                {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
-              </Select>
-            </FormControl>
             <Button variant="contained" onClick={applyFilters}>Tìm kiếm</Button>
             <Button variant="outlined" onClick={clearFilters} disabled={!studentCode && !classId && !status && !billingType && !billingMonth}>Xóa lọc</Button>
           </Stack>
+          <Collapse in={showAdvancedFilters}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>
+              <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: { md: 260 } }} />
+              <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" sx={{ flex: 1, minWidth: { md: 260 } }} />
+              <FormControl size="small" sx={{ minWidth: { md: 210 } }}>
+                <InputLabel id="tuition-type-label">Loại phí</InputLabel>
+                <Select labelId="tuition-type-label" label="Loại phí" value={billingType} onChange={(event) => setBillingType(event.target.value)}>
+                  <MenuItem value="">Tất cả loại phí</MenuItem>
+                  {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Stack>
+          </Collapse>
         </Stack>
       </Paper>
 
       {error && <Alert severity="error" action={<Button variant="text" color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
 
-      <Paper sx={{ overflowX: "auto" }}>
+      <Paper sx={{ overflow: "hidden" }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
           <Box>
             <Typography variant="h6" fontWeight={800}>Danh sách học phí</Typography>
             <Typography variant="body2" color="text.secondary">{total} khoản phí trong kết quả hiện tại</Typography>
           </Box>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {appliedStudentCode && <Chip size="small" variant="outlined" label={`HV: ${appliedStudentCode}`} />}
+            {appliedClassId && <Chip size="small" variant="outlined" label="Đã lọc theo lớp" />}
             {appliedBillingMonth && <Chip size="small" color="info" label={`Kỳ ${appliedBillingMonth}`} />}
+            {appliedStatus && <Chip size="small" color={colors[appliedStatus as Status]} label={labels[appliedStatus as Status]} />}
             {appliedBillingType && <Chip size="small" variant="outlined" label={billingTypeLabels[appliedBillingType as BillingType]} />}
           </Stack>
         </Stack>
-        <Table sx={{ minWidth: 1320 }} size="small">
-          <TableHead><TableRow><TableCell>Mã học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Lớp</TableCell><TableCell>Loại phí</TableCell><TableCell>Kỳ</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Giảm giá</TableCell><TableCell>Phụ phí</TableCell><TableCell align="right">Tổng phải thu</TableCell><TableCell align="right">Đã thu</TableCell><TableCell align="right">Còn nợ</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+        <Box sx={{ overflowX: "auto" }}>
+        <Table sx={{ minWidth: 980 }} size="small">
+          <TableHead><TableRow><TableCell>Khoản học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Kỳ / lớp</TableCell><TableCell>Phải thu / đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
           <TableBody>
-            {!loading && items.map((item) => <TableRow key={item.id} hover><TableCell><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="outlined">{item.feeNo}</Button></TableCell><TableCell><Typography variant="body2" fontWeight={600}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell><TableCell>{item.class?.name || "-"}</TableCell><TableCell><Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} /></TableCell><TableCell>{`${item.billingYear}-${String(item.billingMonth).padStart(2, "0")}`}</TableCell><TableCell>{money(item.originalAmount)}</TableCell><TableCell>{money(item.discountAmount)}</TableCell><TableCell>{money(item.additionalAmount)}</TableCell><TableCell align="right"><strong>{money(item.finalAmount)}</strong></TableCell><TableCell align="right">{money(item.paidAmount)}</TableCell><TableCell align="right"><strong>{money(item.remainingAmount)}</strong></TableCell><TableCell>{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</TableCell><TableCell><Chip size="small" color={colors[item.status]} label={labels[item.status]} /></TableCell><TableCell align="right"><Stack direction="row" justifyContent="flex-end" spacing={0.5}><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Xem chi tiết</Button>{(item.status === "UNPAID" || item.status === "PARTIAL" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">{item.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}</Button>}</Stack></TableCell></TableRow>)}
-            {!loading && !items.length && <TableRow><TableCell colSpan={15}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
-            {loading && <TableRow><TableCell colSpan={12}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
+            {!loading && items.map((item) => <TableRow key={item.id} hover>
+              <TableCell sx={{ minWidth: 170 }}>
+                <Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="text" sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}>{item.feeNo}</Button>
+                <Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} sx={{ mt: 0.75, display: "flex", width: "fit-content" }} />
+              </TableCell>
+              <TableCell sx={{ minWidth: 180 }}><Typography variant="body2" fontWeight={700}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell>
+              <TableCell sx={{ minWidth: 150 }}><Typography variant="body2" fontWeight={600}>{`${String(item.billingMonth).padStart(2, "0")}/${item.billingYear}`}</Typography><Typography variant="caption" color="text.secondary">{item.class?.name || "-"}</Typography></TableCell>
+              <TableCell sx={{ minWidth: 155 }}><Typography variant="body2" fontWeight={800}>{money(item.finalAmount)}</Typography><Typography variant="caption" color="text.secondary">Đã thu {money(item.paidAmount)}</Typography></TableCell>
+              <TableCell sx={{ minWidth: 130 }}><Typography fontWeight={800} color={Number(item.remainingAmount) > 0 ? "error.main" : "success.main"}>{money(item.remainingAmount)}</Typography></TableCell>
+              <TableCell sx={{ minWidth: 150 }}><Typography variant="body2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</Typography><Chip size="small" color={colors[item.status]} label={labels[item.status]} sx={{ mt: 0.75 }} /></TableCell>
+              <TableCell align="right" sx={{ minWidth: 185 }}><Stack direction="row" justifyContent="flex-end" spacing={0.5}><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Chi tiết</Button>{(item.status === "UNPAID" || item.status === "PARTIAL" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">{item.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}</Button>}</Stack></TableCell>
+            </TableRow>)}
+            {!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
+            {loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
           </TableBody>
         </Table>
+        </Box>
         <TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} />
       </Paper>
 

@@ -11,6 +11,7 @@ export const paymentDateSchema = z
 
 export const paymentBatchCreateSchema = z.object({
   tuitionFeeIds: z.array(z.string().uuid()).min(1).max(100),
+  idempotencyKey: z.string().trim().min(1).max(150).optional(),
   /** Optional per-fee amounts. Missing entries mean the current remaining balance. */
   amounts: z.record(z.string().uuid(), moneyInput).optional(),
   paymentMethod: z.enum(["CASH", "BANK_TRANSFER"]),

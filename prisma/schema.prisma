@@ -495,6 +495,7 @@ model PaymentBatch {
   bankAccountId        String?              @map("bank_account_id") @db.Uuid
   bankTransactionNo    String?              @map("bank_transaction_no") @db.VarChar(150)
   transactionReference String?              @map("transaction_reference") @db.VarChar(150)
+  idempotencyKey       String?              @unique(map: "uq_payment_batches_idempotency_key") @map("idempotency_key") @db.VarChar(150)
   payerName            String?              @map("payer_name") @db.VarChar(255)
   paymentContent       String?              @map("payment_content") @db.VarChar(500)
   confirmedBy          String?              @map("confirmed_by") @db.Uuid

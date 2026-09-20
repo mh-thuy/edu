@@ -46,6 +46,7 @@ type Detail = {
     }>;
     tuitionFee: {
       feeNo: string;
+      finalAmount: number;
       discountAmount: number;
       additionalAmount: number;
       student: { code: string; fullName: string };
@@ -119,6 +120,9 @@ export function ReceiptDetailDialog({
   }, [load]);
 
   const activeRefund = data?.payment.refunds.find((refund) => !["REJECTED", "CANCELLED"].includes(refund.status));
+  const isPartialReceipt = data
+    ? Number(data.amount) < Number(data.payment.tuitionFee.finalAmount)
+    : false;
 
   async function createRefund() {
     if (!refundReason.trim()) {
@@ -239,16 +243,23 @@ export function ReceiptDetailDialog({
                     key={`${item.itemName}-${index}`}
                     variant="body2"
                   >
-                    • {item.classSubject?.subject.name || item.itemName} — {money(Number(item.amount))}
+                    • {item.classSubject?.subject.name || item.itemName}
+                    {!isPartialReceipt && ` — ${money(Number(item.amount))}`}
                   </Typography>
                 ))}
             </Stack>
-            {Number(data.payment.tuitionFee.discountAmount) > 0 && (
+            {isPartialReceipt && (
+              <Alert severity="info">
+                Đây là thanh toán một phần. Số tiền của lần thu này: {" "}
+                <strong>{money(Number(data.amount))}</strong>
+              </Alert>
+            )}
+            {!isPartialReceipt && Number(data.payment.tuitionFee.discountAmount) > 0 && (
               <Typography color="success.main">
                 Giảm giá: -{money(Number(data.payment.tuitionFee.discountAmount))}
               </Typography>
             )}
-            {Number(data.payment.tuitionFee.additionalAmount) > 0 && (
+            {!isPartialReceipt && Number(data.payment.tuitionFee.additionalAmount) > 0 && (
               <Typography>
                 Phụ thu: {money(Number(data.payment.tuitionFee.additionalAmount))}
               </Typography>

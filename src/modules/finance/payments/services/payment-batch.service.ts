@@ -54,6 +54,81 @@ async function generateBatchNo(tx: Prisma.TransactionClient) {
   throw new ConflictError("Không thể tạo mã thanh toán tổng, vui lòng thử lại");
 }
 
+function sameNullableText(
+  left: string | null | undefined,
+  right: string | null | undefined,
+) {
+  return (left?.trim() || null) === (right?.trim() || null);
+}
+
+async function findIdempotentBatch(
+  tx: Prisma.TransactionClient,
+  data: PaymentBatchCreate,
+) {
+  if (!data.idempotencyKey) return null;
+
+  await tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`payment-idempotency:${data.idempotencyKey}`}))`,
+  );
+  const existingRows = await tx.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT id FROM payment_batches WHERE idempotency_key = ${data.idempotencyKey} LIMIT 1 FOR UPDATE`,
+  );
+  const existingId = existingRows[0]?.id;
+  const existing = existingId
+    ? await tx.paymentBatch.findUnique({
+        where: { id: existingId },
+        include: {
+          allocations: { include: { tuitionFee: true } },
+          student: true,
+        },
+      })
+    : null;
+  if (!existing) return null;
+
+  const requestedFeeIds = new Set(data.tuitionFeeIds);
+  const existingFeeIds = new Set(
+    existing.allocations.map((allocation) => allocation.tuitionFeeId),
+  );
+  const sameFees =
+    requestedFeeIds.size === data.tuitionFeeIds.length &&
+    requestedFeeIds.size === existingFeeIds.size &&
+    [...requestedFeeIds].every((feeId) => existingFeeIds.has(feeId));
+  const sameAmounts =
+    sameFees &&
+    existing.allocations.every((allocation) => {
+      const requested = data.amounts?.[allocation.tuitionFeeId];
+      return (
+        requested === undefined ||
+        new Prisma.Decimal(requested).equals(allocation.amount)
+      );
+    });
+  const requestedCashDate =
+    data.paymentMethod === "CASH" ? parsePaymentDate(data.paymentDate) : undefined;
+  const samePaymentDate =
+    data.paymentMethod !== "CASH" ||
+    (requestedCashDate !== undefined &&
+      existing.paymentDate.getTime() === requestedCashDate.getTime());
+  const reconciliationMetadataChanged =
+    existing.status === PaymentBatchStatus.SUCCESS &&
+    existing.paymentMethod === "BANK_TRANSFER";
+  const sameRequest =
+    existing.paymentMethod === data.paymentMethod &&
+    (data.paymentMethod === "CASH"
+      ? existing.bankAccountId === null
+      : existing.bankAccountId === data.bankAccountId) &&
+    (reconciliationMetadataChanged ||
+      (sameNullableText(existing.transactionReference, data.transactionReference) &&
+        sameNullableText(existing.paymentContent, data.note))) &&
+    sameNullableText(existing.payerName, data.payerName) &&
+    sameFees &&
+    sameAmounts &&
+    samePaymentDate;
+  if (!sameRequest) {
+    throw new ConflictError("Idempotency-Key đã được dùng cho request thanh toán khác");
+  }
+  return existing;
+}
+
 export async function completePaymentBatch(
   tx: Prisma.TransactionClient,
   batchId: string,
@@ -365,6 +440,8 @@ export async function createPaymentBatch(
   auditContext?: AuditContext,
 ) {
   const execute = async (tx: Prisma.TransactionClient) => {
+    const existingIdempotentBatch = await findIdempotentBatch(tx, data);
+    if (existingIdempotentBatch) return existingIdempotentBatch;
     if (data.paymentMethod === "CASH" && !data.paymentDate) {
       throw new ConflictError("Ngày nhận tiền mặt là bắt buộc");
     }
@@ -548,12 +625,19 @@ export async function createPaymentBatch(
         student: true,
       },
     });
-    await savePaymentBatchNoticeSnapshot(tx, batch.id, {
-      version: 1,
-      student: { code: fees[0]!.student.code, fullName: fees[0]!.student.fullName },
-      fees: fees.map((fee) => toFeeSnapshot(fee, requestedAmounts.get(fee.id))),
-      ...(bankAccountSnapshot ? { bankAccount: bankAccountSnapshot } : {}),
-    });
+    if (data.idempotencyKey) {
+      await tx.$executeRaw(
+        Prisma.sql`UPDATE payment_batches SET idempotency_key = ${data.idempotencyKey} WHERE id = ${batch.id}::uuid`,
+      );
+    }
+    if (data.paymentMethod === "BANK_TRANSFER") {
+      await savePaymentBatchNoticeSnapshot(tx, batch.id, {
+        version: 1,
+        student: { code: fees[0]!.student.code, fullName: fees[0]!.student.fullName },
+        fees: fees.map((fee) => toFeeSnapshot(fee, requestedAmounts.get(fee.id))),
+        ...(bankAccountSnapshot ? { bankAccount: bankAccountSnapshot } : {}),
+      });
+    }
     await tx.tuitionAuditLog.create({
       data: {
         entityType: "PAYMENT_BATCH",

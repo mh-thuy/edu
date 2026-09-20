@@ -20,10 +20,13 @@ import {
   Typography,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import {
@@ -58,7 +61,7 @@ type Batch = {
 };
 
 const money = (value: number) =>
-  `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
+  `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 const statusLabels: Record<string, string> = {
   PENDING: "Chờ chuyển khoản / đối soát",
   SUCCESS: "Đã thanh toán",
@@ -229,25 +232,29 @@ export function PaymentBatchHistory() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "flex-end" }} gap={2}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 2.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}>
               <ReceiptLongOutlinedIcon />
-            </Box>
+          </Box>
+          <Box>
+            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Giao dịch thu học phí</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Theo dõi các đợt thu, đối soát chuyển khoản và biên lai.</Typography>
+          </Box>
+        </Stack>
+        <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+      </Stack>
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25} sx={{ mb: 1.5 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <FilterAltOutlinedIcon color="primary" fontSize="small" />
             <Box>
-              <Typography variant="h5" fontWeight={700}>Giao dịch thu học phí</Typography>
-              <Typography variant="body2" color="text.secondary">Theo dõi thanh toán, đối soát chuyển khoản và biên lai.</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>Tra cứu giao dịch</Typography>
+              <Typography variant="caption" color="text.secondary">Lọc theo học viên và trạng thái xử lý</Typography>
             </Box>
           </Stack>
-          <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
-        </Stack>
-      </Paper>
-
-      <Paper sx={{ p: 2 }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
-          <FilterAltOutlinedIcon color="action" fontSize="small" />
-          <Typography variant="subtitle1" fontWeight={700}>Bộ lọc tra cứu</Typography>
+          <Chip size="small" variant="outlined" icon={<CalendarMonthOutlinedIcon />} label="Lịch sử thu học phí" />
         </Stack>
         <Stack
           direction={{ xs: "column", sm: "row" }}
@@ -293,26 +300,24 @@ export function PaymentBatchHistory() {
       {error && <Alert severity="error">{error}</Alert>}
 
       <Paper sx={{ overflow: "hidden" }}>
-        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25} sx={{ p: { xs: 2, md: 2.5 }, borderBottom: 1, borderColor: "divider" }}>
           <Box>
-            <Typography variant="subtitle1" fontWeight={700}>Danh sách đợt thanh toán</Typography>
-            <Typography variant="body2" color="text.secondary">{total} giao dịch</Typography>
+            <Typography variant="h6" fontWeight={800}>Danh sách đợt thu</Typography>
+            <Typography variant="body2" color="text.secondary">{total} đợt thanh toán trong kết quả hiện tại</Typography>
           </Box>
           <Chip size="small" label={status ? statusLabels[status] : "Tất cả trạng thái"} variant="outlined" />
         </Stack>
         {loading && <LinearProgress />}
         <Box sx={{ overflowX: "auto" }}>
-        <Table sx={{ minWidth: 1040 }} size="small">
+        <Table sx={{ minWidth: 900 }} size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Mã đợt thanh toán</TableCell>
+              <TableCell>Đợt thu</TableCell>
               <TableCell>Học viên</TableCell>
-              <TableCell align="center">Số khoản</TableCell>
-              <TableCell align="right">Số tiền</TableCell>
-              <TableCell>Phương thức</TableCell>
+              <TableCell>Giá trị đợt thu</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell>Ngày tạo</TableCell>
-              <TableCell />
+              <TableCell align="right">Thao tác</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -322,45 +327,41 @@ export function PaymentBatchHistory() {
                   <TableRow
                     key={batch.id}
                     hover
-                    sx={{
-                      bgcolor:
-                        batch.status === "PENDING"
-                          ? "warning.light"
-                          : batch.status === "SUCCESS"
-                            ? "success.light"
-                            : undefined,
-                    }}
                   >
-                    <TableCell>
+                    <TableCell sx={{ minWidth: 170 }}>
                       <Button
                         component={Link}
                         href={`/admin/tuition-fees/payment-history/${batch.id}`}
                         size="small"
-                        variant="outlined"
+                        variant="text"
+                        startIcon={<VisibilityOutlinedIcon />}
+                        sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}
                       >
                         {batch.batchNo}
                       </Button>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
+                        {batch.paymentMethod === "BANK_TRANSFER"
+                          ? "Chuyển khoản / VietQR"
+                          : batch.paymentMethod === "CASH"
+                            ? "Tiền mặt"
+                            : "Phương thức cũ"}
+                      </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Typography fontWeight={600}>
+                    <TableCell sx={{ minWidth: 180 }}>
+                      <Typography fontWeight={700}>
                         {batch.student.fullName}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {batch.student.code}
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">{batch.allocations.length}</TableCell>
-                    <TableCell align="right">
-                      <Typography fontWeight={700}>
+                    <TableCell sx={{ minWidth: 170 }}>
+                      <Typography fontWeight={800}>
                         {money(Number(batch.totalAmount))}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      {batch.paymentMethod === "BANK_TRANSFER"
-                        ? "Chuyển khoản / VietQR"
-                        : batch.paymentMethod === "CASH"
-                          ? "Tiền mặt"
-                          : "Phương thức cũ"}
+                      <Typography variant="caption" color="text.secondary">
+                        {batch.allocations.length} khoản học phí
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -369,7 +370,7 @@ export function PaymentBatchHistory() {
                         label={statusLabels[batch.status] || batch.status}
                       />
                     </TableCell>
-                    <TableCell>
+                    <TableCell sx={{ minWidth: 145 }}>
                       <Typography variant="body2">
                         {new Date(batch.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
                       </Typography>
@@ -379,7 +380,7 @@ export function PaymentBatchHistory() {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="right" sx={{ minWidth: 155 }}>
                       <Button
                         size="small"
                         variant="outlined"
@@ -395,7 +396,7 @@ export function PaymentBatchHistory() {
                     </TableCell>
                   </TableRow>
                   <TableRow key={`${batch.id}-detail`}>
-                    <TableCell colSpan={8} sx={{ p: 0, border: 0 }}>
+                    <TableCell colSpan={6} sx={{ p: 0, border: 0 }}>
                       <Collapse in={expanded === batch.id} id={`batch-details-${batch.id}`}>
                         <Box sx={{ p: 2, bgcolor: "action.hover" }}>
                           <Stack
@@ -498,16 +499,18 @@ export function PaymentBatchHistory() {
               ))}
             {!loading && !items.length && (
               <TableRow>
-                <TableCell colSpan={8}>
-                  <Typography sx={{ p: 3 }} color="text.secondary">
-                    Chưa có dữ liệu
-                  </Typography>
+                <TableCell colSpan={6}>
+                  <Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}>
+                    <AccountBalanceWalletOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} />
+                    <Typography fontWeight={700}>Chưa có đợt thu phù hợp</Typography>
+                    <Typography variant="body2">Thử thay đổi bộ lọc để xem thêm giao dịch.</Typography>
+                  </Stack>
                 </TableCell>
               </TableRow>
             )}
             {loading && (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={6}>
                   <Typography sx={{ p: 3 }} textAlign="center">
                     Đang tải...
                   </Typography>

@@ -92,7 +92,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       {/* Main content */}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <Header user={user} onToggleSidebar={toggleSidebar} currentTitle={currentTitle} currentSection={currentSection} />
-        <Box component="main" sx={{ minHeight: "calc(100vh - 72px)", px: 0, py: { xs: 2, md: 3.5 }, bgcolor: "background.default" }}>
+        <Box component="main" sx={{ minHeight: "calc(100vh - 72px)", px: { xs: 1.5, sm: 2.5, md: 3.5 }, py: { xs: 2, md: 3.5 }, bgcolor: "background.default" }}>
           <Box sx={{ width: "100%" }}>
             {children}
           </Box>

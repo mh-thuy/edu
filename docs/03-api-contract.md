@@ -544,11 +544,18 @@ Ví dụ:
 ```json
 {
   "tuitionFeeIds": ["fee-uuid"],
+  "idempotencyKey": "collect-fee-20260920-0001",
   "amounts": { "fee-uuid": 1000000 },
   "paymentMethod": "CASH",
   "paymentDate": "2026-09-20"
 }
 ```
+
+API `POST /api/payment-batches` bắt buộc nhận khóa idempotency duy nhất cho
+mỗi lần thu. Khóa có thể gửi qua header `Idempotency-Key` hoặc field
+`idempotencyKey` trong body; nếu gửi cả hai thì phải giống nhau. Retry cùng
+khóa và cùng nội dung sẽ trả lại payment batch đã tạo, không tạo thêm payment.
+Dùng lại khóa cho nội dung khác phải trả `409 CONFLICT`.
 
 ---
 

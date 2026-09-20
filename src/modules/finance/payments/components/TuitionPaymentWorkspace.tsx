@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Accordion,
@@ -123,6 +123,7 @@ export function TuitionPaymentWorkspace({
   const [receiptId, setReceiptId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const paymentIdempotencyKeyRef = useRef<string | null>(null);
   const studentDialog = useDisclosure();
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const selectedFees = fees.filter((fee) => selectedIds.includes(fee.id));
@@ -362,12 +363,16 @@ export function TuitionPaymentWorkspace({
     setConfirmOpen(false);
     setLoading(true);
     setError("");
+    let response: Response | null = null;
     try {
-      const response = await fetch("/api/payment-batches", {
+      const idempotencyKey = paymentIdempotencyKeyRef.current ?? crypto.randomUUID();
+      paymentIdempotencyKeyRef.current = idempotencyKey;
+      response = await fetch("/api/payment-batches", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tuitionFeeIds: selectedIds,
+          idempotencyKey,
           amounts: Object.fromEntries(selectedFees.map((fee) => [fee.id, getAmount(fee)])),
           paymentMethod: method,
           paymentDate: method === "CASH" ? cashPaymentDate : undefined,
@@ -377,10 +382,12 @@ export function TuitionPaymentWorkspace({
             method === "BANK_TRANSFER" ? transactionReference || undefined : undefined,
         }),
       });
-      if (!response.ok)
+      if (!response.ok) {
+        paymentIdempotencyKeyRef.current = null;
         throw new Error(
           await extractApiErrorMessage(response, "Không thể tạo thanh toán"),
         );
+      }
       const batch = await unwrapApiResponse<{
         id: string;
         batchNo: string;
@@ -389,6 +396,7 @@ export function TuitionPaymentWorkspace({
         receipt?: { id: string } | null;
       }>(response);
       if (batch.status === "SUCCESS") {
+        paymentIdempotencyKeyRef.current = null;
         setReceiptId(batch.receipt?.id || null);
         setStep(3);
         showSuccess("Đã ghi nhận thanh toán và phát hành biên lai");
@@ -420,8 +428,9 @@ export function TuitionPaymentWorkspace({
             bankName: "",
             accountNo: "",
             accountName: "",
-          },
+        },
       });
+      paymentIdempotencyKeyRef.current = null;
       showSuccess("Đã tạo đợt chuyển khoản. Chờ đối soát sau khi nhận tiền");
     } catch (reason) {
       setError(
@@ -473,6 +482,7 @@ export function TuitionPaymentWorkspace({
   }
 
   function reset() {
+    paymentIdempotencyKeyRef.current = null;
     setStep(0);
     setStudent(null);
     setStudentCode("");
@@ -494,6 +504,7 @@ export function TuitionPaymentWorkspace({
   }
 
   function continueWithSameStudent() {
+    paymentIdempotencyKeyRef.current = null;
     setStep(0);
     setFees([]);
     setSelectedIds([]);
@@ -508,6 +519,7 @@ export function TuitionPaymentWorkspace({
     void lookupStudent();
   }
   function selectStudent(item: StudentItem) {
+    paymentIdempotencyKeyRef.current = null;
     setStudent({ id: item.id, code: item.code, name: item.fullName });
     setStudentCode(item.code);
     setFees([]);

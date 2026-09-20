@@ -68,6 +68,8 @@ async function generateTuitionReceiptPdfWithClient(
   const student = snapshot?.student ?? receipt.payment.tuitionFee.student;
   const fee = snapshot?.tuitionFee ?? {
     className: receipt.payment.tuitionFee.class.name,
+    finalAmount: receipt.payment.tuitionFee.finalAmount.toString(),
+    payableAmount: receipt.amount.toString(),
     items: receipt.payment.tuitionFee.items.map((item) => ({
       itemName: item.itemName,
       subjectName: item.classSubject?.subject.name ?? null,
@@ -77,6 +79,13 @@ async function generateTuitionReceiptPdfWithClient(
     discountAmount: receipt.payment.tuitionFee.discountAmount.toString(),
     additionalAmount: receipt.payment.tuitionFee.additionalAmount.toString(),
   };
+  const receiptFinalAmount = "finalAmount" in fee
+    ? Number(fee.finalAmount)
+    : Number(receipt.amount);
+  const receiptPayableAmount = "payableAmount" in fee
+    ? Number(fee.payableAmount)
+    : Number(receipt.amount);
+  const isPartialReceipt = receiptPayableAmount < receiptFinalAmount;
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
@@ -125,15 +134,15 @@ async function generateTuitionReceiptPdfWithClient(
       75,
       y,
     );
-    draw(`${money(Number(item.amount))} VND`, 400, y);
+    if (!isPartialReceipt) draw(`${money(Number(item.amount))} VND`, 400, y);
     y -= 24;
   }
-  if (Number(fee.discountAmount) > 0) {
+  if (!isPartialReceipt && Number(fee.discountAmount) > 0) {
     draw("Giảm giá", 75, y);
     draw(`-${money(Number(fee.discountAmount))} VND`, 400, y);
     y -= 24;
   }
-  if (Number(fee.additionalAmount) > 0) {
+  if (!isPartialReceipt && Number(fee.additionalAmount) > 0) {
     draw("Phụ thu", 75, y);
     draw(`${money(Number(fee.additionalAmount))} VND`, 400, y);
     y -= 24;
@@ -144,7 +153,7 @@ async function generateTuitionReceiptPdfWithClient(
     thickness: A5_SCALE,
     color: rgb(0.8, 0.8, 0.8),
   });
-  draw("TỔNG CỘNG", 75, y - 35, 13, true);
+  draw(isPartialReceipt ? "SỐ TIỀN THU LẦN NÀY" : "TỔNG CỘNG", 75, y - 35, 13, true);
   draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13, true);
   draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
   draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);

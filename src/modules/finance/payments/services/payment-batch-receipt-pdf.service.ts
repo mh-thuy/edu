@@ -86,7 +86,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   const student = snapshot?.student ?? receipt.paymentBatch.student;
   const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
     feeNo: allocation.tuitionFee.feeNo,
-    finalAmount: allocation.amount.toString(),
+    finalAmount: allocation.tuitionFee.finalAmount.toString(),
     payableAmount: allocation.amount.toString(),
     className: allocation.tuitionFee.class?.name ?? null,
     items: allocation.tuitionFee.items.map((item) => ({
@@ -139,6 +139,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
       y,
     );
     const payableAmount = allocation.payableAmount ?? allocation.finalAmount;
+    const isPartialReceipt = Number(payableAmount) < Number(allocation.finalAmount);
     draw(`${money(Number(payableAmount))} VND`, 390, y);
     let itemY = y - 17;
     for (const item of allocation.items) {
@@ -150,15 +151,15 @@ async function generatePaymentBatchReceiptPdfWithClient(
       }
       const subjectName = item.subjectName || item.itemName;
       draw(`- ${subjectName}`, 90, itemY, 9);
-      draw(`${money(Number(item.amount))} VND`, 390, itemY, 9);
+      if (!isPartialReceipt) draw(`${money(Number(item.amount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
-    if (Number(allocation.discountAmount) > 0) {
+    if (!isPartialReceipt && Number(allocation.discountAmount) > 0) {
       draw("- Giảm giá", 90, itemY, 9);
       draw(`-${money(Number(allocation.discountAmount))} VND`, 390, itemY, 9);
       itemY -= 17;
     }
-    if (Number(allocation.additionalAmount) > 0) {
+    if (!isPartialReceipt && Number(allocation.additionalAmount) > 0) {
       draw("- Phụ thu", 90, itemY, 9);
       draw(`${money(Number(allocation.additionalAmount))} VND`, 390, itemY, 9);
       itemY -= 17;
