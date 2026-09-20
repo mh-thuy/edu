@@ -365,61 +365,68 @@ export function UserManagement() {
             </Alert>
           )}
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label="Họ tên"
-              required
-              value={form.fullName}
-              error={Boolean(fieldErrors.fullName)}
-              helperText={fieldErrors.fullName}
-              onChange={(event) => {
-                setForm({ ...form, fullName: event.target.value });
-                setFieldErrors((current) => ({ ...current, fullName: undefined }));
-              }}
-            />
-            <TextField
-              label="Email"
-              required
-              type="email"
-              value={form.email}
-              error={Boolean(fieldErrors.email)}
-              helperText={fieldErrors.email}
-              onChange={(event) => {
-                setForm({ ...form, email: event.target.value });
-                setFieldErrors((current) => ({ ...current, email: undefined }));
-              }}
-            />
-            <TextField
-              label={
-                editing ? "Mật khẩu mới (bỏ trống nếu không đổi)" : "Mật khẩu"
-              }
-              required={!editing}
-              type="password"
-              value={form.password}
-              error={Boolean(fieldErrors.password)}
-              helperText={fieldErrors.password || (editing ? "Để trống nếu không đổi mật khẩu" : "Tối thiểu 8 ký tự")}
-              onChange={(event) => {
-                setForm({ ...form, password: event.target.value });
-                setFieldErrors((current) => ({ ...current, password: undefined }));
-              }}
-            />
-            <FormControl error={Boolean(fieldErrors.status)}>
-              <InputLabel>Trạng thái</InputLabel>
-              <Select
-                label="Trạng thái"
-                value={form.status}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Họ tên"
+                required
+                fullWidth
+                value={form.fullName}
+                error={Boolean(fieldErrors.fullName)}
+                helperText={fieldErrors.fullName}
                 onChange={(event) => {
-                  setForm({ ...form, status: event.target.value as FormState["status"] });
-                  setFieldErrors((current) => ({ ...current, status: undefined }));
+                  setForm({ ...form, fullName: event.target.value });
+                  setFieldErrors((current) => ({ ...current, fullName: undefined }));
                 }}
-              >
-                {Object.entries(statusLabel).map(([key, label]) => (
-                  <MenuItem key={key} value={key}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-              {fieldErrors.status && <FormHelperText>{fieldErrors.status}</FormHelperText>}
-            </FormControl>
+              />
+              <TextField
+                label="Email"
+                required
+                fullWidth
+                type="email"
+                value={form.email}
+                error={Boolean(fieldErrors.email)}
+                helperText={fieldErrors.email}
+                onChange={(event) => {
+                  setForm({ ...form, email: event.target.value });
+                  setFieldErrors((current) => ({ ...current, email: undefined }));
+                }}
+              />
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label={
+                  editing ? "Mật khẩu mới (bỏ trống nếu không đổi)" : "Mật khẩu"
+                }
+                required={!editing}
+                fullWidth
+                type="password"
+                value={form.password}
+                error={Boolean(fieldErrors.password)}
+                helperText={fieldErrors.password || (editing ? "Để trống nếu không đổi mật khẩu" : "Tối thiểu 8 ký tự")}
+                onChange={(event) => {
+                  setForm({ ...form, password: event.target.value });
+                  setFieldErrors((current) => ({ ...current, password: undefined }));
+                }}
+              />
+              <FormControl error={Boolean(fieldErrors.status)} fullWidth>
+                <InputLabel>Trạng thái</InputLabel>
+                <Select
+                  label="Trạng thái"
+                  value={form.status}
+                  onChange={(event) => {
+                    setForm({ ...form, status: event.target.value as FormState["status"] });
+                    setFieldErrors((current) => ({ ...current, status: undefined }));
+                  }}
+                >
+                  {Object.entries(statusLabel).map(([key, label]) => (
+                    <MenuItem key={key} value={key}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {fieldErrors.status && <FormHelperText>{fieldErrors.status}</FormHelperText>}
+              </FormControl>
+            </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>

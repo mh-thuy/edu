@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
   FormControl,
   FormHelperText,
@@ -22,8 +23,17 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import AddCardOutlinedIcon from "@mui/icons-material/AddCardOutlined";
+import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
+import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
+import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
@@ -63,7 +73,7 @@ type Fee = {
 const currentMonth = () => {
   return getVietnamMonth();
 };
-const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
+const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} ₫`;
 const statusLabel: Record<Fee["status"], string> = { UNPAID: "Chưa thu", PARTIAL: "Đã thu một phần", PAID: "Đã thu", OVERDUE: "Quá hạn", EXEMPTED: "Miễn phí", CANCELLED: "Đã hủy" };
 const statusColor: Record<Fee["status"], "warning" | "success" | "error" | "info" | "default"> = { UNPAID: "warning", PARTIAL: "info", PAID: "success", OVERDUE: "error", EXEMPTED: "info", CANCELLED: "default" };
 const classStatusLabel: Record<ClassData["status"], string> = { DRAFT: "Bản nháp", ACTIVE: "Đang hoạt động", COMPLETED: "Đã hoàn thành", CANCELLED: "Đã hủy" };
@@ -196,7 +206,14 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     }
   }
 
-  if (!classData && loading) return <Typography>Đang tải học phí lớp...</Typography>;
+  if (!classData && loading) {
+    return (
+      <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 360 }}>
+        <CircularProgress size={30} />
+        <Typography color="text.secondary">Đang tải thông tin học phí lớp...</Typography>
+      </Stack>
+    );
+  }
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
 
   const metrics = [
@@ -207,38 +224,114 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   ];
 
   return <Stack spacing={{ xs: 2, md: 3 }}>
-    <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1}>
-      <Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}><AccountBalanceWalletOutlinedIcon /></Box><Box><Button component={Link} href={`/admin/classes/${id}`} variant="text" size="small" sx={{ alignSelf: "flex-start", px: 0 }}>← {classData.code}</Button><Stack direction="row" spacing={1} alignItems="center"><Typography variant="h5" fontWeight={700}>Học phí lớp học</Typography><Chip size="small" color={classStatusColor[classData.status]} label={classStatusLabel[classData.status]} /></Stack><Typography color="text.secondary">{classData.name}</Typography></Box></Stack>
-    </Stack>
-    <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-      <Stack spacing={2}>
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
-          <Box><Typography variant="subtitle1" fontWeight={700}>Thiết lập kỳ học phí</Typography><Typography variant="body2" color="text.secondary">Chọn kỳ cần xem hoặc tạo học phí.</Typography></Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}><MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} textFieldProps={{ size: "small" }} /><Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button></Stack>
+    <Box sx={{ px: { xs: 0, md: 0.5 } }}>
+      <Button component={Link} href={`/admin/classes/${id}`} variant="text" size="small" startIcon={<ArrowBackOutlinedIcon />} sx={{ px: 0, mb: 1, color: "text.secondary" }}>
+        Quay lại lớp {classData.code}
+      </Button>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "flex-end" }} gap={2}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 2.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}>
+            <AccountBalanceWalletOutlinedIcon />
+          </Box>
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Học phí lớp học</Typography>
+              <Chip size="small" color={classStatusColor[classData.status]} label={classStatusLabel[classData.status]} />
+            </Stack>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>{classData.name} · {classData.code}</Typography>
+          </Box>
+        </Stack>
+        <Chip icon={<CalendarMonthOutlinedIcon />} label={`Kỳ đang xem: ${month}`} color="primary" variant="outlined" sx={{ alignSelf: { xs: "flex-start", md: "center" }, fontWeight: 700 }} />
+      </Stack>
+    </Box>
+
+    <Paper sx={{ p: { xs: 2, md: 2.5 }, overflow: "hidden" }}>
+      <Stack spacing={2.25}>
+        <Stack direction={{ xs: "column", lg: "row" }} justifyContent="space-between" alignItems={{ lg: "center" }} gap={2}>
+          <Stack direction="row" spacing={1.25} alignItems="flex-start">
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
+              <CalendarMonthOutlinedIcon fontSize="small" />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={800}>Thiết lập kỳ học phí</Typography>
+              <Typography variant="body2" color="text.secondary">Chọn kỳ cần xem hoặc tạo các khoản phí còn thiếu.</Typography>
+            </Box>
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+            <MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} textFieldProps={{ size: "small" }} />
+            <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+          </Stack>
         </Stack>
         <Divider />
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
-          <Box><Typography variant="subtitle1" fontWeight={700}>Tạo học phí</Typography><Typography variant="body2" color="text.secondary">Tạo các khoản phí còn thiếu cho kỳ đã chọn. Phương thức thanh toán sẽ được chọn khi thu tiền.</Typography></Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}><Button variant="contained" onClick={() => void createFees()} disabled={busy || Boolean(classClosed)}>Tạo học phí tháng</Button><Button variant="outlined" onClick={() => void openNoticeDialog()} disabled={busy || Boolean(classClosed)}>Tạo thông báo chuyển khoản</Button></Stack>
+        <Stack direction={{ xs: "column", lg: "row" }} justifyContent="space-between" alignItems={{ lg: "center" }} gap={2}>
+          <Box>
+            <Typography variant="subtitle1" fontWeight={800}>Thao tác thu học phí</Typography>
+            <Typography variant="body2" color="text.secondary">Tạo khoản phí trước, sau đó ghi nhận tiền mặt hoặc chuyển khoản.</Typography>
+          </Box>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button variant="contained" startIcon={<AddCardOutlinedIcon />} onClick={() => void createFees()} disabled={busy || Boolean(classClosed)}>
+              Tạo học phí tháng
+            </Button>
+            <Button variant="outlined" color="primary" startIcon={<PictureAsPdfOutlinedIcon />} onClick={() => void openNoticeDialog()} disabled={busy || Boolean(classClosed)}>
+              Tạo thông báo chuyển khoản
+            </Button>
+          </Stack>
         </Stack>
       </Stack>
     </Paper>
-    {classClosed && <Alert severity="info">Lớp đã hoàn thành hoặc đã hủy; học phí chỉ được xem, không thể tạo mới.</Alert>}
-    {error && <Alert severity="error">{error}</Alert>}
-    <Alert severity="info">Học phí được tính trọn tháng theo các môn đang đăng ký. Sau khi tạo khoản phí, hãy chọn “Thu học phí” để ghi nhận tiền mặt hoặc tạo giao dịch chuyển khoản. Chỉ chọn “Tạo thông báo chuyển khoản” khi muốn lập đợt chuyển khoản cho cả lớp.</Alert>
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-      {metrics.map((metric) => <Paper key={metric.label} elevation={0} sx={{ p: 2, flex: 1, border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Typography variant="body2" color="text.secondary">{metric.label}</Typography><Typography variant="h6" fontWeight={700}>{metric.value}</Typography></Paper>)}
-    </Stack>
-    <Paper elevation={0} sx={{ overflowX: "auto", border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-      <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-        <Typography variant="h6" fontWeight={700}>Danh sách khoản phí</Typography>
-        <Typography variant="body2" color="text.secondary">Kỳ {month} · {fees.length} khoản phí</Typography>
-      </Box>
+
+    {classClosed && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp đã hoàn thành hoặc đã hủy; học phí chỉ được xem, không thể tạo mới.</Alert>}
+    {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
+    <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
+      Học phí được tính trọn tháng theo các môn đang đăng ký. Chọn <strong>Thu học phí</strong> để ghi nhận thanh toán; chỉ tạo thông báo chuyển khoản khi muốn lập đợt thu cho cả lớp.
+    </Alert>
+
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4, 1fr)" }, gap: 1.5 }}>
+      <MetricCard icon={<GroupsOutlinedIcon />} label={`Khoản phí kỳ ${month}`} value={metrics[0]?.value ?? 0} tone="blue" />
+      <MetricCard icon={<AccountBalanceWalletOutlinedIcon />} label="Tổng phải thu" value={metrics[1]?.value ?? money(0)} tone="violet" />
+      <MetricCard icon={<CheckCircleOutlineOutlinedIcon />} label="Đã thu" value={metrics[2]?.value ?? 0} tone="green" />
+      <MetricCard icon={<PaymentsOutlinedIcon />} label="Còn phải thu" value={metrics[3]?.value ?? 0} tone="orange" />
+    </Box>
+
+    <Paper sx={{ overflow: "hidden" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5} sx={{ p: { xs: 2, md: 2.5 }, borderBottom: "1px solid", borderColor: "divider" }}>
+        <Box>
+          <Typography variant="h6" fontWeight={800}>Danh sách khoản phí</Typography>
+          <Typography variant="body2" color="text.secondary">Theo dõi số tiền và trạng thái thu của từng học viên trong kỳ.</Typography>
+        </Box>
+        <Chip size="small" variant="outlined" label={`${fees.length} khoản phí`} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
+      </Stack>
       {loading && <LinearProgress />}
-      <Table sx={{ minWidth: 1000 }}>
-      <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
-    <TableBody>{fees.map((fee) => { const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch; const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status]; const feeColor = pendingBatch ? "warning" : statusColor[fee.status]; const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE"); return <TableRow key={fee.id} hover><TableCell><Typography fontWeight={600}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography></TableCell><TableCell>{fee.items.map((item) => item.itemName).join(", ") || "-"}</TableCell><TableCell>{money(Number(fee.originalAmount))}</TableCell><TableCell><strong>{money(Number(fee.finalAmount))}</strong></TableCell><TableCell>{money(Number(fee.paidAmount))}</TableCell><TableCell><strong>{money(Number(fee.remainingAmount))}</strong></TableCell><TableCell><Stack spacing={0.5} alignItems="flex-start"><Chip size="small" color={feeColor} label={feeStatus} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack></TableCell><TableCell align="right"><Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="flex-end">{pendingBatch && <Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700, boxShadow: 2, whiteSpace: "nowrap" }}>Xử lý đợt thu</Button>}{canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained">{fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu học phí"}</Button>}<Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined">Xem chi tiết</Button></Stack></TableCell></TableRow>; })}{!fees.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Chưa có học phí cho kỳ {month}</Typography></TableCell></TableRow>}</TableBody>
-      </Table>
+      <Box sx={{ overflowX: "auto" }}>
+        <Table sx={{ minWidth: 1000 }}>
+          <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+          <TableBody>
+            {fees.map((fee) => {
+              const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
+              const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status];
+              const feeColor = pendingBatch ? "warning" : statusColor[fee.status];
+              const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE");
+              return (
+                <TableRow key={fee.id} hover>
+                  <TableCell><Typography fontWeight={700}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography></TableCell>
+                  <TableCell><Typography variant="body2" sx={{ maxWidth: 210 }}>{fee.items.map((item) => item.itemName).join(", ") || "-"}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{money(Number(fee.originalAmount))}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}><Typography fontWeight={800}>{money(Number(fee.finalAmount))}</Typography></TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{money(Number(fee.paidAmount))}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}><Typography fontWeight={800} color={Number(fee.remainingAmount) > 0 ? "error.main" : "success.main"}>{money(Number(fee.remainingAmount))}</Typography></TableCell>
+                  <TableCell><Stack spacing={0.5} alignItems="flex-start"><Chip size="small" color={feeColor} label={feeStatus} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack></TableCell>
+                  <TableCell align="right"><Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} justifyContent="flex-end">
+                    {pendingBatch && <Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>Xử lý đợt thu</Button>}
+                    {canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained" startIcon={<PaymentsOutlinedIcon />} sx={{ whiteSpace: "nowrap" }}>{fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu học phí"}</Button>}
+                    <Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} sx={{ whiteSpace: "nowrap" }}>Chi tiết</Button>
+                  </Stack></TableCell>
+                </TableRow>
+              );
+            })}
+            {!loading && !fees.length && <TableRow><TableCell colSpan={8}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>Chưa có học phí cho kỳ {month}</Typography><Typography variant="body2">Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu.</Typography></Stack></TableCell></TableRow>}
+          </TableBody>
+        </Table>
+      </Box>
     </Paper>
     <ConfirmDialog
       open={noticeConfirmOpen}
@@ -254,4 +347,37 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     />
     {Snackbar}
   </Stack>;
+}
+
+type MetricTone = "blue" | "violet" | "green" | "orange";
+
+type MetricCardProps = {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  tone: MetricTone;
+};
+
+function MetricCard({ icon, label, value, tone }: MetricCardProps) {
+  const toneStyles: Record<MetricTone, { background: string; color: string }> = {
+    blue: { background: "#eff6ff", color: "#2563eb" },
+    violet: { background: "#f5f3ff", color: "#7c3aed" },
+    green: { background: "#f0fdf4", color: "#16a34a" },
+    orange: { background: "#fff7ed", color: "#ea580c" },
+  };
+  const style = toneStyles[tone];
+
+  return (
+    <Paper sx={{ p: { xs: 1.75, md: 2 }, minWidth: 0 }}>
+      <Stack direction="row" spacing={1.25} alignItems="flex-start">
+        <Box sx={{ width: 36, height: 36, flexShrink: 0, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: style.background, color: style.color }}>
+          {icon}
+        </Box>
+        <Box minWidth={0}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1.35 }}>{label}</Typography>
+          <Typography variant="h6" fontWeight={800} noWrap sx={{ mt: 0.5 }}>{value}</Typography>
+        </Box>
+      </Stack>
+    </Paper>
+  );
 }

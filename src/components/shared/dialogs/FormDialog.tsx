@@ -35,10 +35,16 @@ export function FormDialog({
   cancelText = "Hủy",
 }: FormDialogProps): ReactElement {
   return (
-    <Dialog open={open} onClose={isLoading ? undefined : onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      onClose={isLoading ? undefined : onClose}
+      maxWidth="md"
+      fullWidth
+      scroll="paper"
+    >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
-        <Box sx={{ pt: 2 }}>{children}</Box>
+        <Box sx={{ pt: 1 }}>{children}</Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="outlined" disabled={isLoading}>

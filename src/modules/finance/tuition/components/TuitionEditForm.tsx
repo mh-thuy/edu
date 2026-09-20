@@ -182,16 +182,18 @@ export function TuitionEditForm({
             value={Number(fee.originalAmount)}
             readOnly
           />
-          <CurrencyInput
-            label="Giảm giá / học bổng"
-            value={discount}
-            onChange={setDiscount}
-          />
-          <CurrencyInput
-            label="Phụ phí"
-            value={additional}
-            onChange={setAdditional}
-          />
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <CurrencyInput
+              label="Giảm giá / học bổng"
+              value={discount}
+              onChange={setDiscount}
+            />
+            <CurrencyInput
+              label="Phụ phí"
+              value={additional}
+              onChange={setAdditional}
+            />
+          </Stack>
           <Typography variant="h6" color="primary.main">
             Tổng mới: {total.toLocaleString("vi-VN")} VND
           </Typography>

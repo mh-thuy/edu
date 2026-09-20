@@ -68,7 +68,24 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           border: "1px solid #e2e8f0",
-          boxShadow: "0 8px 24px rgba(15, 23, 42, 0.04)",
+          borderRadius: 16,
+          boxShadow: "0 4px 18px rgba(15, 23, 42, 0.035)",
+        },
+      },
+    },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          padding: 24,
+          "&:last-child": {
+            paddingBottom: 24,
+          },
+          "@media (max-width:600px)": {
+            padding: 16,
+            "&:last-child": {
+              paddingBottom: 16,
+            },
+          },
         },
       },
     },
@@ -97,7 +114,43 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
+          border: "1px solid #e2e8f0",
           borderColor: "#e2e8f0",
+          borderRadius: 16,
+          boxShadow: "0 4px 18px rgba(15, 23, 42, 0.035)",
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          borderRadius: 18,
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 18px 48px rgba(15, 23, 42, 0.16)",
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          padding: "22px 24px 12px",
+          fontWeight: 800,
+          fontSize: "1.125rem",
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          padding: "12px 24px 20px",
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          padding: "14px 24px 22px",
+          gap: 8,
         },
       },
     },
@@ -106,6 +159,7 @@ const theme = createTheme({
         root: {
           borderColor: "#e2e8f0",
           padding: "12px 16px",
+          verticalAlign: "middle",
         },
         head: {
           backgroundColor: "#f8fafc",
@@ -139,6 +193,8 @@ const theme = createTheme({
       styleOverrides: {
         ".MuiDataGrid-root": {
           border: 0,
+          borderRadius: 16,
+          overflow: "hidden",
         },
         ".MuiDataGrid-columnHeaders": {
           backgroundColor: "#f8fafc",
@@ -147,6 +203,13 @@ const theme = createTheme({
         },
         ".MuiDataGrid-cell:focus, .MuiDataGrid-cell:focus-within": {
           outline: "none",
+        },
+        ".MuiDataGrid-columnHeader:focus, .MuiDataGrid-columnHeader:focus-within": {
+          outline: "none",
+        },
+        ".MuiDataGrid-footerContainer": {
+          minHeight: 56,
+          borderTop: "1px solid #e2e8f0",
         },
       },
     },

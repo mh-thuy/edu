@@ -64,44 +64,45 @@ export function ClassForm({
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)}>
       <Stack spacing={2}>
-        <Controller
-          name="code"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <AppTextField
-              {...field}
-              label="Mã lớp"
-              error={!!error}
-              helperText={
-                error?.message ??
-                (isEditing
-                  ? "Mã lớp không thể thay đổi khi chỉnh sửa"
-                  : "Nhập mã lớp duy nhất, ví dụ: ENG001")
-              }
-              fullWidth
-              required={!isEditing}
-              placeholder="VD: ENG001"
-              disabled={isEditing}
-              autoFocus
-            />
-          )}
-        />
-
-        <Controller
-          name="name"
-          control={control}
-          render={({ field, fieldState: { error } }) => (
-            <AppTextField
-              {...field}
-              label="Tên lớp"
-              error={!!error}
-              helperText={error?.message ?? "Nhập tên lớp dễ nhận biết"}
-              fullWidth
-              required
-              placeholder="VD: Toán 101"
-            />
-          )}
-        />
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Controller
+            name="code"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <AppTextField
+                {...field}
+                label="Mã lớp"
+                error={!!error}
+                helperText={
+                  error?.message ??
+                  (isEditing
+                    ? "Mã lớp không thể thay đổi khi chỉnh sửa"
+                    : "Nhập mã lớp duy nhất, ví dụ: ENG001")
+                }
+                fullWidth
+                required={!isEditing}
+                placeholder="VD: ENG001"
+                disabled={isEditing}
+                autoFocus
+              />
+            )}
+          />
+          <Controller
+            name="name"
+            control={control}
+            render={({ field, fieldState: { error } }) => (
+              <AppTextField
+                {...field}
+                label="Tên lớp"
+                error={!!error}
+                helperText={error?.message ?? "Nhập tên lớp dễ nhận biết"}
+                fullWidth
+                required
+                placeholder="VD: Toán 101"
+              />
+            )}
+          />
+        </Stack>
 
         <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
           <Controller

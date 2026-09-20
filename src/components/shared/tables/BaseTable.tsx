@@ -61,9 +61,11 @@ export function BaseTable<T extends GridValidRowModel>({
 
   if (isLoading && rows.length === 0) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
+      <Card sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
+        <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
         <CircularProgress />
-      </Box>
+        </Box>
+      </Card>
     );
   }
 
@@ -81,7 +83,7 @@ export function BaseTable<T extends GridValidRowModel>({
 
   return (
     <Card>
-      <Box sx={{ overflowX: "auto" }}>
+      <Box sx={{ overflowX: "auto", borderRadius: 2 }}>
         <DataGrid
           rows={rows}
           columns={columns}
