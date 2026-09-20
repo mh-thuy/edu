@@ -238,7 +238,14 @@ export async function updateClass(
     );
     const current = await tx.class.findUnique({
       where: { id },
-      select: { status: true, startDate: true, endDate: true },
+      select: {
+        code: true,
+        name: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        deletedAt: true,
+      },
     });
 
     if (!current) throw new NotFoundError("Không tìm thấy lớp học");
@@ -287,7 +294,7 @@ export async function updateClass(
         DRAFT: ["ACTIVE", "CANCELLED"],
         ACTIVE: ["COMPLETED", "CANCELLED"],
         COMPLETED: [],
-        CANCELLED: [],
+        CANCELLED: ["ACTIVE"],
       };
       if (!allowedTransitions[current.status].includes(data.status)) {
         throw new ConflictError("Trạng thái lớp học không hợp lệ");
@@ -339,7 +346,37 @@ export async function updateClass(
       }
     }
 
-    return tx.class.update({ where: { id }, data: buildClassUpdateInput(data) });
+    const updatedClass = await tx.class.update({
+      where: { id },
+      data: buildClassUpdateInput(data),
+    });
+
+    if (current.status === "CANCELLED" && data.status === "ACTIVE") {
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "CLASS",
+          entityId: id,
+          action: "CLASS_RESTORED",
+          dataBefore: {
+            code: current.code,
+            name: current.name,
+            status: current.status,
+            deletedAt: current.deletedAt?.toISOString() ?? null,
+          },
+          dataAfter: {
+            code: updatedClass.code,
+            name: updatedClass.name,
+            status: updatedClass.status,
+            deletedAt: updatedClass.deletedAt?.toISOString() ?? null,
+          },
+          reason: "Khôi phục lớp đã hủy",
+          performedBy: actorId,
+          ...auditFields(auditContext),
+        },
+      });
+    }
+
+    return updatedClass;
   });
 }
 

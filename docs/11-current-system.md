@@ -34,6 +34,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
   đoạn hiện tại; lớp đã kết thúc/hủy chỉ cho xem enrollment.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
 - Khi lớp chuyển `ACTIVE -> COMPLETED`, enrollment và môn đang `ACTIVE` được chuyển sang `COMPLETED` cùng transaction, có audit log; lịch sử vẫn hiển thị nhưng chỉ đọc.
+- Lớp `CANCELLED` có thể được khôi phục về `ACTIVE`; thao tác xóa `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`. Lớp `COMPLETED` không thể khôi phục.
 - Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.
 - Dashboard có thể xuất Excel báo cáo thu học phí theo từng ngày, tách tiền mặt/chuyển khoản và kèm chi tiết payment `SUCCESS` theo ngày Việt Nam.
 - Dashboard hiển thị riêng tổng thu tiền mặt và tổng thu chuyển khoản; hai số liệu tuân theo bộ lọc ngày và chỉ tính payment `SUCCESS`.

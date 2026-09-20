@@ -630,6 +630,24 @@ bộ enrollment `ACTIVE` trong lớp và các môn `ACTIVE` của chúng sang
 `COMPLETED`, đồng thời ghi audit log theo từng enrollment. Dữ liệu enrollment
 đã hoàn thành vẫn được trả về ở API danh sách học viên để chỉ xem.
 
+## 19.1.0.1 Khôi phục lớp đã hủy
+
+```http
+PATCH /api/classes/{classId}
+```
+
+Body:
+
+```json
+{
+  "status": "ACTIVE"
+}
+```
+
+API chỉ chấp nhận chuyển trạng thái `CANCELLED` sang `ACTIVE`. Khi thành công,
+API xóa `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`. Không thể khôi
+phục lớp `COMPLETED`.
+
 ## 19.1.1 Đăng ký học viên
 
 ```http

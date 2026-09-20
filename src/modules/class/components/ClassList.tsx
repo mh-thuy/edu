@@ -50,6 +50,7 @@ export interface Class {
 type ClassRow = Class & {
   _onEdit?: (cls: Class) => void;
   _onDelete?: (cls: Class) => void;
+  _onRestore?: (cls: Class) => void;
 };
 
 const getColumns = (): GridColDef<ClassRow>[] => [
@@ -143,7 +144,7 @@ const getColumns = (): GridColDef<ClassRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 220,
+    minWidth: 300,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -206,6 +207,20 @@ const getColumns = (): GridColDef<ClassRow>[] => [
         >
           Đóng lớp
         </Button>
+
+        {params.row.status === "CANCELLED" && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="success"
+            onClick={() => params.row._onRestore?.(params.row)}
+            sx={{
+              minWidth: 80,
+            }}
+          >
+            Khôi phục
+          </Button>
+        )}
       </Stack>
     ),
   },
@@ -248,6 +263,7 @@ export function ClassList(): ReactElement {
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Class | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<Class | null>(null);
   const [completionData, setCompletionData] = useState<ClassFormData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -265,6 +281,10 @@ export function ClassList(): ReactElement {
 
   const handleDelete = useCallback((cls: Class) => {
     setDeleteTarget(cls);
+  }, []);
+
+  const handleRestore = useCallback((cls: Class) => {
+    setRestoreTarget(cls);
   }, []);
 
   const handleCloseDialog = useCallback(() => {
@@ -297,6 +317,32 @@ export function ClassList(): ReactElement {
       setIsSubmitting(false);
     }
   }, [deleteTarget, refresh, showSuccess, showError]);
+
+  const handleConfirmRestore = useCallback(async () => {
+    if (!restoreTarget) return;
+
+    try {
+      setIsSubmitting(true);
+
+      const response = await fetch(`/api/classes/${restoreTarget.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ACTIVE" }),
+      });
+
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, "Khôi phục lớp học thất bại"));
+      }
+
+      showSuccess("Đã khôi phục lớp và chuyển sang trạng thái hoạt động");
+      setRestoreTarget(null);
+      await refresh();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Có lỗi khi khôi phục lớp học");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [restoreTarget, refresh, showSuccess, showError]);
 
   const persistClass = useCallback(
     async (formData: ClassFormData) => {
@@ -353,6 +399,7 @@ export function ClassList(): ReactElement {
     ...row,
     _onEdit: handleEdit,
     _onDelete: handleDelete,
+    _onRestore: handleRestore,
   }));
 
   return (
@@ -523,6 +570,17 @@ export function ClassList(): ReactElement {
         isLoading={isSubmitting}
         confirmLabel="Hoàn thành lớp"
         confirmColor="warning"
+      />
+
+      <ConfirmDialog
+        open={Boolean(restoreTarget)}
+        title="Khôi phục lớp học"
+        message={`Lớp ${restoreTarget?.code ?? "này"} — ${restoreTarget?.name ?? ""} sẽ chuyển từ đã hủy sang hoạt động. Sau đó lớp có thể tiếp tục quản lý học viên, lịch học và học phí theo quy định. Bạn có chắc chắn muốn tiếp tục?`}
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setRestoreTarget(null)}
+        isLoading={isSubmitting}
+        confirmLabel="Khôi phục lớp"
+        confirmColor="success"
       />
 
       {Snackbar}

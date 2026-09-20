@@ -251,6 +251,11 @@ DRAFT
 → CANCELLED
 ```
 
+Lớp `CANCELLED` có thể được khôi phục duy nhất về `ACTIVE`. Khi khôi phục,
+hệ thống phải xóa cờ `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`.
+Lớp `COMPLETED` không thể khôi phục. Sau khi khôi phục, các nghiệp vụ học
+viên, lịch học và tạo học phí được áp dụng lại theo các rule hiện hành.
+
 ---
 
 # 6. Enrollment Rules
