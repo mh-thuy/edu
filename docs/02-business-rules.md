@@ -337,7 +337,10 @@ Ghi audit log
 Thực hiện trong transaction
 ```
 
-Nếu học viên đăng ký thêm môn sau khi đã tạo học phí, thao tác tạo học phí lần tiếp theo chỉ tạo phí cho các môn mới chưa được lập phí.
+Nếu học viên đăng ký thêm môn sau khi đã tạo học phí nhưng kỳ đó chưa có payment
+`SUCCESS` hoặc payment batch `PENDING`, thao tác tạo học phí lần tiếp theo chỉ tạo
+phí cho các môn mới chưa được lập phí. Sau khi đã phát sinh thanh toán thành công,
+thành phần item của kỳ được khóa để bảo toàn phân bổ báo cáo và snapshot chứng từ.
 
 ## 6.5 Báo cáo thu học phí theo ngày
 

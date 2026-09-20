@@ -14,7 +14,6 @@ import type {
 } from "@/modules/finance/tuition/schemas/tuition.schema";
 import {
   getEffectiveTuitionFeeStatus,
-  getStoredTuitionFeeStatus,
   PARTIAL_FEE_STATUS,
 } from "@/modules/finance/tuition/utils/tuition-status";
 import { getVietnamDayStart } from "@/lib/vietnam-time";
@@ -275,10 +274,10 @@ export class TuitionService {
           billingType: TuitionFeeBillingType.MONTHLY,
         },
         include: {
-          items: { select: { classSubjectId: true } },
+          items: { select: { classSubjectId: true, displayOrder: true } },
           payments: {
             where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
-            select: { amount: true },
+            select: { id: true },
           },
           paymentAllocations: {
             where: { paymentBatch: { status: PaymentBatchStatus.PENDING } },
@@ -308,14 +307,18 @@ export class TuitionService {
 
       if (
         existingFee &&
-        (existingFee.paymentAllocations.length > 0 ||
+        (existingFee.payments.length > 0 ||
+          existingFee.paymentAllocations.length > 0 ||
+          existingFee.status === TuitionFeeStatus.PAID ||
           existingFee.status === TuitionFeeStatus.EXEMPTED ||
           existingFee.status === TuitionFeeStatus.CANCELLED)
       ) {
         throw new ConflictError(
-          existingFee.paymentAllocations.length > 0
-            ? "Không thể bổ sung môn vào học phí tháng đang chờ thanh toán"
-            : "Không thể bổ sung môn vào học phí đã được miễn hoặc hủy",
+          existingFee.payments.length > 0
+            ? "Không thể bổ sung môn vào học phí tháng đã có thanh toán thành công"
+            : existingFee.paymentAllocations.length > 0
+              ? "Không thể bổ sung môn vào học phí tháng đang chờ thanh toán"
+              : "Không thể bổ sung môn vào học phí đã được miễn hoặc hủy",
         );
       }
 
@@ -341,19 +344,18 @@ export class TuitionService {
         ? new Date(enrollment.class.endDate)
         : null;
       const dueDate = classEnd && classEnd < periodEnd ? classEnd : periodEnd;
+      const nextDisplayOrder = existingFee
+        ? Math.max(
+            -1,
+            ...existingFee.items.map((item) => item.displayOrder),
+          ) + 1
+        : 0;
       const fee = existingFee
         ? await tx.tuitionFee.update({
             where: { id: existingFee.id },
             data: {
               originalAmount: { increment: originalAmount },
               finalAmount: { increment: originalAmount },
-              status: getStoredTuitionFeeStatus(
-                existingFee.finalAmount.add(originalAmount),
-                existingFee.payments.reduce(
-                  (total, payment) => total.add(payment.amount),
-                  new Prisma.Decimal(0),
-                ),
-              ),
               version: { increment: 1 },
               updatedBy: actorId,
             },
@@ -386,7 +388,7 @@ export class TuitionService {
           unitPrice: item.amount,
           amount: item.amount,
           note: `Tính trọn học phí tháng ${String(data.billingMonth).padStart(2, "0")}/${data.billingYear}`,
-          displayOrder: index,
+          displayOrder: nextDisplayOrder + index,
         })),
       });
       await tx.tuitionAuditLog.create({

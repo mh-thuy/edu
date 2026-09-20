@@ -18,7 +18,7 @@
 
 ## Đã loại bỏ
 
-Không còn UI chia kỳ, partial payment, nhập amount tùy ý, phân bổ một phần, tiền dư hoặc badge `PARTIALLY_PAID`. Batch nhiều khoản vẫn hiển thị phân bổ theo đúng toàn bộ `final_amount` của từng khoản.
+UI hỗ trợ thanh toán từng phần, nhập số tiền nhỏ hơn số dư còn lại và hiển thị trạng thái `PARTIAL`. Batch nhiều khoản hiển thị phân bổ theo đúng số tiền thực tế của từng khoản; không cho phép thanh toán vượt số dư hoặc tạo tiền dư.
 
 ## Kiểm tra
 

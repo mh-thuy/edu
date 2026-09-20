@@ -478,11 +478,16 @@ export function TuitionPaymentWorkspace({
   }
 
   function clearPaymentAttempt(storageKey?: string) {
+    const activeStorageKey =
+      storageKey ||
+      (paymentAttemptFingerprintRef.current
+        ? `${paymentAttemptStoragePrefix}${paymentAttemptFingerprintRef.current}`
+        : null);
     paymentIdempotencyKeyRef.current = null;
     paymentAttemptFingerprintRef.current = null;
-    if (!storageKey) return;
+    if (!activeStorageKey) return;
     try {
-      window.sessionStorage.removeItem(storageKey);
+      window.sessionStorage.removeItem(activeStorageKey);
     } catch {
       // Session storage can be unavailable in privacy-restricted browsers.
     }

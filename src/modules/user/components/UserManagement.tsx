@@ -23,7 +23,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Typography,
   useMediaQuery,
   useTheme,
@@ -31,10 +30,13 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { userCreateSchema, userUpdateSchema } from "@/modules/user/schemas/user.schema";
+import { AppTextField } from "@/components/shared/forms/AppTextField";
 
 type User = {
   id: string;
@@ -60,6 +62,11 @@ const statusLabel = {
   INACTIVE: "Ngừng hoạt động",
   LOCKED: "Đã khóa",
 } as const;
+const statusColor: Record<User["status"], "success" | "warning" | "default"> = {
+  ACTIVE: "success",
+  INACTIVE: "default",
+  LOCKED: "warning",
+};
 
 export function UserManagement() {
   const theme = useTheme();
@@ -203,82 +210,78 @@ export function UserManagement() {
   };
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, md: 2.5 },
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 3,
-        }}
-      >
-        <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-        alignItems={{ md: "center" }}
-        gap={2}
-        >
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
-              <PeopleAltOutlinedIcon />
-            </Box>
-            <BoxTitle />
-          </Stack>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={openCreate}
-        >
-          Thêm người dùng
-        </Button>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "flex-end" }} gap={2}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 2.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}>
+            <PeopleAltOutlinedIcon />
+          </Box>
+          <BoxTitle />
         </Stack>
-      </Paper>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>Thêm người dùng</Button>
+      </Stack>
       {message && (
         <Alert severity="success" onClose={() => setMessage("")}>
           {message}
         </Alert>
       )}
-      {error && !open && <Alert severity="error">{error}</Alert>}
-      <Paper elevation={0} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mr: { md: 1 } }}>
-          <FilterAltOutlinedIcon color="action" fontSize="small" />
-          <Typography variant="subtitle2">Bộ lọc</Typography>
+      {error && !open && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25} sx={{ mb: 1.5 }}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <FilterAltOutlinedIcon color="primary" fontSize="small" />
+            <Box>
+              <Typography fontWeight={800}>Tra cứu tài khoản</Typography>
+              <Typography variant="caption" color="text.secondary">Tìm theo email, họ tên hoặc trạng thái hoạt động</Typography>
+            </Box>
+          </Stack>
+          <Chip size="small" variant="outlined" label={status ? statusLabel[status as User["status"]] : "Tất cả trạng thái"} />
         </Stack>
-        <TextField
-          size="small"
-          label="Tìm email hoặc họ tên"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(0);
-          }}
-        />
-        <Select
-          size="small"
-          displayEmpty
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value);
-            setPage(0);
-          }}
-        >
-          <MenuItem value="">Tất cả trạng thái</MenuItem>
-          {Object.entries(statusLabel).map(([key, label]) => (
-            <MenuItem key={key} value={key}>
-              {label}
-            </MenuItem>
-          ))}
-        </Select>
-        <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); setPage(0); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
+          <AppTextField
+            fullWidth
+            size="small"
+            label="Tìm email hoặc họ tên"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(0);
+            }}
+            InputProps={{ startAdornment: <SearchOutlinedIcon fontSize="small" sx={{ mr: 1, color: "text.secondary" }} /> }}
+            sx={{ flex: 1 }}
+          />
+          <FormControl size="small" sx={{ minWidth: { md: 210 } }}>
+            <InputLabel id="user-status-filter-label">Trạng thái</InputLabel>
+            <Select
+              labelId="user-status-filter-label"
+              label="Trạng thái"
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value);
+                setPage(0);
+              }}
+            >
+              <MenuItem value="">Tất cả trạng thái</MenuItem>
+              {Object.entries(statusLabel).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); setPage(0); }} disabled={!search && !status}>Xóa bộ lọc</Button>
         </Stack>
       </Paper>
-      <Paper sx={{ overflowX: "auto" }}>
-        <Table sx={{ minWidth: 700 }} size="small">
+
+      <Paper sx={{ overflow: "hidden" }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25} sx={{ p: { xs: 2, md: 2.5 }, borderBottom: 1, borderColor: "divider" }}>
+          <Box>
+            <Typography variant="h6" fontWeight={800}>Danh sách người dùng</Typography>
+            <Typography variant="body2" color="text.secondary">{total} tài khoản trong kết quả hiện tại</Typography>
+          </Box>
+          <Chip size="small" color="primary" variant="outlined" label={loading ? "Đang tải" : `${items.length} tài khoản trên trang`} />
+        </Stack>
+        <Box sx={{ overflowX: "auto" }}>
+        <Table sx={{ minWidth: 760 }} size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Họ tên</TableCell>
-              <TableCell>Email</TableCell>
+              <TableCell>Tài khoản</TableCell>
+              <TableCell>Email đăng nhập</TableCell>
               <TableCell>Trạng thái</TableCell>
               <TableCell align="right">Thao tác</TableCell>
             </TableRow>
@@ -287,37 +290,30 @@ export function UserManagement() {
             {loading ? (
               <TableRow>
                 <TableCell colSpan={4}>
-                  <Typography sx={{ p: 3 }} textAlign="center">
-                    Đang tải người dùng...
-                  </Typography>
+                  <Stack alignItems="center" spacing={1} sx={{ py: 5, color: "text.secondary" }}><PeopleAltOutlinedIcon sx={{ fontSize: 36, color: "text.disabled" }} /><Typography>Đang tải người dùng...</Typography></Stack>
                 </TableCell>
               </TableRow>
             ) : !items.length ? (
               <TableRow>
                 <TableCell colSpan={4}>
-                  <Typography
-                    sx={{ p: 3 }}
-                    textAlign="center"
-                    color="text.secondary"
-                  >
-                    Không có người dùng phù hợp
-                  </Typography>
+                  <Stack alignItems="center" spacing={1} sx={{ py: 5, color: "text.secondary" }}><PeopleAltOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>Không có người dùng phù hợp</Typography><Typography variant="body2">Thử thay đổi từ khóa hoặc trạng thái lọc.</Typography></Stack>
                 </TableCell>
               </TableRow>
             ) : (
               items.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>{user.fullName}</TableCell>
-                  <TableCell>{user.email}</TableCell>
+                <TableRow key={user.id} hover>
+                  <TableCell sx={{ minWidth: 220 }}><Typography fontWeight={700}>{user.fullName}</Typography><Typography variant="caption" color="text.secondary">Tài khoản hệ thống</Typography></TableCell>
+                  <TableCell sx={{ minWidth: 260 }}><Typography variant="body2" color="text.secondary">{user.email}</Typography></TableCell>
                   <TableCell>
                     <Chip
                       size="small"
                       label={statusLabel[user.status]}
-                      color={user.status === "ACTIVE" ? "success" : "default"}
+                      color={statusColor[user.status]}
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <Button size="small" variant="outlined" onClick={() => openEdit(user)}>
+                    <Stack direction="row" spacing={0.75} justifyContent="flex-end">
+                    <Button size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} onClick={() => openEdit(user)}>
                       Sửa
                     </Button>
                     <Button
@@ -329,25 +325,29 @@ export function UserManagement() {
                     >
                       Khóa
                     </Button>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
+        </Box>
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          rowsPerPage={pageSize}
+          onPageChange={(_, value) => setPage(value)}
+          onRowsPerPageChange={(event) => {
+            setPageSize(Number(event.target.value));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 20, 50]}
+          labelRowsPerPage="Số dòng/trang"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`}
+        />
       </Paper>
-      <TablePagination
-        component="div"
-        count={total}
-        page={page}
-        rowsPerPage={pageSize}
-        onPageChange={(_, value) => setPage(value)}
-        onRowsPerPageChange={(event) => {
-          setPageSize(Number(event.target.value));
-          setPage(0);
-        }}
-        rowsPerPageOptions={[10, 20, 50]}
-      />
       <Dialog
         open={open}
         onClose={() => !loading && setOpen(false)}
@@ -366,7 +366,7 @@ export function UserManagement() {
           )}
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
+              <AppTextField
                 label="Họ tên"
                 required
                 fullWidth
@@ -378,7 +378,7 @@ export function UserManagement() {
                   setFieldErrors((current) => ({ ...current, fullName: undefined }));
                 }}
               />
-              <TextField
+              <AppTextField
                 label="Email"
                 required
                 fullWidth
@@ -393,7 +393,7 @@ export function UserManagement() {
               />
             </Stack>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
+              <AppTextField
                 label={
                   editing ? "Mật khẩu mới (bỏ trống nếu không đổi)" : "Mật khẩu"
                 }
