@@ -26,8 +26,11 @@ import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { useSnackbar } from "@/hooks/useSnackbar";
 
 type Fee = {
   id: string;
@@ -96,6 +99,10 @@ export function TuitionDetail({ id }: { id: string }) {
   >(null);
   const [statusReason, setStatusReason] = useState("");
   const [statusSaving, setStatusSaving] = useState(false);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreReason, setRestoreReason] = useState("");
+  const [restoreSaving, setRestoreSaving] = useState(false);
+  const { showSuccess, Snackbar } = useSnackbar();
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -154,6 +161,39 @@ export function TuitionDetail({ id }: { id: string }) {
       );
     } finally {
       setStatusSaving(false);
+    }
+  }
+
+  async function restoreFee() {
+    if (!fee || !restoreReason.trim()) return;
+    setRestoreSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/tuition-fees/${id}/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: restoreReason.trim(),
+          version: fee.version,
+        }),
+      });
+      if (!response.ok)
+        throw new Error(
+          await extractApiErrorMessage(
+            response,
+            "Không thể khôi phục học phí",
+          ),
+        );
+      setRestoreOpen(false);
+      setRestoreReason("");
+      showSuccess("Đã khôi phục học phí, có thể thu tiền lại");
+      await load();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Không thể khôi phục học phí",
+      );
+    } finally {
+      setRestoreSaving(false);
     }
   }
   if (loading)
@@ -273,6 +313,16 @@ export function TuitionDetail({ id }: { id: string }) {
                 Xuất thông báo
               </Button>
             </>
+          )}
+          {fee.status === "CANCELLED" && (
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<RestoreOutlinedIcon />}
+              onClick={() => setRestoreOpen(true)}
+            >
+              Khôi phục học phí
+            </Button>
           )}
           {editableStatus && (
             <>
@@ -632,6 +682,36 @@ export function TuitionDetail({ id }: { id: string }) {
           </Button>
         </DialogActions>
       </Dialog>
+      <ConfirmDialog
+        open={restoreOpen}
+        title="Khôi phục học phí"
+        message="Khoản phí sẽ chuyển về trạng thái chưa thanh toán để có thể thu lại. Lịch sử hủy vẫn được lưu trong nhật ký nghiệp vụ."
+        content={
+          <AppTextField
+            fullWidth
+            required
+            multiline
+            minRows={2}
+            label="Lý do khôi phục"
+            value={restoreReason}
+            onChange={(event) => setRestoreReason(event.target.value)}
+            inputProps={{ maxLength: 500 }}
+            sx={{ mt: 2 }}
+          />
+        }
+        onConfirm={() => void restoreFee()}
+        onCancel={() => {
+          if (!restoreSaving) {
+            setRestoreOpen(false);
+            setRestoreReason("");
+          }
+        }}
+        isLoading={restoreSaving}
+        confirmDisabled={!restoreReason.trim()}
+        confirmLabel="Khôi phục"
+        confirmColor="success"
+      />
+      {Snackbar}
     </Stack>
   );
 }

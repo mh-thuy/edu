@@ -17,5 +17,11 @@ export const tuitionFeeStatusSchema = z.object({
   version: z.number().int().positive(),
 });
 
+export const tuitionFeeRestoreSchema = z.object({
+  reason: z.string().trim().min(1, "Lý do là bắt buộc").max(500),
+  version: z.number().int().positive(),
+});
+
 export type TuitionFeeUpdate = z.infer<typeof tuitionFeeUpdateSchema>;
 export type TuitionFeeStatusUpdate = z.infer<typeof tuitionFeeStatusSchema>;
+export type TuitionFeeRestore = z.infer<typeof tuitionFeeRestoreSchema>;

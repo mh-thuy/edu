@@ -716,4 +716,78 @@ export class TuitionService {
     });
   }
 
+  static async restoreCancelledFee(
+    id: string,
+    data: { reason: string; version: number },
+    actorId: string,
+    auditContext?: AuditContext,
+  ) {
+    return prisma.$transaction(async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
+      );
+      const current = await tx.tuitionFee.findUnique({
+        where: { id },
+        include: {
+          class: { select: { status: true } },
+          payments: { where: { paymentStatus: TuitionPaymentStatus.SUCCESS } },
+          paymentAllocations: {
+            where: { paymentBatch: { status: PaymentBatchStatus.PENDING } },
+            select: { paymentBatch: { select: { batchNo: true } } },
+          },
+        },
+      });
+      if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
+      if (current.version !== data.version)
+        throw new ConflictError(
+          "Khoản học phí đã thay đổi, vui lòng tải lại",
+          "VERSION_CONFLICT",
+        );
+      if (current.status !== TuitionFeeStatus.CANCELLED)
+        throw new ConflictError(
+          "Chỉ có thể khôi phục khoản học phí đã hủy",
+        );
+      if (current.class.status === "COMPLETED" || current.class.status === "CANCELLED")
+        throw new ConflictError(
+          "Không thể khôi phục học phí của lớp đã kết thúc hoặc đã hủy",
+        );
+      if (current.payments.length)
+        throw new ConflictError(
+          "Không thể khôi phục khoản học phí đã có thanh toán thành công",
+        );
+      if (current.paymentAllocations.length)
+        throw new ConflictError(
+          `Không thể khôi phục khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
+        );
+
+      const updated = await tx.tuitionFee.update({
+        where: { id },
+        data: {
+          status: TuitionFeeStatus.UNPAID,
+          cancellationReason: null,
+          version: { increment: 1 },
+          updatedBy: actorId,
+        },
+        include: feeInclude,
+      });
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "TUITION_FEE",
+          entityId: id,
+          action: "TUITION_FEE_RESTORED",
+          reason: data.reason,
+          dataBefore: current as unknown as Prisma.InputJsonValue,
+          dataAfter: updated as unknown as Prisma.InputJsonValue,
+          performedBy: actorId,
+          ...auditFields(auditContext),
+        },
+      });
+      const balanced = addPaymentBalances(updated);
+      return {
+        ...balanced,
+        status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate),
+      };
+    });
+  }
+
 }

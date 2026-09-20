@@ -9,3 +9,4 @@
 7. Không sửa snapshot của notice/receipt đã phát hành; thay bằng version/cancel/reissue.
 8. Refund mặc định toàn bộ payment SUCCESS, không sửa payment gốc.
 9. Bank transaction chỉ confirm một payment batch đang `PENDING` và credit amount phải khớp tuyệt đối với tổng batch; mỗi allocation trong batch phải nằm trong số dư còn lại của fee tương ứng.
+10. Học phí `CANCELLED` có thể được khôi phục về `UNPAID` bằng thao tác có lý do và audit log. Chỉ khôi phục khi chưa có payment SUCCESS, chưa thuộc batch `PENDING`, và lớp chưa `COMPLETED` hoặc `CANCELLED`; nếu đã quá hạn thì trạng thái hiển thị là `OVERDUE`.
