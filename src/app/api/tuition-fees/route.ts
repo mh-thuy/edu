@@ -4,13 +4,15 @@ import { requireApiUser } from "@/lib/api-auth";
 import { TuitionService } from "@/modules/finance/tuition/services/tuition.service";
 import { TuitionFeeBillingType, TuitionFeeStatus } from "@prisma/client";
 import { z } from "zod";
+import { PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await requireApiUser(); if (user instanceof Response) return user;
     const params = request.nextUrl.searchParams;
     const rawStatus = params.get("status");
-    if (rawStatus && !Object.values(TuitionFeeStatus).includes(rawStatus as TuitionFeeStatus)) {
+    const validStatuses = [...Object.values(TuitionFeeStatus), PARTIAL_FEE_STATUS];
+    if (rawStatus && !validStatuses.includes(rawStatus as TuitionFeeStatus)) {
       return apiError("VALIDATION_ERROR", "Trạng thái học phí không hợp lệ", 422);
     }
     const status = rawStatus ? rawStatus as TuitionFeeStatus : undefined;
@@ -51,8 +53,8 @@ export async function GET(request: NextRequest) {
       result = { ...result, items: allItems };
       const escape = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
       const rows = [
-        ["Mã học phí", "Mã học sinh", "Học sinh", "Lớp", "Loại phí", "Kỳ", "Học phí gốc", "Giảm giá", "Phụ phí", "Tổng phải thu", "Hạn thanh toán", "Trạng thái"],
-        ...result.items.map((fee) => [fee.feeNo, fee.student.code, fee.student.fullName, fee.class.name, fee.billingType, `${fee.billingYear}-${String(fee.billingMonth).padStart(2, "0")}`, fee.originalAmount, fee.discountAmount, fee.additionalAmount, fee.finalAmount, fee.dueDate?.toISOString().slice(0, 10), fee.status]),
+        ["Mã học phí", "Mã học sinh", "Học sinh", "Lớp", "Loại phí", "Kỳ", "Học phí gốc", "Giảm giá", "Phụ phí", "Tổng phải thu", "Đã thu", "Còn nợ", "Hạn thanh toán", "Trạng thái"],
+        ...result.items.map((fee) => [fee.feeNo, fee.student.code, fee.student.fullName, fee.class.name, fee.billingType, `${fee.billingYear}-${String(fee.billingMonth).padStart(2, "0")}`, fee.originalAmount, fee.discountAmount, fee.additionalAmount, fee.finalAmount, fee.paidAmount, fee.remainingAmount, fee.dueDate?.toISOString().slice(0, 10), fee.status]),
       ];
       return new Response(`\uFEFF${rows.map((row) => row.map(escape).join(",")).join("\r\n")}`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=tuition-fees.csv" } });
     }

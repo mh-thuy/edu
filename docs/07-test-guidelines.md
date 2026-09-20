@@ -211,9 +211,10 @@ Không tạo học phí ngoài thời gian của lớp
 Không tạo khoảng tạm nghỉ trước tháng đăng ký hoặc ngoài thời gian của lớp
 Hủy tạm nghỉ giữ bản ghi lịch sử và không còn chặn tạo học phí
 Không tạo học phí/item trùng môn
-Thanh toán thiếu hoặc thừa -> PAYMENT_AMOUNT_MISMATCH
+Thanh toán vượt số tiền còn nợ -> CONFLICT
+Thanh toán thiếu -> PARTIAL và còn số dư
 Thanh toán đủ -> PAID
-Không cho payment SUCCESS thứ hai trên cùng học phí
+Thanh toán lần tiếp theo trên cùng học phí -> được phép nếu không vượt số dư
 Payment tạo receipt
 Receipt không tạo nếu chưa có payment
 ```
@@ -359,11 +360,11 @@ Khi sửa payment/học phí, bắt buộc test flow:
 1. Đăng ký một hoặc nhiều môn trong lớp
 2. Xác nhận đăng ký chưa tự động tạo học phí
 3. Mở chi tiết học phí và sinh QR/bill tạm (nếu có)
-4. Xác nhận thanh toán đúng toàn bộ `finalAmount`
-5. Kiểm tra trạng thái PAID
-6. Kiểm tra receipt được tạo
-7. Thử thanh toán lại và xác nhận hệ thống từ chối
-8. Thử amount thiếu/thừa ở backend và nhận `PAYMENT_AMOUNT_MISMATCH`
+4. Xác nhận thanh toán thiếu `finalAmount`
+5. Kiểm tra trạng thái `PARTIAL` và số dư còn lại
+6. Kiểm tra receipt của lần thanh toán được tạo
+7. Thanh toán tiếp phần còn lại và kiểm tra trạng thái `PAID`
+8. Thử thanh toán vượt số dư ở backend và xác nhận bị từ chối
 ```
 
 ---

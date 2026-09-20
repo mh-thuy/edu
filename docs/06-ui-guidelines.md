@@ -847,9 +847,9 @@ Ghi chú
 
 ## 22.3 UI rules
 
-- Không hiển thị ô nhập số tiền thanh toán.
-- Hiển thị số tiền phải thanh toán bằng `finalAmount` ở chế độ chỉ đọc.
-- Chỉ cho xác nhận thanh toán đủ một lần.
+- Hiển thị `finalAmount`, số tiền đã thu và số tiền còn nợ.
+- Cho phép nhập số tiền thanh toán của lần hiện tại, không vượt số tiền còn nợ.
+- Hỗ trợ tiếp tục thanh toán các khoản có trạng thái `PARTIAL`.
 - Sau khi lưu payment thành công, gợi ý in biên lai.
 
 ---

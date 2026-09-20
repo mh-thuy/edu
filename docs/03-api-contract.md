@@ -122,7 +122,7 @@ Student code duplicated → 409
 
 Email invalid → 422
 
-Payment amount khác `finalAmount` → 409
+Payment amount vượt số tiền còn nợ → 409
 ```
 
 ---
@@ -534,9 +534,21 @@ Backend tự tính:
 payment_status
 ```
 
-Backend lấy `finalAmount` từ học phí và không nhận amount thanh toán tùy ý từ
-frontend. Mỗi học phí chỉ có tối đa một payment SUCCESS; payment SUCCESS phải
-đúng bằng toàn bộ `finalAmount`.
+Backend lấy `finalAmount` và tổng payment SUCCESS từ database. Request có thể
+gửi `amounts` theo từng `tuitionFeeId`; amount phải lớn hơn 0 và không vượt số
+tiền còn nợ. Nếu không gửi amount cho một khoản, backend tự dùng toàn bộ số dư
+còn lại của khoản đó. Mỗi lần payment SUCCESS tạo một receipt riêng.
+
+Ví dụ:
+
+```json
+{
+  "tuitionFeeIds": ["fee-uuid"],
+  "amounts": { "fee-uuid": 1000000 },
+  "paymentMethod": "CASH",
+  "paymentDate": "2026-09-20"
+}
+```
 
 ---
 

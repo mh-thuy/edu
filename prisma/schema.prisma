@@ -86,6 +86,7 @@ enum ReceiptStatus {
 
 enum TuitionFeeStatus {
   UNPAID
+  PARTIAL
   PAID
   OVERDUE
   EXEMPTED

@@ -25,4 +25,4 @@
 
 ## Logic không còn sử dụng
 
-Không giữ UI chia kỳ, thanh toán một phần, nhập số tiền tùy ý, phân bổ một phần, tiền dư hoặc `PARTIALLY_PAID`. Batch nhiều khoản chỉ phân bổ đúng toàn bộ `final_amount` của từng khoản. Các route/module legacy đã bị xóa trong đợt cutover database.
+UI hỗ trợ thanh toán từng phần và hiển thị số dư; backend vẫn chặn tiền dư. Batch nhiều khoản phân bổ theo amount thực tế của từng khoản. Các route/module legacy đã bị xóa trong đợt cutover database.

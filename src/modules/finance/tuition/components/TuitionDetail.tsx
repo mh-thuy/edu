@@ -34,9 +34,11 @@ type Fee = {
   discountAmount: number;
   additionalAmount: number;
   finalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
   version: number;
   dueDate?: string | null;
-  status: "UNPAID" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
+  status: "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
   student: { code: string; fullName: string; phone?: string | null };
   class: { code: string; name: string };
   items: Array<{ itemName: string; quantity: number; amount: number }>;
@@ -53,6 +55,7 @@ type Fee = {
 };
 const labels = {
   UNPAID: "Chưa thanh toán",
+  PARTIAL: "Đã thu một phần",
   PAID: "Đã thanh toán",
   OVERDUE: "Quá hạn",
   EXEMPTED: "Miễn học phí",
@@ -177,7 +180,9 @@ export function TuitionDetail({ id }: { id: string }) {
                     ? "success"
                     : fee.status === "OVERDUE"
                       ? "error"
-                      : "warning"
+                      : fee.status === "PARTIAL"
+                        ? "info"
+                        : "warning"
                 }
                 label={labels[fee.status]}
               />
@@ -193,7 +198,7 @@ export function TuitionDetail({ id }: { id: string }) {
                   href={`/admin/tuition-fees/payment?tuitionFeeId=${id}`}
                   variant="contained"
                 >
-                  Thanh toán học phí
+                  {fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}
                 </Button>
               )}
               {pendingBatch && (
@@ -216,7 +221,7 @@ export function TuitionDetail({ id }: { id: string }) {
                   </Button>
                 </>
               )}
-              {!paid && !pendingBatch && fee.status !== "EXEMPTED" && fee.status !== "CANCELLED" && (
+              {editableStatus && fee.status !== "EXEMPTED" && fee.status !== "CANCELLED" && (
                 <Button
                   component={Link}
                   href={`/admin/tuition-fees/${id}/edit`}
@@ -279,11 +284,13 @@ export function TuitionDetail({ id }: { id: string }) {
             </Info>
           </Stack>
           <Box sx={{ minWidth: 220, textAlign: { xs: "left", md: "right" } }}>
-            <Typography variant="body2" color="text.secondary">
-              Tổng phải thanh toán
-            </Typography>
-            <Typography variant="h5" fontWeight={800} color="primary.main">
+            <Typography variant="body2" color="text.secondary">Tổng phải thu</Typography>
+            <Typography variant="h6" fontWeight={800} color="primary.main">
               {Number(fee.finalAmount).toLocaleString("vi-VN")} ₫
+            </Typography>
+            <Typography variant="body2" color="text.secondary">Đã thu: {Number(fee.paidAmount).toLocaleString("vi-VN")} ₫</Typography>
+            <Typography variant="body2" fontWeight={700} color={fee.remainingAmount > 0 ? "warning.main" : "success.main"}>
+              Còn nợ: {Number(fee.remainingAmount).toLocaleString("vi-VN")} ₫
             </Typography>
           </Box>
         </Stack>
@@ -328,13 +335,21 @@ export function TuitionDetail({ id }: { id: string }) {
             </TableRow>
             <TableRow>
               <TableCell>
-                <strong>Tổng phải thanh toán</strong>
+                <strong>Tổng phải thu</strong>
               </TableCell>
               <TableCell align="right">
                 <strong>
                   {Number(fee.finalAmount).toLocaleString("vi-VN")} ₫
                 </strong>
               </TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell>Đã thu</TableCell>
+              <TableCell align="right">{Number(fee.paidAmount).toLocaleString("vi-VN")} ₫</TableCell>
+            </TableRow>
+            <TableRow>
+              <TableCell><strong>Còn nợ</strong></TableCell>
+              <TableCell align="right"><strong>{Number(fee.remainingAmount).toLocaleString("vi-VN")} ₫</strong></TableCell>
             </TableRow>
           </TableBody>
         </Table>

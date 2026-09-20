@@ -1,7 +1,7 @@
 # UI migration checklist
 
 - [x] Xóa menu/page/API legacy.
-- [x] Không còn `PARTIALLY_PAID`, partial amount hoặc phân bổ một phần trong UI mới.
+- [x] Hiển thị `PARTIAL`, paid amount và remaining amount; cho phép nhập partial amount.
 - [x] Payment chọn một tuition fee và amount read-only.
 - [x] Có badge trạng thái chuẩn.
 - [x] Có loading/empty/error state ở tuition list.

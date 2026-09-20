@@ -44,7 +44,14 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 
 ## Thanh toán và đối soát
 
-- Chỉ có hai phương thức: `CASH` và `BANK_TRANSFER`; không hỗ trợ thanh toán từng phần.
+- Chỉ có hai phương thức: `CASH` và `BANK_TRANSFER`; một khoản học phí có thể
+  được thanh toán nhiều lần theo số dư còn nợ.
+- `UNPAID` là chưa phát sinh payment thành công, `PARTIAL` là đã thu một phần,
+  `PAID` là đã thu đủ. Payment thành công không được làm tổng tiền đã thu vượt
+  `finalAmount`.
+- Mỗi payment thành công tạo một receipt riêng; payment batch có thể gom nhiều
+  khoản học phí và mỗi allocation có thể là toàn bộ hoặc một phần số dư của
+  khoản đó.
 - Thanh toán tiền mặt bắt buộc nhập `paymentDate` là ngày nhận tiền; khi đổi batch chuyển khoản đang chờ sang tiền mặt cũng bắt buộc nhập ngày nhận. Chuyển khoản lấy ngày thực tế từ sao kê khi đối soát.
 - Batch `BANK_TRANSFER` bắt buộc gắn đúng một tài khoản ngân hàng nhận tiền.
 - Đối soát chỉ chọn batch `BANK_TRANSFER` đang `PENDING`, cùng tài khoản và đúng tổng tiền.

@@ -336,11 +336,12 @@ Rule:
 
 final_amount = amount - discount
 
-Mỗi học phí chỉ được thanh toán một lần.
+Một học phí có thể có nhiều payment SUCCESS.
 
-Payment SUCCESS phải có số tiền đúng bằng final_amount.
+Tổng payment SUCCESS không được vượt `final_amount`.
 
-Không cho thanh toán thiếu, thừa hoặc tạo payment SUCCESS thứ hai.
+Thanh toán thiếu được phép và làm học phí chuyển sang `PARTIAL`; thanh toán đủ
+chuyển sang `PAID`. Không cho thanh toán vượt số tiền còn nợ.
 ```
 
 Học phí theo tháng được tính trọn tháng theo từng môn:
@@ -356,8 +357,8 @@ Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học ph
 # 9. Payment batch
 
 Thanh toán bắt đầu từ một hoặc nhiều khoản học phí của cùng một học viên.
-Các khoản được gom vào một `payment_batch`; mỗi allocation phải bằng toàn bộ
-`final_amount` của khoản học phí tương ứng.
+Các khoản được gom vào một `payment_batch`; mỗi allocation phải lớn hơn 0 và
+không vượt số tiền còn nợ của khoản học phí tương ứng.
 
 Các bảng hiện hành:
 
@@ -379,9 +380,9 @@ BANK_TRANSFER
 Rule:
 
 ```text
-Không hỗ trợ thanh toán từng phần.
-Một tuition fee chỉ có tối đa một payment SUCCESS.
-Payment SUCCESS phải có amount đúng bằng final_amount.
+Cho phép thanh toán từng phần nhiều lần.
+Tổng các payment SUCCESS của một tuition fee không được vượt `final_amount`.
+Payment SUCCESS phải có amount bằng số tiền đã nhận của lần thanh toán đó.
 CASH hoàn tất ngay trong transaction.
 BANK_TRANSFER tạo batch PENDING và chỉ hoàn tất sau đối soát.
 ```

@@ -8,7 +8,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
-import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { getStoredTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
 async function findReceiptForCancellation(
@@ -124,13 +124,21 @@ export async function cancelTuitionReceipt(
             version: { increment: 1 },
           },
         });
+        const remainingPayments = await tx.tuitionPayment.findMany({
+          where: {
+            tuitionFeeId: payment.tuitionFeeId,
+            paymentStatus: TuitionPaymentStatus.SUCCESS,
+          },
+          select: { amount: true },
+        });
+        const paidAfterCancellation = remainingPayments.reduce(
+          (total, item) => total.add(item.amount),
+          new Prisma.Decimal(0),
+        );
         const reopenedFee = await tx.tuitionFee.update({
           where: { id: payment.tuitionFeeId },
           data: {
-            status: getEffectiveTuitionFeeStatus(
-              "UNPAID",
-              payment.tuitionFee.dueDate,
-            ),
+            status: getStoredTuitionFeeStatus(payment.tuitionFee.finalAmount, paidAfterCancellation),
             version: { increment: 1 },
             updatedBy: actorId,
           },
@@ -230,13 +238,21 @@ export async function cancelTuitionReceipt(
         version: { increment: 1 },
       },
     });
+    const remainingPayments = await tx.tuitionPayment.findMany({
+      where: {
+        tuitionFeeId: receipt.payment.tuitionFeeId,
+        paymentStatus: TuitionPaymentStatus.SUCCESS,
+      },
+      select: { amount: true },
+    });
+    const paidAfterCancellation = remainingPayments.reduce(
+      (total, item) => total.add(item.amount),
+      new Prisma.Decimal(0),
+    );
     const reopenedFee = await tx.tuitionFee.update({
       where: { id: receipt.payment.tuitionFeeId },
       data: {
-        status: getEffectiveTuitionFeeStatus(
-          "UNPAID",
-          receipt.payment.tuitionFee.dueDate,
-        ),
+        status: getStoredTuitionFeeStatus(receipt.payment.tuitionFee.finalAmount, paidAfterCancellation),
         version: { increment: 1 },
         updatedBy: actorId,
       },

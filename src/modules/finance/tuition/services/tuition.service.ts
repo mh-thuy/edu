@@ -12,7 +12,7 @@ import type {
   TuitionFeeStatusUpdate,
   TuitionFeeUpdate,
 } from "@/modules/finance/tuition/schemas/tuition.schema";
-import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { getEffectiveTuitionFeeStatus, PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 import { getVietnamDayStart } from "@/lib/vietnam-time";
 
 const feeInclude = {
@@ -36,6 +36,21 @@ export type TuitionBillingPeriod = {
   billingYear: number;
   billingMonth: number;
 };
+
+function addPaymentBalances<T extends {
+  finalAmount: Prisma.Decimal;
+  payments: Array<{ amount: Prisma.Decimal }>;
+}>(fee: T) {
+  const paidAmount = fee.payments.reduce(
+    (total, payment) => total.add(payment.amount),
+    new Prisma.Decimal(0),
+  );
+  return {
+    ...fee,
+    paidAmount,
+    remainingAmount: Prisma.Decimal.max(fee.finalAmount.sub(paidAmount), 0),
+  };
+}
 
 async function generateTuitionFeeNo(
   tx: Prisma.TransactionClient,
@@ -80,6 +95,7 @@ export class TuitionService {
             OR: [
               { status: TuitionFeeStatus.OVERDUE },
               { status: TuitionFeeStatus.UNPAID, dueDate: { lt: todayStart } },
+              { status: PARTIAL_FEE_STATUS, dueDate: { lt: todayStart } },
             ],
           }
         : params.status === TuitionFeeStatus.UNPAID
@@ -87,6 +103,11 @@ export class TuitionService {
               status: TuitionFeeStatus.UNPAID,
               OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
             }
+          : params.status === PARTIAL_FEE_STATUS
+            ? {
+                status: PARTIAL_FEE_STATUS,
+                OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
+              }
           : params.status
             ? { status: params.status }
             : {};
@@ -114,10 +135,13 @@ export class TuitionService {
       }),
       prisma.tuitionFee.count({ where }),
     ]);
-    const effectiveItems = items.map((fee) => ({
-      ...fee,
-      status: getEffectiveTuitionFeeStatus(fee.status, fee.dueDate, asOf),
-    }));
+    const effectiveItems = items.map((fee) => {
+      const balanced = addPaymentBalances(fee);
+      return {
+        ...balanced,
+        status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate, asOf),
+      };
+    });
     return {
       items: effectiveItems,
       total,
@@ -139,9 +163,10 @@ export class TuitionService {
       include: feeInclude,
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
+    const balanced = addPaymentBalances(fee);
     return {
-      ...fee,
-      status: getEffectiveTuitionFeeStatus(fee.status, fee.dueDate),
+      ...balanced,
+      status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate),
     };
   }
 
@@ -597,9 +622,10 @@ export class TuitionService {
           ...auditFields(auditContext),
         },
       });
+      const balanced = addPaymentBalances(updated);
       return {
-        ...updated,
-        status: getEffectiveTuitionFeeStatus(updated.status, updated.dueDate),
+        ...balanced,
+        status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate),
       };
     });
   }
@@ -663,7 +689,11 @@ export class TuitionService {
           ...auditFields(auditContext),
         },
       });
-      return updated;
+      const balanced = addPaymentBalances(updated);
+      return {
+        ...balanced,
+        status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate),
+      };
     });
   }
 

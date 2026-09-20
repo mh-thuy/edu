@@ -186,7 +186,10 @@ async function renderPaymentBatchNoticePdf(
       75,
       y,
     );
-    draw(`${money(Number(allocation.finalAmount))} VND`, 390, y);
+    const payableAmount = "payableAmount" in allocation
+      ? allocation.payableAmount
+      : allocation.finalAmount;
+    draw(`${money(Number(payableAmount))} VND`, 390, y);
     let itemY = y - 17;
     for (const item of allocation.items) {
       if (itemY < 220) {

@@ -48,7 +48,9 @@ type Fee = {
   feeNo: string;
   originalAmount: number;
   finalAmount: number;
-  status: "UNPAID" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
+  status: "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
+  paidAmount: number;
+  remainingAmount: number;
   billingYear: number;
   billingMonth: number;
   student: { code: string; fullName: string };
@@ -62,8 +64,8 @@ const currentMonth = () => {
   return getVietnamMonth();
 };
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
-const statusLabel: Record<Fee["status"], string> = { UNPAID: "Chưa thu", PAID: "Đã thu", OVERDUE: "Quá hạn", EXEMPTED: "Miễn phí", CANCELLED: "Đã hủy" };
-const statusColor: Record<Fee["status"], "warning" | "success" | "error" | "info" | "default"> = { UNPAID: "warning", PAID: "success", OVERDUE: "error", EXEMPTED: "info", CANCELLED: "default" };
+const statusLabel: Record<Fee["status"], string> = { UNPAID: "Chưa thu", PARTIAL: "Đã thu một phần", PAID: "Đã thu", OVERDUE: "Quá hạn", EXEMPTED: "Miễn phí", CANCELLED: "Đã hủy" };
+const statusColor: Record<Fee["status"], "warning" | "success" | "error" | "info" | "default"> = { UNPAID: "warning", PARTIAL: "info", PAID: "success", OVERDUE: "error", EXEMPTED: "info", CANCELLED: "default" };
 const classStatusLabel: Record<ClassData["status"], string> = { DRAFT: "Bản nháp", ACTIVE: "Đang hoạt động", COMPLETED: "Đã hoàn thành", CANCELLED: "Đã hủy" };
 const classStatusColor: Record<ClassData["status"], "default" | "success" | "info" | "error"> = { DRAFT: "default", ACTIVE: "success", COMPLETED: "info", CANCELLED: "error" };
 
@@ -121,7 +123,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       .filter((fee) => fee.status !== "EXEMPTED" && fee.status !== "CANCELLED")
       .reduce((sum, fee) => sum + Number(fee.finalAmount), 0),
     paid: fees.filter((fee) => fee.status === "PAID").length,
-    unpaid: fees.filter((fee) => fee.status === "UNPAID" || fee.status === "OVERDUE").length,
+    unpaid: fees.filter((fee) => fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE").length,
   }), [fees]);
 
   async function createFees() {
@@ -234,8 +236,8 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       </Box>
       {loading && <LinearProgress />}
       <Table sx={{ minWidth: 1000 }}>
-        <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
-    <TableBody>{fees.map((fee) => { const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch; const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status]; const feeColor = pendingBatch ? "warning" : statusColor[fee.status]; const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "OVERDUE"); return <TableRow key={fee.id} hover><TableCell><Typography fontWeight={600}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography></TableCell><TableCell>{fee.items.map((item) => item.itemName).join(", ") || "-"}</TableCell><TableCell>{money(Number(fee.originalAmount))}</TableCell><TableCell><strong>{money(Number(fee.finalAmount))}</strong></TableCell><TableCell><Stack spacing={0.5} alignItems="flex-start"><Chip size="small" color={feeColor} label={feeStatus} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack></TableCell><TableCell align="right"><Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="flex-end">{pendingBatch && <Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700, boxShadow: 2, whiteSpace: "nowrap" }}>Xử lý đợt thu</Button>}{canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained">Thu học phí</Button>}<Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined">Xem chi tiết</Button></Stack></TableCell></TableRow>; })}{!fees.length && <TableRow><TableCell colSpan={6}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Chưa có học phí cho kỳ {month}</Typography></TableCell></TableRow>}</TableBody>
+      <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Học phí gốc</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+    <TableBody>{fees.map((fee) => { const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch; const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status]; const feeColor = pendingBatch ? "warning" : statusColor[fee.status]; const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE"); return <TableRow key={fee.id} hover><TableCell><Typography fontWeight={600}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography></TableCell><TableCell>{fee.items.map((item) => item.itemName).join(", ") || "-"}</TableCell><TableCell>{money(Number(fee.originalAmount))}</TableCell><TableCell><strong>{money(Number(fee.finalAmount))}</strong></TableCell><TableCell>{money(Number(fee.paidAmount))}</TableCell><TableCell><strong>{money(Number(fee.remainingAmount))}</strong></TableCell><TableCell><Stack spacing={0.5} alignItems="flex-start"><Chip size="small" color={feeColor} label={feeStatus} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack></TableCell><TableCell align="right"><Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="flex-end">{pendingBatch && <Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700, boxShadow: 2, whiteSpace: "nowrap" }}>Xử lý đợt thu</Button>}{canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained">{fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu học phí"}</Button>}<Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined">Xem chi tiết</Button></Stack></TableCell></TableRow>; })}{!fees.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Chưa có học phí cho kỳ {month}</Typography></TableCell></TableRow>}</TableBody>
       </Table>
     </Paper>
     <ConfirmDialog

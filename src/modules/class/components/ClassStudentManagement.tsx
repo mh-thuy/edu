@@ -53,6 +53,8 @@ type Fee = {
   id: string;
   status: string;
   finalAmount: number;
+  paidAmount: number;
+  remainingAmount: number;
   billingYear: number;
   billingMonth: number;
   billingType: string;
@@ -89,6 +91,7 @@ const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)
 const monthValue = (value: string) => value.slice(0, 7);
 const feeStatusLabel: Record<string, string> = {
   UNPAID: "Đã tạo",
+  PARTIAL: "Đã thu một phần",
   PAID: "Đã thanh toán",
   OVERDUE: "Quá hạn",
   EXEMPTED: "Được miễn",
@@ -96,6 +99,7 @@ const feeStatusLabel: Record<string, string> = {
 };
 const feeStatusColor: Record<string, "warning" | "success" | "error" | "info" | "default"> = {
   UNPAID: "warning",
+  PARTIAL: "info",
   PAID: "success",
   OVERDUE: "error",
   EXEMPTED: "info",
@@ -559,7 +563,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
         {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5, opacity: pause.status === "CANCELLED" ? 0.65 : 1 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)} {pause.status === "CANCELLED" ? "· Đã hủy" : ""}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack>{pause.status === "ACTIVE" && <Stack direction="row"><Button size="small" disabled={classClosed} onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy || classClosed} onClick={() => setPauseCancelTarget({ student: selectedStudent, pauseId: pause.id })}>Hủy</Button></Stack>}</Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
         <Divider />
         <Typography variant="subtitle1" fontWeight={700}>Học phí {month}</Typography>
-        {getPause(selectedStudent) ? <Chip color="info" label="Không phát sinh trong kỳ tạm nghỉ" /> : selectedFee ? <Stack spacing={0.5}><Typography variant="h5">{money(Number(selectedFee.finalAmount))}</Typography><Chip size="small" sx={{ alignSelf: "flex-start" }} color={feeStatusColor[selectedFee.status] ?? "default"} label={feeStatusLabel[selectedFee.status] ?? selectedFee.status} /></Stack> : <Stack spacing={0.5}><Typography variant="h5">{money(selectedExpectedAmount)}</Typography><Typography variant="body2" color="text.secondary">Dự kiến theo các môn đang đăng ký; chưa tạo khoản học phí.</Typography></Stack>}
+        {getPause(selectedStudent) ? <Chip color="info" label="Không phát sinh trong kỳ tạm nghỉ" /> : selectedFee ? <Stack spacing={0.5}><Typography variant="h5">{money(Number(selectedFee.finalAmount))}</Typography><Typography variant="body2" color="text.secondary">Đã thu: {money(Number(selectedFee.paidAmount))} · Còn nợ: {money(Number(selectedFee.remainingAmount))}</Typography><Chip size="small" sx={{ alignSelf: "flex-start" }} color={feeStatusColor[selectedFee.status] ?? "default"} label={feeStatusLabel[selectedFee.status] ?? selectedFee.status} /></Stack> : <Stack spacing={0.5}><Typography variant="h5">{money(selectedExpectedAmount)}</Typography><Typography variant="body2" color="text.secondary">Dự kiến theo các môn đang đăng ký; chưa tạo khoản học phí.</Typography></Stack>}
         <Typography variant="body2" color="text.secondary">Đăng ký học viên và tạo học phí là hai thao tác độc lập.</Typography>
       </Stack>}
     </Drawer>

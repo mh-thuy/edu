@@ -2,7 +2,6 @@ import {
   PaymentBatchStatus,
   Prisma,
   ReceiptStatus,
-  TuitionFeeStatus,
   TuitionPaymentStatus,
   TuitionRefundStatus,
 } from "@prisma/client";
@@ -13,7 +12,7 @@ import type {
   PaymentRefundComplete,
   PaymentRefundCreate,
 } from "../schemas/payment-refund.schema";
-import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import { getStoredTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 import { markPaymentBatchReceiptCancelled } from "@/modules/finance/payments/services/payment-document-snapshot";
 
 async function generateRefundNo(tx: Prisma.TransactionClient) {
@@ -331,13 +330,21 @@ export async function completePaymentRefund(
           version: { increment: 1 },
         },
       });
+      const remainingPayments = await tx.tuitionPayment.findMany({
+        where: {
+          tuitionFeeId: payment.tuitionFeeId,
+          paymentStatus: TuitionPaymentStatus.SUCCESS,
+        },
+        select: { amount: true },
+      });
+      const paidAfterRefund = remainingPayments.reduce(
+        (total, item) => total.add(item.amount),
+        new Prisma.Decimal(0),
+      );
       const reopenedFee = await tx.tuitionFee.update({
         where: { id: payment.tuitionFeeId },
         data: {
-          status: getEffectiveTuitionFeeStatus(
-            TuitionFeeStatus.UNPAID,
-            payment.tuitionFee.dueDate,
-          ),
+          status: getStoredTuitionFeeStatus(payment.tuitionFee.finalAmount, paidAfterRefund),
           version: { increment: 1 },
           updatedBy: actorId,
         },

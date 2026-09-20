@@ -87,6 +87,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
     feeNo: allocation.tuitionFee.feeNo,
     finalAmount: allocation.amount.toString(),
+    payableAmount: allocation.amount.toString(),
     className: allocation.tuitionFee.class?.name ?? null,
     items: allocation.tuitionFee.items.map((item) => ({
       itemName: item.itemName,
@@ -137,7 +138,8 @@ async function generatePaymentBatchReceiptPdfWithClient(
       75,
       y,
     );
-    draw(`${money(Number(allocation.finalAmount))} VND`, 390, y);
+    const payableAmount = allocation.payableAmount ?? allocation.finalAmount;
+    draw(`${money(Number(payableAmount))} VND`, 390, y);
     let itemY = y - 17;
     for (const item of allocation.items) {
       if (itemY < 220) {

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
@@ -29,6 +32,7 @@ import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import {
@@ -40,6 +44,7 @@ import {
   type StudentItem,
 } from "@/components/shared/dialogs/StudentSelectDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
@@ -50,6 +55,8 @@ type Fee = {
   id: string;
   feeNo: string;
   finalAmount: number;
+  paidAmount?: number;
+  remainingAmount?: number;
   dueDate?: string | null;
   status: string;
   student?: { code: string; fullName: string } | null;
@@ -72,13 +79,15 @@ type PendingBatch = {
   account: BankAccount;
   qrUrl: string;
 };
-const steps = ["Tìm học sinh", "Chọn khoản phí", "Xác nhận thanh toán", "Hoàn tất"];
+const steps = ["Tìm học sinh", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
 const feeStatusLabels: Record<string, string> = {
   UNPAID: "Chưa thanh toán",
+  PARTIAL: "Đã thu một phần",
   OVERDUE: "Quá hạn",
 };
-const feeStatusColors: Record<string, "warning" | "error"> = {
+const feeStatusColors: Record<string, "warning" | "error" | "info"> = {
   UNPAID: "warning",
+  PARTIAL: "info",
   OVERDUE: "error",
 };
 const money = (value: number) =>
@@ -94,6 +103,8 @@ export function TuitionPaymentWorkspace({
   const [studentCode, setStudentCode] = useState("");
   const [fees, setFees] = useState<Fee[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showMultipleFees, setShowMultipleFees] = useState(false);
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [method, setMethod] = useState("CASH");
   const [payerName, setPayerName] = useState("");
   const [transactionReference, setTransactionReference] = useState("");
@@ -115,9 +126,12 @@ export function TuitionPaymentWorkspace({
   const studentDialog = useDisclosure();
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const selectedFees = fees.filter((fee) => selectedIds.includes(fee.id));
+  const selectedFee = selectedFees[0];
+  const getRemaining = (fee: Fee) => Number(fee.remainingAmount ?? fee.finalAmount);
+  const getAmount = (fee: Fee) => amounts[fee.id] ?? getRemaining(fee);
   const total = useMemo(
-    () => selectedFees.reduce((sum, fee) => sum + Number(fee.finalAmount), 0),
-    [selectedFees],
+    () => selectedFees.reduce((sum, fee) => sum + (amounts[fee.id] ?? Number(fee.remainingAmount ?? fee.finalAmount)), 0),
+    [selectedFees, amounts],
   );
   const selectedStudent = fees[0]?.student;
 
@@ -167,7 +181,7 @@ export function TuitionPaymentWorkspace({
         >(response);
       })
       .then((fee) => {
-        if (fee.status !== "UNPAID" && fee.status !== "OVERDUE")
+        if (fee.status !== "UNPAID" && fee.status !== "PARTIAL" && fee.status !== "OVERDUE")
           throw new Error("Khoản học phí này không còn cần thanh toán");
         const pendingBatchNo =
           fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
@@ -217,14 +231,16 @@ export function TuitionPaymentWorkspace({
             fee,
             fees: allFees.filter(
               (studentFee) =>
-                studentFee.status === "UNPAID" || studentFee.status === "OVERDUE",
+                studentFee.status === "UNPAID" || studentFee.status === "PARTIAL" || studentFee.status === "OVERDUE",
             ),
           };
         });
       })
       .then(({ fee, fees: studentFees }) => {
         setFees(studentFees);
+        setAmounts(Object.fromEntries(studentFees.map((item) => [item.id, Number(item.remainingAmount ?? item.finalAmount)])));
         setSelectedIds([fee.id]);
+        setShowMultipleFees(false);
         setStep(1);
       })
       .catch((reason) =>
@@ -265,11 +281,14 @@ export function TuitionPaymentWorkspace({
       );
       const allFees = [result.items, ...remainingPages.map((page) => page.items)].flat();
       const unpaid = allFees.filter(
-        (fee) => fee.status === "UNPAID" || fee.status === "OVERDUE",
+        (fee) => fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE",
       );
+      const firstAvailableFee = unpaid.find((fee) => !fee.paymentAllocations?.length);
       setFees(unpaid);
-      setSelectedIds([]);
-      if (!unpaid.length) {
+      setAmounts(Object.fromEntries(unpaid.map((fee) => [fee.id, Number(fee.remainingAmount ?? fee.finalAmount)])));
+      setSelectedIds(firstAvailableFee ? [firstAvailableFee.id] : []);
+      setShowMultipleFees(false);
+      if (!unpaid.length || !firstAvailableFee) {
         setError("Học sinh không còn khoản học phí cần thanh toán");
         return;
       }
@@ -331,6 +350,11 @@ export function TuitionPaymentWorkspace({
       setStep(1);
       return;
     }
+    if (selectedFees.some((fee) => getAmount(fee) <= 0 || getAmount(fee) > getRemaining(fee))) {
+      setError("Số tiền thanh toán phải lớn hơn 0 và không vượt số tiền còn nợ");
+      setStep(1);
+      return;
+    }
     if (method === "BANK_TRANSFER" && !bankAccountId) {
       setBankAccountError("Hãy chọn tài khoản nhận tiền");
       return;
@@ -344,6 +368,7 @@ export function TuitionPaymentWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tuitionFeeIds: selectedIds,
+          amounts: Object.fromEntries(selectedFees.map((fee) => [fee.id, getAmount(fee)])),
           paymentMethod: method,
           paymentDate: method === "CASH" ? cashPaymentDate : undefined,
           bankAccountId: method === "BANK_TRANSFER" ? bankAccountId : undefined,
@@ -453,6 +478,8 @@ export function TuitionPaymentWorkspace({
     setStudentCode("");
     setFees([]);
     setSelectedIds([]);
+    setShowMultipleFees(false);
+    setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
     setError("");
@@ -465,11 +492,28 @@ export function TuitionPaymentWorkspace({
     setBankAccountError("");
     setQrError("");
   }
+
+  function continueWithSameStudent() {
+    setStep(0);
+    setFees([]);
+    setSelectedIds([]);
+    setAmounts({});
+    setShowMultipleFees(false);
+    setPendingBatch(null);
+    setReceiptId(null);
+    setError("");
+    setMethod("CASH");
+    setBankAccountId("");
+    setTransactionReference("");
+    void lookupStudent();
+  }
   function selectStudent(item: StudentItem) {
     setStudent({ id: item.id, code: item.code, name: item.fullName });
     setStudentCode(item.code);
     setFees([]);
     setSelectedIds([]);
+    setShowMultipleFees(false);
+    setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
     setError("");
@@ -479,6 +523,11 @@ export function TuitionPaymentWorkspace({
   function requestPaymentConfirmation() {
     if (!selectedIds.length) {
       setError("Hãy chọn ít nhất một khoản học phí");
+      setStep(1);
+      return;
+    }
+    if (selectedFees.some((fee) => getAmount(fee) <= 0 || getAmount(fee) > getRemaining(fee))) {
+      setError("Số tiền thanh toán phải lớn hơn 0 và không vượt số tiền còn nợ");
       setStep(1);
       return;
     }
@@ -511,7 +560,7 @@ export function TuitionPaymentWorkspace({
           Thu học phí
         </Typography>
         <Typography color="text.secondary">
-          Gom nhiều khoản học phí của một học sinh và thanh toán trong một lần.
+          Chọn một khoản, thu đủ phần còn lại hoặc nhập số tiền muốn thu.
         </Typography>
       </Box>
       <Paper sx={{ p: { xs: 1, md: 3 } }}>
@@ -570,7 +619,7 @@ export function TuitionPaymentWorkspace({
                 gap={1}
               >
                 <Box>
-                  <Typography variant="h6">2. Chọn khoản phí</Typography>
+                  <Typography variant="h6">2. Nhập số tiền cần thu</Typography>
                   <Typography color="text.secondary">
                     {selectedStudent?.code} — {selectedStudent?.fullName}
                   </Typography>
@@ -584,97 +633,130 @@ export function TuitionPaymentWorkspace({
                   Đổi học sinh
                 </Button>
               </Stack>
-              <Alert severity="info">
-                Có{" "}
-                {fees.filter((fee) => !fee.paymentAllocations?.length).length}{" "}
-                khoản có thể chọn trong tổng số {fees.length} khoản. Khoản đang
-                chờ đối soát hoặc đã thanh toán sẽ bị khóa.
-              </Alert>
-              <Stack>
-                {fees.map((fee) => {
-                  const locked = Boolean(fee.paymentAllocations?.length);
-                  const batchNo =
-                    fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
-                  return (
-                    <Paper
-                      key={fee.id}
-                      variant="outlined"
-                      sx={{
-                        p: 1,
-                        mb: 1,
-                        borderColor: selectedIds.includes(fee.id)
-                          ? "primary.main"
-                          : undefined,
-                        opacity: locked ? 0.65 : 1,
-                      }}
-                    >
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        justifyContent="space-between"
-                        alignItems={{ sm: "center" }}
-                        gap={1}
+              {!showMultipleFees && selectedFee && (
+                <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderColor: "primary.main" }}>
+                  <Stack spacing={2}>
+                    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+                      <Box>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="h6">{selectedFee.feeNo}</Typography>
+                          <Chip
+                            size="small"
+                            color={feeStatusColors[selectedFee.status] || "warning"}
+                            label={feeStatusLabels[selectedFee.status] || selectedFee.status}
+                          />
+                        </Stack>
+                        <Typography color="text.secondary">
+                          {selectedFee.class?.name || "Chưa có lớp"}
+                          {selectedFee.dueDate
+                            ? ` · Hạn ${new Date(selectedFee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+                            : ""}
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setShowMultipleFees(true)}
                       >
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              disabled={locked}
-                              checked={selectedIds.includes(fee.id)}
-                              onChange={() =>
-                                setSelectedIds((current) =>
-                                  current.includes(fee.id)
-                                    ? current.filter((id) => id !== fee.id)
-                                    : [...current, fee.id],
-                                )
+                        Thu nhiều khoản
+                      </Button>
+                    </Stack>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary">Tổng phải thu</Typography>
+                        <Typography variant="h6">{money(Number(selectedFee.finalAmount))}</Typography>
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary">Đã thu</Typography>
+                        <Typography variant="h6">{money(Number(selectedFee.paidAmount ?? 0))}</Typography>
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary">Còn nợ</Typography>
+                        <Typography variant="h6" color="warning.main">{money(getRemaining(selectedFee))}</Typography>
+                      </Box>
+                    </Stack>
+                    <CurrencyInput
+                      label="Số tiền thu lần này"
+                      value={getAmount(selectedFee)}
+                      onChange={(value) => setAmounts((current) => ({ ...current, [selectedFee.id]: value }))}
+                      helperText="Mặc định là toàn bộ số tiền còn nợ. Có thể nhập ít hơn để thu từng phần."
+                    />
+                  </Stack>
+                </Paper>
+              )}
+              {showMultipleFees && (
+                <>
+                  <Alert
+                    severity="info"
+                    action={<Button color="inherit" size="small" onClick={() => {
+                      const feeToKeep = selectedFee ?? fees.find((fee) => !fee.paymentAllocations?.length);
+                      setShowMultipleFees(false);
+                      setSelectedIds(feeToKeep ? [feeToKeep.id] : []);
+                    }}>Thu một khoản</Button>}
+                  >
+                    Chế độ nâng cao: chọn nhiều khoản và nhập số tiền riêng cho từng khoản.
+                  </Alert>
+                  <Stack>
+                    {fees.map((fee) => {
+                      const locked = Boolean(fee.paymentAllocations?.length);
+                      const batchNo = fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
+                      return (
+                        <Paper
+                          key={fee.id}
+                          variant="outlined"
+                          sx={{
+                            p: 1,
+                            mb: 1,
+                            borderColor: selectedIds.includes(fee.id) ? "primary.main" : undefined,
+                            opacity: locked ? 0.65 : 1,
+                          }}
+                        >
+                          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  disabled={locked}
+                                  checked={selectedIds.includes(fee.id)}
+                                  onChange={() => {
+                                    setSelectedIds((current) => current.includes(fee.id) ? current.filter((id) => id !== fee.id) : [...current, fee.id]);
+                                    setAmounts((current) => ({ ...current, [fee.id]: current[fee.id] ?? getRemaining(fee) }));
+                                  }}
+                                />
+                              }
+                              label={
+                                <Box>
+                                  <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} alignItems={{ sm: "center" }}>
+                                    <Typography>{fee.feeNo} · {fee.class?.name || "Chưa có lớp"}</Typography>
+                                    {!locked && <Chip size="small" color={feeStatusColors[fee.status] || "warning"} label={feeStatusLabels[fee.status] || fee.status} />}
+                                  </Stack>
+                                  <Typography variant="caption" color={locked ? "warning.main" : "text.secondary"}>
+                                    {locked ? `Đang chờ thanh toán trong đợt ${batchNo}` : `Còn nợ: ${money(getRemaining(fee))}`}
+                                  </Typography>
+                                </Box>
                               }
                             />
-                          }
-                          label={
-                            <Box>
-                              <Stack
-                                direction={{ xs: "column", sm: "row" }}
-                                spacing={0.75}
-                                alignItems={{ sm: "center" }}
-                              >
-                                <Typography>
-                                  {fee.feeNo} · {fee.class?.name || "Chưa có lớp"}
-                                </Typography>
-                                {!locked && (
-                                  <Chip
-                                    size="small"
-                                    color={feeStatusColors[fee.status] || "warning"}
-                                    label={feeStatusLabels[fee.status] || fee.status}
-                                  />
-                                )}
-                              </Stack>
-                              <Typography
-                                variant="caption"
-                                color={locked ? "warning.main" : "text.secondary"}
-                              >
-                                {locked
-                                  ? `Đang chờ thanh toán trong đợt ${batchNo}`
-                                  : `${fee.dueDate ? `Hạn ${new Date(fee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}` : "Chưa có hạn"} · ${money(Number(fee.finalAmount))}`}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                        {locked && fee.paymentAllocations?.[0]?.paymentBatch.id && (
-                          <Button
-                            component={Link}
-                            href={`/admin/tuition-fees/payment-history/${fee.paymentAllocations[0].paymentBatch.id}`}
-                            size="small"
-                            variant="contained"
-                            color="warning"
-                            startIcon={<ArrowBackIcon sx={{ transform: "rotate(180deg)" }} />}
-                            sx={{ fontWeight: 700, boxShadow: 2, whiteSpace: "nowrap" }}
-                          >
-                            Xử lý đợt thu
-                          </Button>
-                        )}
-                      </Stack>
-                    </Paper>
-                  );
-                })}
-              </Stack>
+                            {!locked && selectedIds.includes(fee.id) && (
+                              <Box sx={{ width: { xs: "100%", sm: 230 }, ml: { sm: 6 } }}>
+                                <CurrencyInput
+                                  label="Số tiền lần này"
+                                  value={getAmount(fee)}
+                                  onChange={(value) => setAmounts((current) => ({ ...current, [fee.id]: value }))}
+                                  helperText={`Còn nợ: ${money(getRemaining(fee))}`}
+                                />
+                              </Box>
+                            )}
+                            {locked && fee.paymentAllocations?.[0]?.paymentBatch.id && (
+                              <Button component={Link} href={`/admin/tuition-fees/payment-history/${fee.paymentAllocations[0].paymentBatch.id}`} size="small" variant="contained" color="warning">
+                                Xử lý đợt thu
+                              </Button>
+                            )}
+                          </Stack>
+                        </Paper>
+                      );
+                    })}
+                  </Stack>
+                </>
+              )}
               <Divider />
               <Stack
                 direction={{ xs: "column", sm: "row" }}
@@ -683,7 +765,7 @@ export function TuitionPaymentWorkspace({
                 gap={1}
               >
                 <Typography>
-                  Đã chọn <strong>{selectedFees.length}</strong> khoản
+                  {showMultipleFees ? <>Đã chọn <strong>{selectedFees.length}</strong> khoản</> : "Khoản đang thu"}
                 </Typography>
                 <Typography variant="h6" color="primary.main">
                   {money(total)}
@@ -718,7 +800,7 @@ export function TuitionPaymentWorkspace({
                   >
                     <Typography variant="body2">{fee.feeNo}</Typography>
                     <Typography variant="body2">
-                      {money(Number(fee.finalAmount))}
+                      {money(getAmount(fee))} / còn nợ {money(getRemaining(fee))}
                     </Typography>
                   </Stack>
                 ))}
@@ -812,22 +894,31 @@ export function TuitionPaymentWorkspace({
                         "Chỉ chọn tài khoản đang hoạt động của trung tâm"}
                     </FormHelperText>
                   </FormControl>
-                  <AppTextField
-                    fullWidth
-                    label="Mã giao dịch (nếu có)"
-                    value={transactionReference}
-                    onChange={(event) =>
-                      setTransactionReference(event.target.value)
-                    }
-                  />
                 </>
               )}
-              <AppTextField
-                fullWidth
-                label="Người nộp"
-                value={payerName}
-                onChange={(event) => setPayerName(event.target.value)}
-              />
+              <Accordion disableGutters variant="outlined">
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography>Thông tin bổ sung <Typography component="span" color="text.secondary" variant="body2">(không bắt buộc)</Typography></Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    <AppTextField
+                      fullWidth
+                      label="Người nộp"
+                      value={payerName}
+                      onChange={(event) => setPayerName(event.target.value)}
+                    />
+                    {method === "BANK_TRANSFER" && (
+                      <AppTextField
+                        fullWidth
+                        label="Mã giao dịch (nếu có)"
+                        value={transactionReference}
+                        onChange={(event) => setTransactionReference(event.target.value)}
+                      />
+                    )}
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
               <Stack direction="row" justifyContent="space-between">
                 <Button
                   variant="outlined"
@@ -844,7 +935,7 @@ export function TuitionPaymentWorkspace({
                   {loading ? (
                     <CircularProgress size={20} color="inherit" />
                   ) : (
-                    "Xác nhận thanh toán toàn bộ"
+                    "Xác nhận thanh toán"
                   )}
                 </Button>
               </Stack>
@@ -988,6 +1079,9 @@ export function TuitionPaymentWorkspace({
                   Thanh toán đã hoàn tất và biên lai đã được phát hành. Vui lòng xuất hoặc in biên lai để lưu hồ sơ.
                 </Alert>
               )}
+              {!pendingBatch && (
+                <Button variant="contained" onClick={continueWithSameStudent}>Thu tiếp cho học sinh này</Button>
+              )}
               <Button variant="outlined" onClick={reset}>Thu học phí cho học sinh khác</Button>
             </Stack>
           </CardContent>
@@ -1001,7 +1095,7 @@ export function TuitionPaymentWorkspace({
       <ConfirmDialog
         open={confirmOpen}
         title="Xác nhận thu học phí"
-        message="Bạn có chắc muốn ghi nhận toàn bộ các khoản học phí đã chọn? Thao tác này sẽ tạo giao dịch; thanh toán tiền mặt hoàn tất ngay, còn chuyển khoản sẽ chờ đối soát."
+        message="Bạn có chắc muốn ghi nhận số tiền thanh toán đã nhập? Thao tác này sẽ tạo giao dịch; thanh toán tiền mặt hoàn tất ngay, còn chuyển khoản sẽ chờ đối soát."
         content={
           <Stack spacing={0.5} sx={{ mt: 2 }}>
             <Typography variant="body2">
@@ -1011,7 +1105,7 @@ export function TuitionPaymentWorkspace({
               Số khoản: <strong>{selectedFees.length}</strong>
             </Typography>
             <Typography variant="body2">
-              Tổng tiền: <strong>{money(total)}</strong>
+              Tổng tiền lần này: <strong>{money(total)}</strong>
             </Typography>
             <Typography variant="body2">
               Phương thức: <strong>{method === "CASH" ? "Tiền mặt" : "Chuyển khoản / VietQR"}</strong>

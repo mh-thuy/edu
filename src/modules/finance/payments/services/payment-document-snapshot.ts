@@ -57,7 +57,7 @@ type SnapshotFeeInput = {
   }>;
 };
 
-export function toFeeSnapshot(fee: SnapshotFeeInput) {
+export function toFeeSnapshot(fee: SnapshotFeeInput, payableAmount?: PrismaTypes.Decimal) {
   return {
     tuitionFeeId: fee.id,
     feeNo: fee.feeNo,
@@ -68,6 +68,7 @@ export function toFeeSnapshot(fee: SnapshotFeeInput) {
     discountAmount: fee.discountAmount.toString(),
     additionalAmount: fee.additionalAmount.toString(),
     finalAmount: fee.finalAmount.toString(),
+    payableAmount: (payableAmount ?? fee.finalAmount).toString(),
     items: fee.items.map((item) => ({
       itemName: item.itemName,
       subjectName: item.classSubject?.subject.name ?? null,

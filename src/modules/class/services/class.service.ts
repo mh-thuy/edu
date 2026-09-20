@@ -1346,15 +1346,20 @@ export async function getClassStudents(
         where: { status: { in: ["ACTIVE", "COMPLETED"] } },
         select: { classSubjectId: true },
       },
-      tuitionFees: {
-        select: {
-          id: true,
-          status: true,
-          dueDate: true,
-          billingYear: true,
-          billingMonth: true,
-          billingType: true,
-          items: { select: { classSubjectId: true } },
+        tuitionFees: {
+          select: {
+            id: true,
+            status: true,
+            finalAmount: true,
+            dueDate: true,
+            billingYear: true,
+            billingMonth: true,
+            billingType: true,
+            items: { select: { classSubjectId: true } },
+            payments: {
+              where: { paymentStatus: "SUCCESS" },
+              select: { amount: true },
+            },
         },
       },
       pauses: {
@@ -1383,8 +1388,15 @@ export async function getClassStudents(
       })),
       tuitionFees: student.tuitionFees.map((fee) => {
         const { dueDate, ...feeData } = fee;
+        const paidAmount = fee.payments.reduce(
+          (total, payment) => total.add(payment.amount),
+          new Prisma.Decimal(0),
+        );
+        const remainingAmount = fee.finalAmount.sub(paidAmount);
         return {
           ...feeData,
+          paidAmount,
+          remainingAmount: remainingAmount.greaterThan(0) ? remainingAmount : new Prisma.Decimal(0),
           status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
         };
       }),
@@ -1492,6 +1504,10 @@ export async function getClassStudentsPage(
             billingMonth: true,
             billingType: true,
             items: { select: { classSubjectId: true } },
+            payments: {
+              where: { paymentStatus: "SUCCESS" },
+              select: { amount: true },
+            },
           },
         },
         pauses: {
@@ -1574,8 +1590,15 @@ export async function getClassStudentsPage(
     })),
     tuitionFees: student.tuitionFees.map((fee) => {
       const { dueDate, ...feeData } = fee;
+      const paidAmount = fee.payments.reduce(
+        (total, payment) => total.add(payment.amount),
+        new Prisma.Decimal(0),
+      );
+      const remainingAmount = fee.finalAmount.sub(paidAmount);
       return {
         ...feeData,
+        paidAmount,
+        remainingAmount: remainingAmount.greaterThan(0) ? remainingAmount : new Prisma.Decimal(0),
         status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
       };
     }),

@@ -11,6 +11,7 @@ import {
   TuitionService,
   type TuitionBillingPeriod,
 } from "@/modules/finance/tuition/services/tuition.service";
+import { PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 
 export async function createClassPaymentBatches(
   classId: string,
@@ -86,7 +87,7 @@ export async function createClassPaymentBatches(
       billingYear: period.billingYear,
       billingMonth: period.billingMonth,
       billingType: TuitionFeeBillingType.MONTHLY,
-      status: { in: [TuitionFeeStatus.UNPAID, TuitionFeeStatus.OVERDUE] },
+      status: { in: [TuitionFeeStatus.UNPAID, PARTIAL_FEE_STATUS, TuitionFeeStatus.OVERDUE] },
     },
     select: {
       id: true,

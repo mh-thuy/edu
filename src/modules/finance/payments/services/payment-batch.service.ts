@@ -10,7 +10,11 @@ import { auditFields, type AuditContext } from "@/lib/audit";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
 import { parseVietnamDateStart } from "@/lib/vietnam-time";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
-import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
+import {
+  getEffectiveTuitionFeeStatus,
+  PARTIAL_FEE_STATUS,
+  getStoredTuitionFeeStatus,
+} from "@/modules/finance/tuition/utils/tuition-status";
 import {
   savePaymentBatchNoticeSnapshot,
   savePaymentBatchReceiptSnapshot,
@@ -24,6 +28,15 @@ function parsePaymentDate(value?: string): Date | undefined {
   const parsed = parseVietnamDateStart(value);
   if (!parsed) throw new ConflictError("Ngày nhận không hợp lệ");
   return parsed;
+}
+
+function sumSuccessfulPayments(
+  payments: Array<{ amount: Prisma.Decimal }>,
+) {
+  return payments.reduce(
+    (total, payment) => total.add(payment.amount),
+    new Prisma.Decimal(0),
+  );
 }
 
 async function generateBatchNo(tx: Prisma.TransactionClient) {
@@ -115,15 +128,18 @@ export async function completePaymentBatch(
       include: {
         payments: {
           where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
-          select: { id: true },
+          select: { id: true, amount: true },
         },
       },
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
-    if (fee.payments.length > 0)
+    const paidAmount = sumSuccessfulPayments(fee.payments);
+    const remainingAmount = fee.finalAmount.sub(paidAmount);
+    if (!remainingAmount.greaterThan(0))
       throw new ConflictError("TUITION_ALREADY_PAID");
     if (
       fee.status !== TuitionFeeStatus.UNPAID &&
+      fee.status !== PARTIAL_FEE_STATUS &&
       fee.status !== TuitionFeeStatus.OVERDUE
     )
       throw new ConflictError(
@@ -131,9 +147,9 @@ export async function completePaymentBatch(
       );
     if (!allocation.amount.greaterThan(0))
       throw new ConflictError("Số tiền thanh toán phải lớn hơn 0");
-    if (!allocation.amount.equals(fee.finalAmount))
+    if (allocation.amount.greaterThan(remainingAmount))
       throw new ConflictError(
-        `Số tiền phân bổ của ${fee.feeNo} không khớp toàn bộ học phí`,
+        `Số tiền phân bổ của ${fee.feeNo} vượt số tiền còn nợ`,
       );
   }
   const paymentReceiptIssuedAt = new Date();
@@ -204,7 +220,7 @@ export async function completePaymentBatch(
       receiptNo: receipt.receiptNo,
       issuedAt: paymentReceiptIssuedAt.toISOString(),
       student: { code: batch.student.code, fullName: batch.student.fullName },
-      tuitionFee: toFeeSnapshot(allocation.tuitionFee),
+      tuitionFee: toFeeSnapshot(allocation.tuitionFee, allocation.amount),
       amount: allocation.amount.toString(),
       paymentMethod: batch.paymentMethod,
     });
@@ -223,10 +239,19 @@ export async function completePaymentBatch(
         ...auditFields(auditContext),
       },
     });
+    const successfulPayments = await tx.tuitionPayment.findMany({
+      where: {
+        tuitionFeeId: allocation.tuitionFeeId,
+        paymentStatus: TuitionPaymentStatus.SUCCESS,
+      },
+      select: { amount: true },
+    });
+    const paidAmount = sumSuccessfulPayments(successfulPayments);
+    const nextStatus = getStoredTuitionFeeStatus(allocation.tuitionFee.finalAmount, paidAmount);
     await tx.tuitionFee.update({
       where: { id: allocation.tuitionFeeId },
       data: {
-        status: TuitionFeeStatus.PAID,
+        status: nextStatus,
         version: { increment: 1 },
         updatedBy: actorId,
       },
@@ -251,11 +276,11 @@ export async function completePaymentBatch(
       data: {
         entityType: "TUITION_FEE",
         entityId: allocation.tuitionFeeId,
-        action: "PAID",
+        action: nextStatus === TuitionFeeStatus.PAID ? "PAID" : "PARTIAL",
         dataAfter: {
           paymentId: payment.id,
           paymentBatchId: batch.id,
-          status: TuitionFeeStatus.PAID,
+          status: nextStatus,
         },
         performedBy: actorId,
         ...auditFields(auditContext),
@@ -276,7 +301,9 @@ export async function completePaymentBatch(
     receiptNo: batchReceipt.receiptNo,
     issuedAt: paymentReceiptIssuedAt.toISOString(),
     student: { code: batch.student.code, fullName: batch.student.fullName },
-    fees: batch.allocations.map((allocation) => toFeeSnapshot(allocation.tuitionFee)),
+    fees: batch.allocations.map((allocation) =>
+      toFeeSnapshot(allocation.tuitionFee, allocation.amount),
+    ),
     amount: batch.totalAmount.toString(),
     paymentMethod: batch.paymentMethod,
   });
@@ -412,6 +439,7 @@ export async function createPaymentBatch(
       fees.some(
         (fee) =>
           fee.status !== TuitionFeeStatus.UNPAID &&
+          fee.status !== PARTIAL_FEE_STATUS &&
           fee.status !== TuitionFeeStatus.OVERDUE,
       )
     )
@@ -425,12 +453,31 @@ export async function createPaymentBatch(
         tuitionFeeId: { in: data.tuitionFeeIds },
         paymentStatus: TuitionPaymentStatus.SUCCESS,
       },
-      select: { tuitionFeeId: true },
+      select: { tuitionFeeId: true, amount: true },
     });
-    if (paid.length)
-      throw new ConflictError("Một hoặc nhiều học phí đã được thanh toán");
-    const totalAmount = fees.reduce(
-      (sum, fee) => sum.add(fee.finalAmount),
+    const paidByFee = new Map<string, Prisma.Decimal>();
+    for (const payment of paid) {
+      paidByFee.set(
+        payment.tuitionFeeId,
+        (paidByFee.get(payment.tuitionFeeId) ?? new Prisma.Decimal(0)).add(payment.amount),
+      );
+    }
+    const requestedAmounts = new Map<string, Prisma.Decimal>();
+    for (const fee of fees) {
+      const paidAmount = paidByFee.get(fee.id) ?? new Prisma.Decimal(0);
+      const remainingAmount = fee.finalAmount.sub(paidAmount);
+      if (!remainingAmount.greaterThan(0))
+        throw new ConflictError(`Học phí ${fee.feeNo} đã được thanh toán đủ`);
+      const rawAmount = data.amounts?.[fee.id];
+      const amount = rawAmount === undefined
+        ? remainingAmount
+        : new Prisma.Decimal(rawAmount);
+      if (!amount.greaterThan(0) || amount.greaterThan(remainingAmount))
+        throw new ConflictError(`Số tiền thanh toán của ${fee.feeNo} vượt số tiền còn nợ`);
+      requestedAmounts.set(fee.id, amount);
+    }
+    const totalAmount = [...requestedAmounts.values()].reduce(
+      (sum, amount) => sum.add(amount),
       new Prisma.Decimal(0),
     );
     const selectedFeeIds = new Set(data.tuitionFeeIds);
@@ -451,9 +498,16 @@ export async function createPaymentBatch(
         data.paymentMethod === "BANK_TRANSFER"
           ? duplicate.bankAccountId === data.bankAccountId
           : duplicate.bankAccountId === null;
-      if (!samePaymentMethod || !sameBankAccount) {
+      const sameAmounts = duplicate.allocations.every(
+        (allocation) => {
+          const expectedAmount = requestedAmounts.get(allocation.tuitionFeeId);
+          if (!expectedAmount) return false;
+          return allocation.amount.equals(expectedAmount);
+        },
+      );
+      if (!samePaymentMethod || !sameBankAccount || !sameAmounts) {
         throw new ConflictError(
-          `Các khoản học phí đã thuộc đợt ${duplicate.batchNo} với phương thức thanh toán khác`,
+          `Các khoản học phí đã thuộc đợt ${duplicate.batchNo} với thông tin thanh toán khác`,
         );
       }
       return duplicate;
@@ -485,7 +539,7 @@ export async function createPaymentBatch(
         allocations: {
           create: fees.map((fee) => ({
             tuitionFeeId: fee.id,
-            amount: fee.finalAmount,
+            amount: requestedAmounts.get(fee.id)!,
           })),
         },
       },
@@ -497,7 +551,7 @@ export async function createPaymentBatch(
     await savePaymentBatchNoticeSnapshot(tx, batch.id, {
       version: 1,
       student: { code: fees[0]!.student.code, fullName: fees[0]!.student.fullName },
-      fees: fees.map((fee) => toFeeSnapshot(fee)),
+      fees: fees.map((fee) => toFeeSnapshot(fee, requestedAmounts.get(fee.id))),
       ...(bankAccountSnapshot ? { bankAccount: bankAccountSnapshot } : {}),
     });
     await tx.tuitionAuditLog.create({

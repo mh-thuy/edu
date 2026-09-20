@@ -1,6 +1,8 @@
 import { apiError, apiSuccess } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { toDecimal } from "@/lib/decimal";
+import { TuitionFeeStatus } from "@prisma/client";
+import { PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 import { prisma } from "@/lib/prisma";
 import {
   getVietnamDayEndExclusive,
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
       OR: [
         { status: "OVERDUE" as const },
         { status: "UNPAID" as const, dueDate: { lt: todayStart } },
+        { status: PARTIAL_FEE_STATUS, dueDate: { lt: todayStart } },
       ],
     };
     const [paymentAggregate, cashPaymentAggregate, bankTransferPaymentAggregate, tuitionFeeAggregate, debtAggregate, overdueFees, activeClasses, activeStudents, pendingBatches] =
@@ -64,12 +67,22 @@ export async function GET(request: Request) {
           _sum: { amount: true },
         }),
         prisma.tuitionFee.aggregate({
-          where: { status: { in: ["UNPAID", "PAID", "OVERDUE"] } },
+          where: { status: { in: [TuitionFeeStatus.UNPAID, PARTIAL_FEE_STATUS, TuitionFeeStatus.PAID, TuitionFeeStatus.OVERDUE] } },
           _sum: {
             finalAmount: true,
           },
         }),
-        prisma.tuitionFee.aggregate({ where: { status: { in: ["UNPAID", "OVERDUE"] } }, _sum: { finalAmount: true } }),
+        prisma.$queryRaw<Array<{ total: import("@prisma/client").Prisma.Decimal }>>`
+          SELECT COALESCE(SUM(tf.final_amount - COALESCE(paid.total_paid, 0)), 0) AS total
+          FROM tuition_fees tf
+          LEFT JOIN (
+            SELECT tuition_fee_id, SUM(amount) AS total_paid
+            FROM tuition_payments
+            WHERE payment_status = 'SUCCESS'::tuition_payment_status
+            GROUP BY tuition_fee_id
+          ) paid ON paid.tuition_fee_id = tf.id
+          WHERE tf.status IN ('UNPAID'::tuition_fee_status, 'PARTIAL'::tuition_fee_status, 'OVERDUE'::tuition_fee_status)
+        `.then((rows) => rows[0]?.total ?? toDecimal(0)),
         prisma.tuitionFee.count({ where: overdueWhere }),
         prisma.class.count({
           where: {
@@ -90,9 +103,9 @@ export async function GET(request: Request) {
     const totalRevenue = paymentAggregate._sum.amount ?? toDecimal(0);
     const cashCollected = cashPaymentAggregate._sum.amount ?? toDecimal(0);
     const bankTransferCollected = bankTransferPaymentAggregate._sum.amount ?? toDecimal(0);
-    const totalFeeAmount = tuitionFeeAggregate._sum.finalAmount ?? toDecimal(0);
+    const totalFeeAmount = tuitionFeeAggregate._sum?.finalAmount ?? toDecimal(0);
     const totalCollected = totalRevenue;
-    const totalDebt = debtAggregate._sum.finalAmount ?? toDecimal(0);
+    const totalDebt = debtAggregate;
 
     return apiSuccess({
       totalFeeAmount,

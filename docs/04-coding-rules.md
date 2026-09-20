@@ -232,7 +232,7 @@ AI coding agent bắt buộc:
 4. Không tự đổi schema nếu chưa cần.
 5. Không bỏ rule nghiệp vụ.
 6. Không tạo receipt nếu chưa có payment.
-7. Payment SUCCESS phải bằng đúng `tuitionFee.finalAmount`; không hỗ trợ partial payment.
+7. Payment SUCCESS không được làm tổng tiền đã thu vượt `tuitionFee.finalAmount`; payment từng phần phải cập nhật số dư và trạng thái học phí trong cùng transaction.
 8. Không hard delete dữ liệu tài chính.
 9. Sau khi sửa phải báo rõ file đã sửa.
 10. Nếu chưa chắc, thêm TODO rõ ràng thay vì tự suy diễn.

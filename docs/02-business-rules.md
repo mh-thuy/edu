@@ -563,15 +563,15 @@ cảnh báo người nộp liên hệ trung tâm trước khi chuyển khoản.
 
 ## 11.1 Payment Amount
 
-Hệ thống chỉ hỗ trợ thanh toán đủ một lần cho từng học phí.
+Hệ thống cho phép thanh toán nhiều lần cho từng học phí.
 
 ```text
-payment.amount = tuition_fee.final_amount
+0 < payment.amount <= tuition_fee.final_amount - paid_amount
+paid_amount = SUM(payment SUCCESS của tuition_fee)
 ```
 
-Không cho thanh toán thiếu, thừa hoặc nhập số tiền tùy ý từ frontend.
-
-Nếu số tiền không khớp `final_amount`, trả lỗi `PAYMENT_AMOUNT_MISMATCH`.
+Backend nhận số tiền của lần thanh toán để ghi nhận số tiền thực tế, nhưng luôn
+tự tính số dư và từ chối thanh toán vượt số tiền còn nợ.
 
 ---
 
@@ -607,7 +607,8 @@ thanh toán của batch và payment.
 ## 11.3 Payment Uniqueness
 
 ```text
-1 student_fee chỉ có tối đa một payment SUCCESS
+1 student_fee có thể có nhiều payment SUCCESS, nhưng tổng amount không vượt
+`final_amount`.
 ```
 
 Payment `FAILED` hoặc `CANCELLED` vẫn được lưu để tra cứu lịch sử, nhưng không
@@ -617,11 +618,12 @@ Payment `FAILED` hoặc `CANCELLED` vẫn được lưu để tra cứu lịch s
 
 ## 11.4 Payment Status Update
 
-Trạng thái học phí chỉ có hai trạng thái thanh toán chính:
+Trạng thái học phí được tính theo tổng payment SUCCESS:
 
 ```text
 Chưa có payment SUCCESS -> UNPAID hoặc OVERDUE
-Có payment SUCCESS đúng final_amount -> PAID
+Tổng payment SUCCESS nằm giữa 0 và final_amount -> PARTIAL
+Tổng payment SUCCESS bằng final_amount -> PAID
 ```
 
 Sau khi đã `PAID`, không cho tạo thêm payment SUCCESS.
@@ -870,10 +872,15 @@ Backend phải tự tính lại:
 ```text
 actual_amount
 payment_status
+
+paid_amount = tổng payment SUCCESS của tuition fee
+
+remaining_amount = final_amount - paid_amount
 ```
 
-Payment SUCCESS luôn có số tiền bằng `actual_amount`; không phát sinh
-`outstanding_amount` do hệ thống không hỗ trợ thanh toán từng phần.
+Payment SUCCESS của từng lần thu có amount bằng số tiền thực nhận; tổng payment
+SUCCESS không được vượt `final_amount`. Khi `paid_amount` nằm giữa 0 và
+`final_amount`, học phí có trạng thái `PARTIAL`.
 
 ---
 

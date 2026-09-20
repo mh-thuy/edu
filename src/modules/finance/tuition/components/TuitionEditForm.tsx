@@ -141,6 +141,10 @@ export function TuitionEditForm({
         Khoản phí đang chờ thanh toán trong đợt {pendingBatch.batchNo} và không thể sửa.
       </Alert>
     );
+  if (fee.status === "PARTIAL")
+    return (
+      <Alert severity="warning">Học phí đã phát sinh thanh toán một phần và không thể sửa số tiền.</Alert>
+    );
   const total = Number(fee.originalAmount) - discount + additional;
   return (
     <Stack spacing={{ xs: 2, md: 3 }} maxWidth={760}>
