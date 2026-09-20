@@ -687,6 +687,7 @@ export async function createPaymentBatch(
 }
 
 export async function listPaymentBatches(params: {
+  transactionCode?: string;
   studentCode?: string;
   status?: PaymentBatchStatus;
   page: number;
@@ -698,7 +699,33 @@ export async function listPaymentBatches(params: {
   const pageSize = Number.isFinite(params.pageSize)
     ? Math.min(Math.max(Math.floor(params.pageSize), 1), 100)
     : 20;
+  const transactionSearchValues = params.transactionCode
+    ? (() => {
+        const values = [params.transactionCode];
+        const batchMatch = params.transactionCode.match(
+          /PB(?:[\s_-]*PB)?[\s_-]*(\d{8})[\s_-]*(\d{6})/i,
+        );
+        if (batchMatch) {
+          values.push(`PB-${batchMatch[1]}-${batchMatch[2]}`);
+          values.push(`PB${batchMatch[1]}${batchMatch[2]}`);
+        }
+        return values.filter(
+          (value, index, allValues) => allValues.indexOf(value) === index,
+        );
+      })()
+    : [];
   const where: Prisma.PaymentBatchWhereInput = {
+    ...(transactionSearchValues.length
+      ? {
+          OR: [
+            ...transactionSearchValues.flatMap((value) => [
+              { batchNo: { contains: value, mode: "insensitive" as const } },
+              { bankTransactionNo: { contains: value, mode: "insensitive" as const } },
+              { transactionReference: { contains: value, mode: "insensitive" as const } },
+            ]),
+          ],
+        }
+      : {}),
     ...(params.status ? { status: params.status } : {}),
     ...(params.studentCode
       ? {

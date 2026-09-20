@@ -83,6 +83,8 @@ export function PaymentBatchHistory() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [transactionCode, setTransactionCode] = useState("");
+  const [pendingTransactionCode, setPendingTransactionCode] = useState("");
   const [studentCode, setStudentCode] = useState("");
   const [pendingStudentCode, setPendingStudentCode] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
@@ -109,6 +111,9 @@ export function PaymentBatchHistory() {
       page: String(page + 1),
       pageSize: String(pageSize),
     });
+    if (transactionCode.trim()) {
+      params.set("transactionCode", transactionCode.trim());
+    }
     if (studentCode.trim()) params.set("studentCode", studentCode.trim());
     if (status) params.set("status", status);
 
@@ -136,7 +141,7 @@ export function PaymentBatchHistory() {
     } finally {
       setLoading(false);
     }
-  }, [studentCode, status, page, pageSize]);
+  }, [transactionCode, studentCode, status, page, pageSize]);
 
   useEffect(() => {
     void load();
@@ -144,8 +149,16 @@ export function PaymentBatchHistory() {
 
   function clearSearch() {
     const hasSearchState = Boolean(
-      studentCode || status || pendingStudentCode || pendingStatus || page !== 0,
+      transactionCode ||
+        studentCode ||
+        status ||
+        pendingTransactionCode ||
+        pendingStudentCode ||
+        pendingStatus ||
+        page !== 0,
     );
+    setTransactionCode("");
+    setPendingTransactionCode("");
     setStudent(null);
     setStudentCode("");
     setPendingStudentCode("");
@@ -156,6 +169,7 @@ export function PaymentBatchHistory() {
   }
 
   function applySearch() {
+    setTransactionCode(pendingTransactionCode);
     setStudentCode(pendingStudentCode);
     setStatus(pendingStatus);
     setPage(0);
@@ -251,7 +265,7 @@ export function PaymentBatchHistory() {
             <FilterAltOutlinedIcon color="primary" fontSize="small" />
             <Box>
               <Typography variant="subtitle1" fontWeight={800}>Tra cứu giao dịch</Typography>
-              <Typography variant="caption" color="text.secondary">Lọc theo học viên và trạng thái xử lý</Typography>
+          <Typography variant="caption" color="text.secondary">Lọc theo mã giao dịch, học viên và trạng thái xử lý</Typography>
             </Box>
           </Stack>
           <Chip size="small" variant="outlined" icon={<CalendarMonthOutlinedIcon />} label="Lịch sử thu học phí" />
@@ -261,6 +275,14 @@ export function PaymentBatchHistory() {
           spacing={1}
           alignItems={{ xs: "stretch", sm: "center" }}
         >
+          <AppTextField
+            size="small"
+            label="Mã giao dịch"
+            placeholder="Mã giao dịch hoặc dán nội dung QR"
+            value={pendingTransactionCode}
+            onChange={(event) => setPendingTransactionCode(event.target.value)}
+            sx={{ flex: 1, minWidth: 240 }}
+          />
           <MasterSelectField
             label="Học viên"
             value={student}
@@ -290,7 +312,7 @@ export function PaymentBatchHistory() {
           <Button
             variant="outlined"
             onClick={clearSearch}
-            disabled={!studentCode && !status && !pendingStudentCode && !pendingStatus && page === 0}
+            disabled={!transactionCode && !studentCode && !status && !pendingTransactionCode && !pendingStudentCode && !pendingStatus && page === 0}
           >
             Xóa tìm kiếm
           </Button>

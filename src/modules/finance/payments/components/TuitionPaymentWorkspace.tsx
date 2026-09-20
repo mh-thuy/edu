@@ -8,8 +8,6 @@ import {
   AccordionSummary,
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Chip,
   CircularProgress,
@@ -618,16 +616,39 @@ export function TuitionPaymentWorkspace({
   }
 
   return (
-    <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%" }}>
-      <Box>
-        <Typography variant="h4" fontWeight={700}>
-          Thu học phí
-        </Typography>
-        <Typography color="text.secondary">
-          Chọn một khoản, thu đủ phần còn lại hoặc nhập số tiền muốn thu.
-        </Typography>
-      </Box>
-      <Paper sx={{ p: { xs: 1, md: 3 } }}>
+    <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", minWidth: 0, pb: 3 }}>
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        justifyContent="space-between"
+        alignItems={{ xs: "flex-start", sm: "center" }}
+        gap={2}
+      >
+        <Box>
+          <Typography variant="overline" color="primary.main" fontWeight={700}>
+            Tài chính / Thu học phí
+          </Typography>
+          <Typography variant="h4" fontWeight={800} sx={{ letterSpacing: -0.5 }}>
+            Thu học phí
+          </Typography>
+          <Typography color="text.secondary">
+            Thu toàn bộ hoặc chia thành nhiều lần theo từng khoản học phí.
+          </Typography>
+        </Box>
+        {step > 0 && (
+          <Button variant="outlined" onClick={reset} sx={{ flexShrink: 0 }}>
+            Bắt đầu lượt thu mới
+          </Button>
+        )}
+      </Stack>
+
+      <Paper
+        variant="outlined"
+        sx={{
+          p: { xs: 1, sm: 2 },
+          borderRadius: 2,
+          bgcolor: "background.paper",
+        }}
+      >
         <Stepper activeStep={step} alternativeLabel>
           {steps.map((label) => (
             <Step key={label}>
@@ -636,16 +657,28 @@ export function TuitionPaymentWorkspace({
           ))}
         </Stepper>
       </Paper>
+
       {error && <Alert severity="error">{error}</Alert>}
 
       {step === 0 && (
-        <Card>
-          <CardContent>
-            <Stack spacing={2} maxWidth={700}>
-              <Typography variant="h6">1. Tìm học sinh</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Chọn học sinh để xem các khoản chưa thanh toán.
-              </Typography>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 340px" },
+            gap: 2,
+            alignItems: "start",
+          }}
+        >
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2 }}>
+            <Stack spacing={2.5}>
+              <Box>
+                <Typography variant="h6" fontWeight={800}>
+                  Chọn học viên
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Tìm theo mã hoặc tên để tải các khoản học phí còn phải thu.
+                </Typography>
+              </Box>
               <MasterSelectField
                 label="Học viên"
                 value={student}
@@ -655,13 +688,11 @@ export function TuitionPaymentWorkspace({
                 nameLabel="Họ tên"
               />
               <Button
+                fullWidth
                 variant="contained"
+                size="large"
                 startIcon={
-                  loading ? (
-                    <CircularProgress size={18} color="inherit" />
-                  ) : (
-                    <SearchIcon />
-                  )
+                  loading ? <CircularProgress size={18} color="inherit" /> : <SearchIcon />
                 }
                 onClick={() => void lookupStudent()}
                 disabled={loading || !studentCode}
@@ -669,487 +700,527 @@ export function TuitionPaymentWorkspace({
                 Tra cứu học phí
               </Button>
             </Stack>
-          </CardContent>
-        </Card>
+          </Paper>
+          <Paper
+            variant="outlined"
+            sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, bgcolor: "action.hover" }}
+          >
+            <Typography variant="subtitle1" fontWeight={800}>
+              Quy trình thu
+            </Typography>
+            <Stack spacing={1.5} sx={{ mt: 2 }}>
+              {["Chọn học viên", "Chọn khoản và nhập số tiền", "Chọn phương thức thanh toán"].map(
+                (label, index) => (
+                  <Stack key={label} direction="row" spacing={1.25} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: "primary.main",
+                        color: "primary.contrastText",
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {index + 1}
+                    </Box>
+                    <Typography variant="body2">{label}</Typography>
+                  </Stack>
+                ),
+              )}
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
+              Có thể thu một phần và tiếp tục thu ở các lần sau.
+            </Typography>
+          </Paper>
+        </Box>
       )}
 
       {step === 1 && (
-        <Card>
-          <CardContent>
-            <Stack spacing={2}>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                gap={1}
-              >
-                <Box>
-                  <Typography variant="h6">2. Nhập số tiền cần thu</Typography>
-                  <Typography color="text.secondary">
-                    {selectedStudent?.code} — {selectedStudent?.fullName}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={() => setStep(0)}
-                >
-                  Đổi học sinh
-                </Button>
-              </Stack>
-              {!showMultipleFees && selectedFee && (
-                <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderColor: "primary.main" }}>
-                  <Stack spacing={2}>
-                    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
-                      <Box>
-                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                          <Typography variant="h6">{selectedFee.feeNo}</Typography>
-                          <Chip
-                            size="small"
-                            color={feeStatusColors[selectedFee.status] || "warning"}
-                            label={feeStatusLabels[selectedFee.status] || selectedFee.status}
-                          />
-                        </Stack>
-                        <Typography color="text.secondary">
-                          {selectedFee.class?.name || "Chưa có lớp"}
-                          {selectedFee.dueDate
-                            ? ` · Hạn ${new Date(selectedFee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
-                            : ""}
-                        </Typography>
-                      </Box>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => setShowMultipleFees(true)}
-                      >
-                        Thu nhiều khoản
-                      </Button>
-                    </Stack>
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Tổng phải thu</Typography>
-                        <Typography variant="h6">{money(Number(selectedFee.finalAmount))}</Typography>
-                      </Box>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Đã thu</Typography>
-                        <Typography variant="h6">{money(Number(selectedFee.paidAmount ?? 0))}</Typography>
-                      </Box>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Còn nợ</Typography>
-                        <Typography variant="h6" color="warning.main">{money(getRemaining(selectedFee))}</Typography>
-                      </Box>
-                    </Stack>
-                    <CurrencyInput
-                      label="Số tiền thu lần này"
-                      value={getAmount(selectedFee)}
-                      onChange={(value) => setAmounts((current) => ({ ...current, [selectedFee.id]: value }))}
-                      helperText="Mặc định là toàn bộ số tiền còn nợ. Có thể nhập ít hơn để thu từng phần."
-                    />
-                  </Stack>
-                </Paper>
-              )}
-              {showMultipleFees && (
-                <>
-                  <Alert
-                    severity="info"
-                    action={<Button color="inherit" size="small" onClick={() => {
-                      const feeToKeep = selectedFee ?? fees.find((fee) => !fee.paymentAllocations?.length);
-                      setShowMultipleFees(false);
-                      setSelectedIds(feeToKeep ? [feeToKeep.id] : []);
-                    }}>Thu một khoản</Button>}
-                  >
-                    Chế độ nâng cao: chọn nhiều khoản và nhập số tiền riêng cho từng khoản.
-                  </Alert>
-                  <Stack>
-                    {fees.map((fee) => {
-                      const locked = Boolean(fee.paymentAllocations?.length);
-                      const batchNo = fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
-                      return (
-                        <Paper
-                          key={fee.id}
-                          variant="outlined"
-                          sx={{
-                            p: 1,
-                            mb: 1,
-                            borderColor: selectedIds.includes(fee.id) ? "primary.main" : undefined,
-                            opacity: locked ? 0.65 : 1,
-                          }}
-                        >
-                          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1}>
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  disabled={locked}
-                                  checked={selectedIds.includes(fee.id)}
-                                  onChange={() => {
-                                    setSelectedIds((current) => current.includes(fee.id) ? current.filter((id) => id !== fee.id) : [...current, fee.id]);
-                                    setAmounts((current) => ({ ...current, [fee.id]: current[fee.id] ?? getRemaining(fee) }));
-                                  }}
-                                />
-                              }
-                              label={
-                                <Box>
-                                  <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} alignItems={{ sm: "center" }}>
-                                    <Typography>{fee.feeNo} · {fee.class?.name || "Chưa có lớp"}</Typography>
-                                    {!locked && <Chip size="small" color={feeStatusColors[fee.status] || "warning"} label={feeStatusLabels[fee.status] || fee.status} />}
-                                  </Stack>
-                                  <Typography variant="caption" color={locked ? "warning.main" : "text.secondary"}>
-                                    {locked ? `Đang chờ thanh toán trong đợt ${batchNo}` : `Còn nợ: ${money(getRemaining(fee))}`}
-                                  </Typography>
-                                </Box>
-                              }
-                            />
-                            {!locked && selectedIds.includes(fee.id) && (
-                              <Box sx={{ width: { xs: "100%", sm: 230 }, ml: { sm: 6 } }}>
-                                <CurrencyInput
-                                  label="Số tiền lần này"
-                                  value={getAmount(fee)}
-                                  onChange={(value) => setAmounts((current) => ({ ...current, [fee.id]: value }))}
-                                  helperText={`Còn nợ: ${money(getRemaining(fee))}`}
-                                />
-                              </Box>
-                            )}
-                            {locked && fee.paymentAllocations?.[0]?.paymentBatch.id && (
-                              <Button component={Link} href={`/admin/tuition-fees/payment-history/${fee.paymentAllocations[0].paymentBatch.id}`} size="small" variant="contained" color="warning">
-                                Xử lý đợt thu
-                              </Button>
-                            )}
-                          </Stack>
-                        </Paper>
-                      );
-                    })}
-                  </Stack>
-                </>
-              )}
-              <Divider />
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", sm: "center" }}
-                gap={1}
-              >
-                <Typography>
-                  {showMultipleFees ? <>Đã chọn <strong>{selectedFees.length}</strong> khoản</> : "Khoản đang thu"}
+        <Stack spacing={2}>
+          <Paper
+            variant="outlined"
+            sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, bgcolor: "primary.50" }}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              gap={1.5}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="overline" color="primary.main" fontWeight={700}>
+                  Học viên đang thu
                 </Typography>
-                <Typography variant="h6" color="primary.main">
-                  {money(total)}
+                <Typography variant="h6" fontWeight={800} noWrap>
+                  {selectedStudent?.fullName || student?.name || "-"}
                 </Typography>
-                <Button
-                  variant="contained"
-                  onClick={() => setStep(2)}
-                  disabled={!selectedIds.length}
-                >
-                  Tiếp tục
-                </Button>
-              </Stack>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedStudent?.code || student?.code || "-"}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ArrowBackIcon />}
+                onClick={() => setStep(0)}
+                sx={{ flexShrink: 0 }}
+              >
+                Đổi học viên
+              </Button>
             </Stack>
-          </CardContent>
-        </Card>
-      )}
+          </Paper>
 
-      {step === 2 && (
-        <Card>
-          <CardContent>
-            <Stack spacing={2} maxWidth={760}>
-              <Typography variant="h6">3. Xác nhận thanh toán</Typography>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography>
-                  {selectedStudent?.code} — {selectedStudent?.fullName}
-                </Typography>
-                {selectedFees.map((fee) => (
-                  <Stack
-                    key={fee.id}
-                    direction="row"
-                    justifyContent="space-between"
-                  >
-                    <Typography variant="body2">{fee.feeNo}</Typography>
-                    <Typography variant="body2">
-                      {money(getAmount(fee))} / còn nợ {money(getRemaining(fee))}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 320px" },
+              gap: 2,
+              alignItems: "start",
+            }}
+          >
+            <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, minWidth: 0 }}>
+              <Stack spacing={2.5}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                  gap={1}
+                >
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>
+                      Khoản học phí cần thu
                     </Typography>
-                  </Stack>
-                ))}
-                <Divider sx={{ my: 1 }} />
-                <Stack direction="row" justifyContent="space-between">
-                  <Typography fontWeight={700}>Tổng thanh toán</Typography>
-                  <Typography fontWeight={700} color="primary.main">
-                    {money(total)}
-                  </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Nhập số tiền nhỏ hơn số còn nợ nếu muốn thanh toán từng phần.
+                    </Typography>
+                  </Box>
+                  {!showMultipleFees && selectedFee && (
+                    <Button size="small" variant="outlined" onClick={() => setShowMultipleFees(true)}>
+                      Thu nhiều khoản
+                    </Button>
+                  )}
                 </Stack>
-              </Paper>
-              <AppTextField
-                select
-                fullWidth
-                label="Phương thức thanh toán"
-                value={method}
-                onChange={(event) => {
-                  setMethod(event.target.value);
-                  setBankAccountError("");
-                  if (event.target.value === "CASH") {
-                    setBankAccountId("");
-                    setTransactionReference("");
-                  }
-                }}
-              >
-                <MenuItem value="CASH">Tiền mặt</MenuItem>
-                <MenuItem value="BANK_TRANSFER">Chuyển khoản / VietQR</MenuItem>
-              </AppTextField>
-              {method === "CASH" && (
-                <DatePickerField
-                  label="Ngày nhận tiền"
-                  value={cashPaymentDate}
-                  onChange={setCashPaymentDate}
-                  textFieldProps={{ required: true }}
-                />
-              )}
-              {method === "BANK_TRANSFER" && (
-                <>
-                  {bankAccountsError && (
+
+                {!showMultipleFees && selectedFee && (
+                  <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderColor: "primary.main", borderWidth: 1.5, borderRadius: 2 }}>
+                    <Stack spacing={2.25}>
+                      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Typography variant="subtitle1" fontWeight={800}>{selectedFee.feeNo}</Typography>
+                            <Chip
+                              size="small"
+                              color={feeStatusColors[selectedFee.status] || "warning"}
+                              label={feeStatusLabels[selectedFee.status] || selectedFee.status}
+                            />
+                          </Stack>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            {selectedFee.class?.name || "Chưa có lớp"}
+                            {selectedFee.dueDate
+                              ? ` · Hạn ${new Date(selectedFee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
+                              : ""}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+                          gap: 1,
+                        }}
+                      >
+                        {[
+                          ["Tổng phải thu", money(Number(selectedFee.finalAmount)), "text.primary"],
+                          ["Đã thu", money(Number(selectedFee.paidAmount ?? 0)), "text.primary"],
+                          ["Còn nợ", money(getRemaining(selectedFee)), "warning.main"],
+                        ].map(([label, value, color]) => (
+                          <Box key={label} sx={{ p: 1.25, borderRadius: 1.5, bgcolor: "action.hover" }}>
+                            <Typography variant="caption" color="text.secondary">{label}</Typography>
+                            <Typography fontWeight={800} color={color}>{value}</Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                      <CurrencyInput
+                        label="Số tiền thu lần này"
+                        value={getAmount(selectedFee)}
+                        onChange={(value) => setAmounts((current) => ({ ...current, [selectedFee.id]: value }))}
+                        helperText="Mặc định là toàn bộ số tiền còn nợ."
+                      />
+                    </Stack>
+                  </Paper>
+                )}
+
+                {showMultipleFees && (
+                  <>
                     <Alert
-                      severity="error"
+                      severity="info"
                       action={
                         <Button
                           color="inherit"
                           size="small"
-                          onClick={() => void loadBankAccounts()}
-                          disabled={bankAccountsLoading}
+                          onClick={() => {
+                            const feeToKeep = selectedFee ?? fees.find((fee) => !fee.paymentAllocations?.length);
+                            setShowMultipleFees(false);
+                            setSelectedIds(feeToKeep ? [feeToKeep.id] : []);
+                          }}
                         >
-                          Thử lại
+                          Thu một khoản
                         </Button>
                       }
                     >
-                      {bankAccountsError}
+                      Chọn nhiều khoản và nhập số tiền riêng cho từng khoản.
                     </Alert>
-                  )}
-                  <FormControl fullWidth required>
-                    <InputLabel id="bank-account-label">
-                      Tài khoản nhận tiền
-                    </InputLabel>
-                    <Select
-                      labelId="bank-account-label"
-                      label="Tài khoản nhận tiền"
-                      value={bankAccountId}
-                      onChange={(event) => {
-                        setBankAccountId(event.target.value);
-                        setBankAccountError("");
-                      }}
-                      error={Boolean(bankAccountError)}
-                    >
-                      <MenuItem value="">
-                        {bankAccountsLoading
-                          ? "Đang tải tài khoản..."
-                          : "Chọn tài khoản nhận tiền"}
-                      </MenuItem>
-                      {!bankAccountsLoading &&
-                        !bankAccountsError &&
-                        !bankAccounts.length && (
-                          <MenuItem value="" disabled>
-                            Chưa cấu hình tài khoản nhận tiền
-                          </MenuItem>
-                        )}
-                      {bankAccounts.map((account) => (
-                        <MenuItem key={account.id} value={account.id}>
-                          {account.bankName} — {account.accountNo} —{" "}
-                          {account.accountName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    <FormHelperText error={Boolean(bankAccountError)}>
-                      {bankAccountError ||
-                        "Chỉ chọn tài khoản đang hoạt động của trung tâm"}
-                    </FormHelperText>
-                  </FormControl>
-                </>
-              )}
-              <Accordion disableGutters variant="outlined">
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography>Thông tin bổ sung <Typography component="span" color="text.secondary" variant="body2">(không bắt buộc)</Typography></Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Stack spacing={2}>
-                    <AppTextField
-                      fullWidth
-                      label="Người nộp"
-                      value={payerName}
-                      onChange={(event) => setPayerName(event.target.value)}
-                    />
-                    {method === "BANK_TRANSFER" && (
-                      <AppTextField
-                        fullWidth
-                        label="Mã giao dịch (nếu có)"
-                        value={transactionReference}
-                        onChange={(event) => setTransactionReference(event.target.value)}
-                      />
-                    )}
-                  </Stack>
-                </AccordionDetails>
-              </Accordion>
-              <Stack direction="row" justifyContent="space-between">
+                    <Stack spacing={1}>
+                      {fees.map((fee) => {
+                        const locked = Boolean(fee.paymentAllocations?.length);
+                        const batchNo = fee.paymentAllocations?.[0]?.paymentBatch.batchNo;
+                        const selected = selectedIds.includes(fee.id);
+                        return (
+                          <Paper
+                            key={fee.id}
+                            variant="outlined"
+                            sx={{
+                              p: { xs: 1.25, sm: 1.5 },
+                              borderColor: selected ? "primary.main" : "divider",
+                              bgcolor: selected ? "primary.50" : "background.paper",
+                              opacity: locked ? 0.65 : 1,
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.5}>
+                              <FormControlLabel
+                                sx={{ alignItems: "flex-start", m: 0, minWidth: 0, flex: 1 }}
+                                control={
+                                  <Checkbox
+                                    sx={{ pt: 0.5 }}
+                                    disabled={locked}
+                                    checked={selected}
+                                    onChange={() => {
+                                      setSelectedIds((current) => current.includes(fee.id) ? current.filter((id) => id !== fee.id) : [...current, fee.id]);
+                                      setAmounts((current) => ({ ...current, [fee.id]: current[fee.id] ?? getRemaining(fee) }));
+                                    }}
+                                  />
+                                }
+                                label={
+                                  <Box sx={{ minWidth: 0, pt: 0.25 }}>
+                                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                                      <Typography fontWeight={700}>{fee.feeNo}</Typography>
+                                      {!locked && <Chip size="small" color={feeStatusColors[fee.status] || "warning"} label={feeStatusLabels[fee.status] || fee.status} />}
+                                    </Stack>
+                                    <Typography variant="body2" color="text.secondary" noWrap>
+                                      {fee.class?.name || "Chưa có lớp"}
+                                    </Typography>
+                                    <Typography variant="caption" color={locked ? "warning.main" : "text.secondary"}>
+                                      {locked ? `Đang chờ thanh toán trong đợt ${batchNo}` : `Còn nợ: ${money(getRemaining(fee))}`}
+                                    </Typography>
+                                  </Box>
+                                }
+                              />
+                              {!locked && selected && (
+                                <Box sx={{ width: { xs: "100%", md: 230 }, flexShrink: 0 }}>
+                                  <CurrencyInput
+                                    label="Số tiền lần này"
+                                    value={getAmount(fee)}
+                                    onChange={(value) => setAmounts((current) => ({ ...current, [fee.id]: value }))}
+                                    helperText={`Còn nợ: ${money(getRemaining(fee))}`}
+                                  />
+                                </Box>
+                              )}
+                              {locked && fee.paymentAllocations?.[0]?.paymentBatch.id && (
+                                <Button
+                                  component={Link}
+                                  href={`/admin/tuition-fees/payment-history/${fee.paymentAllocations[0].paymentBatch.id}`}
+                                  size="small"
+                                  variant="contained"
+                                  color="warning"
+                                  sx={{ alignSelf: { xs: "stretch", md: "center" }, flexShrink: 0 }}
+                                >
+                                  Xử lý đợt thu
+                                </Button>
+                              )}
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  </>
+                )}
+              </Stack>
+            </Paper>
+
+            <Paper
+              variant="outlined"
+              sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 16 } }}
+            >
+              <Typography variant="subtitle1" fontWeight={800}>
+                Tóm tắt lượt thu
+              </Typography>
+              <Stack spacing={1.25} sx={{ mt: 2 }}>
+                <Stack direction="row" justifyContent="space-between" gap={2}>
+                  <Typography variant="body2" color="text.secondary">Số khoản</Typography>
+                  <Typography fontWeight={700}>{selectedFees.length}</Typography>
+                </Stack>
+                <Stack direction="row" justifyContent="space-between" gap={2}>
+                  <Typography variant="body2" color="text.secondary">Tổng tiền lần này</Typography>
+                  <Typography variant="h6" color="primary.main" fontWeight={800}>{money(total)}</Typography>
+                </Stack>
+                <Divider />
+                <Typography variant="caption" color="text.secondary">
+                  Số tiền còn lại sau lượt thu: {money(Math.max(0, selectedFees.reduce((sum, fee) => sum + getRemaining(fee), 0) - total))}
+                </Typography>
                 <Button
-                  variant="outlined"
-                  startIcon={<ArrowBackIcon />}
-                  onClick={() => setStep(1)}
-                >
-                  Quay lại
-                </Button>
-                <Button
+                  fullWidth
                   variant="contained"
-                  onClick={requestPaymentConfirmation}
-                  disabled={loading || qrLoading}
+                  size="large"
+                  onClick={() => setStep(2)}
+                  disabled={!selectedIds.length}
+                  sx={{ mt: 0.5 }}
                 >
-                  {loading ? (
-                    <CircularProgress size={20} color="inherit" />
-                  ) : (
-                    "Xác nhận thanh toán"
-                  )}
+                  Tiếp tục chọn phương thức
                 </Button>
               </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
+            </Paper>
+          </Box>
+        </Stack>
+      )}
+
+      {step === 2 && (
+        <Stack spacing={2}>
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2 }}>
+            <Typography variant="h6" fontWeight={800}>Xác nhận thông tin thanh toán</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Kiểm tra lại số tiền và chọn phương thức trước khi ghi nhận.
+            </Typography>
+          </Paper>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 320px" },
+              gap: 2,
+              alignItems: "start",
+            }}
+          >
+            <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 2, minWidth: 0 }}>
+              <Stack spacing={2.25}>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={800}>Phương thức thanh toán</Typography>
+                  <Typography variant="body2" color="text.secondary">Chọn một phương thức để tiếp tục.</Typography>
+                </Box>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 1.25 }}>
+                  {[
+                    { value: "CASH", label: "Tiền mặt", description: "Ghi nhận hoàn tất ngay" },
+                    { value: "BANK_TRANSFER", label: "Chuyển khoản / VietQR", description: "Chờ đối soát giao dịch" },
+                  ].map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={method === option.value ? "contained" : "outlined"}
+                      onClick={() => {
+                        setMethod(option.value);
+                        setBankAccountError("");
+                        if (option.value === "CASH") {
+                          setBankAccountId("");
+                          setTransactionReference("");
+                        }
+                      }}
+                      sx={{ minHeight: 76, justifyContent: "flex-start", alignItems: "flex-start", textAlign: "left", flexDirection: "column", px: 2 }}
+                    >
+                      <Typography fontWeight={800}>{option.label}</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.8, mt: 0.25 }}>{option.description}</Typography>
+                    </Button>
+                  ))}
+                </Box>
+                {method === "CASH" && (
+                  <DatePickerField
+                    label="Ngày nhận tiền"
+                    value={cashPaymentDate}
+                    onChange={setCashPaymentDate}
+                    textFieldProps={{ required: true }}
+                  />
+                )}
+                {method === "BANK_TRANSFER" && (
+                  <>
+                    {bankAccountsError && (
+                      <Alert
+                        severity="error"
+                        action={
+                          <Button color="inherit" size="small" onClick={() => void loadBankAccounts()} disabled={bankAccountsLoading}>
+                            Thử lại
+                          </Button>
+                        }
+                      >
+                        {bankAccountsError}
+                      </Alert>
+                    )}
+                    <FormControl fullWidth required>
+                      <InputLabel id="bank-account-label">Tài khoản nhận tiền</InputLabel>
+                      <Select
+                        labelId="bank-account-label"
+                        label="Tài khoản nhận tiền"
+                        value={bankAccountId}
+                        onChange={(event) => {
+                          setBankAccountId(event.target.value);
+                          setBankAccountError("");
+                        }}
+                        error={Boolean(bankAccountError)}
+                      >
+                        <MenuItem value="">
+                          {bankAccountsLoading ? "Đang tải tài khoản..." : "Chọn tài khoản nhận tiền"}
+                        </MenuItem>
+                        {!bankAccountsLoading && !bankAccountsError && !bankAccounts.length && (
+                          <MenuItem value="" disabled>Chưa cấu hình tài khoản nhận tiền</MenuItem>
+                        )}
+                        {bankAccounts.map((account) => (
+                          <MenuItem key={account.id} value={account.id}>
+                            {account.bankName} — {account.accountNo} — {account.accountName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormHelperText error={Boolean(bankAccountError)}>
+                        {bankAccountError || "Chỉ chọn tài khoản đang hoạt động của trung tâm"}
+                      </FormHelperText>
+                    </FormControl>
+                  </>
+                )}
+                <Accordion disableGutters variant="outlined">
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>
+                      Thông tin bổ sung <Typography component="span" color="text.secondary" variant="body2">(không bắt buộc)</Typography>
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack spacing={2}>
+                      <AppTextField
+                        fullWidth
+                        label="Người nộp"
+                        value={payerName}
+                        onChange={(event) => setPayerName(event.target.value)}
+                      />
+                      {method === "BANK_TRANSFER" && (
+                        <AppTextField
+                          fullWidth
+                          label="Mã giao dịch (nếu có)"
+                          value={transactionReference}
+                          onChange={(event) => setTransactionReference(event.target.value)}
+                        />
+                      )}
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
+              </Stack>
+            </Paper>
+
+            <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderRadius: 2, position: { lg: "sticky" }, top: { lg: 16 } }}>
+              <Typography variant="subtitle1" fontWeight={800}>Tóm tắt thanh toán</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>
+                {selectedStudent?.fullName || student?.name || "-"}
+              </Typography>
+              <Stack spacing={1} sx={{ mt: 2 }}>
+                {selectedFees.map((fee) => (
+                  <Stack key={fee.id} direction="row" justifyContent="space-between" gap={1}>
+                    <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>{fee.feeNo}</Typography>
+                    <Typography variant="body2" fontWeight={700} sx={{ flexShrink: 0 }}>{money(getAmount(fee))}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+              <Divider sx={{ my: 1.5 }} />
+              <Stack direction="row" justifyContent="space-between" gap={1}>
+                <Typography fontWeight={700}>Tổng thanh toán</Typography>
+                <Typography variant="h6" color="primary.main" fontWeight={800}>{money(total)}</Typography>
+              </Stack>
+              <Stack direction="row" justifyContent="space-between" gap={1} sx={{ mt: 2 }}>
+                <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={() => setStep(1)}>
+                  Quay lại
+                </Button>
+                <Button variant="contained" onClick={requestPaymentConfirmation} disabled={loading || qrLoading}>
+                  {loading ? <CircularProgress size={20} color="inherit" /> : "Xác nhận"}
+                </Button>
+              </Stack>
+            </Paper>
+          </Box>
+        </Stack>
       )}
 
       {step === 3 && (
-        <Card>
-          <CardContent>
-            <Stack spacing={2} alignItems="center" textAlign="center">
-              <Chip
-                color={pendingBatch ? "warning" : "success"}
-                label={
-                  pendingBatch ? "Đang chờ đối soát" : "Thanh toán thành công"
-                }
-              />
-              <Typography variant="h6">
-                {pendingBatch
-                  ? `Mã đợt thanh toán: ${pendingBatch.batchNo}`
-                  : "Đã ghi nhận toàn bộ khoản đã chọn"}
+        <Paper variant="outlined" sx={{ p: { xs: 2, md: 4 }, borderRadius: 2, maxWidth: 960, width: "100%", mx: "auto" }}>
+          <Stack spacing={2.25} alignItems="center" textAlign="center">
+            <Chip color={pendingBatch ? "warning" : "success"} label={pendingBatch ? "Đang chờ đối soát" : "Thanh toán thành công"} />
+            <Box>
+              <Typography variant="h5" fontWeight={800}>
+                {pendingBatch ? `Mã đợt thanh toán: ${pendingBatch.batchNo}` : "Đã ghi nhận toàn bộ khoản đã chọn"}
               </Typography>
-              {pendingBatch && (
-                <>
-                  <Alert severity="info" sx={{ width: "100%", textAlign: "left" }}>
-                    Đây là phiếu báo thanh toán, chưa phải biên lai. Chỉ chuyển đúng số tiền và nội dung bên dưới.
-                  </Alert>
-                  <Paper variant="outlined" sx={{ width: "100%", p: 2, textAlign: "left" }}>
-                    <Stack spacing={0.75}>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                {pendingBatch ? "Hoàn tất chuyển khoản để hệ thống đối soát và phát hành biên lai." : "Giao dịch đã hoàn tất và có thể xuất biên lai."}
+              </Typography>
+            </Box>
+            {pendingBatch && (
+              <Stack spacing={2} sx={{ width: "100%" }}>
+                <Alert severity="info" sx={{ textAlign: "left" }}>
+                  Đây là phiếu báo thanh toán, chưa phải biên lai. Chỉ chuyển đúng số tiền và nội dung bên dưới.
+                </Alert>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 280px" }, gap: 2, alignItems: "start" }}>
+                  <Paper variant="outlined" sx={{ p: 2, textAlign: "left", minWidth: 0 }}>
+                    <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Thông tin chuyển khoản</Typography>
+                    <Stack spacing={1}>
                       <Typography><strong>Ngân hàng:</strong> {pendingBatch.account.bankName || "-"}</Typography>
                       <Typography><strong>Số tài khoản:</strong> {pendingBatch.account.accountNo || "-"}</Typography>
                       <Typography><strong>Chủ tài khoản:</strong> {pendingBatch.account.accountName || "-"}</Typography>
                       <Typography><strong>Số tiền:</strong> {money(pendingBatch.amount)}</Typography>
-                      <Typography sx={{ overflowWrap: "anywhere" }}>
-                        <strong>Nội dung chuyển khoản:</strong> PB {pendingBatch.batchNo}
-                      </Typography>
+                      <Typography sx={{ overflowWrap: "anywhere" }}><strong>Nội dung:</strong> PB {pendingBatch.batchNo}</Typography>
                     </Stack>
                   </Paper>
-                  {qrError && (
-                    <Alert
-                      severity="error"
-                      sx={{ width: "100%" }}
-                      action={
-                        <Button
-                          color="inherit"
-                          size="small"
-                          onClick={() => void loadPendingQr(pendingBatch)}
-                          disabled={qrLoading}
-                        >
-                          Thử lại
-                        </Button>
-                      }
-                    >
-                      {qrError}
-                    </Alert>
-                  )}
-                  {qrLoading ? (
-                    <Stack alignItems="center" spacing={1} sx={{ py: 3 }}>
-                      <CircularProgress />
-                      <Typography color="text.secondary">Đang tạo QR thanh toán...</Typography>
-                    </Stack>
-                  ) : pendingBatch.qrUrl ? (
-                    <Box
-                      component="img"
-                      src={pendingBatch.qrUrl}
-                      alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`}
-                      sx={{ width: 260, height: 260, border: "1px solid", borderColor: "divider" }}
-                    />
-                  ) : null}
-                  <Typography variant="body2" color="text.secondary">
-                    Nếu số tiền hoặc khoản phí thay đổi, hãy tạo lại đợt thanh toán và QR mới.
-                  </Typography>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<ContentCopyOutlinedIcon />}
-                      onClick={() => void copyTransferContent()}
-                    >
-                      Sao chép nội dung
-                    </Button>
-                    {pendingBatch.qrUrl && (
-                      <Button
-                        component="a"
-                        href={pendingBatch.qrUrl}
-                        download={`qr-${pendingBatch.batchNo}.png`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        variant="outlined"
-                        startIcon={<DownloadOutlinedIcon />}
-                      >
-                        Tải QR
-                      </Button>
+                  <Paper variant="outlined" sx={{ p: 1.5, display: "grid", placeItems: "center", minHeight: 280 }}>
+                    {qrError && (
+                      <Alert severity="error" sx={{ width: "100%" }} action={<Button color="inherit" size="small" onClick={() => void loadPendingQr(pendingBatch)} disabled={qrLoading}>Thử lại</Button>}>
+                        {qrError}
+                      </Alert>
                     )}
-                    <Button
-                      variant="outlined"
-                      href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`}
-                      startIcon={<DownloadOutlinedIcon />}
-                    >
-                      Tải thông báo PDF
-                    </Button>
-                    <Button
-                      variant="contained"
-                      href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      startIcon={<PrintOutlinedIcon />}
-                    >
-                      Mở để in
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      color="warning"
-                      onClick={() => {
-                        setCashPaymentDate(getVietnamDate());
-                        setCashNote("");
-                        setCashDialogOpen(true);
-                      }}
-                    >
-                      Đổi sang tiền mặt
-                    </Button>
-                  </Stack>
-                </>
-              )}
-              {receiptId && (
-                <Button
-                  variant="outlined"
-                  onClick={() =>
-                    window.open(
-                      `/api/payment-batch-receipts/${receiptId}/pdf`,
-                      "_blank",
-                      "noopener,noreferrer",
-                    )
-                  }
-                >
-                  Xuất biên lai tổng
-                </Button>
-              )}
-              {!pendingBatch && (
-                <Alert severity="success" sx={{ width: "100%", textAlign: "left" }}>
-                  Thanh toán đã hoàn tất và biên lai đã được phát hành. Vui lòng xuất hoặc in biên lai để lưu hồ sơ.
-                </Alert>
-              )}
-              {!pendingBatch && (
-                <Button variant="contained" onClick={continueWithSameStudent}>Thu tiếp cho học sinh này</Button>
-              )}
-              <Button variant="outlined" onClick={reset}>Thu học phí cho học sinh khác</Button>
+                    {qrLoading ? (
+                      <Stack alignItems="center" spacing={1} sx={{ py: 3 }}>
+                        <CircularProgress />
+                        <Typography color="text.secondary">Đang tạo QR...</Typography>
+                      </Stack>
+                    ) : pendingBatch.qrUrl ? (
+                      <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 250, height: 250, maxWidth: "100%", border: "1px solid", borderColor: "divider" }} />
+                    ) : null}
+                  </Paper>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Nếu số tiền hoặc khoản phí thay đổi, hãy tạo lại đợt thanh toán và QR mới.
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
+                  <Button variant="outlined" startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copyTransferContent()}>Sao chép nội dung</Button>
+                  {pendingBatch.qrUrl && (
+                    <Button component="a" href={pendingBatch.qrUrl} download={`qr-${pendingBatch.batchNo}.png`} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải QR</Button>
+                  )}
+                  <Button variant="outlined" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} startIcon={<DownloadOutlinedIcon />}>Tải thông báo PDF</Button>
+                  <Button variant="contained" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer" startIcon={<PrintOutlinedIcon />}>Mở để in</Button>
+                  <Button variant="outlined" color="warning" onClick={() => { setCashPaymentDate(getVietnamDate()); setCashNote(""); setCashDialogOpen(true); }}>Đổi sang tiền mặt</Button>
+                </Stack>
+              </Stack>
+            )}
+            {receiptId && (
+              <Button
+                variant="outlined"
+                onClick={() => window.open(`/api/payment-batch-receipts/${receiptId}/pdf`, "_blank", "noopener,noreferrer")}
+              >
+                Xuất biên lai tổng
+              </Button>
+            )}
+            {!pendingBatch && (
+              <Alert severity="success" sx={{ width: "100%", textAlign: "left" }}>
+                Thanh toán đã hoàn tất và biên lai đã được phát hành. Vui lòng xuất hoặc in biên lai để lưu hồ sơ.
+              </Alert>
+            )}
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" sx={{ width: "100%" }}>
+              {!pendingBatch && <Button variant="contained" onClick={continueWithSameStudent}>Thu tiếp cho học viên này</Button>}
+              <Button variant="outlined" onClick={reset}>Thu học phí cho học viên khác</Button>
             </Stack>
-          </CardContent>
-        </Card>
+          </Stack>
+        </Paper>
       )}
       <StudentSelectDialog
         open={studentDialog.open}

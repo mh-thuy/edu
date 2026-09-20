@@ -2,7 +2,7 @@
 
 import type { ReactElement } from "react";
 import { type GridColDef } from "@mui/x-data-grid";
-import { Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { BaseSelectDialog } from "@/components/shared/dialogs/BaseSelectDialog";
 
 export interface StudentItem {
@@ -38,14 +38,25 @@ export function StudentSelectDialog({
       flex: 1,
       minWidth: 220,
       renderCell: (params) => (
-        <Typography
-          variant="body2"
-          color={params.value ? "text.primary" : "text.disabled"}
-          noWrap
-          title={params.value || "Chưa xếp lớp"}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            width: "100%",
+            height: "100%",
+            minWidth: 0,
+          }}
         >
-          {params.value || "Chưa xếp lớp"}
-        </Typography>
+          <Typography
+            variant="body2"
+            color={params.value ? "text.primary" : "text.disabled"}
+            noWrap
+            title={params.value || "Chưa xếp lớp"}
+            sx={{ minWidth: 0, width: "100%" }}
+          >
+            {params.value || "Chưa xếp lớp"}
+          </Typography>
+        </Box>
       ),
     },
     {
