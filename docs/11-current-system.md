@@ -45,6 +45,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 ## Thanh toán và đối soát
 
 - Chỉ có hai phương thức: `CASH` và `BANK_TRANSFER`; không hỗ trợ thanh toán từng phần.
+- Thanh toán tiền mặt bắt buộc nhập `paymentDate` là ngày nhận tiền; khi đổi batch chuyển khoản đang chờ sang tiền mặt cũng bắt buộc nhập ngày nhận. Chuyển khoản lấy ngày thực tế từ sao kê khi đối soát.
 - Batch `BANK_TRANSFER` bắt buộc gắn đúng một tài khoản ngân hàng nhận tiền.
 - Đối soát chỉ chọn batch `BANK_TRANSFER` đang `PENDING`, cùng tài khoản và đúng tổng tiền.
 - QR được sinh động theo payment batch, không lưu lịch sử QR.

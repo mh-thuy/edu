@@ -101,7 +101,7 @@ async function generateTuitionReceiptPdfWithClient(
   draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
   draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
   draw(
-    `Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    `Ngày thu: ${receipt.payment.paymentDate.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
     55,
     708,
   );

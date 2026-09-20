@@ -588,6 +588,22 @@ Không cho method khác.
 
 ---
 
+## 11.2.1 Ngày nhận tiền
+
+Thanh toán `CASH` bắt buộc nhập ngày nhận tiền. Ngày này được lưu vào
+`paymentDate` của payment và payment batch, đồng thời được dùng trong báo cáo
+thu học phí theo ngày và hiển thị là ngày thu trên biên lai.
+
+Khi chuyển một batch `BANK_TRANSFER` đang `PENDING` sang `CASH`, người dùng
+cũng phải nhập ngày nhận tiền mặt. Ngày tạo phiếu báo vẫn giữ nguyên; ngày nhận
+tiền mặt là ngày được dùng để ghi nhận thanh toán.
+
+Thanh toán `BANK_TRANSFER` không nhập ngày nhận ở màn hình thu tiền; ngày thanh
+toán được lấy từ ngày giao dịch trong sao kê khi đối soát.
+
+Khi chuyển batch sang tiền mặt, ghi chú là tùy chọn và được lưu vào nội dung
+thanh toán của batch và payment.
+
 ## 11.3 Payment Uniqueness
 
 ```text

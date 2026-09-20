@@ -115,7 +115,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
   draw(`Mã thanh toán: ${receipt.paymentBatch.batchNo}`, 55, 708);
   draw(
-    `Ngày thu: ${receipt.issuedAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    `Ngày thu: ${receipt.paymentBatch.paymentDate.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
     55,
     686,
   );

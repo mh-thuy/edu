@@ -25,7 +25,9 @@ import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { getVietnamDate } from "@/lib/vietnam-time";
 
 type Batch = {
   id: string;
@@ -99,6 +101,8 @@ export function PaymentBatchDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cashDialogOpen, setCashDialogOpen] = useState(false);
+  const [cashPaymentDate, setCashPaymentDate] = useState(() => getVietnamDate());
+  const [cashNote, setCashNote] = useState("");
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -131,6 +135,8 @@ export function PaymentBatchDetail({ id }: { id: string }) {
     try {
       const response = await fetch(`/api/payment-batches/${id}/cash`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentDate: cashPaymentDate, note: cashNote || undefined }),
       });
       if (!response.ok)
         throw new Error(
@@ -249,7 +255,11 @@ export function PaymentBatchDetail({ id }: { id: string }) {
                       <Button
                         variant="outlined"
                         color="warning"
-                        onClick={() => setCashDialogOpen(true)}
+                        onClick={() => {
+                          setCashPaymentDate(getVietnamDate());
+                          setCashNote("");
+                          setCashDialogOpen(true);
+                        }}
                       >
                         Chuyển sang tiền mặt
                       </Button>
@@ -424,6 +434,25 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         open={cashDialogOpen}
         title="Chuyển sang thanh toán tiền mặt"
         message={`Xác nhận đã nhận ${money(batch.totalAmount)} tiền mặt từ ${batch.student.fullName}? Hệ thống sẽ hoàn tất thanh toán và phát hành biên lai.`}
+        content={
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <DatePickerField
+              label="Ngày nhận tiền"
+              value={cashPaymentDate}
+              onChange={setCashPaymentDate}
+              textFieldProps={{ required: true }}
+            />
+            <AppTextField
+              fullWidth
+              multiline
+              minRows={2}
+              label="Ghi chú (nếu có)"
+              value={cashNote}
+              onChange={(event) => setCashNote(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          </Stack>
+        }
         confirmLabel="Xác nhận tiền mặt"
         cancelLabel="Quay lại"
         confirmColor="warning"

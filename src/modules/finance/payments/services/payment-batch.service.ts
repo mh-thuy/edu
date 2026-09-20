@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
+import { parseVietnamDateStart } from "@/lib/vietnam-time";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
 import {
@@ -17,6 +18,13 @@ import {
   toFeeSnapshot,
   type DocumentSnapshot,
 } from "./payment-document-snapshot";
+
+function parsePaymentDate(value?: string): Date | undefined {
+  if (!value) return undefined;
+  const parsed = parseVietnamDateStart(value);
+  if (!parsed) throw new ConflictError("Ngày nhận không hợp lệ");
+  return parsed;
+}
 
 async function generateBatchNo(tx: Prisma.TransactionClient) {
   const prefix = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
@@ -330,6 +338,13 @@ export async function createPaymentBatch(
   auditContext?: AuditContext,
 ) {
   const execute = async (tx: Prisma.TransactionClient) => {
+    if (data.paymentMethod === "CASH" && !data.paymentDate) {
+      throw new ConflictError("Ngày nhận tiền mặt là bắt buộc");
+    }
+    if (data.paymentMethod === "BANK_TRANSFER" && data.paymentDate) {
+      throw new ConflictError("Ngày chuyển khoản được lấy từ sao kê khi đối soát");
+    }
+    const requestedPaymentDate = parsePaymentDate(data.paymentDate);
     const feeRefs = await tx.tuitionFee.findMany({
       where: { id: { in: data.tuitionFeeIds } },
       select: { id: true, studentId: true },
@@ -460,6 +475,7 @@ export async function createPaymentBatch(
         totalAmount,
         paymentMethod: data.paymentMethod,
         status: PaymentBatchStatus.PENDING,
+        paymentDate: requestedPaymentDate,
         bankAccountId: data.paymentMethod === "BANK_TRANSFER" ? data.bankAccountId : undefined,
         transactionReference: data.transactionReference,
         payerName: data.payerName,
@@ -500,7 +516,9 @@ export async function createPaymentBatch(
       },
     });
     if (data.paymentMethod === "CASH")
-      return completePaymentBatch(tx, batch.id, actorId, undefined, auditContext);
+    return completePaymentBatch(tx, batch.id, actorId, {
+      paymentDate: requestedPaymentDate,
+    }, auditContext);
     return batch;
   };
   return transaction ? execute(transaction) : prisma.$transaction(execute);
@@ -689,8 +707,13 @@ export async function cancelPaymentBatch(
 export async function convertPaymentBatchToCash(
   batchId: string,
   actorId: string,
+  paymentDate: string,
+  note: string | undefined,
   auditContext?: AuditContext,
 ) {
+  const cashPaymentDate = parsePaymentDate(paymentDate);
+  if (!cashPaymentDate) throw new ConflictError("Ngày nhận tiền mặt là bắt buộc");
+  const cashPaymentNote = note?.trim() || "Thanh toán tiền mặt";
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
@@ -725,14 +748,18 @@ export async function convertPaymentBatchToCash(
         entityId: batchId,
         action: "UPDATE",
         dataBefore: { paymentMethod: batch.paymentMethod },
-        dataAfter: { paymentMethod: "CASH", reason: "Chuyển sang thanh toán tiền mặt" },
+        dataAfter: {
+          paymentMethod: "CASH",
+          paymentContent: cashPaymentNote,
+          reason: "Chuyển sang thanh toán tiền mặt",
+        },
         performedBy: actorId,
         ...auditFields(auditContext),
       },
     });
     return completePaymentBatch(tx, batchId, actorId, {
-      paymentDate: new Date(),
-      paymentContent: "Thanh toán tiền mặt",
+      paymentDate: cashPaymentDate,
+      paymentContent: cashPaymentNote,
     }, auditContext);
   });
 }

@@ -37,7 +37,9 @@ import {
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { getVietnamDate } from "@/lib/vietnam-time";
 
 type Batch = {
   id: string;
@@ -89,6 +91,8 @@ export function PaymentBatchHistory() {
   const [cancelTarget, setCancelTarget] = useState<Batch | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [cashTarget, setCashTarget] = useState<Batch | null>(null);
+  const [cashPaymentDate, setCashPaymentDate] = useState(() => getVietnamDate());
+  const [cashNote, setCashNote] = useState("");
   const [convertingCash, setConvertingCash] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState("");
@@ -195,10 +199,16 @@ export function PaymentBatchHistory() {
 
   async function convertToCash() {
     if (!cashTarget) return;
+    if (!cashPaymentDate) {
+      setError("Ngày nhận tiền mặt là bắt buộc");
+      return;
+    }
     setConvertingCash(true);
     try {
       const response = await fetch(`/api/payment-batches/${cashTarget.id}/cash`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentDate: cashPaymentDate, note: cashNote || undefined }),
       });
       if (!response.ok)
         throw new Error(
@@ -456,7 +466,11 @@ export function PaymentBatchHistory() {
                                     size="small"
                                     color="warning"
                                     variant="outlined"
-                                    onClick={() => setCashTarget(batch)}
+                                    onClick={() => {
+                                      setCashPaymentDate(getVietnamDate());
+                                      setCashNote("");
+                                      setCashTarget(batch);
+                                    }}
                                   >
                                     Chuyển sang tiền mặt
                                   </Button>
@@ -569,6 +583,25 @@ export function PaymentBatchHistory() {
           cashTarget
             ? `Xác nhận đã nhận ${money(Number(cashTarget.totalAmount))} tiền mặt từ ${cashTarget.student.fullName}? Hệ thống sẽ hoàn tất thanh toán và phát hành biên lai.`
             : ""
+        }
+        content={
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <DatePickerField
+              label="Ngày nhận tiền"
+              value={cashPaymentDate}
+              onChange={setCashPaymentDate}
+              textFieldProps={{ required: true }}
+            />
+            <AppTextField
+              fullWidth
+              multiline
+              minRows={2}
+              label="Ghi chú (nếu có)"
+              value={cashNote}
+              onChange={(event) => setCashNote(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          </Stack>
         }
         confirmLabel="Xác nhận tiền mặt"
         cancelLabel="Quay lại"

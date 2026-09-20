@@ -40,9 +40,11 @@ import {
   type StudentItem,
 } from "@/components/shared/dialogs/StudentSelectDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { getVietnamDate } from "@/lib/vietnam-time";
 
 type Fee = {
   id: string;
@@ -102,6 +104,8 @@ export function TuitionPaymentWorkspace({
   const [bankAccountError, setBankAccountError] = useState("");
   const [pendingBatch, setPendingBatch] = useState<PendingBatch | null>(null);
   const [cashDialogOpen, setCashDialogOpen] = useState(false);
+  const [cashPaymentDate, setCashPaymentDate] = useState(() => getVietnamDate());
+  const [cashNote, setCashNote] = useState("");
   const [qrLoading, setQrLoading] = useState(false);
   const [qrError, setQrError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -341,6 +345,7 @@ export function TuitionPaymentWorkspace({
         body: JSON.stringify({
           tuitionFeeIds: selectedIds,
           paymentMethod: method,
+          paymentDate: method === "CASH" ? cashPaymentDate : undefined,
           bankAccountId: method === "BANK_TRANSFER" ? bankAccountId : undefined,
           payerName: payerName || undefined,
           transactionReference:
@@ -404,11 +409,17 @@ export function TuitionPaymentWorkspace({
 
   async function convertPendingBatchToCash() {
     if (!pendingBatch) return;
+    if (!cashPaymentDate) {
+      setError("Ngày nhận tiền mặt là bắt buộc");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const response = await fetch(`/api/payment-batches/${pendingBatch.id}/cash`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentDate: cashPaymentDate, note: cashNote || undefined }),
       });
       if (!response.ok)
         throw new Error(
@@ -446,6 +457,8 @@ export function TuitionPaymentWorkspace({
     setReceiptId(null);
     setError("");
     setMethod("CASH");
+    setCashPaymentDate(getVietnamDate());
+    setCashNote("");
     setPayerName("");
     setTransactionReference("");
     setBankAccountId("");
@@ -471,6 +484,10 @@ export function TuitionPaymentWorkspace({
     }
     if (method === "BANK_TRANSFER" && !bankAccountId) {
       setBankAccountError("Hãy chọn tài khoản nhận tiền");
+      return;
+    }
+    if (method === "CASH" && !cashPaymentDate) {
+      setError("Ngày nhận tiền mặt là bắt buộc");
       return;
     }
     setBankAccountError("");
@@ -730,6 +747,14 @@ export function TuitionPaymentWorkspace({
                 <MenuItem value="CASH">Tiền mặt</MenuItem>
                 <MenuItem value="BANK_TRANSFER">Chuyển khoản / VietQR</MenuItem>
               </AppTextField>
+              {method === "CASH" && (
+                <DatePickerField
+                  label="Ngày nhận tiền"
+                  value={cashPaymentDate}
+                  onChange={setCashPaymentDate}
+                  textFieldProps={{ required: true }}
+                />
+              )}
               {method === "BANK_TRANSFER" && (
                 <>
                   {bankAccountsError && (
@@ -933,7 +958,11 @@ export function TuitionPaymentWorkspace({
                     <Button
                       variant="outlined"
                       color="warning"
-                      onClick={() => setCashDialogOpen(true)}
+                      onClick={() => {
+                        setCashPaymentDate(getVietnamDate());
+                        setCashNote("");
+                        setCashDialogOpen(true);
+                      }}
                     >
                       Đổi sang tiền mặt
                     </Button>
@@ -987,6 +1016,11 @@ export function TuitionPaymentWorkspace({
             <Typography variant="body2">
               Phương thức: <strong>{method === "CASH" ? "Tiền mặt" : "Chuyển khoản / VietQR"}</strong>
             </Typography>
+            {method === "CASH" && (
+              <Typography variant="body2">
+                Ngày nhận tiền: <strong>{cashPaymentDate || "-"}</strong>
+              </Typography>
+            )}
           </Stack>
         }
         onConfirm={() => void submitPayment()}
@@ -1003,6 +1037,25 @@ export function TuitionPaymentWorkspace({
           pendingBatch
             ? `Xác nhận đã nhận ${money(pendingBatch.amount)} tiền mặt từ ${selectedStudent?.fullName || "học viên"}? Hệ thống sẽ hoàn tất toàn bộ đợt ${pendingBatch.batchNo} và phát hành biên lai.`
             : ""
+        }
+        content={
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <DatePickerField
+              label="Ngày nhận tiền"
+              value={cashPaymentDate}
+              onChange={setCashPaymentDate}
+              textFieldProps={{ required: true }}
+            />
+            <AppTextField
+              fullWidth
+              multiline
+              minRows={2}
+              label="Ghi chú (nếu có)"
+              value={cashNote}
+              onChange={(event) => setCashNote(event.target.value)}
+              inputProps={{ maxLength: 1000 }}
+            />
+          </Stack>
         }
         onConfirm={() => void convertPendingBatchToCash()}
         onCancel={() => setCashDialogOpen(false)}

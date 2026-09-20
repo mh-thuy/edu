@@ -766,6 +766,38 @@ màn hình thu học phí và chọn `CASH`.
 
 ---
 
+## 19.1.6 Ngày nhận khi thanh toán tiền mặt
+
+Khi gọi `POST /api/payment-batches`, nếu `paymentMethod` là `CASH`, body bắt
+buộc có `paymentDate` dạng `YYYY-MM-DD`:
+
+```json
+{
+  "tuitionFeeIds": ["uuid"],
+  "paymentMethod": "CASH",
+  "paymentDate": "2026-09-20"
+}
+```
+
+Khi chuyển batch chuyển khoản đang chờ sang tiền mặt:
+
+```http
+POST /api/payment-batches/{batchId}/cash
+```
+
+Body bắt buộc:
+
+```json
+{
+  "paymentDate": "2026-09-20",
+  "note": "Đã nhận tiền mặt tại quầy"
+}
+```
+
+Ngày này được lưu cho payment, payment batch và dùng trong báo cáo. Batch
+`BANK_TRANSFER` lấy ngày thanh toán từ sao kê khi đối soát, không từ body tạo
+phiếu báo. `note` là tùy chọn và được lưu là nội dung thanh toán.
+
 # 19.2 Refund APIs
 
 Tạo yêu cầu hoàn tiền toàn bộ:
