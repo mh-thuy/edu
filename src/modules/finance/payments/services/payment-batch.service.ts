@@ -80,6 +80,7 @@ async function findIdempotentBatch(
         include: {
           allocations: { include: { tuitionFee: true } },
           student: true,
+          receipt: true,
         },
       })
     : null;
@@ -222,6 +223,11 @@ export async function completePaymentBatch(
     )
       throw new ConflictError(
         `Học phí ${fee.feeNo} không còn đủ điều kiện thanh toán`,
+        fee.status === TuitionFeeStatus.CANCELLED
+          ? "TUITION_CANCELLED"
+          : fee.status === TuitionFeeStatus.EXEMPTED
+            ? "TUITION_EXEMPTED"
+            : undefined,
       );
     if (!allocation.amount.greaterThan(0))
       throw new ConflictError(
@@ -529,6 +535,11 @@ export async function createPaymentBatch(
     )
       throw new ConflictError(
         "Danh sách có học phí không còn đủ điều kiện thanh toán",
+        fees.some((fee) => fee.status === TuitionFeeStatus.CANCELLED)
+          ? "TUITION_CANCELLED"
+          : fees.some((fee) => fee.status === TuitionFeeStatus.EXEMPTED)
+            ? "TUITION_EXEMPTED"
+            : undefined,
       );
     if (fees.some((fee) => !fee.finalAmount.greaterThan(0)))
       throw new ConflictError("Học phí phải có số tiền lớn hơn 0");

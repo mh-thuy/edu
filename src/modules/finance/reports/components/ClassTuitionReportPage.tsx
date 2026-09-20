@@ -137,6 +137,7 @@ export function ClassTuitionReportPage() {
               label="Lớp học"
               value={selectedClass ? { id: selectedClass.id, code: selectedClass.code, name: selectedClass.name } : null}
               onOpen={() => setClassDialogOpen(true)}
+              size="small"
               required
             />
             <FormControl fullWidth disabled={!selectedClass || loadingClass}>
@@ -155,12 +156,12 @@ export function ClassTuitionReportPage() {
                 ))}
               </Select>
             </FormControl>
-            <MasterSelectField label="Giáo viên phụ trách" value={teacher} onOpen={() => undefined} disabled />
+            <MasterSelectField label="Giáo viên phụ trách" value={teacher} onOpen={() => undefined} size="small" disabled />
             <MonthPickerField
               label="Kỳ báo cáo"
               value={month}
               onChange={setMonth}
-              textFieldProps={{ required: true }}
+              textFieldProps={{ required: true, size: "small" }}
             />
           </Box>
 

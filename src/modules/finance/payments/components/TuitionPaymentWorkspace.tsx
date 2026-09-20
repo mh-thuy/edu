@@ -92,6 +92,7 @@ const feeStatusColors: Record<string, "warning" | "error" | "info"> = {
 };
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
+const paymentAttemptStoragePrefix = "edu:payment-attempt:";
 
 export function TuitionPaymentWorkspace({
   initialTuitionFeeId,
@@ -124,6 +125,7 @@ export function TuitionPaymentWorkspace({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const paymentIdempotencyKeyRef = useRef<string | null>(null);
+  const paymentAttemptFingerprintRef = useRef<string | null>(null);
   const studentDialog = useDisclosure();
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const selectedFees = fees.filter((fee) => selectedIds.includes(fee.id));
@@ -365,8 +367,41 @@ export function TuitionPaymentWorkspace({
     setError("");
     let response: Response | null = null;
     try {
-      const idempotencyKey = paymentIdempotencyKeyRef.current ?? crypto.randomUUID();
+      const requestPayload = {
+        tuitionFeeIds: [...selectedIds].sort(),
+        amounts: Object.fromEntries(
+          Object.entries(
+            Object.fromEntries(selectedFees.map((fee) => [fee.id, getAmount(fee)])),
+          ).sort(([left], [right]) => left.localeCompare(right)),
+        ),
+        paymentMethod: method,
+        paymentDate: method === "CASH" ? cashPaymentDate : undefined,
+        bankAccountId: method === "BANK_TRANSFER" ? bankAccountId : undefined,
+        payerName: payerName || undefined,
+        transactionReference:
+          method === "BANK_TRANSFER" ? transactionReference || undefined : undefined,
+        note: method === "CASH" ? cashNote || undefined : undefined,
+      };
+      const requestFingerprint = JSON.stringify(requestPayload);
+      if (paymentAttemptFingerprintRef.current !== requestFingerprint) {
+        paymentIdempotencyKeyRef.current = null;
+        paymentAttemptFingerprintRef.current = requestFingerprint;
+      }
+      const storageKey = `${paymentAttemptStoragePrefix}${requestFingerprint}`;
+      let storedKey: string | null = null;
+      try {
+        storedKey = window.sessionStorage.getItem(storageKey);
+      } catch {
+        storedKey = null;
+      }
+      const idempotencyKey =
+        paymentIdempotencyKeyRef.current ?? storedKey ?? crypto.randomUUID();
       paymentIdempotencyKeyRef.current = idempotencyKey;
+      try {
+        window.sessionStorage.setItem(storageKey, idempotencyKey);
+      } catch {
+        // Session storage can be unavailable in privacy-restricted browsers.
+      }
       response = await fetch("/api/payment-batches", {
         method: "POST",
         headers: {
@@ -374,15 +409,8 @@ export function TuitionPaymentWorkspace({
           "Idempotency-Key": idempotencyKey,
         },
         body: JSON.stringify({
-          tuitionFeeIds: selectedIds,
+          ...requestPayload,
           idempotencyKey,
-          amounts: Object.fromEntries(selectedFees.map((fee) => [fee.id, getAmount(fee)])),
-          paymentMethod: method,
-          paymentDate: method === "CASH" ? cashPaymentDate : undefined,
-          bankAccountId: method === "BANK_TRANSFER" ? bankAccountId : undefined,
-          payerName: payerName || undefined,
-          transactionReference:
-            method === "BANK_TRANSFER" ? transactionReference || undefined : undefined,
         }),
       });
       if (!response.ok) {
@@ -390,7 +418,7 @@ export function TuitionPaymentWorkspace({
         // the transaction before the response was lost. Clear it only for a
         // definitive client/domain rejection so the user can submit a new payload.
         if (response.status < 500 && response.status !== 408 && response.status !== 429) {
-          paymentIdempotencyKeyRef.current = null;
+          clearPaymentAttempt(storageKey);
         }
         throw new Error(
           await extractApiErrorMessage(response, "Không thể tạo thanh toán"),
@@ -404,7 +432,7 @@ export function TuitionPaymentWorkspace({
         receipt?: { id: string } | null;
       }>(response);
       if (batch.status === "SUCCESS") {
-        paymentIdempotencyKeyRef.current = null;
+        clearPaymentAttempt(storageKey);
         setReceiptId(batch.receipt?.id || null);
         setStep(3);
         showSuccess("Đã ghi nhận thanh toán và phát hành biên lai");
@@ -438,7 +466,7 @@ export function TuitionPaymentWorkspace({
             accountName: "",
         },
       });
-      paymentIdempotencyKeyRef.current = null;
+      clearPaymentAttempt(storageKey);
       showSuccess("Đã tạo đợt chuyển khoản. Chờ đối soát sau khi nhận tiền");
     } catch (reason) {
       setError(
@@ -446,6 +474,17 @@ export function TuitionPaymentWorkspace({
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  function clearPaymentAttempt(storageKey?: string) {
+    paymentIdempotencyKeyRef.current = null;
+    paymentAttemptFingerprintRef.current = null;
+    if (!storageKey) return;
+    try {
+      window.sessionStorage.removeItem(storageKey);
+    } catch {
+      // Session storage can be unavailable in privacy-restricted browsers.
     }
   }
 
@@ -490,7 +529,7 @@ export function TuitionPaymentWorkspace({
   }
 
   function reset() {
-    paymentIdempotencyKeyRef.current = null;
+    clearPaymentAttempt();
     setStep(0);
     setStudent(null);
     setStudentCode("");
@@ -512,7 +551,7 @@ export function TuitionPaymentWorkspace({
   }
 
   function continueWithSameStudent() {
-    paymentIdempotencyKeyRef.current = null;
+    clearPaymentAttempt();
     setStep(0);
     setFees([]);
     setSelectedIds([]);
@@ -527,7 +566,7 @@ export function TuitionPaymentWorkspace({
     void lookupStudent();
   }
   function selectStudent(item: StudentItem) {
-    paymentIdempotencyKeyRef.current = null;
+    clearPaymentAttempt();
     setStudent({ id: item.id, code: item.code, name: item.fullName });
     setStudentCode(item.code);
     setFees([]);

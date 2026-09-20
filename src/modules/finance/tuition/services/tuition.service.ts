@@ -12,7 +12,11 @@ import type {
   TuitionFeeStatusUpdate,
   TuitionFeeUpdate,
 } from "@/modules/finance/tuition/schemas/tuition.schema";
-import { getEffectiveTuitionFeeStatus, PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
+import {
+  getEffectiveTuitionFeeStatus,
+  getStoredTuitionFeeStatus,
+  PARTIAL_FEE_STATUS,
+} from "@/modules/finance/tuition/utils/tuition-status";
 import { getVietnamDayStart } from "@/lib/vietnam-time";
 
 const feeInclude = {
@@ -274,7 +278,7 @@ export class TuitionService {
           items: { select: { classSubjectId: true } },
           payments: {
             where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
-            select: { id: true },
+            select: { amount: true },
           },
           paymentAllocations: {
             where: { paymentBatch: { status: PaymentBatchStatus.PENDING } },
@@ -304,14 +308,14 @@ export class TuitionService {
 
       if (
         existingFee &&
-        (existingFee.payments.length > 0 ||
-          existingFee.paymentAllocations.length > 0 ||
-          existingFee.status === TuitionFeeStatus.PAID ||
+        (existingFee.paymentAllocations.length > 0 ||
           existingFee.status === TuitionFeeStatus.EXEMPTED ||
           existingFee.status === TuitionFeeStatus.CANCELLED)
       ) {
         throw new ConflictError(
-          "Không thể bổ sung môn vào học phí tháng đã có thanh toán hoặc đang chờ thanh toán",
+          existingFee.paymentAllocations.length > 0
+            ? "Không thể bổ sung môn vào học phí tháng đang chờ thanh toán"
+            : "Không thể bổ sung môn vào học phí đã được miễn hoặc hủy",
         );
       }
 
@@ -343,6 +347,13 @@ export class TuitionService {
             data: {
               originalAmount: { increment: originalAmount },
               finalAmount: { increment: originalAmount },
+              status: getStoredTuitionFeeStatus(
+                existingFee.finalAmount.add(originalAmount),
+                existingFee.payments.reduce(
+                  (total, payment) => total.add(payment.amount),
+                  new Prisma.Decimal(0),
+                ),
+              ),
               version: { increment: 1 },
               updatedBy: actorId,
             },
