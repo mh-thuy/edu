@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
   Button,
+  Chip,
   FormControl,
   InputLabel,
   MenuItem,
@@ -14,6 +15,10 @@ import {
   Typography,
 } from "@mui/material";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
@@ -100,23 +105,33 @@ export function ClassTuitionReportPage() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} alignItems={{ md: "center" }}>
-          <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "flex-end" }} gap={2}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 2.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}>
             <AssessmentOutlinedIcon />
           </Box>
           <Box>
-            <Typography variant="h6" fontWeight={700}>Báo cáo thu học phí</Typography>
-            <Typography variant="body2" color="text.secondary">Xuất báo cáo tiền đã thu theo lớp và môn học</Typography>
+            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Báo cáo thu học phí</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Theo dõi tiền đã thu theo lớp, môn học và kỳ báo cáo.</Typography>
           </Box>
         </Stack>
-      </Paper>
+        <Chip label="Báo cáo tài chính" color="primary" variant="outlined" />
+      </Stack>
 
-      <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, border: "1px solid", borderColor: "divider" }}>
-        <Stack spacing={2}>
-          {error && <Alert severity="error">{error}</Alert>}
-          <Typography variant="subtitle1" fontWeight={700}>Thiết lập tham số báo cáo</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: -1 }}>Chọn đúng lớp, môn học và kỳ thu trước khi xuất file.</Typography>
+      {error && <Alert severity="error">{error}</Alert>}
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 }, overflow: "hidden" }}>
+        <Stack spacing={2.5}>
+          <Stack direction="row" spacing={1.25} alignItems="flex-start">
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
+              <AssessmentOutlinedIcon fontSize="small" />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={800}>Thiết lập phạm vi báo cáo</Typography>
+              <Typography variant="body2" color="text.secondary">Chọn lớp, môn học và kỳ thu để tạo file Excel.</Typography>
+            </Box>
+          </Stack>
+
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
             <MasterSelectField
               label="Lớp học"
@@ -132,7 +147,7 @@ export function ClassTuitionReportPage() {
                 value={selectedSubjectId}
                 onChange={(event) => setSelectedSubjectId(event.target.value)}
               >
-                <MenuItem value=""><em>Chọn môn học</em></MenuItem>
+                <MenuItem value=""><em>{loadingClass ? "Đang tải môn học..." : "Chọn môn học"}</em></MenuItem>
                 {subjects.map((subject) => (
                   <MenuItem key={subject.id} value={subject.id} disabled={!subject.teacher}>
                     {subject.subject.name}{subject.teacher ? "" : " · Chưa phân công giáo viên"}
@@ -148,15 +163,43 @@ export function ClassTuitionReportPage() {
               textFieldProps={{ required: true }}
             />
           </Box>
-          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-            <Button variant="contained" onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </Button>
+
+          <Alert severity="info" icon={<CalendarMonthOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
+            Báo cáo chỉ ghi nhận các khoản thanh toán thành công trong kỳ đã chọn và được phân bổ cho môn học tương ứng.
+          </Alert>
+
+          <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: "#f8fafc", border: "1px solid", borderColor: "divider" }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Phạm vi đang chọn</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.5, mt: 1.25 }}>
+              <ReportScopeItem icon={<MenuBookOutlinedIcon fontSize="small" />} label="Lớp học" value={selectedClass?.name || "Chưa chọn lớp"} />
+              <ReportScopeItem icon={<AssessmentOutlinedIcon fontSize="small" />} label="Môn học" value={selectedSubject?.subject.name || "Chưa chọn môn"} />
+              <ReportScopeItem icon={<PersonOutlineOutlinedIcon fontSize="small" />} label="Giáo viên" value={teacher?.name || "Chưa phân công"} />
+              <ReportScopeItem icon={<CalendarMonthOutlinedIcon fontSize="small" />} label="Kỳ báo cáo" value={month || "Chưa chọn kỳ"} />
+            </Box>
           </Box>
+
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5}>
+            <Typography variant="body2" color="text.secondary">File Excel gồm danh sách học viên và số tiền đã thu theo môn.</Typography>
+            <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
+              {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
+            </Button>
+          </Stack>
         </Stack>
       </Paper>
 
       <ClassSelectDialog open={classDialogOpen} onClose={() => setClassDialogOpen(false)} onSelect={(classItem) => void handleClassSelect(classItem)} />
+    </Stack>
+  );
+}
+
+function ReportScopeItem({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="flex-start" minWidth={0}>
+      <Box sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", bgcolor: "#ffffff", color: "primary.main", border: "1px solid", borderColor: "divider" }}>{icon}</Box>
+      <Box minWidth={0}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{label}</Typography>
+        <Typography variant="body2" fontWeight={700} noWrap title={value}>{value}</Typography>
+      </Box>
     </Stack>
   );
 }

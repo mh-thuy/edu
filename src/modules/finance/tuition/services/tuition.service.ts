@@ -562,7 +562,10 @@ export class TuitionService {
       });
       if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
       if (current.version !== data.version)
-        throw new ConflictError("Khoản học phí đã thay đổi, vui lòng tải lại");
+        throw new ConflictError(
+          "Khoản học phí đã thay đổi, vui lòng tải lại",
+          "VERSION_CONFLICT",
+        );
       if (
         current.status !== TuitionFeeStatus.UNPAID &&
         current.status !== TuitionFeeStatus.OVERDUE
@@ -652,7 +655,10 @@ export class TuitionService {
       });
       if (!current) throw new NotFoundError("Không tìm thấy khoản học phí");
       if (current.version !== data.version)
-        throw new ConflictError("Khoản học phí đã thay đổi, vui lòng tải lại");
+        throw new ConflictError(
+          "Khoản học phí đã thay đổi, vui lòng tải lại",
+          "VERSION_CONFLICT",
+        );
       if (current.payments.length)
         throw new ConflictError("Không thể miễn hoặc hủy khoản học phí đã thanh toán");
       if (current.paymentAllocations.length)

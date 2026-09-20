@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { BadRequestError, ConflictError, NotFoundError } from "@/lib/errors";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+  type DomainConflictCode,
+} from "@/lib/errors";
 import { serializeDecimals } from "@/lib/decimal";
 import { Prisma } from "@prisma/client";
 
@@ -10,7 +15,8 @@ export type ApiErrorCode =
   | "NOT_FOUND"
   | "UNAUTHORIZED"
   | "INTERNAL_ERROR"
-  | "BAD_REQUEST";
+  | "BAD_REQUEST"
+  | DomainConflictCode;
 
 export type ApiSuccessResponse<T> = {
   success: true;
@@ -65,7 +71,7 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
   }
 
   if (error instanceof ConflictError) {
-    return apiError("CONFLICT", error.message, 409);
+    return apiError(error.code ?? "CONFLICT", error.message, 409);
   }
 
   if (error instanceof NotFoundError) {

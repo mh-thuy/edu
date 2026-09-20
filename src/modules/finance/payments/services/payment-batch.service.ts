@@ -124,7 +124,10 @@ async function findIdempotentBatch(
     sameAmounts &&
     samePaymentDate;
   if (!sameRequest) {
-    throw new ConflictError("Idempotency-Key đã được dùng cho request thanh toán khác");
+    throw new ConflictError(
+      "Idempotency-Key đã được dùng cho request thanh toán khác",
+      "IDEMPOTENCY_CONFLICT",
+    );
   }
   return existing;
 }
@@ -175,7 +178,7 @@ export async function completePaymentBatch(
     new Prisma.Decimal(0),
   );
   if (!allocationTotal.equals(batch.totalAmount))
-    throw new ConflictError("Tổng phân bổ không khớp tổng thanh toán");
+    throw new ConflictError("Tổng phân bổ không khớp tổng thanh toán", "AMOUNT_MISMATCH");
 
   const teacherIds = [
     ...new Set(
@@ -211,7 +214,7 @@ export async function completePaymentBatch(
     const paidAmount = sumSuccessfulPayments(fee.payments);
     const remainingAmount = fee.finalAmount.sub(paidAmount);
     if (!remainingAmount.greaterThan(0))
-      throw new ConflictError("TUITION_ALREADY_PAID");
+      throw new ConflictError("Học phí đã được thanh toán đủ", "TUITION_ALREADY_PAID");
     if (
       fee.status !== TuitionFeeStatus.UNPAID &&
       fee.status !== PARTIAL_FEE_STATUS &&
@@ -221,10 +224,14 @@ export async function completePaymentBatch(
         `Học phí ${fee.feeNo} không còn đủ điều kiện thanh toán`,
       );
     if (!allocation.amount.greaterThan(0))
-      throw new ConflictError("Số tiền thanh toán phải lớn hơn 0");
+      throw new ConflictError(
+        "Số tiền thanh toán phải lớn hơn 0",
+        "PAYMENT_AMOUNT_MISMATCH",
+      );
     if (allocation.amount.greaterThan(remainingAmount))
       throw new ConflictError(
         `Số tiền phân bổ của ${fee.feeNo} vượt số tiền còn nợ`,
+        "PAYMENT_AMOUNT_MISMATCH",
       );
   }
   const paymentReceiptIssuedAt = new Date();
@@ -544,13 +551,19 @@ export async function createPaymentBatch(
       const paidAmount = paidByFee.get(fee.id) ?? new Prisma.Decimal(0);
       const remainingAmount = fee.finalAmount.sub(paidAmount);
       if (!remainingAmount.greaterThan(0))
-        throw new ConflictError(`Học phí ${fee.feeNo} đã được thanh toán đủ`);
+        throw new ConflictError(
+          `Học phí ${fee.feeNo} đã được thanh toán đủ`,
+          "TUITION_ALREADY_PAID",
+        );
       const rawAmount = data.amounts?.[fee.id];
       const amount = rawAmount === undefined
         ? remainingAmount
         : new Prisma.Decimal(rawAmount);
       if (!amount.greaterThan(0) || amount.greaterThan(remainingAmount))
-        throw new ConflictError(`Số tiền thanh toán của ${fee.feeNo} vượt số tiền còn nợ`);
+        throw new ConflictError(
+          `Số tiền thanh toán của ${fee.feeNo} vượt số tiền còn nợ`,
+          "PAYMENT_AMOUNT_MISMATCH",
+        );
       requestedAmounts.set(fee.id, amount);
     }
     const totalAmount = [...requestedAmounts.values()].reduce(

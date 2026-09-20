@@ -373,15 +373,23 @@ function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
   const transactionNo = getBankTransactionNo(row);
   const identity = transactionNo
     ? `${bankAccountId}:transaction-no:${transactionNo}`
-    : `${bankAccountId}:row:${row.raw}`;
+    : `${bankAccountId}:row:${row.transactionDate.toISOString()}:${row.amount.toString()}:${normalize(row.description)}:${row.balance?.toString() ?? ""}`;
   const transactionHash = hashTransactionIdentity(identity);
-  // Preserve duplicate protection for TCB rows imported before CHI TIET was
-  // correctly treated as narrative rather than as a transaction number.
-  const legacyTransactionHash =
-    row.transactionNoIsExplicit === false && row.transactionNo?.trim()
-      ? hashTransactionIdentity(`${bankAccountId}:transaction-no:${row.transactionNo.trim()}`)
-      : null;
-  return { transactionHash, legacyTransactionHash };
+  const legacyTransactionHashes = row.transactionNoIsExplicit === false
+    ? [
+        // Preserve duplicate protection for TCB rows imported before CHI TIET
+        // was correctly treated as narrative rather than as a transaction number.
+        ...(row.transactionNo?.trim()
+          ? [hashTransactionIdentity(`${bankAccountId}:transaction-no:${row.transactionNo.trim()}`)]
+          : []),
+        // Preserve rows imported with the previous raw-row identity while new
+        // imports use a format-stable identity.
+        ...(!transactionNo
+          ? [hashTransactionIdentity(`${bankAccountId}:row:${row.raw}`)]
+          : []),
+      ]
+    : [];
+  return { transactionHash, legacyTransactionHashes };
 }
 
 function getTokenSecret() {
@@ -489,9 +497,9 @@ export async function importBankStatement(args: {
   const { rows, errors: invalidRowErrors } = parsed;
 
   const rowHashes = rows.map((row) => getTransactionHashes(args.bankAccountId, row));
-  const transactionHashes = rowHashes.flatMap(({ transactionHash, legacyTransactionHash }) => [
+  const transactionHashes = rowHashes.flatMap(({ transactionHash, legacyTransactionHashes }) => [
     transactionHash,
-    ...(legacyTransactionHash ? [legacyTransactionHash] : []),
+    ...legacyTransactionHashes,
   ]);
   const transactionNumbers = rows
     .map((row) => getBankTransactionNo(row))
@@ -587,9 +595,9 @@ export async function importBankStatement(args: {
     };
     if (
       importedHashes.has(transactionHash) ||
-      (rowHashes[index]!.legacyTransactionHash !== null &&
-        importedHashes.has(rowHashes[index]!.legacyTransactionHash)) ||
+      rowHashes[index]!.legacyTransactionHashes.some((hash) => importedHashes.has(hash)) ||
       existingReferences.has(transactionHash) ||
+      rowHashes[index]!.legacyTransactionHashes.some((hash) => existingReferences.has(hash)) ||
       (transactionNumber !== null && existingReferences.has(transactionNumber))
     ) {
       duplicatedRows += 1;
@@ -722,16 +730,33 @@ async function confirmPaymentBatch(
         ],
       },
     });
-    if (existingBatch) throw new ConflictError("Giao dịch ngân hàng đã được xác nhận");
+    if (existingBatch) {
+      throw new ConflictError(
+        "Giao dịch ngân hàng đã được xác nhận",
+        "STATEMENT_DUPLICATE",
+      );
+    }
 
     const batch = await tx.paymentBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
-    if (batch.status !== PaymentBatchStatus.PENDING) throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
+    if (batch.status !== PaymentBatchStatus.PENDING) {
+      throw new ConflictError(
+        "Đợt thanh toán không còn chờ xử lý",
+        batch.status === PaymentBatchStatus.SUCCESS
+          ? "PAYMENT_ALREADY_CONFIRMED"
+          : undefined,
+      );
+    }
     if (batch.paymentMethod !== "BANK_TRANSFER")
       throw new ConflictError("Chỉ payment batch chuyển khoản mới được đối soát ngân hàng");
     if (batch.bankAccountId !== payload.bankAccountId)
       throw new ConflictError("Tài khoản ngân hàng không khớp với đợt thanh toán");
-    if (!new Prisma.Decimal(payload.creditAmount).equals(batch.totalAmount)) throw new ConflictError("PAYMENT_AMOUNT_MISMATCH");
+    if (!new Prisma.Decimal(payload.creditAmount).equals(batch.totalAmount)) {
+      throw new ConflictError(
+        "Số tiền ghi có không khớp với tổng đợt thanh toán",
+        "PAYMENT_AMOUNT_MISMATCH",
+      );
+    }
     const completed = await completePaymentBatch(tx, batchId, actorId, {
       paymentDate: new Date(payload.transactionDate),
       bankAccountId: payload.bankAccountId,

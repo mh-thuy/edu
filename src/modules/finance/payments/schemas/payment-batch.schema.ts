@@ -19,7 +19,7 @@ export const paymentBatchCreateSchema = z.object({
   bankAccountId: z.string().uuid().optional(),
   transactionReference: z.string().trim().max(150).optional(),
   payerName: z.string().trim().max(255).optional(),
-  note: z.string().trim().max(1000).optional(),
+  note: z.string().trim().max(500).optional(),
 }).superRefine((data, ctx) => {
   if (data.amounts) {
     for (const feeId of Object.keys(data.amounts)) {
@@ -50,7 +50,7 @@ export const paymentBatchCreateSchema = z.object({
 
 export const cashPaymentSchema = z.object({
   paymentDate: paymentDateSchema,
-  note: z.string().trim().max(1000, "Ghi chú tối đa 1000 ký tự").optional(),
+  note: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự").optional(),
 });
 
 export type PaymentBatchCreate = z.infer<typeof paymentBatchCreateSchema>;

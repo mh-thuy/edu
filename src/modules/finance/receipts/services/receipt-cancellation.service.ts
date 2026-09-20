@@ -224,6 +224,7 @@ export async function cancelTuitionReceipt(
           dataBefore: batch as unknown as Prisma.InputJsonValue,
           dataAfter: cancelledBatch as unknown as Prisma.InputJsonValue,
           performedBy: actorId,
+          ...auditFields(auditContext),
         },
       });
       return tx.tuitionReceipt.findUnique({ where: { id: receiptId } });

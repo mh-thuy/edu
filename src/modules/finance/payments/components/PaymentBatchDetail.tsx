@@ -449,7 +449,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
               label="Ghi chú (nếu có)"
               value={cashNote}
               onChange={(event) => setCashNote(event.target.value)}
-              inputProps={{ maxLength: 1000 }}
+              inputProps={{ maxLength: 500 }}
             />
           </Stack>
         }

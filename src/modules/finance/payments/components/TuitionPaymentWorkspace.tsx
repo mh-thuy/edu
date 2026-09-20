@@ -369,7 +369,10 @@ export function TuitionPaymentWorkspace({
       paymentIdempotencyKeyRef.current = idempotencyKey;
       response = await fetch("/api/payment-batches", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           tuitionFeeIds: selectedIds,
           idempotencyKey,
@@ -383,7 +386,12 @@ export function TuitionPaymentWorkspace({
         }),
       });
       if (!response.ok) {
-        paymentIdempotencyKeyRef.current = null;
+        // Keep the key for network/5xx failures: the server may have committed
+        // the transaction before the response was lost. Clear it only for a
+        // definitive client/domain rejection so the user can submit a new payload.
+        if (response.status < 500 && response.status !== 408 && response.status !== 429) {
+          paymentIdempotencyKeyRef.current = null;
+        }
         throw new Error(
           await extractApiErrorMessage(response, "Không thể tạo thanh toán"),
         );
@@ -1159,7 +1167,7 @@ export function TuitionPaymentWorkspace({
               label="Ghi chú (nếu có)"
               value={cashNote}
               onChange={(event) => setCashNote(event.target.value)}
-              inputProps={{ maxLength: 1000 }}
+              inputProps={{ maxLength: 500 }}
             />
           </Stack>
         }
