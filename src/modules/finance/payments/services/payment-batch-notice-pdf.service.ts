@@ -13,6 +13,21 @@ import {
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
+const formatVietnamDateTime = (value: Date) => {
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+};
 
 export async function generatePaymentBatchNoticePdf(
   batchId: string,
@@ -143,7 +158,7 @@ async function renderPaymentBatchNoticePdf(
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
-  const exportedAt = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+  const exportedAt = formatVietnamDateTime(new Date());
   let page = pdf.addPage([595, 842]);
   const color = rgb(0.12, 0.16, 0.24);
   const muted = rgb(0.38, 0.42, 0.48);
@@ -163,7 +178,7 @@ async function renderPaymentBatchNoticePdf(
   draw("Chưa xác nhận thanh toán", 220, 747, 10, muted);
   draw(`Mã đợt thanh toán: ${batch.batchNo}`, 55, 708);
   draw(
-    `Ngày tạo: ${batch.createdAt.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    `Ngày tạo: ${formatVietnamDateTime(batch.createdAt)}`,
     55,
     686,
   );

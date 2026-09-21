@@ -53,6 +53,7 @@ function buildClassUpdateInput(
     ...((data.status === "DRAFT" || data.status === "ACTIVE") && {
       deletedAt: null,
     }),
+    ...(data.status === "CANCELLED" && { deletedAt: new Date() }),
   };
 }
 
@@ -1423,7 +1424,7 @@ export async function getClassStudentsPage(
     page: number;
     pageSize: number;
     search?: string;
-    status?: "ACTIVE" | "PAUSED" | "COMPLETED";
+    status?: "ACTIVE" | "PAUSED" | "COMPLETED" | "LEFT";
     subjectId?: string;
     month: string;
   },
@@ -1449,6 +1450,8 @@ export async function getClassStudentsPage(
   const statusWhere: Prisma.ClassStudentWhereInput =
     options.status === "COMPLETED"
       ? { status: "COMPLETED" }
+      : options.status === "LEFT"
+        ? { status: "LEFT" }
       : options.status === "PAUSED"
         ? { ...activeInPeriod, pauses: { some: pauseWhere } }
         : options.status === "ACTIVE"

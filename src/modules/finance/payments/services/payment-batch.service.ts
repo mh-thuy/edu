@@ -9,6 +9,7 @@ import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
 import { parseVietnamDateStart } from "@/lib/vietnam-time";
+import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getEffectiveTuitionFeeStatus,
@@ -78,7 +79,18 @@ async function findIdempotentBatch(
     ? await tx.paymentBatch.findUnique({
         where: { id: existingId },
         include: {
-          allocations: { include: { tuitionFee: true } },
+          allocations: {
+            include: {
+              tuitionFee: {
+                include: {
+                  payments: {
+                    where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
+                    select: { amount: true, paymentBatchId: true },
+                  },
+                },
+              },
+            },
+          },
           student: true,
           receipt: true,
         },
@@ -98,10 +110,18 @@ async function findIdempotentBatch(
     sameFees &&
     existing.allocations.every((allocation) => {
       const requested = data.amounts?.[allocation.tuitionFeeId];
-      return (
-        requested === undefined ||
-        new Prisma.Decimal(requested).equals(allocation.amount)
+      const paidAmount = sumSuccessfulPayments(allocation.tuitionFee.payments);
+      const existingBatchAmount = sumSuccessfulPayments(
+        allocation.tuitionFee.payments.filter(
+          (payment) => payment.paymentBatchId === existing.id,
+        ),
       );
+      const remainingAmount = allocation.tuitionFee.finalAmount
+        .sub(paidAmount)
+        .add(existingBatchAmount);
+      const expectedAmount =
+        requested === undefined ? remainingAmount : new Prisma.Decimal(requested);
+      return expectedAmount.equals(allocation.amount);
     });
   const requestedCashDate =
     data.paymentMethod === "CASH" ? parsePaymentDate(data.paymentDate) : undefined;
@@ -167,6 +187,7 @@ export async function completePaymentBatch(
     },
   });
   if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
+
   if (batch.status === PaymentBatchStatus.SUCCESS) return batch;
   if (batch.status !== PaymentBatchStatus.PENDING)
     throw new ConflictError("Đợt thanh toán không còn chờ xử lý");
@@ -299,8 +320,9 @@ export async function completePaymentBatch(
         receiptNo: `REC-${batchToken}-${sequence}`,
         paymentId: payment.id,
         issuedBy: actorId,
-        receiverName: batch.payerName || batch.studentId,
+        receiverName: batch.payerName?.trim() || batch.student.fullName,
         amount: allocation.amount,
+        amountInWords: vietnameseAmountInWords(allocation.amount.toString()),
       },
     });
     await saveTuitionReceiptSnapshot(tx, receipt.id, {
@@ -308,6 +330,7 @@ export async function completePaymentBatch(
       receiptNo: receipt.receiptNo,
       issuedAt: paymentReceiptIssuedAt.toISOString(),
       student: { code: batch.student.code, fullName: batch.student.fullName },
+      receiverName: batch.payerName?.trim() || batch.student.fullName,
       tuitionFee: toFeeSnapshot(allocation.tuitionFee, allocation.amount),
       amount: allocation.amount.toString(),
       paymentMethod: batch.paymentMethod,
@@ -380,7 +403,7 @@ export async function completePaymentBatch(
       receiptNo: `BRC-${batch.batchNo}`.slice(0, 40),
       paymentBatchId: batch.id,
       issuedBy: actorId,
-      receiverName: batch.payerName || batch.studentId,
+      receiverName: batch.payerName?.trim() || batch.student.fullName,
       amount: batch.totalAmount,
     },
   });
@@ -389,6 +412,7 @@ export async function completePaymentBatch(
     receiptNo: batchReceipt.receiptNo,
     issuedAt: paymentReceiptIssuedAt.toISOString(),
     student: { code: batch.student.code, fullName: batch.student.fullName },
+    receiverName: batch.payerName?.trim() || batch.student.fullName,
     fees: batch.allocations.map((allocation) =>
       toFeeSnapshot(allocation.tuitionFee, allocation.amount),
     ),
@@ -798,6 +822,14 @@ export async function getPaymentBatchDetail(batchId: string) {
   });
   if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
 
+  const printedAtRow = batch.receipt
+    ? (await prisma.$queryRaw<Array<{ printedAt: Date | null }>>(
+        Prisma.sql`SELECT printed_at AS "printedAt"
+          FROM payment_batch_receipts
+          WHERE id = ${batch.receipt.id}::uuid`,
+      ))[0]
+    : null;
+
   const auditLogs = await prisma.tuitionAuditLog.findMany({
     where: {
       entityType: "PAYMENT_BATCH",
@@ -839,7 +871,9 @@ export async function getPaymentBatchDetail(batchId: string) {
     ...batch,
     allocations,
     receipt:
-      batch.status === PaymentBatchStatus.SUCCESS ? batch.receipt : null,
+      batch.status === PaymentBatchStatus.SUCCESS && batch.receipt
+        ? { ...batch.receipt, printedAt: printedAtRow?.printedAt ?? null }
+        : null,
     createdByUser: usersById.get(batch.createdBy) || null,
     updatedByUser: usersById.get(batch.updatedBy) || null,
     confirmedByUser: batch.confirmedBy

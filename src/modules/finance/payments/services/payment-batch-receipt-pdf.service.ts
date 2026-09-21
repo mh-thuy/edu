@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
+import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
 import {
   getPaymentBatchReceiptSnapshot,
   parseBatchReceiptSnapshot,
@@ -15,10 +16,33 @@ const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
 
+const formatVietnamDateTime = (value: Date) => {
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+};
+
+const displayReceiverName = (receiverName: string | null | undefined, student: { fullName: string }) => {
+  const name = receiverName?.trim();
+  return name && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(name)
+    ? name
+    : student.fullName;
+};
+
 export async function generatePaymentBatchReceiptPdf(
   receiptId: string,
   actorId: string,
   auditContext?: AuditContext,
+  markPrinted = false,
 ) {
   const receiptRef = await prisma.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
@@ -40,7 +64,7 @@ export async function generatePaymentBatchReceiptPdf(
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM payment_batches WHERE id = ${receiptRef.paymentBatchId}::uuid FOR UPDATE`,
     );
-    return generatePaymentBatchReceiptPdfWithClient(tx, receiptId, actorId, auditContext);
+    return generatePaymentBatchReceiptPdfWithClient(tx, receiptId, actorId, auditContext, markPrinted);
   });
 }
 
@@ -49,6 +73,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   receiptId: string,
   actorId: string,
   auditContext?: AuditContext,
+  markPrinted = false,
 ) {
   const receipt = await client.paymentBatchReceipt.findUnique({
     where: { id: receiptId },
@@ -84,6 +109,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
     throw new ConflictError("Biên lai tổng đã được hủy và không thể xuất PDF");
   }
   const student = snapshot?.student ?? receipt.paymentBatch.student;
+  const receiverName = displayReceiverName(snapshot?.receiverName ?? receipt.receiverName, student);
   const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
     feeNo: allocation.tuitionFee.feeNo,
     finalAmount: allocation.tuitionFee.finalAmount.toString(),
@@ -116,13 +142,14 @@ async function generatePaymentBatchReceiptPdfWithClient(
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
   draw(`Mã thanh toán: ${receipt.paymentBatch.batchNo}`, 55, 708);
   draw(
-    `Ngày thu: ${receipt.paymentBatch.paymentDate.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`,
+    `Ngày thu: ${formatVietnamDateTime(receipt.paymentBatch.paymentDate)}`,
     55,
     686,
   );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
   draw(`Mã học sinh: ${student.code}`, 75, 615);
   draw(`Họ tên: ${student.fullName}`, 75, 593);
+  draw(`Người nộp: ${receiverName}`, 75, 571);
   draw("CÁC KHOẢN ĐÃ THANH TOÁN", 55, 545, 13);
 
   let y = 515;
@@ -174,6 +201,7 @@ async function generatePaymentBatchReceiptPdfWithClient(
   });
   draw("TỔNG CỘNG", 75, y - 35, 13);
   draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13);
+  draw(`Bằng chữ: ${vietnameseAmountInWords(receipt.amount.toString())}`, 75, y - 55, 9);
   draw(`Phương thức: ${receipt.paymentBatch.paymentMethod}`, 75, y - 75);
   if (receipt.paymentBatch.bankTransactionNo)
     draw(
@@ -194,12 +222,22 @@ async function generatePaymentBatchReceiptPdfWithClient(
     9,
   );
   const pdfBuffer = Buffer.from(await pdf.save());
+  const printedAt = markPrinted ? new Date() : null;
+  if (printedAt) {
+    await client.$executeRaw(
+      Prisma.sql`UPDATE payment_batch_receipts SET printed_at = ${printedAt} WHERE id = ${receipt.id}::uuid`,
+    );
+  }
   await client.tuitionAuditLog.create({
     data: {
       entityType: "PAYMENT_BATCH",
       entityId: receipt.paymentBatchId,
-      action: "RECEIPT_PDF_PRINTED",
-      dataAfter: { receiptNo: receipt.receiptNo, snapshotUsed: Boolean(snapshot) },
+      action: markPrinted ? "RECEIPT_PDF_PRINTED" : "RECEIPT_PDF_EXPORTED",
+      dataAfter: {
+        receiptNo: receipt.receiptNo,
+        ...(printedAt ? { printedAt: printedAt.toISOString() } : {}),
+        snapshotUsed: Boolean(snapshot),
+      },
       performedBy: actorId,
       ...auditFields(auditContext),
     },

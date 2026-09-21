@@ -62,6 +62,21 @@ type Batch = {
 
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
+const dateTime = (value: string) => {
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+};
 const statusLabels: Record<string, string> = {
   PENDING: "Chờ chuyển khoản / đối soát",
   SUCCESS: "Đã thanh toán",
@@ -394,11 +409,11 @@ export function PaymentBatchHistory() {
                     </TableCell>
                     <TableCell sx={{ minWidth: 145 }}>
                       <Typography variant="body2">
-                        {new Date(batch.createdAt).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
+                        {dateTime(batch.createdAt)}
                       </Typography>
                       {batch.status === "SUCCESS" && batch.paymentDate && (
                         <Typography variant="caption" color="text.secondary">
-                          Thu: {new Date(batch.paymentDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}
+                          Thu: {dateTime(batch.paymentDate)}
                         </Typography>
                       )}
                     </TableCell>

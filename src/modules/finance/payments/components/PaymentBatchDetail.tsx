@@ -43,9 +43,9 @@ type Batch = {
   transactionReference?: string | null;
   payerName?: string | null;
   paymentContent?: string | null;
-  student: { code: string; fullName: string; phone?: string | null };
+  student: { id: string; code: string; fullName: string; phone?: string | null };
   bankAccount?: { accountNo: string; accountName: string; bankName: string } | null;
-  receipt?: { id: string; receiptNo: string; issuedAt: string; amount: number } | null;
+  receipt?: { id: string; receiptNo: string; issuedAt: string; printedAt?: string | null; amount: number } | null;
   createdByUser?: { fullName: string; email: string } | null;
   confirmedByUser?: { fullName: string; email: string } | null;
   receivedByUser?: { fullName: string; email: string } | null;
@@ -81,8 +81,32 @@ const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(Number(value))} VND`;
 const date = (value?: string | null) =>
   value ? new Date(value).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-";
-const dateTime = (value?: string | null) =>
-  value ? new Date(value).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-";
+const dateTime = (value?: string | null) => {
+  if (!value) return "-";
+  const parts = new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(value));
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+};
+const displayPayerName = (
+  payerName: string | null | undefined,
+  student: Batch["student"],
+) => {
+  const name = payerName?.trim();
+  const looksLikeId = Boolean(
+    name &&
+      (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(name) || name === student.id),
+  );
+  return name && !looksLikeId ? name : student.fullName;
+};
 const statusLabels: Record<string, string> = {
   PENDING: "Chờ chuyển khoản / đối soát",
   SUCCESS: "Đã thanh toán",
@@ -107,6 +131,9 @@ export function PaymentBatchDetail({ id }: { id: string }) {
   const [actionLoading, setActionLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState("");
+  const [reverseDialogOpen, setReverseDialogOpen] = useState(false);
+  const [reverseReason, setReverseReason] = useState("");
+  const [reverseReasonError, setReverseReasonError] = useState("");
   const { showSuccess, Snackbar } = useSnackbar();
 
   const load = useCallback(async () => {
@@ -175,6 +202,44 @@ export function PaymentBatchDetail({ id }: { id: string }) {
       showSuccess("Đã hủy đợt thanh toán");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể hủy thanh toán");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function reverseSuccessfulBatch() {
+    const reason = reverseReason.trim();
+    const receiptId = batch?.payments.find((payment) => payment.receipt?.id)?.receipt?.id;
+    if (!reason) {
+      setReverseReasonError("Lý do hủy là bắt buộc");
+      return;
+    }
+    if (!receiptId) {
+      setError("Không tìm thấy biên lai chi tiết để hoàn tác đợt thanh toán");
+      return;
+    }
+    setReverseReasonError("");
+    setActionLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/receipts/${receiptId}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, "Không thể hủy ghi nhận thanh toán"));
+      }
+      setReverseDialogOpen(false);
+      setReverseReason("");
+      await load();
+      showSuccess("Đã hủy ghi nhận thanh toán và giải phóng toàn bộ đợt thu");
+    } catch (reasonError) {
+      setError(
+        reasonError instanceof Error
+          ? reasonError.message
+          : "Không thể hủy ghi nhận thanh toán",
+      );
     } finally {
       setActionLoading(false);
     }
@@ -294,13 +359,38 @@ export function PaymentBatchDetail({ id }: { id: string }) {
                   </Button>
                 </>
               )}
-              {batch.receipt && batch.status === "SUCCESS" && (
+              {batch.status === "SUCCESS" && batch.payments.some((payment) => Boolean(payment.receipt?.id)) && (
                 <Button
                   variant="outlined"
-                  href={`/api/payment-batch-receipts/${batch.receipt.id}/pdf`}
+                  color="error"
+                  onClick={() => {
+                    setReverseReason("");
+                    setReverseReasonError("");
+                    setReverseDialogOpen(true);
+                  }}
+                  disabled={actionLoading}
                 >
-                  Tải biên lai
+                  Hủy ghi nhận nhầm
                 </Button>
+              )}
+              {batch.receipt && batch.status === "SUCCESS" && (
+                <>
+                  <Button
+                    variant="outlined"
+                    href={`/api/payment-batch-receipts/${batch.receipt.id}/pdf`}
+                  >
+                    Tải biên lai
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<PrintOutlinedIcon />}
+                    href={`/api/payment-batch-receipts/${batch.receipt.id}/pdf?inline=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Mở để in
+                  </Button>
+                </>
               )}
             </Stack>
           </Stack>
@@ -412,12 +502,13 @@ export function PaymentBatchDetail({ id }: { id: string }) {
           Thông tin thanh toán và đối soát
         </Typography>
         <InfoGrid>
-          <Info label="Người nộp" value={batch.payerName || "-"} />
+          <Info label="Người nộp" value={displayPayerName(batch.payerName, batch.student)} />
           <Info label="Nội dung thanh toán" value={batch.paymentContent || "-"} />
           <Info label="Mã giao dịch ngân hàng" value={batch.bankTransactionNo || "-"} />
           <Info label="Mã tham chiếu" value={batch.transactionReference || "-"} />
           <Info label="Tài khoản nhận" value={batch.bankAccount ? `${batch.bankAccount.bankName} — ${batch.bankAccount.accountNo}` : "-"} />
           <Info label="Ngày cập nhật" value={dateTime(batch.updatedAt)} />
+          <Info label="Ngày in biên lai" value={batch.receipt?.printedAt ? dateTime(batch.receipt.printedAt) : "Chưa in"} />
         </InfoGrid>
         {batch.receipt && batch.status === "SUCCESS" && (
           <Alert severity="success" sx={{ mt: 2 }}>
@@ -487,6 +578,41 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         onConfirm={() => void cancelPayment()}
         onCancel={() => setCancelDialogOpen(false)}
         isLoading={actionLoading}
+      />
+      <ConfirmDialog
+        open={reverseDialogOpen}
+        title="Hủy ghi nhận thanh toán?"
+        message={`Hủy ghi nhận đợt ${batch.batchNo}? Tất cả payment và biên lai trong đợt sẽ bị hủy, các khoản học phí sẽ được mở lại.`}
+        confirmLabel="Xác nhận hủy"
+        cancelLabel="Quay lại"
+        confirmColor="error"
+        content={
+          <Stack spacing={1} sx={{ mt: 2 }}>
+            <Alert severity="warning">
+              Chỉ dùng khi thanh toán được ghi nhận nhầm và chưa thực nhận tiền.
+              Nếu đã nhận tiền và trả lại tiền, hãy dùng luồng hoàn tiền.
+            </Alert>
+            <AppTextField
+              autoFocus
+              fullWidth
+              multiline
+              minRows={3}
+              label="Lý do hủy"
+              value={reverseReason}
+              onChange={(event) => {
+                setReverseReason(event.target.value);
+                if (event.target.value.trim()) setReverseReasonError("");
+              }}
+              error={Boolean(reverseReasonError)}
+              helperText={reverseReasonError || "Tối đa 500 ký tự"}
+              inputProps={{ maxLength: 500 }}
+            />
+          </Stack>
+        }
+        onConfirm={() => void reverseSuccessfulBatch()}
+        onCancel={() => setReverseDialogOpen(false)}
+        isLoading={actionLoading}
+        confirmDisabled={!reverseReason.trim()}
       />
       {Snackbar}
     </Stack>

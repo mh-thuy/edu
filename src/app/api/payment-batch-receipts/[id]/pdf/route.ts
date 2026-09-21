@@ -12,8 +12,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const { id } = routeParamsSchema.parse(await params);
-    const result = await generatePaymentBatchReceiptPdf(id, user.id, getAuditContext(request));
-    return new Response(result.pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename=bien-lai-${result.batchNo}.pdf`, "Cache-Control": "no-store" } });
+    const inline = request.nextUrl.searchParams.get("inline") === "1";
+    const result = await generatePaymentBatchReceiptPdf(id, user.id, getAuditContext(request), inline);
+    return new Response(result.pdf, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `${inline ? "inline" : "attachment"}; filename=bien-lai-${result.batchNo}.pdf`, "Cache-Control": "no-store" } });
   } catch (error) {
     return handleApiError(error, "Không thể xuất PDF biên lai tổng");
   }

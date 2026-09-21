@@ -18,6 +18,7 @@ export type ReceiptSnapshot = {
   receiptNo: string;
   issuedAt: string;
   student: { code: string; fullName: string };
+  receiverName?: string;
   tuitionFee: ReturnType<typeof toFeeSnapshot>;
   amount: string;
   paymentMethod: string;
@@ -28,6 +29,7 @@ export type BatchReceiptSnapshot = {
   receiptNo: string;
   issuedAt: string;
   student: { code: string; fullName: string };
+  receiverName?: string;
   fees: ReturnType<typeof toFeeSnapshot>[];
   amount: string;
   paymentMethod: string;

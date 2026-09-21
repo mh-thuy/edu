@@ -1,7 +1,7 @@
 import { apiError, apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { ReceiptStatus } from "@prisma/client";
+import { Prisma, ReceiptStatus } from "@prisma/client";
 import { getVietnamDayEndExclusive, parseVietnamDateStart } from "@/lib/vietnam-time";
 
 export async function GET(request: Request) {
@@ -52,6 +52,7 @@ export async function GET(request: Request) {
           { payment: { tuitionFee: { feeNo: { contains: search, mode: "insensitive" as const } } } },
           { payment: { tuitionFee: { student: { code: { contains: search, mode: "insensitive" as const } } } } },
           { payment: { tuitionFee: { student: { fullName: { contains: search, mode: "insensitive" as const } } } } },
+          { receiverName: { contains: search, mode: "insensitive" as const } },
         ],
       } : {}),
     };
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
           id: true,
           receiptNo: true,
           issuedAt: true,
+          receiverName: true,
           amount: true,
           status: true,
           payment: {
@@ -71,7 +73,7 @@ export async function GET(request: Request) {
               tuitionFee: {
                 select: {
                   feeNo: true,
-                  student: { select: { code: true, fullName: true } },
+                  student: { select: { id: true, code: true, fullName: true } },
                   class: { select: { name: true } },
                   items: {
                     select: {
@@ -92,8 +94,19 @@ export async function GET(request: Request) {
       }),
       prisma.tuitionReceipt.count({ where }),
     ]);
+    const printedAtRows = items.length
+      ? await prisma.$queryRaw<Array<{ id: string; printedAt: Date | null }>>(
+          Prisma.sql`SELECT id, printed_at AS "printedAt"
+            FROM tuition_receipts
+            WHERE id IN (${Prisma.join(items.map((item) => Prisma.sql`${item.id}::uuid`))})`,
+        )
+      : [];
+    const printedAtById = new Map(printedAtRows.map((row) => [row.id, row.printedAt]));
     return apiSuccess({
-      items,
+      items: items.map((item) => ({
+        ...item,
+        printedAt: printedAtById.get(item.id) ?? null,
+      })),
       total,
       page,
       pageSize,

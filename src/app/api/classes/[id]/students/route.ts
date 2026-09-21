@@ -47,7 +47,7 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
       page: z.coerce.number().int().min(1).default(1),
       pageSize: z.coerce.number().int().min(1).max(100).default(20),
       search: z.string().optional(),
-      status: z.enum(["ACTIVE", "PAUSED", "COMPLETED"]).optional(),
+      status: z.enum(["ACTIVE", "PAUSED", "COMPLETED", "LEFT"]).optional(),
       subjectId: z.string().uuid().optional(),
       month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
     }).parse({

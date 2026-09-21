@@ -121,6 +121,7 @@ export function TuitionPaymentWorkspace({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [newPaymentConfirmOpen, setNewPaymentConfirmOpen] = useState(false);
   const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [completedBatchId, setCompletedBatchId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
   const [error, setError] = useState("");
@@ -274,6 +275,7 @@ export function TuitionPaymentWorkspace({
     setError("");
     setPendingBatch(null);
     setReceiptId(null);
+    setCompletedBatchId(null);
     try {
       const response = await fetch(
         `/api/tuition-fees?studentCode=${encodeURIComponent(studentCode)}&pageSize=100`,
@@ -444,6 +446,7 @@ export function TuitionPaymentWorkspace({
       if (batch.status === "SUCCESS") {
         clearPaymentAttempt(storageKey);
         setReceiptId(batch.receipt?.id || null);
+        setCompletedBatchId(batch.id);
         setStep(3);
         showSuccess("Đã ghi nhận thanh toán và phát hành biên lai");
         return;
@@ -525,11 +528,13 @@ export function TuitionPaymentWorkspace({
           ),
         );
       const completed = await unwrapApiResponse<{
+        id: string;
         receipt?: { id: string } | null;
       }>(response);
       setCashDialogOpen(false);
       setPendingBatch(null);
       setReceiptId(completed.receipt?.id || null);
+      setCompletedBatchId(completed.id);
       setQrError("");
       showSuccess("Đã chuyển sang tiền mặt và phát hành biên lai");
     } catch (reason) {
@@ -554,6 +559,7 @@ export function TuitionPaymentWorkspace({
     setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
+    setCompletedBatchId(null);
     setError("");
     setMethod("CASH");
     setCashPaymentDate(getVietnamDate());
@@ -582,6 +588,7 @@ export function TuitionPaymentWorkspace({
     setShowMultipleFees(false);
     setPendingBatch(null);
     setReceiptId(null);
+    setCompletedBatchId(null);
     setError("");
     setMethod("CASH");
     setBankAccountId("");
@@ -598,6 +605,7 @@ export function TuitionPaymentWorkspace({
     setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
+    setCompletedBatchId(null);
     setError("");
     studentDialog.onClose();
   }
@@ -1249,6 +1257,16 @@ export function TuitionPaymentWorkspace({
                 onClick={() => window.open(`/api/payment-batch-receipts/${receiptId}/pdf`, "_blank", "noopener,noreferrer")}
               >
                 Xuất biên lai tổng
+              </Button>
+            )}
+            {completedBatchId && (
+              <Button
+                component={Link}
+                variant="outlined"
+                color="error"
+                href={`/admin/tuition-fees/payment-history/${completedBatchId}`}
+              >
+                Xử lý nếu ghi nhận nhầm
               </Button>
             )}
             {!pendingBatch && (
