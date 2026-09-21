@@ -5,8 +5,37 @@ import { createPaymentBatch, listPaymentBatches } from "@/modules/finance/paymen
 import { paymentBatchCreateSchema } from "@/modules/finance/payments/schemas/payment-batch.schema";
 import { PaymentBatchStatus } from "@prisma/client";
 import { getAuditContext } from "@/lib/audit";
+import { z } from "zod";
 
-export async function GET(request: NextRequest) { try { const user = await requireApiUser(); if (user instanceof Response) return user; const params = request.nextUrl.searchParams; const rawStatus = params.get("status"); if (rawStatus && !Object.values(PaymentBatchStatus).includes(rawStatus as PaymentBatchStatus)) return apiError("VALIDATION_ERROR", "Trạng thái payment batch không hợp lệ", 422); const status = rawStatus ? rawStatus as PaymentBatchStatus : undefined; return apiSuccess(await listPaymentBatches({ transactionCode: params.get("transactionCode") || undefined, studentCode: params.get("studentCode") || undefined, status, page: Number(params.get("page") || 1), pageSize: Number(params.get("pageSize") || 20) })); } catch (error) { return handleApiError(error, "Không thể tải lịch sử thu học phí"); } }
+const paginationSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export async function GET(request: NextRequest) {
+  try {
+    const user = await requireApiUser();
+    if (user instanceof Response) return user;
+    const params = request.nextUrl.searchParams;
+    const pagination = paginationSchema.parse({
+      page: params.get("page") ?? undefined,
+      pageSize: params.get("pageSize") ?? undefined,
+    });
+    const rawStatus = params.get("status");
+    if (rawStatus && !Object.values(PaymentBatchStatus).includes(rawStatus as PaymentBatchStatus)) {
+      return apiError("VALIDATION_ERROR", "Trạng thái payment batch không hợp lệ", 422);
+    }
+    const status = rawStatus ? rawStatus as PaymentBatchStatus : undefined;
+    return apiSuccess(await listPaymentBatches({
+      transactionCode: params.get("transactionCode") || undefined,
+      studentCode: params.get("studentCode") || undefined,
+      status,
+      ...pagination,
+    }));
+  } catch (error) {
+    return handleApiError(error, "Không thể tải lịch sử thu học phí");
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {

@@ -9,6 +9,8 @@ import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
 import {
   getTuitionReceiptSnapshot,
   parseReceiptSnapshot,
+  saveTuitionReceiptSnapshot,
+  toFeeSnapshot,
 } from "@/modules/finance/payments/services/payment-document-snapshot";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
@@ -87,24 +89,25 @@ async function generateTuitionReceiptPdfWithClient(
   if (!receipt) throw new NotFoundError("Không tìm thấy biên lai");
   if (receipt.status === "CANCELLED")
     throw new ConflictError("Biên lai đã được hủy và không thể xuất PDF");
-  const snapshot = parseReceiptSnapshot(
+  const parsedSnapshot = parseReceiptSnapshot(
     await getTuitionReceiptSnapshot(receipt.id, client),
   );
-  const student = snapshot?.student ?? receipt.payment.tuitionFee.student;
-  const receiverName = displayReceiverName(snapshot?.receiverName ?? receipt.receiverName, student);
-  const fee = snapshot?.tuitionFee ?? {
-    className: receipt.payment.tuitionFee.class.name,
-    finalAmount: receipt.payment.tuitionFee.finalAmount.toString(),
-    payableAmount: receipt.amount.toString(),
-    items: receipt.payment.tuitionFee.items.map((item) => ({
-      itemName: item.itemName,
-      subjectName: item.classSubject?.subject.name ?? null,
-      quantity: item.quantity.toString(),
-      amount: item.amount.toString(),
-    })),
-    discountAmount: receipt.payment.tuitionFee.discountAmount.toString(),
-    additionalAmount: receipt.payment.tuitionFee.additionalAmount.toString(),
+  const student = parsedSnapshot?.student ?? receipt.payment.tuitionFee.student;
+  const receiverName = displayReceiverName(parsedSnapshot?.receiverName ?? receipt.receiverName, student);
+  const snapshot = parsedSnapshot ?? {
+    version: 1 as const,
+    receiptNo: receipt.receiptNo,
+    issuedAt: receipt.issuedAt.toISOString(),
+    student: { code: student.code, fullName: student.fullName },
+    receiverName,
+    tuitionFee: toFeeSnapshot(receipt.payment.tuitionFee, receipt.amount),
+    amount: receipt.amount.toString(),
+    paymentMethod: receipt.payment.paymentMethod,
   };
+  if (!parsedSnapshot) {
+    await saveTuitionReceiptSnapshot(client, receipt.id, snapshot);
+  }
+  const fee = snapshot.tuitionFee;
   const receiptFinalAmount = "finalAmount" in fee
     ? Number(fee.finalAmount)
     : Number(receipt.amount);

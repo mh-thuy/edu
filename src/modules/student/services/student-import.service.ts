@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ConflictError } from "@/lib/errors";
 import { generateStudentCode } from "@/modules/student/services/student.service";
+import { studentCreateSchema } from "@/modules/student/schemas/student.schema";
 
 type CsvDelimiter = "," | ";" | "\t";
 
@@ -237,6 +238,7 @@ export async function importStudentsCsv(
   }
 
   const { rows, errors } = parseStudentCsv(buffer);
+  const totalRows = rows.length + errors.length;
   const importedRows = await prisma.$transaction(async (tx) => {
     const existingStudents = await tx.student.findMany({
       select: { fullName: true, phone: true },
@@ -248,7 +250,19 @@ export async function importStudentsCsv(
     let imported = 0;
 
     for (const row of rows) {
-      const key = studentKey(row.fullName, row.phone);
+      const validated = studentCreateSchema.safeParse({
+        fullName: row.fullName,
+        phone: row.phone ?? undefined,
+        address: row.address ?? undefined,
+        status: "ACTIVE",
+      });
+      if (!validated.success) {
+        const message = validated.error.issues[0]?.message ?? "Dữ liệu học viên không hợp lệ";
+        errors.push({ rowNo: row.rowNo, message });
+        continue;
+      }
+
+      const key = studentKey(validated.data.fullName, validated.data.phone ?? null);
       if (knownStudents.has(key) || importedKeys.has(key)) continue;
 
       const code = await generateStudentCode(tx);
@@ -256,9 +270,9 @@ export async function importStudentsCsv(
         await tx.student.create({
           data: {
             code,
-            fullName: row.fullName,
-            phone: row.phone,
-            address: row.address,
+            fullName: validated.data.fullName,
+            phone: validated.data.phone || null,
+            address: validated.data.address || null,
             status: "ACTIVE",
           },
         });
@@ -281,9 +295,9 @@ export async function importStudentsCsv(
   });
 
   return {
-    totalRows: rows.length + errors.length,
+    totalRows,
     importedRows,
-    skippedRows: rows.length + errors.length - importedRows,
+    skippedRows: totalRows - importedRows,
     errors,
   };
 }

@@ -16,8 +16,8 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
       excludeClassId: searchParams.get("excludeClassId") || undefined,
-      page: parseInt(searchParams.get("page") || "1"),
-      pageSize: parseInt(searchParams.get("pageSize") || "10"),
+      page: Number(searchParams.get("page") || "1"),
+      pageSize: Number(searchParams.get("pageSize") || "10"),
     });
 
     if (searchParams.get("export") === "xlsx") {

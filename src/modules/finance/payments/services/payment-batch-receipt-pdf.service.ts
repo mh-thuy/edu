@@ -9,6 +9,8 @@ import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
 import {
   getPaymentBatchReceiptSnapshot,
   parseBatchReceiptSnapshot,
+  savePaymentBatchReceiptSnapshot,
+  toFeeSnapshot,
 } from "./payment-document-snapshot";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
@@ -102,27 +104,30 @@ async function generatePaymentBatchReceiptPdfWithClient(
   if (receipt.paymentBatch.status !== "SUCCESS") {
     throw new ConflictError("Biên lai tổng đã bị hủy và không thể xuất PDF");
   }
-  const snapshot = parseBatchReceiptSnapshot(
+  const parsedSnapshot = parseBatchReceiptSnapshot(
     await getPaymentBatchReceiptSnapshot(receipt.id, client),
   );
-  if (snapshot?.status === "CANCELLED") {
+  if (parsedSnapshot?.status === "CANCELLED") {
     throw new ConflictError("Biên lai tổng đã được hủy và không thể xuất PDF");
   }
-  const student = snapshot?.student ?? receipt.paymentBatch.student;
-  const receiverName = displayReceiverName(snapshot?.receiverName ?? receipt.receiverName, student);
-  const fees = snapshot?.fees ?? receipt.paymentBatch.allocations.map((allocation) => ({
-    feeNo: allocation.tuitionFee.feeNo,
-    finalAmount: allocation.tuitionFee.finalAmount.toString(),
-    payableAmount: allocation.amount.toString(),
-    className: allocation.tuitionFee.class?.name ?? null,
-    items: allocation.tuitionFee.items.map((item) => ({
-      itemName: item.itemName,
-      subjectName: item.classSubject?.subject.name ?? null,
-      amount: item.amount.toString(),
-    })),
-    discountAmount: allocation.tuitionFee.discountAmount.toString(),
-    additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
-  }));
+  const student = parsedSnapshot?.student ?? receipt.paymentBatch.student;
+  const receiverName = displayReceiverName(parsedSnapshot?.receiverName ?? receipt.receiverName, student);
+  const snapshot = parsedSnapshot ?? {
+    version: 1 as const,
+    receiptNo: receipt.receiptNo,
+    issuedAt: receipt.issuedAt.toISOString(),
+    student: { code: student.code, fullName: student.fullName },
+    receiverName,
+    fees: receipt.paymentBatch.allocations.map((allocation) =>
+      toFeeSnapshot(allocation.tuitionFee, allocation.amount),
+    ),
+    amount: receipt.paymentBatch.totalAmount.toString(),
+    paymentMethod: receipt.paymentBatch.paymentMethod,
+  };
+  if (!parsedSnapshot) {
+    await savePaymentBatchReceiptSnapshot(client, receipt.id, snapshot);
+  }
+  const fees = snapshot.fees;
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);

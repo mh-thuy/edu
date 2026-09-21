@@ -12,15 +12,49 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     const { id } = routeParamsSchema.parse(await params);
     const receipt = await prisma.tuitionReceipt.findUnique({
       where: { id },
-      include: {
+      select: {
+        receiptNo: true,
+        issuedAt: true,
+        receiverName: true,
+        amount: true,
+        status: true,
         payment: {
-          include: {
-            refunds: { orderBy: { createdAt: "desc" } },
+          select: {
+            id: true,
+            paymentNo: true,
+            paymentDate: true,
+            paymentStatus: true,
+            paymentMethod: true,
+            transactionReference: true,
+            refunds: {
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                refundNo: true,
+                amount: true,
+                refundMethod: true,
+                status: true,
+                reason: true,
+                bankTransactionNo: true,
+              },
+            },
             tuitionFee: {
-              include: {
-                student: true,
-                class: true,
-                items: { include: { classSubject: { include: { subject: true } } } },
+              select: {
+                feeNo: true,
+                finalAmount: true,
+                discountAmount: true,
+                additionalAmount: true,
+                student: { select: { id: true, code: true, fullName: true } },
+                class: { select: { name: true } },
+                items: {
+                  select: {
+                    itemName: true,
+                    amount: true,
+                    classSubject: {
+                      select: { subject: { select: { name: true } } },
+                    },
+                  },
+                },
               },
             },
           },

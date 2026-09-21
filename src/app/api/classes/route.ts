@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
     const filter = classFilterSchema.parse({
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
-      page: parseInt(searchParams.get("page") || "1"),
-      pageSize: parseInt(searchParams.get("pageSize") || "10"),
+      page: Number(searchParams.get("page") || "1"),
+      pageSize: Number(searchParams.get("pageSize") || "10"),
     });
 
     const result = await getClasses(filter);

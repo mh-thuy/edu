@@ -6,10 +6,23 @@ import { TuitionFeeBillingType, TuitionFeeStatus } from "@prisma/client";
 import { z } from "zod";
 import { PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 
+const paginationSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+
 export async function GET(request: NextRequest) {
   try {
     const user = await requireApiUser(); if (user instanceof Response) return user;
     const params = request.nextUrl.searchParams;
+    const pagination = paginationSchema.parse({
+      page: params.get("page") ?? undefined,
+      pageSize: params.get("pageSize") ?? undefined,
+    });
+    const rawClassId = params.get("classId");
+    if (rawClassId && !z.string().uuid().safeParse(rawClassId).success) {
+      return apiError("VALIDATION_ERROR", "Mã lớp không hợp lệ", 422);
+    }
     const rawStatus = params.get("status");
     const validStatuses = [...Object.values(TuitionFeeStatus), PARTIAL_FEE_STATUS];
     if (rawStatus && !validStatuses.includes(rawStatus as TuitionFeeStatus)) {
@@ -37,8 +50,8 @@ export async function GET(request: NextRequest) {
     const isExport = params.get("export") === "csv";
     let result = await TuitionService.listFees({
       ...filters,
-      page: isExport ? 1 : Number(params.get("page") || 1),
-      pageSize: isExport ? 100 : Number(params.get("pageSize") || 50),
+      page: isExport ? 1 : pagination.page,
+      pageSize: isExport ? 100 : pagination.pageSize,
     });
     if (isExport) {
       const allItems = [...result.items];

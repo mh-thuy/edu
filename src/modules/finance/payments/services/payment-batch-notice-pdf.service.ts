@@ -9,6 +9,8 @@ import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.servic
 import {
   getPaymentBatchNoticeSnapshot,
   parseDocumentSnapshot,
+  savePaymentBatchNoticeSnapshot,
+  toFeeSnapshot,
 } from "./payment-document-snapshot";
 
 const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
@@ -121,21 +123,26 @@ async function loadPaymentBatchNoticeData(
       "Tài khoản ngân hàng của đợt thanh toán không còn tồn tại",
     );
   }
-  const snapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id, client));
-  const account = snapshot?.bankAccount ?? accountRecord;
-  const student = snapshot?.student ?? batch.student;
-  const fees = snapshot?.fees ?? batch.allocations.map((allocation) => ({
-    feeNo: allocation.tuitionFee.feeNo,
-    className: allocation.tuitionFee.class?.name ?? null,
-    finalAmount: allocation.amount.toString(),
-    items: allocation.tuitionFee.items.map((item) => ({
-      itemName: item.itemName,
-      subjectName: item.classSubject?.subject.name ?? null,
-      amount: item.amount.toString(),
-    })),
-    discountAmount: allocation.tuitionFee.discountAmount.toString(),
-    additionalAmount: allocation.tuitionFee.additionalAmount.toString(),
-  }));
+  const parsedSnapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id, client));
+  const student = parsedSnapshot?.student ?? batch.student;
+  const snapshot = parsedSnapshot ?? {
+    version: 1 as const,
+    student: { code: student.code, fullName: student.fullName },
+    fees: batch.allocations.map((allocation) =>
+      toFeeSnapshot(allocation.tuitionFee, allocation.amount),
+    ),
+    bankAccount: {
+      bankCode: accountRecord.bankCode,
+      bankName: accountRecord.bankName,
+      accountNo: accountRecord.accountNo,
+      accountName: accountRecord.accountName,
+    },
+  };
+  if (!parsedSnapshot) {
+    await savePaymentBatchNoticeSnapshot(client, batch.id, snapshot);
+  }
+  const account = snapshot.bankAccount ?? accountRecord;
+  const fees = snapshot.fees;
 
   return { batch, accountRecord, account, student, fees, snapshot };
 }
@@ -201,9 +208,7 @@ async function renderPaymentBatchNoticePdf(
       75,
       y,
     );
-    const payableAmount = "payableAmount" in allocation
-      ? allocation.payableAmount
-      : allocation.finalAmount;
+    const payableAmount = allocation.payableAmount;
     draw(`${money(Number(payableAmount))} VND`, 390, y);
     let itemY = y - 17;
     for (const item of allocation.items) {
