@@ -215,7 +215,7 @@ CANCELLED
 Rule:
 
 ```text
-class.code unique
+class.code unique, chỉ gồm ký tự chữ cái ASCII (A-Z/a-z), chữ số (0-9) và dấu gạch ngang (-)
 Sĩ số được giới hạn riêng theo từng class_subject
 active_subject_enrollment_count <= class_subject.max_students
 Không cho xóa nếu đã phát sinh học phí

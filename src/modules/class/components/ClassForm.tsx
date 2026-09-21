@@ -77,11 +77,12 @@ export function ClassForm({
                   error?.message ??
                   (isEditing
                     ? "Mã lớp không thể thay đổi khi chỉnh sửa"
-                    : "Nhập mã lớp duy nhất, ví dụ: ENG001")
+                    : "Chỉ dùng chữ cái a-z, số và dấu -, ví dụ: ENG-001")
                 }
                 fullWidth
                 required={!isEditing}
-                placeholder="VD: ENG001"
+                placeholder="VD: ENG-001"
+                inputProps={{ maxLength: 50, pattern: "[A-Za-z0-9-]+" }}
                 disabled={isEditing}
                 autoFocus
               />

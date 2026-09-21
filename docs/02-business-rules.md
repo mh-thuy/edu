@@ -171,7 +171,7 @@ receipt. Student `INACTIVE` không được đăng ký mới vào lớp.
 Rule:
 
 ```text
-class.code UNIQUE
+class.code UNIQUE, chỉ gồm ký tự chữ cái ASCII (A-Z/a-z), chữ số (0-9) và dấu gạch ngang (-)
 ```
 
 ---

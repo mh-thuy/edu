@@ -143,7 +143,7 @@ async function seedClasses(
 ) {
   const mathClass = await prisma.class.create({
     data: {
-      code: "CLS-MATH-001",
+      code: "CLSMATH001",
       name: "Toán tư duy cơ bản",
       startDate: date("2026-06-01"),
       endDate: date("2026-08-31"),
@@ -154,7 +154,7 @@ async function seedClasses(
 
   const englishClass = await prisma.class.create({
     data: {
-      code: "CLS-ENG-001",
+      code: "CLSENG001",
       name: "Tiếng Anh giao tiếp thiếu nhi",
       startDate: date("2026-06-05"),
       endDate: date("2026-09-30"),
@@ -165,7 +165,7 @@ async function seedClasses(
 
   const physicsClass = await prisma.class.create({
     data: {
-      code: "CLS-PHY-001",
+      code: "CLSPHY001",
       name: "Vật lý nâng cao",
       startDate: date("2026-07-01"),
       endDate: date("2026-09-15"),

@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 const classFieldsSchema = z.object({
-  code: z.string().trim().min(1, "Mã lớp là bắt buộc").max(50),
+  code: z
+    .string()
+    .trim()
+    .min(1, "Mã lớp là bắt buộc")
+    .max(50)
+    .regex(/^[A-Za-z0-9-]+$/, "Mã lớp chỉ được gồm chữ cái a-z, số và dấu -"),
   name: z.string().trim().min(1, "Tên lớp là bắt buộc").max(100),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
