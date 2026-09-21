@@ -1,10 +1,12 @@
 import { apiSuccess, handleApiError } from "@/lib/api";
 import { requireApiUser } from "@/lib/api-auth";
 import {
+  bankReconciliationGroupConfirmSchema,
   bankReconciliationBulkConfirmSchema,
   bankReconciliationConfirmSchema,
 } from "@/modules/finance/bank/schemas/bank-reconciliation.schema";
 import {
+  confirmBankReconciliationGroup,
   confirmBankReconciliation,
   confirmBankReconciliations,
 } from "@/modules/finance/bank/services/bank-csv.service";
@@ -15,6 +17,21 @@ export async function POST(request: Request) {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
     const body: unknown = await request.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "batchIds" in body
+    ) {
+      const groupBody = bankReconciliationGroupConfirmSchema.parse(body);
+      return apiSuccess(
+        await confirmBankReconciliationGroup({
+          confirmationToken: groupBody.confirmationToken,
+          batchIds: groupBody.batchIds,
+          actorId: user.id,
+          auditContext: getAuditContext(request),
+        }),
+      );
+    }
     if (
       typeof body === "object" &&
       body !== null &&

@@ -59,6 +59,12 @@ type Batch = {
     tuitionFee: { feeNo: string; class: { name: string } };
   }>;
 };
+type BatchGroup = {
+  batchIds: string[];
+  totalAmount: number;
+  batches: Batch[];
+  confirmationToken: string;
+};
 type Transaction = {
   confirmationToken: string;
   rowNo: number;
@@ -70,6 +76,7 @@ type Transaction = {
   reconciliationStatus: string;
   paymentBatch?: Batch | null;
   paymentBatchCandidates: Array<Batch & { confirmationToken: string }>;
+  paymentBatchGroupCandidates: BatchGroup[];
 };
 type ImportResult = {
   totalRows: number;
@@ -83,7 +90,7 @@ type ImportResult = {
   items: Transaction[];
 };
 type PendingConfirmation = {
-  body: { confirmationToken: string; batchId: string };
+  body: { confirmationToken: string; batchId?: string; batchIds?: string[] };
   itemToken: string;
   title: string;
   message: string;
@@ -224,6 +231,9 @@ export function BankReconciliationPanel() {
       const studentNames = [
         item.paymentBatch?.student.fullName,
         ...item.paymentBatchCandidates.map((candidate) => candidate.student.fullName),
+        ...item.paymentBatchGroupCandidates.flatMap((group) =>
+          group.batches.map((batch) => batch.student.fullName),
+        ),
       ]
         .filter(Boolean)
         .join(" ")
@@ -243,6 +253,13 @@ export function BankReconciliationPanel() {
             candidate.student.code,
             candidate.student.fullName,
           ]),
+          ...item.paymentBatchGroupCandidates.flatMap((group) =>
+            group.batches.flatMap((batch) => [
+              batch.batchNo,
+              batch.student.code,
+              batch.student.fullName,
+            ]),
+          ),
         ]
           .filter(Boolean)
           .join(" ")
@@ -262,6 +279,9 @@ export function BankReconciliationPanel() {
     const allocations = [
       ...(selectedItem.paymentBatch?.allocations || []),
       ...selectedItem.paymentBatchCandidates.flatMap((candidate) => candidate.allocations),
+      ...selectedItem.paymentBatchGroupCandidates.flatMap((group) =>
+        group.batches.flatMap((batch) => batch.allocations),
+      ),
     ];
     return [...new Set(allocations.map((allocation) => allocation.tuitionFee.class.name))];
   }, [selectedItem]);
@@ -272,6 +292,19 @@ export function BankReconciliationPanel() {
     if (!normalizedSearch) return candidates;
     return candidates.filter((candidate) =>
       candidate.student.fullName.toLocaleLowerCase("vi-VN").includes(normalizedSearch),
+    );
+  }, [drawerStudentSearchTerm, selectedItem]);
+
+  const filteredDrawerGroupCandidates = useMemo(() => {
+    const candidates = selectedItem?.paymentBatchGroupCandidates || [];
+    const normalizedSearch = drawerStudentSearchTerm.trim().toLocaleLowerCase("vi-VN");
+    if (!normalizedSearch) return candidates;
+    return candidates.filter((candidate) =>
+      candidate.batches.some((batch) =>
+        `${batch.student.fullName} ${batch.batchNo}`
+          .toLocaleLowerCase("vi-VN")
+          .includes(normalizedSearch),
+      ),
     );
   }, [drawerStudentSearchTerm, selectedItem]);
 
@@ -375,7 +408,7 @@ export function BankReconciliationPanel() {
 
   function requestConfirm(
     item: Transaction,
-    selection: { batchId: string },
+    selection: { batchId?: string; batchIds?: string[] },
     title: string,
     message: string,
     confirmationToken = item.confirmationToken,
@@ -776,9 +809,9 @@ export function BankReconciliationPanel() {
                       <Typography variant="body2" noWrap>
                         <strong>{item.paymentBatch.batchNo}</strong> · {item.paymentBatch.student.code}
                       </Typography>
-                    ) : item.paymentBatchCandidates.length ? (
+                    ) : item.paymentBatchCandidates.length || item.paymentBatchGroupCandidates.length ? (
                       <Typography variant="body2" color="warning.main" noWrap>
-                        {item.paymentBatchCandidates.length} ứng viên phù hợp
+                        {item.paymentBatchCandidates.length + item.paymentBatchGroupCandidates.length} ứng viên phù hợp
                       </Typography>
                     ) : (
                       <Typography variant="body2" color="text.secondary" noWrap>
@@ -930,12 +963,12 @@ export function BankReconciliationPanel() {
                 <Alert severity="info">Giao dịch ghi nợ, không cần đối soát.</Alert>
               ) : selectedItem.reconciliationStatus === "DUPLICATED" ? (
                 <Alert severity="warning">Giao dịch đã được xác nhận trước đó.</Alert>
-              ) : selectedItem.paymentBatchCandidates.length ? (
+              ) : selectedItem.paymentBatchCandidates.length || selectedItem.paymentBatchGroupCandidates.length ? (
                 <Stack spacing={1.25}>
                   <Box>
                     <Typography variant="subtitle2" fontWeight={700}>Chọn đối tượng đối soát</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Có {selectedItem.paymentBatchCandidates.length} đợt cùng số tiền. Chọn đúng học viên để xác nhận.
+                      Có {selectedItem.paymentBatchCandidates.length} ứng viên đơn lẻ và {selectedItem.paymentBatchGroupCandidates.length} nhóm batch có tổng tiền khớp. Chọn đúng phương án để xác nhận.
                     </Typography>
                   </Box>
                   <TextField
@@ -1000,7 +1033,61 @@ export function BankReconciliationPanel() {
                     </Box>
                   ))}
                   {!filteredDrawerCandidates.length && (
-                    <Alert severity="info">Không tìm thấy học viên phù hợp.</Alert>
+                    selectedItem.paymentBatchCandidates.length > 0 && (
+                      <Alert severity="info">Không tìm thấy đợt đơn lẻ phù hợp.</Alert>
+                    )
+                  )}
+                  {filteredDrawerGroupCandidates.length > 0 && (
+                    <>
+                      <Divider sx={{ my: 0.5 }} />
+                      <Typography variant="subtitle2" fontWeight={700}>
+                        Gộp nhiều đợt thanh toán
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Tổng các batch trong nhóm phải khớp chính xác giao dịch ngân hàng. Sau khi xác nhận, mỗi batch sẽ tạo payment và biên lai riêng.
+                      </Typography>
+                      {filteredDrawerGroupCandidates.map((group) => (
+                        <Box key={group.confirmationToken} sx={{ p: 1.5, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "primary.light" }}>
+                          <Typography variant="body2" fontWeight={700}>
+                            {group.batches.map((batch) => batch.batchNo).join(" + ")}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {group.batches.map((batch) => batch.student.fullName).join(", ")}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {group.batches.length} batch · {money(group.totalAmount)} VND
+                          </Typography>
+                          <Button
+                            sx={{ mt: 1 }}
+                            size="small"
+                            variant="contained"
+                            fullWidth
+                            disabled={loading}
+                            onClick={() =>
+                              requestConfirm(
+                                selectedItem,
+                                { batchIds: group.batchIds },
+                                "Xác nhận gộp nhiều đợt thanh toán",
+                                `Xác nhận giao dịch ${selectedItem.bankTransactionNo || "không có mã"} số tiền ${money(selectedItem.creditAmount)} VND cho ${group.batches.map((batch) => batch.batchNo).join(", ")} và tạo payment/biên lai cho từng đợt?`,
+                                group.confirmationToken,
+                              )
+                            }
+                          >
+                            Chọn nhóm này
+                          </Button>
+                        </Box>
+                      ))}
+                    </>
+                  )}
+                  {!filteredDrawerGroupCandidates.length &&
+                    selectedItem.paymentBatchGroupCandidates.length > 0 &&
+                    drawerStudentSearchTerm && (
+                      <Alert severity="info">Không tìm thấy nhóm batch phù hợp.</Alert>
+                    )}
+                  {!filteredDrawerCandidates.length &&
+                    !filteredDrawerGroupCandidates.length &&
+                    drawerStudentSearchTerm && (
+                      <Alert severity="info">Không tìm thấy ứng viên phù hợp.</Alert>
                   )}
                 </Stack>
               ) : (

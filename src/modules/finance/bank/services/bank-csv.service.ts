@@ -43,6 +43,7 @@ type ReconciliationTokenPayload = {
   debitAmount: string;
   balanceAmount: string | null;
   paymentBatchId: string | null;
+  paymentBatchIds?: string[];
 };
 
 type PaymentBatchMatch = {
@@ -57,6 +58,12 @@ type PaymentBatchMatch = {
   }>;
 };
 
+type PaymentBatchGroupMatch = {
+  batchIds: string[];
+  totalAmount: Prisma.Decimal;
+  batches: PaymentBatchMatch[];
+};
+
 export type BankImportItem = {
   confirmationToken: string;
   rowNo: number;
@@ -69,6 +76,7 @@ export type BankImportItem = {
   reconciliationStatus: ReconciliationStatus;
   paymentBatch: PaymentBatchMatch | null;
   paymentBatchCandidates: Array<PaymentBatchMatch & { confirmationToken: string }>;
+  paymentBatchGroupCandidates: Array<PaymentBatchGroupMatch & { confirmationToken: string }>;
 };
 
 export type BankImportResult = {
@@ -439,7 +447,11 @@ function verifyConfirmationToken(token: string): ReconciliationTokenPayload {
     typeof decoded.creditAmount !== "string" ||
     typeof decoded.debitAmount !== "string" ||
     (decoded.balanceAmount !== null && typeof decoded.balanceAmount !== "string") ||
-    (decoded.paymentBatchId !== null && typeof decoded.paymentBatchId !== "string")
+    (decoded.paymentBatchId !== null && typeof decoded.paymentBatchId !== "string") ||
+    (decoded.paymentBatchIds !== undefined &&
+      (!Array.isArray(decoded.paymentBatchIds) ||
+        decoded.paymentBatchIds.length < 2 ||
+        decoded.paymentBatchIds.some((batchId) => typeof batchId !== "string")))
   ) throw new ConflictError("Token đối soát không hợp lệ");
   return decoded as ReconciliationTokenPayload;
 }
@@ -449,6 +461,7 @@ function createTokenPayload(
   transactionHash: string,
   row: ParsedBankRow,
   paymentBatchId: string | null,
+  paymentBatchIds?: string[],
 ): ReconciliationTokenPayload {
   return {
     version: 1,
@@ -463,7 +476,42 @@ function createTokenPayload(
     debitAmount: row.amount.isNegative() ? row.amount.abs().toString() : "0",
     balanceAmount: row.balance?.toString() ?? null,
     paymentBatchId,
+    ...(paymentBatchIds?.length ? { paymentBatchIds } : {}),
   };
+}
+
+function findExactBatchGroups(
+  batches: PaymentBatchMatch[],
+  targetAmount: Prisma.Decimal,
+  reservedBatchIds: Set<string>,
+  maxGroups = 20,
+  maxBatchCount = 8,
+): PaymentBatchMatch[][] {
+  const candidates = batches
+    .filter((batch) => !reservedBatchIds.has(batch.id) && batch.totalAmount.lessThan(targetAmount))
+    .sort((left, right) => left.totalAmount.comparedTo(right.totalAmount));
+  const groups: PaymentBatchMatch[][] = [];
+  let visited = 0;
+
+  function visit(start: number, total: Prisma.Decimal, selected: PaymentBatchMatch[]) {
+    if (groups.length >= maxGroups || selected.length >= maxBatchCount || visited >= 100_000) return;
+    for (let index = start; index < candidates.length; index += 1) {
+      visited += 1;
+      const candidate = candidates[index]!;
+      const nextTotal = total.add(candidate.totalAmount);
+      if (nextTotal.greaterThan(targetAmount)) continue;
+      const nextSelected = [...selected, candidate];
+      if (nextTotal.equals(targetAmount)) {
+        if (nextSelected.length >= 2) groups.push(nextSelected);
+        continue;
+      }
+      visit(index + 1, nextTotal, nextSelected);
+      if (groups.length >= maxGroups) return;
+    }
+  }
+
+  visit(0, new Prisma.Decimal(0), []);
+  return groups;
 }
 
 function toPaymentBatchMatch(batch: PaymentBatchMatch): PaymentBatchMatch {
@@ -528,28 +576,22 @@ export async function importBankStatement(args: {
     existingPayments.flatMap((payment) => [payment.transactionReference, payment.bankTransactionNo]),
   );
 
-  const creditRows = rows.filter((row) => row.amount.greaterThan(0));
-  const amounts = [...new Set(creditRows.map((row) => row.amount.toString()))].map(
-    (amount) => new Prisma.Decimal(amount),
-  );
-  const pendingBatches = amounts.length
-    ? await prisma.paymentBatch.findMany({
-        where: {
-          status: PaymentBatchStatus.PENDING,
-          paymentMethod: "BANK_TRANSFER",
-          bankAccountId: args.bankAccountId,
-          totalAmount: { in: amounts },
-        },
+  const pendingBatches = await prisma.paymentBatch.findMany({
+    where: {
+      status: PaymentBatchStatus.PENDING,
+      paymentMethod: "BANK_TRANSFER",
+      bankAccountId: args.bankAccountId,
+    },
+    orderBy: { createdAt: "asc" },
+    include: {
+      student: true,
+      allocations: {
         include: {
-          student: true,
-          allocations: {
-            include: {
-              tuitionFee: { include: { class: { select: { name: true } } } },
-            },
-          },
+          tuitionFee: { include: { class: { select: { name: true } } } },
         },
-      })
-    : [];
+      },
+    },
+  });
 
   const importedHashes = new Set<string>();
   const autoMatchCandidatesByRow = new Map<number, PaymentBatchMatch>();
@@ -602,6 +644,7 @@ export async function importBankStatement(args: {
       reconciliationStatus: (isCredit ? "UNMATCHED" : "IGNORED") as ReconciliationStatus,
       paymentBatch: null as BankImportItem["paymentBatch"],
       paymentBatchCandidates: [] as BankImportItem["paymentBatchCandidates"],
+      paymentBatchGroupCandidates: [] as BankImportItem["paymentBatchGroupCandidates"],
     };
     if (
       importedHashes.has(transactionHash) ||
@@ -654,10 +697,26 @@ export async function importBankStatement(args: {
           createTokenPayload(args.bankAccountId, transactionHash, row, candidate.id),
         ),
       }));
+    const paymentBatchGroups = findExactBatchGroups(
+      pendingBatches.map(toPaymentBatchMatch),
+      row.amount,
+      reservedAutoMatchedBatchIds,
+    ).map((batches) => {
+      const batchIds = batches.map((batch) => batch.id);
+      return {
+        batchIds,
+        totalAmount: row.amount,
+        batches,
+        confirmationToken: createConfirmationToken(
+          createTokenPayload(args.bankAccountId, transactionHash, row, null, batchIds),
+        ),
+      };
+    });
 
     items.push({
       ...baseItem,
       paymentBatchCandidates,
+      paymentBatchGroupCandidates: paymentBatchGroups,
     });
   }
 
@@ -811,6 +870,123 @@ export async function confirmBankReconciliation(args: {
     undefined,
     args.auditContext,
   );
+}
+
+export async function confirmBankReconciliationGroup(args: {
+  confirmationToken: string;
+  batchIds: string[];
+  actorId: string;
+  auditContext?: AuditContext;
+}) {
+  const payload = verifyConfirmationToken(args.confirmationToken);
+  if (new Prisma.Decimal(payload.debitAmount).greaterThan(0)) {
+    throw new ConflictError("Không thể đối soát giao dịch ghi nợ");
+  }
+  const batchIds = [...new Set(args.batchIds)].sort();
+  const tokenBatchIds = [...new Set(payload.paymentBatchIds || [])].sort();
+  if (
+    batchIds.length < 2 ||
+    tokenBatchIds.length !== batchIds.length ||
+    tokenBatchIds.some((batchId, index) => batchId !== batchIds[index])
+  ) {
+    throw new ConflictError("Danh sách đợt thanh toán trong token không khớp");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation:${payload.transactionHash}`}))`,
+    );
+    if (payload.bankTransactionNo) {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`bank-reconciliation-no:${payload.bankAccountId}:${payload.bankTransactionNo}`}))`,
+      );
+    }
+
+    const existingBatch = await tx.paymentBatch.findFirst({
+      where: {
+        id: { notIn: batchIds },
+        bankAccountId: payload.bankAccountId,
+        OR: [
+          { transactionReference: payload.transactionHash },
+          ...(payload.bankTransactionNo
+            ? [{ bankTransactionNo: payload.bankTransactionNo }]
+            : []),
+        ],
+      },
+      select: { batchNo: true },
+    });
+    if (existingBatch) {
+      throw new ConflictError(
+        `Giao dịch ngân hàng đã được xác nhận cho đợt ${existingBatch.batchNo}`,
+        "STATEMENT_DUPLICATE",
+      );
+    }
+
+    const batches = await tx.paymentBatch.findMany({
+      where: { id: { in: batchIds } },
+      select: {
+        id: true,
+        status: true,
+        paymentMethod: true,
+        bankAccountId: true,
+        totalAmount: true,
+      },
+    });
+    if (batches.length !== batchIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
+    }
+    if (batches.some((batch) => batch.status !== PaymentBatchStatus.PENDING)) {
+      throw new ConflictError("Một hoặc nhiều đợt thanh toán không còn chờ xử lý");
+    }
+    if (batches.some((batch) => batch.paymentMethod !== "BANK_TRANSFER")) {
+      throw new ConflictError("Chỉ có thể gộp các đợt thanh toán chuyển khoản");
+    }
+    if (batches.some((batch) => batch.bankAccountId !== payload.bankAccountId)) {
+      throw new ConflictError("Tài khoản ngân hàng không khớp với một hoặc nhiều đợt thanh toán");
+    }
+    const totalAmount = batches.reduce(
+      (total, batch) => total.add(batch.totalAmount),
+      new Prisma.Decimal(0),
+    );
+    if (!totalAmount.equals(new Prisma.Decimal(payload.creditAmount))) {
+      throw new ConflictError(
+        "Tổng các đợt thanh toán không khớp số tiền giao dịch ngân hàng",
+        "PAYMENT_AMOUNT_MISMATCH",
+      );
+    }
+
+    const completed = [];
+    for (const batchId of batchIds) {
+      const completedBatch = await completePaymentBatch(tx, batchId, args.actorId, {
+        paymentDate: new Date(payload.transactionDate),
+        bankAccountId: payload.bankAccountId,
+        bankTransactionNo: payload.bankTransactionNo || undefined,
+        transactionReference: payload.transactionHash,
+        paymentContent: payload.description,
+      }, args.auditContext);
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "PAYMENT_BATCH",
+          entityId: batchId,
+          action: "BANK_RECONCILIATION_GROUP_CONFIRMED",
+          dataAfter: {
+            transactionHash: payload.transactionHash,
+            bankAccountId: payload.bankAccountId,
+            bankTransactionNo: payload.bankTransactionNo,
+            rowNo: payload.rowNo,
+            transactionDate: payload.transactionDate,
+            creditAmount: payload.creditAmount,
+            batchIds,
+            groupTotalAmount: totalAmount.toString(),
+          },
+          performedBy: args.actorId,
+          ...auditFields(args.auditContext),
+        },
+      });
+      completed.push(completedBatch);
+    }
+    return { confirmedCount: completed.length, batches: completed };
+  });
 }
 
 export async function confirmBankReconciliations(args: {

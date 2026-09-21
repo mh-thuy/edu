@@ -9,6 +9,11 @@ export const bankReconciliationConfirmSchema = z.object({
   batchId: z.string().uuid(),
 });
 
+export const bankReconciliationGroupConfirmSchema = z.object({
+  confirmationToken: z.string().min(1),
+  batchIds: z.array(z.string().uuid()).min(2).max(20),
+});
+
 export const bankReconciliationBulkConfirmSchema = z.object({
   confirmations: z
     .array(bankReconciliationConfirmSchema)
@@ -18,6 +23,10 @@ export const bankReconciliationBulkConfirmSchema = z.object({
 
 export type BankReconciliationConfirm = z.infer<
   typeof bankReconciliationConfirmSchema
+>;
+
+export type BankReconciliationGroupConfirm = z.infer<
+  typeof bankReconciliationGroupConfirmSchema
 >;
 
 export type BankReconciliationBulkConfirm = z.infer<
