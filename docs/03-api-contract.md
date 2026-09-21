@@ -229,6 +229,16 @@ classSubjectIds = UUID môn học (có thể gửi nhiều lần)
 API áp dụng toàn bộ nghiệp vụ đăng ký hiện hành cho từng dòng; kết quả trả về số
 đăng ký thành công, số dòng bỏ qua và danh sách lỗi theo số dòng Excel.
 
+Xuất danh sách học viên của một lớp dùng mã học viên trong cột MÃ HỌC VIÊN để có
+thể import lại:
+
+```http
+GET /api/classes/{classId}/students/export
+```
+
+API trả về file Excel `.xlsx` gồm các học viên đang học hoặc đã hoàn thành trong
+lớp. Khi import lại, người dùng vẫn chọn các môn học áp dụng trong dialog import.
+
 ---
 
 # 7. CRUD Pattern chuẩn

@@ -50,7 +50,7 @@ type PaymentBatchMatch = {
   id: string;
   batchNo: string;
   totalAmount: Prisma.Decimal;
-  student: { code: string; fullName: string };
+  student: { id: string; code: string; fullName: string };
   allocations: Array<{
     tuitionFeeId: string;
     amount: Prisma.Decimal;
@@ -487,13 +487,22 @@ function findExactBatchGroups(
   maxGroups = 20,
   maxBatchCount = 8,
 ): PaymentBatchMatch[][] {
-  const candidates = batches
-    .filter((batch) => !reservedBatchIds.has(batch.id) && batch.totalAmount.lessThan(targetAmount))
-    .sort((left, right) => left.totalAmount.comparedTo(right.totalAmount));
+  const candidatesByStudent = new Map<string, PaymentBatchMatch[]>();
+  for (const batch of batches) {
+    if (reservedBatchIds.has(batch.id) || !batch.totalAmount.lessThan(targetAmount)) continue;
+    const studentBatches = candidatesByStudent.get(batch.student.id) ?? [];
+    studentBatches.push(batch);
+    candidatesByStudent.set(batch.student.id, studentBatches);
+  }
   const groups: PaymentBatchMatch[][] = [];
   let visited = 0;
 
-  function visit(start: number, total: Prisma.Decimal, selected: PaymentBatchMatch[]) {
+  function visit(
+    candidates: PaymentBatchMatch[],
+    start: number,
+    total: Prisma.Decimal,
+    selected: PaymentBatchMatch[],
+  ) {
     if (groups.length >= maxGroups || selected.length >= maxBatchCount || visited >= 100_000) return;
     for (let index = start; index < candidates.length; index += 1) {
       visited += 1;
@@ -505,12 +514,16 @@ function findExactBatchGroups(
         if (nextSelected.length >= 2) groups.push(nextSelected);
         continue;
       }
-      visit(index + 1, nextTotal, nextSelected);
+      visit(candidates, index + 1, nextTotal, nextSelected);
       if (groups.length >= maxGroups) return;
     }
   }
 
-  visit(0, new Prisma.Decimal(0), []);
+  for (const studentBatches of candidatesByStudent.values()) {
+    studentBatches.sort((left, right) => left.totalAmount.comparedTo(right.totalAmount));
+    visit(studentBatches, 0, new Prisma.Decimal(0), []);
+    if (groups.length >= maxGroups || visited >= 100_000) break;
+  }
   return groups;
 }
 
@@ -926,6 +939,7 @@ export async function confirmBankReconciliationGroup(args: {
       where: { id: { in: batchIds } },
       select: {
         id: true,
+        studentId: true,
         status: true,
         paymentMethod: true,
         bankAccountId: true,
@@ -940,6 +954,9 @@ export async function confirmBankReconciliationGroup(args: {
     }
     if (batches.some((batch) => batch.paymentMethod !== "BANK_TRANSFER")) {
       throw new ConflictError("Chỉ có thể gộp các đợt thanh toán chuyển khoản");
+    }
+    if (new Set(batches.map((batch) => batch.studentId)).size !== 1) {
+      throw new ConflictError("Chỉ có thể gộp các đợt thanh toán của cùng một học sinh");
     }
     if (batches.some((batch) => batch.bankAccountId !== payload.bankAccountId)) {
       throw new ConflictError("Tài khoản ngân hàng không khớp với một hoặc nhiều đợt thanh toán");

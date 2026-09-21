@@ -7,7 +7,7 @@ Hiện hỗ trợ file Excel `.xlsx` theo format BIDV và Techcombank. BIDV hỗ
 Chống trùng dựa trên transaction hash/mã giao dịch của các payment hoặc payment batch đã xác nhận. Chỉ khi người dùng xác nhận, hệ thống mới tạo payment, receipt và audit log.
 
 Một giao dịch ngân hàng chỉ được dùng một lần. Khi đối soát nhóm, toàn bộ batch phải
-cùng tài khoản ngân hàng, đang `PENDING`, là `BANK_TRANSFER`, và tổng
+cùng một học sinh, cùng tài khoản ngân hàng, đang `PENDING`, là `BANK_TRANSFER`, và tổng
 `payment_batch.total_amount` phải bằng chính xác số tiền ghi có. Việc xác nhận nhóm
 thực hiện trong một transaction; mỗi batch tạo payment và biên lai riêng nhưng dùng
 chung mã giao dịch ngân hàng.

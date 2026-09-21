@@ -40,6 +40,7 @@ import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 
 type ClassSubject = {
   id: string;
@@ -368,6 +369,27 @@ export function ClassStudentManagement({ id }: { id: string }) {
     }
   }
 
+  async function exportStudents() {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/classes/${id}/students/export`);
+      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể xuất danh sách học viên"));
+
+      const file = await response.blob();
+      const url = URL.createObjectURL(file);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `danh-sach-hoc-vien-${classData?.code ?? "lop"}.xlsx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      showSuccess("Đã xuất danh sách học viên ra Excel");
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : "Không thể xuất danh sách học viên");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!classData && loading) return <Typography>Đang tải quản lý học viên...</Typography>;
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
   const classClosed = classData.status === "COMPLETED" || classData.status === "CANCELLED";
@@ -393,6 +415,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
         </Stack>
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
+          <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => void exportStudents()} disabled={busy || loading}>Xuất Excel</Button>
           <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={openImportDialog} disabled={classClosed || !hasActiveClassSubjects}>Import Excel</Button>
           <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={classClosed || !hasActiveClassSubjects}>Đăng ký học viên</Button>
         </Stack>

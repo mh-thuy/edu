@@ -52,7 +52,7 @@ type Batch = {
   id: string;
   batchNo: string;
   totalAmount: number;
-  student: { code: string; fullName: string };
+  student: { id: string; code: string; fullName: string };
   allocations: Array<{
     tuitionFeeId: string;
     amount: number;
@@ -1052,7 +1052,7 @@ export function BankReconciliationPanel() {
                             {group.batches.map((batch) => batch.batchNo).join(" + ")}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {group.batches.map((batch) => batch.student.fullName).join(", ")}
+                            Học sinh: {group.batches[0]?.student.fullName || "Chưa xác định"}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             {group.batches.length} batch · {money(group.totalAmount)} VND
@@ -1068,7 +1068,7 @@ export function BankReconciliationPanel() {
                                 selectedItem,
                                 { batchIds: group.batchIds },
                                 "Xác nhận gộp nhiều đợt thanh toán",
-                                `Xác nhận giao dịch ${selectedItem.bankTransactionNo || "không có mã"} số tiền ${money(selectedItem.creditAmount)} VND cho ${group.batches.map((batch) => batch.batchNo).join(", ")} và tạo payment/biên lai cho từng đợt?`,
+                                `Xác nhận giao dịch ${selectedItem.bankTransactionNo || "không có mã"} số tiền ${money(selectedItem.creditAmount)} VND cho học sinh ${group.batches[0]?.student.fullName || "chưa xác định"}, gồm ${group.batches.map((batch) => batch.batchNo).join(", ")} và tạo payment/biên lai cho từng đợt?`,
                                 group.confirmationToken,
                               )
                             }
