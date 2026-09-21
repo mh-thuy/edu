@@ -63,21 +63,18 @@ export async function createClassPaymentBatches(
         },
       },
     });
-    const incompatibleBatch = existingPendingBatches.find(
-      (batch) =>
-        batch.paymentMethod !== "BANK_TRANSFER" ||
-        batch.bankAccountId !== bankAccount.id ||
-        batch.allocations.some(
-          ({ tuitionFee }) =>
-            tuitionFee.classId !== classId ||
-            tuitionFee.billingYear !== period.billingYear ||
-            tuitionFee.billingMonth !== period.billingMonth ||
-            tuitionFee.billingType !== TuitionFeeBillingType.MONTHLY,
-        ),
+    const mixedScopeBatch = existingPendingBatches.find((batch) =>
+      batch.allocations.some(
+        ({ tuitionFee }) =>
+          tuitionFee.classId !== classId ||
+          tuitionFee.billingYear !== period.billingYear ||
+          tuitionFee.billingMonth !== period.billingMonth ||
+          tuitionFee.billingType !== TuitionFeeBillingType.MONTHLY,
+      ),
     );
-    if (incompatibleBatch) {
+    if (mixedScopeBatch) {
       throw new ConflictError(
-        `Đợt ${incompatibleBatch.batchNo} đã chờ xử lý nhưng không phù hợp với tài khoản, phương thức hoặc phạm vi lớp/kỳ đang chọn`,
+        `Đợt ${mixedScopeBatch.batchNo} đã chờ xử lý và bao gồm học phí ngoài lớp/kỳ đang chọn. Hãy xử lý hoặc hủy đợt này trước khi xuất thông báo theo lớp`,
       );
     }
 
