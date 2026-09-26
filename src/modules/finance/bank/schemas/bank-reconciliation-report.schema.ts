@@ -74,4 +74,11 @@ export type BankReconciliationReportDocument = {
   scope: "ALL" | "MATCHED" | "UNMATCHED";
   items: BankReconciliationReportItem[];
   balanceItems: BankReconciliationReportItem[];
+  balanceCheck: {
+    openingBalance: string | null;
+    closingBalance: string | null;
+    totalCredit: string;
+    totalDebit: string;
+    variance: string | null;
+  };
 };

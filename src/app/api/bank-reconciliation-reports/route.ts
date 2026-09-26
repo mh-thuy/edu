@@ -9,8 +9,10 @@ import {
   type BankReconciliationReportDocument,
 } from "@/modules/finance/bank/schemas/bank-reconciliation-report.schema";
 import {
+  findExactBatchGroups,
   verifyBankReconciliationToken,
   verifyBankStatementToken,
+  type PaymentBatchMatch,
 } from "@/modules/finance/bank/services/bank-csv.service";
 import { buildBankReconciliationReportExcel } from "@/modules/finance/bank/services/bank-reconciliation-report-excel.service";
 
@@ -30,6 +32,10 @@ function decimal(value: string, label: string) {
 
 function sameDecimal(left: string, right: string) {
   return decimal(left, "Số tiền").equals(decimal(right, "Số tiền"));
+}
+
+function normalizeBankAccountNumber(value: string) {
+  return value.replace(/[\s-]/g, "");
 }
 
 function assertSameTransaction(
@@ -75,16 +81,21 @@ async function buildVerifiedReport(
     select: { id: true, bankName: true, accountNo: true, accountName: true },
   });
   if (!account) throw new ConflictError("Tài khoản ngân hàng không còn tồn tại");
-  if (statementToken.statement.accountNo && statementToken.statement.accountNo !== account.accountNo) {
+  if (
+    statementToken.statement.accountNo &&
+    normalizeBankAccountNumber(statementToken.statement.accountNo) !== normalizeBankAccountNumber(account.accountNo)
+  ) {
     throw new ConflictError("Số tài khoản trong file sao kê không khớp tài khoản đã chọn");
   }
 
   const seenRows = new Set<number>();
+  const expectedRows = new Map(statementToken.transactionRows.map((row) => [row.rowNo, row.transactionHash]));
   const verified = input.items.map((requestItem) => {
     const source = verifyBankReconciliationToken(requestItem.confirmationToken);
     if (
       source.bankAccountId !== account.id ||
       source.importSessionId !== statementToken.importSessionId ||
+      expectedRows.get(source.rowNo) !== source.transactionHash ||
       seenRows.has(source.rowNo)
     ) {
       throw new ConflictError("Dữ liệu giao dịch không thuộc cùng phiên sao kê hoặc bị lặp dòng");
@@ -126,6 +137,12 @@ async function buildVerifiedReport(
       finalStatus,
     };
   });
+  if (
+    seenRows.size !== expectedRows.size ||
+    [...expectedRows.keys()].some((rowNo) => !seenRows.has(rowNo))
+  ) {
+    throw new ConflictError("Báo cáo chưa bao gồm đầy đủ các dòng sao kê của phiên phân tích");
+  }
 
   const allBatchIds = [...new Set(verified.flatMap((item) => item.batchIds))];
   const batches = await prisma.paymentBatch.findMany({
@@ -135,6 +152,8 @@ async function buildVerifiedReport(
       batchNo: true,
       totalAmount: true,
       status: true,
+      paymentMethod: true,
+      bankAccountId: true,
       student: { select: { code: true, fullName: true } },
       allocations: {
         select: {
@@ -153,8 +172,24 @@ async function buildVerifiedReport(
       paymentMethod: "BANK_TRANSFER",
       status: PaymentBatchStatus.PENDING,
     },
-    select: { totalAmount: true },
+    select: {
+      id: true,
+      totalAmount: true,
+      student: { select: { id: true, code: true, fullName: true } },
+      allocations: {
+        select: {
+          tuitionFeeId: true,
+          amount: true,
+          tuitionFee: { select: { feeNo: true, class: { select: { name: true } } } },
+        },
+      },
+    },
   });
+  const autoMatchedBatchIds = new Set(
+    verified
+      .filter(({ source }) => source.reconciliationStatus === "AUTO_MATCHED" && source.paymentBatchId)
+      .map(({ source }) => source.paymentBatchId!),
+  );
 
   const items = verified.map(({ source, batchIds, finalStatus }) => {
     const selectedBatches = batchIds.map((batchId) => {
@@ -162,12 +197,38 @@ async function buildVerifiedReport(
       if (!batch) throw new ConflictError("Đợt thu trong token không còn thuộc tài khoản này");
       return batch;
     });
-    if (finalStatus === "CONFIRMED" && selectedBatches.some((batch) => batch.status !== PaymentBatchStatus.SUCCESS)) {
-      throw new ConflictError("Chỉ được xuất mapping đã xác nhận thành công");
-    }
     const creditAmount = decimal(source.creditAmount, "Ghi có");
+    const selectedTotal = selectedBatches.reduce(
+      (sum, batch) => sum.add(batch.totalAmount),
+      new Prisma.Decimal(0),
+    );
+    if (selectedBatches.length > 0 && !selectedTotal.equals(creditAmount)) {
+      throw new ConflictError("Tổng đợt thu không khớp số tiền giao dịch ngân hàng");
+    }
+    if (finalStatus === "CONFIRMED") {
+      if (selectedBatches.some((batch) => batch.status !== PaymentBatchStatus.SUCCESS)) {
+        throw new ConflictError("Chỉ được xuất mapping đã xác nhận thành công");
+      }
+    } else if (source.reconciliationStatus === "AUTO_MATCHED") {
+      if (
+        selectedBatches.length !== 1 ||
+        selectedBatches[0]?.status !== PaymentBatchStatus.PENDING ||
+        selectedBatches[0]?.paymentMethod !== "BANK_TRANSFER" ||
+        selectedBatches[0]?.bankAccountId !== account.id
+      ) {
+        throw new ConflictError("Đợt tự động khớp không còn ở trạng thái chờ đối soát");
+      }
+    }
+    const pendingMatches = pendingCandidates.filter(
+      (candidate) =>
+        candidate.totalAmount.equals(creditAmount) &&
+        !autoMatchedBatchIds.has(candidate.id),
+    ) as PaymentBatchMatch[];
     const candidateCount = creditAmount.greaterThan(0)
-      ? pendingCandidates.filter((candidate) => candidate.totalAmount.equals(creditAmount)).length
+      ? pendingMatches.length
+      : 0;
+    const groupCandidateCount = creditAmount.greaterThan(0)
+      ? findExactBatchGroups(pendingMatches, creditAmount, new Set()).length
       : 0;
     return reportItemDataSchema.parse({
       rowNo: source.rowNo,
@@ -192,7 +253,7 @@ async function buildVerifiedReport(
         .map((batch) => batch.receipt?.receiptNo)
         .filter((receiptNo): receiptNo is string => Boolean(receiptNo)),
       paymentBatchCandidateCount: candidateCount,
-      paymentBatchGroupCandidateCount: 0,
+      paymentBatchGroupCandidateCount: groupCandidateCount,
     });
   });
 
@@ -204,6 +265,19 @@ async function buildVerifiedReport(
         : true,
   );
   const statement = statementToken.statement;
+  const openingBalance = statement.openingBalance === null ? null : decimal(statement.openingBalance, "Số dư đầu kỳ");
+  const closingBalance = statement.closingBalance === null ? null : decimal(statement.closingBalance, "Số dư cuối kỳ");
+  const totalCredit = verified.reduce(
+    (sum, item) => sum.add(decimal(item.source.creditAmount, "Ghi có")),
+    new Prisma.Decimal(0),
+  );
+  const totalDebit = verified.reduce(
+    (sum, item) => sum.add(decimal(item.source.debitAmount, "Ghi nợ")),
+    new Prisma.Decimal(0),
+  );
+  const variance = openingBalance && closingBalance
+    ? openingBalance.add(totalCredit).sub(totalDebit).sub(closingBalance)
+    : null;
   return {
     fileName: statementToken.fileName,
     bankName: account.bankName,
@@ -218,6 +292,13 @@ async function buildVerifiedReport(
     scope: input.scope,
     items: selectedItems,
     balanceItems: items,
+    balanceCheck: {
+      openingBalance: openingBalance?.toString() ?? null,
+      closingBalance: closingBalance?.toString() ?? null,
+      totalCredit: totalCredit.toString(),
+      totalDebit: totalDebit.toString(),
+      variance: variance?.toString() ?? null,
+    },
   };
 }
 

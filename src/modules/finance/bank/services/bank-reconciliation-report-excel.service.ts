@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { Prisma } from "@prisma/client";
 import type {
   BankReconciliationReportDocument,
   BankReconciliationReportItem,
@@ -111,11 +112,10 @@ export async function buildBankReconciliationReportExcel(
     return counts;
   }, {});
   const totalCredit = reportItems.reduce((sum, item) => sum + item.creditAmount, 0);
-  const totalDebit = balanceItems.reduce((sum, item) => sum + item.debitAmount, 0);
-  const totalCreditForBalance = balanceItems.reduce((sum, item) => sum + item.creditAmount, 0);
-  const balanceVariance = report.statement.openingBalance !== null && report.statement.closingBalance !== null
-    ? report.statement.openingBalance + totalCreditForBalance - totalDebit - report.statement.closingBalance
-    : null;
+  const totalDebit = new Prisma.Decimal(report.balanceCheck.totalDebit).toNumber();
+  const balanceVariance = report.balanceCheck.variance === null
+    ? null
+    : new Prisma.Decimal(report.balanceCheck.variance).toNumber();
 
   const overview = workbook.addWorksheet("Tổng quan");
   overview.columns = [{ width: 30 }, { width: 36 }, { width: 20 }, { width: 22 }];

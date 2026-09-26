@@ -68,6 +68,7 @@ type BankStatementTokenPayload = {
   importSessionId: string;
   bankAccountId: string;
   fileName: string;
+  transactionRows: Array<{ rowNo: number; transactionHash: string }>;
   statement: {
     bankFormat: BankStatementMetadata["bankFormat"];
     fromDate: string | null;
@@ -81,7 +82,7 @@ type BankStatementTokenPayload = {
   invalidRowErrors: ParsedBankRowError[];
 };
 
-type PaymentBatchMatch = {
+export type PaymentBatchMatch = {
   id: string;
   batchNo: string;
   totalAmount: Prisma.Decimal;
@@ -461,6 +462,10 @@ function normalize(value: string) {
     .toLowerCase();
 }
 
+function normalizeBankAccountNumber(value: string) {
+  return value.replace(/[\s-]/g, "");
+}
+
 function normalizeBatchReference(value: string) {
   return normalize(value).replace(/[^a-z0-9]/g, "");
 }
@@ -539,6 +544,10 @@ export function verifyBankStatementToken(token: string): BankStatementTokenPaylo
     typeof decoded.importSessionId !== "string" ||
     typeof decoded.bankAccountId !== "string" ||
     typeof decoded.fileName !== "string" ||
+    !Array.isArray(decoded.transactionRows) ||
+    decoded.transactionRows.some(
+      (row) => !isRecord(row) || typeof row.rowNo !== "number" || typeof row.transactionHash !== "string",
+    ) ||
     !isRecord(decoded.statement) ||
     !["BIDV", "TECHCOMBANK"].includes(decoded.statement.bankFormat as string) ||
     (decoded.statement.fromDate !== null && typeof decoded.statement.fromDate !== "string") ||
@@ -637,7 +646,7 @@ function createTokenPayload(
   };
 }
 
-function findExactBatchGroups(
+export function findExactBatchGroups(
   batches: PaymentBatchMatch[],
   targetAmount: Prisma.Decimal,
   reservedBatchIds: Set<string>,
@@ -710,11 +719,17 @@ export async function importBankStatement(args: {
 }): Promise<BankImportResult> {
   const bank = await prisma.bankAccount.findUnique({
     where: { id: args.bankAccountId },
-    select: { id: true, isActive: true, bankCode: true },
+    select: { id: true, isActive: true, bankCode: true, accountNo: true },
   });
   if (!bank) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
   if (!bank.isActive) throw new ConflictError("Tài khoản ngân hàng đã ngừng hoạt động");
   const parsed = await parseBankStatement(args.buffer, bank.bankCode);
+  if (
+    parsed.statement.accountNo &&
+    normalizeBankAccountNumber(parsed.statement.accountNo) !== normalizeBankAccountNumber(bank.accountNo)
+  ) {
+    throw new ConflictError("Số tài khoản trong file sao kê không khớp tài khoản đã chọn");
+  }
   const { rows, errors: invalidRowErrors } = parsed;
   const importSessionId = crypto.randomUUID();
 
@@ -907,6 +922,10 @@ export async function importBankStatement(args: {
       importSessionId,
       bankAccountId: args.bankAccountId,
       fileName: args.fileName,
+      transactionRows: rows.map((row, index) => ({
+        rowNo: row.rowNo,
+        transactionHash: rowHashes[index]!.transactionHash,
+      })),
       statement: {
         ...parsed.statement,
         openingBalance: parsed.statement.openingBalance?.toString() ?? null,
