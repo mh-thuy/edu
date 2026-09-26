@@ -7,6 +7,7 @@ import ClassOutlinedIcon from "@mui/icons-material/ClassOutlined";
 import ReceiptOutlinedIcon from "@mui/icons-material/ReceiptOutlined";
 import AccountBalanceWalletOutlinedIcon from "@mui/icons-material/AccountBalanceWalletOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import CallSplitOutlinedIcon from "@mui/icons-material/CallSplitOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
@@ -75,6 +76,12 @@ const items: SidebarItem[] = [
     label: "Thu học phí",
     href: "/admin/tuition-fees/payment",
     icon: <PaymentsOutlinedIcon fontSize="small" />,
+    section: "Tài chính",
+  },
+  {
+    label: "Tách/gộp đợt thu",
+    href: "/admin/tuition-fees/notice-management",
+    icon: <CallSplitOutlinedIcon fontSize="small" />,
     section: "Tài chính",
   },
   {

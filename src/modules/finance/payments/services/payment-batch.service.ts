@@ -7,7 +7,11 @@ import {
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
-import type { PaymentBatchCreate } from "../schemas/payment-batch.schema";
+import type {
+  NoticeBatchCreate,
+  PaymentBatchCreate,
+  PendingBatchRestructure,
+} from "../schemas/payment-batch.schema";
 import { parseVietnamDateStart } from "@/lib/vietnam-time";
 import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
@@ -710,6 +714,190 @@ export async function createPaymentBatch(
   return transaction ? execute(transaction) : prisma.$transaction(execute);
 }
 
+export async function createNoticeBatches(
+  data: NoticeBatchCreate,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
+  return prisma.$transaction(async (tx) => {
+    const feeRefs = await tx.tuitionFee.findMany({
+      where: { id: { in: data.tuitionFeeIds } },
+      select: { id: true, studentId: true },
+    });
+    if (feeRefs.length !== data.tuitionFeeIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
+    }
+
+    const studentIds = new Set(feeRefs.map((fee) => fee.studentId));
+    if (data.mode === "GROUPED" && studentIds.size !== 1) {
+      throw new ConflictError("Chỉ được gộp học phí của cùng một học sinh");
+    }
+
+    const groups = data.mode === "GROUPED"
+      ? [feeRefs]
+      : feeRefs.map((fee) => [fee]);
+    const batches = [];
+    for (const [index, group] of groups.entries()) {
+      const batch = await createPaymentBatch(
+        {
+          tuitionFeeIds: group.map((fee) => fee.id),
+          paymentMethod: "BANK_TRANSFER",
+          bankAccountId: data.bankAccountId,
+          idempotencyKey: `${data.idempotencyKey}-${index + 1}`.slice(0, 150),
+        },
+        actorId,
+        tx,
+        auditContext,
+      );
+      batches.push(batch);
+    }
+
+    return {
+      batches: batches.map((batch) => ({
+        id: batch.id,
+        batchNo: batch.batchNo,
+        totalAmount: batch.totalAmount,
+      })),
+    };
+  });
+}
+
+async function cancelPendingBatchInTransaction(
+  tx: Prisma.TransactionClient,
+  batchId: string,
+  actorId: string,
+  reason: string,
+  auditContext?: AuditContext,
+) {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
+  );
+  const batch = await tx.paymentBatch.findUnique({
+    where: { id: batchId },
+    include: { allocations: true },
+  });
+  if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
+  if (batch.status !== PaymentBatchStatus.PENDING) {
+    throw new ConflictError("Chỉ có thể thay đổi đợt thanh toán đang chờ đối soát");
+  }
+
+  const cancelled = await tx.paymentBatch.update({
+    where: { id: batchId },
+    data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
+    include: { allocations: true, student: true },
+  });
+  await tx.tuitionAuditLog.create({
+    data: {
+      entityType: "PAYMENT_BATCH",
+      entityId: batchId,
+      action: "CANCEL",
+      reason,
+      dataBefore: batch as unknown as Prisma.InputJsonValue,
+      dataAfter: cancelled as unknown as Prisma.InputJsonValue,
+      performedBy: actorId,
+      ...auditFields(auditContext),
+    },
+  });
+  return { batch, cancelled };
+}
+
+export async function restructurePendingBatches(
+  data: PendingBatchRestructure,
+  actorId: string,
+  auditContext?: AuditContext,
+) {
+  return prisma.$transaction(async (tx) => {
+    const batchIds = data.operation === "SPLIT"
+      ? [data.sourceBatchId]
+      : [...new Set(data.batchIds)];
+    const sourceBatches = await tx.paymentBatch.findMany({
+      where: { id: { in: batchIds } },
+      include: { allocations: true },
+    });
+    if (sourceBatches.length !== batchIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
+    }
+    if (sourceBatches.some((batch) => batch.status !== PaymentBatchStatus.PENDING)) {
+      throw new ConflictError("Chỉ có thể tách hoặc gộp đợt đang chờ đối soát");
+    }
+    if (sourceBatches.some((batch) => batch.paymentMethod !== "BANK_TRANSFER")) {
+      throw new ConflictError("Chỉ có thể tách hoặc gộp đợt chuyển khoản");
+    }
+    if (new Set(sourceBatches.map((batch) => batch.studentId)).size !== 1) {
+      throw new ConflictError("Chỉ được tách hoặc gộp các đợt của cùng một học sinh");
+    }
+    if (new Set(sourceBatches.map((batch) => batch.bankAccountId)).size !== 1) {
+      throw new ConflictError("Các đợt phải dùng cùng một tài khoản nhận tiền");
+    }
+
+    const allocations = sourceBatches.flatMap((batch) => batch.allocations);
+    if (data.operation === "SPLIT" && allocations.length < 2) {
+      throw new ConflictError("Đợt thanh toán chỉ có một khoản, không cần tách");
+    }
+
+    const groups = data.operation === "SPLIT"
+      ? allocations.map((allocation) => [allocation])
+      : [allocations];
+    for (const batch of sourceBatches) {
+      await cancelPendingBatchInTransaction(
+        tx,
+        batch.id,
+        actorId,
+        data.reason,
+        auditContext,
+      );
+    }
+
+    const newBatches = [];
+    for (const [index, group] of groups.entries()) {
+      const created = await createPaymentBatch(
+        {
+          tuitionFeeIds: group.map((allocation) => allocation.tuitionFeeId),
+          amounts: Object.fromEntries(
+            group.map((allocation) => [allocation.tuitionFeeId, allocation.amount.toString()]),
+          ),
+          paymentMethod: "BANK_TRANSFER",
+          bankAccountId: sourceBatches[0]?.bankAccountId ?? undefined,
+          idempotencyKey: `${data.idempotencyKey}-${index + 1}`.slice(0, 150),
+        },
+        actorId,
+        tx,
+        auditContext,
+      );
+      newBatches.push(created);
+    }
+
+    for (const oldBatch of sourceBatches) {
+      await tx.tuitionAuditLog.create({
+        data: {
+          entityType: "PAYMENT_BATCH",
+          entityId: oldBatch.id,
+          action: data.operation,
+          reason: data.reason,
+          dataBefore: {
+            batchNo: oldBatch.batchNo,
+            allocationCount: oldBatch.allocations.length,
+          },
+          dataAfter: {
+            batchIds: newBatches.map((batch) => batch.id),
+            batchNos: newBatches.map((batch) => batch.batchNo),
+          },
+          performedBy: actorId,
+          ...auditFields(auditContext),
+        },
+      });
+    }
+
+    return {
+      batches: newBatches.map((batch) => ({
+        id: batch.id,
+        batchNo: batch.batchNo,
+        totalAmount: batch.totalAmount,
+      })),
+    };
+  });
+}
+
 export async function listPaymentBatches(params: {
   transactionCode?: string;
   studentCode?: string;
@@ -895,35 +1083,13 @@ export async function cancelPaymentBatch(
   auditContext?: AuditContext,
 ) {
   return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(
-      Prisma.sql`SELECT id FROM payment_batches WHERE id = ${batchId}::uuid FOR UPDATE`,
-    );
-    const batch = await tx.paymentBatch.findUnique({
-      where: { id: batchId },
-      include: { allocations: true },
-    });
-    if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
-    if (batch.status !== PaymentBatchStatus.PENDING)
-    throw new ConflictError("Chỉ có thể hủy đợt thanh toán đang chờ đối soát");
-
-    const cancelled = await tx.paymentBatch.update({
-      where: { id: batchId },
-      data: { status: PaymentBatchStatus.CANCELLED, updatedBy: actorId },
-      include: { allocations: true, student: true },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "PAYMENT_BATCH",
-        entityId: batchId,
-        action: "CANCEL",
-        reason,
-        dataBefore: batch as unknown as Prisma.InputJsonValue,
-        dataAfter: cancelled as unknown as Prisma.InputJsonValue,
-        performedBy: actorId,
-        ...auditFields(auditContext),
-      },
-    });
-    return cancelled;
+    return (await cancelPendingBatchInTransaction(
+      tx,
+      batchId,
+      actorId,
+      reason,
+      auditContext,
+    )).cancelled;
   });
 }
 

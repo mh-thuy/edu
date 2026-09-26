@@ -53,4 +53,28 @@ export const cashPaymentSchema = z.object({
   note: z.string().trim().max(500, "Ghi chú tối đa 500 ký tự").optional(),
 });
 
+export const noticeBatchCreateSchema = z.object({
+  tuitionFeeIds: z.array(z.string().uuid()).min(1).max(100),
+  mode: z.enum(["GROUPED", "SEPARATE"]),
+  bankAccountId: z.string().uuid(),
+  idempotencyKey: z.string().trim().min(1).max(150),
+});
+
+export const pendingBatchRestructureSchema = z.discriminatedUnion("operation", [
+  z.object({
+    operation: z.literal("SPLIT"),
+    sourceBatchId: z.string().uuid(),
+    reason: z.string().trim().min(1, "Lý do là bắt buộc").max(500),
+    idempotencyKey: z.string().trim().min(1).max(150),
+  }),
+  z.object({
+    operation: z.literal("MERGE"),
+    batchIds: z.array(z.string().uuid()).min(2).max(100),
+    reason: z.string().trim().min(1, "Lý do là bắt buộc").max(500),
+    idempotencyKey: z.string().trim().min(1).max(150),
+  }),
+]);
+
 export type PaymentBatchCreate = z.infer<typeof paymentBatchCreateSchema>;
+export type NoticeBatchCreate = z.infer<typeof noticeBatchCreateSchema>;
+export type PendingBatchRestructure = z.infer<typeof pendingBatchRestructureSchema>;

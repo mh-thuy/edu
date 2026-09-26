@@ -54,6 +54,9 @@ type Fee = {
   student?: { code: string; fullName: string } | null;
   class?: { name: string } | null;
   payments?: Array<{ paymentDate: string; paymentMethod: string }>;
+  paymentAllocations?: Array<{
+    paymentBatch: { id: string; batchNo: string; status: string };
+  }>;
 };
 
 const labels: Record<Status, string> = {
@@ -216,16 +219,18 @@ export function TuitionList() {
             </Button>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "center" }}>
-            <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={setBillingMonth} textFieldProps={{ size: "small" }} />
-            <FormControl size="small" sx={{ minWidth: { sm: 210 }, flex: { sm: 1 } }}>
+            <Box sx={{ width: { xs: "100%", sm: 220 }, flexShrink: 0 }}>
+              <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={setBillingMonth} textFieldProps={{ size: "small" }} />
+            </Box>
+            <FormControl size="small" sx={{ minWidth: { sm: 210 }, maxWidth: { sm: 420 }, flex: { sm: 1 } }}>
               <InputLabel id="tuition-status-label">Trạng thái</InputLabel>
               <Select labelId="tuition-status-label" label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Tất cả trạng thái</MenuItem>
                 {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
               </Select>
             </FormControl>
-            <Button variant="contained" onClick={applyFilters}>Tìm kiếm</Button>
-            <Button variant="outlined" onClick={clearFilters} disabled={!studentCode && !classId && !status && !billingType && !billingMonth}>Xóa lọc</Button>
+            <Button variant="contained" onClick={applyFilters} sx={{ minWidth: { xs: "100%", sm: 96 }, whiteSpace: "nowrap" }}>Tìm kiếm</Button>
+            <Button variant="outlined" onClick={clearFilters} disabled={!studentCode && !classId && !status && !billingType && !billingMonth} sx={{ minWidth: { xs: "100%", sm: 96 }, whiteSpace: "nowrap" }}>Xóa lọc</Button>
           </Stack>
           <Collapse in={showAdvancedFilters}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>
@@ -259,21 +264,24 @@ export function TuitionList() {
             {appliedBillingType && <Chip size="small" variant="outlined" label={billingTypeLabels[appliedBillingType as BillingType]} />}
           </Stack>
         </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "block", md: "none" }, px: 2, pb: 1 }}>
+          Vuốt ngang để xem đầy đủ thông tin và thao tác.
+        </Typography>
         <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 980 }} size="small">
-          <TableHead><TableRow><TableCell>Khoản học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Kỳ / lớp</TableCell><TableCell>Phải thu / đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+          <TableHead><TableRow><TableCell>Khoản học phí</TableCell><TableCell>Học viên</TableCell><TableCell>Kỳ / lớp</TableCell><TableCell>Phải thu / đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Hạn thanh toán</TableCell><TableCell align="right" sx={{ minWidth: 250 }}>Thao tác</TableCell></TableRow></TableHead>
           <TableBody>
             {!loading && items.map((item) => <TableRow key={item.id} hover>
-              <TableCell sx={{ minWidth: 170 }}>
+              <TableCell sx={{ minWidth: { xs: 150, md: 155 } }}>
                 <Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="text" sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}>{item.feeNo}</Button>
                 <Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} sx={{ mt: 0.75, display: "flex", width: "fit-content" }} />
               </TableCell>
-              <TableCell sx={{ minWidth: 180 }}><Typography variant="body2" fontWeight={700}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell>
-              <TableCell sx={{ minWidth: 150 }}><Typography variant="body2" fontWeight={600}>{`${String(item.billingMonth).padStart(2, "0")}/${item.billingYear}`}</Typography><Typography variant="caption" color="text.secondary">{item.class?.name || "-"}</Typography></TableCell>
-              <TableCell sx={{ minWidth: 155 }}><Typography variant="body2" fontWeight={800}>{money(item.finalAmount)}</Typography><Typography variant="caption" color="text.secondary">Đã thu {money(item.paidAmount)}</Typography></TableCell>
-              <TableCell sx={{ minWidth: 130 }}><Typography fontWeight={800} color={Number(item.remainingAmount) > 0 ? "error.main" : "success.main"}>{money(item.remainingAmount)}</Typography></TableCell>
-              <TableCell sx={{ minWidth: 150 }}><Typography variant="body2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</Typography><Chip size="small" color={colors[item.status]} label={labels[item.status]} sx={{ mt: 0.75 }} /></TableCell>
-              <TableCell align="right" sx={{ minWidth: 185 }}><Stack direction="row" justifyContent="flex-end" spacing={0.5}><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Chi tiết</Button>{(item.status === "UNPAID" || item.status === "PARTIAL" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">{item.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}</Button>}</Stack></TableCell>
+              <TableCell sx={{ minWidth: { xs: 150, md: 155 } }}><Typography variant="body2" fontWeight={700}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell>
+              <TableCell sx={{ minWidth: { xs: 120, md: 125 } }}><Typography variant="body2" fontWeight={600}>{`${String(item.billingMonth).padStart(2, "0")}/${item.billingYear}`}</Typography><Typography variant="caption" color="text.secondary">{item.class?.name || "-"}</Typography></TableCell>
+              <TableCell sx={{ minWidth: { xs: 140, md: 145 } }}><Typography variant="body2" fontWeight={800}>{money(item.finalAmount)}</Typography><Typography variant="caption" color="text.secondary">Đã thu {money(item.paidAmount)}</Typography></TableCell>
+              <TableCell sx={{ minWidth: { xs: 115, md: 120 } }}><Typography fontWeight={800} color={Number(item.remainingAmount) > 0 ? "error.main" : "success.main"}>{money(item.remainingAmount)}</Typography></TableCell>
+              <TableCell sx={{ minWidth: { xs: 135, md: 140 } }}><Typography variant="body2">{item.dueDate ? new Date(item.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "-"}</Typography><Chip size="small" color={colors[item.status]} label={labels[item.status]} sx={{ mt: 0.75 }} /></TableCell>
+              <TableCell align="right" sx={{ minWidth: 250 }}><Stack direction="row" justifyContent="flex-end" spacing={0.5} flexWrap="wrap" useFlexGap><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Chi tiết</Button>{item.paymentAllocations?.[0]?.paymentBatch && <Button component="a" href={`/api/payment-batches/${item.paymentAllocations[0].paymentBatch.id}/notice/pdf`} size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Xuất thông báo tổng</Button>}{(item.status === "UNPAID" || item.status === "PARTIAL" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">{item.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}</Button>}</Stack></TableCell>
             </TableRow>)}
             {!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
             {loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
