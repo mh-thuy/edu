@@ -1,5 +1,8 @@
 import ExcelJS from "exceljs";
-import type { BankReconciliationReportInput } from "@/modules/finance/bank/schemas/bank-reconciliation-report.schema";
+import type {
+  BankReconciliationReportDocument,
+  BankReconciliationReportItem,
+} from "@/modules/finance/bank/schemas/bank-reconciliation-report.schema";
 
 const border = {
   top: { style: "thin" as const, color: { argb: "FFD9E2EC" } },
@@ -79,7 +82,7 @@ function applyHeader(row: ExcelJS.Row, headers: string[]) {
   row.height = 30;
 }
 
-function batchSummary(batches: BankReconciliationReportInput["items"][number]["paymentBatches"]) {
+function batchSummary(batches: BankReconciliationReportItem["paymentBatches"]) {
   if (!batches.length) {
     return { batchNo: "-", student: "-", studentCode: "-", classes: "-", fees: "-", amount: null };
   }
@@ -94,17 +97,25 @@ function batchSummary(batches: BankReconciliationReportInput["items"][number]["p
 }
 
 export async function buildBankReconciliationReportExcel(
-  report: BankReconciliationReportInput,
+  report: BankReconciliationReportDocument,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "EduCenter";
   workbook.created = new Date();
 
-  const statusCounts = report.items.reduce<Record<string, number>>((counts, item) => {
+  const reportItems = report.items;
+  const balanceItems = report.balanceItems;
+
+  const statusCounts = reportItems.reduce<Record<string, number>>((counts, item) => {
     counts[item.reconciliationStatus] = (counts[item.reconciliationStatus] || 0) + 1;
     return counts;
   }, {});
-  const totalCredit = report.items.reduce((sum, item) => sum + item.creditAmount, 0);
+  const totalCredit = reportItems.reduce((sum, item) => sum + item.creditAmount, 0);
+  const totalDebit = balanceItems.reduce((sum, item) => sum + item.debitAmount, 0);
+  const totalCreditForBalance = balanceItems.reduce((sum, item) => sum + item.creditAmount, 0);
+  const balanceVariance = report.statement.openingBalance !== null && report.statement.closingBalance !== null
+    ? report.statement.openingBalance + totalCreditForBalance - totalDebit - report.statement.closingBalance
+    : null;
 
   const overview = workbook.addWorksheet("Tổng quan");
   overview.columns = [{ width: 30 }, { width: 36 }, { width: 20 }, { width: 22 }];
@@ -123,11 +134,13 @@ export async function buildBankReconciliationReportExcel(
     ["Số tài khoản", report.accountNo],
     ["Tên tài khoản", report.accountName || report.statement.accountName || "-"],
     ["Định dạng sao kê", report.statement.bankFormat],
-    ["Từ ngày", report.statement.fromDate || formatDate(report.items[0]?.transactionDate || null)],
-    ["Đến ngày", report.statement.toDate || formatDate(report.items.at(-1)?.transactionDate || null)],
+    ["Phạm vi xuất", report.scope === "ALL" ? "Toàn bộ giao dịch" : report.scope === "MATCHED" ? "Giao dịch đã khớp" : "Giao dịch chưa khớp"],
+    ["Từ ngày", report.statement.fromDate || formatDate(balanceItems[0]?.transactionDate || null)],
+    ["Đến ngày", report.statement.toDate || formatDate(balanceItems.at(-1)?.transactionDate || null)],
     ["Loại tiền", report.statement.currencyCode || "VND"],
     ["Số dư đầu kỳ", report.statement.openingBalance],
     ["Số dư cuối kỳ", report.statement.closingBalance],
+    ["Chênh lệch số dư", balanceVariance],
   ];
   let rowNumber = 4;
   metadata.forEach(([label, value]) => {
@@ -152,8 +165,10 @@ export async function buildBankReconciliationReportExcel(
   fill(overview.getCell(`A${rowNumber}`), colors.navy);
   rowNumber += 1;
   const summaryRows = [
-    ["Tổng giao dịch", report.items.length, "dòng"],
+    ["Tổng giao dịch trong phạm vi", reportItems.length, "dòng"],
     ["Tổng tiền ghi có", totalCredit, "VND"],
+    ["Tổng tiền ghi nợ theo sao kê", totalDebit, "VND"],
+    ["Kiểm tra số dư", balanceVariance === null ? "Không đủ dữ liệu" : balanceVariance === 0 ? "Sao kê cân" : "Sao kê lệch", ""],
     ["Tự động khớp", statusCounts.AUTO_MATCHED || 0, "dòng"],
     ["Đã xác nhận", statusCounts.CONFIRMED || 0, "dòng"],
     ["Chưa khớp", statusCounts.UNMATCHED || 0, "dòng"],
@@ -170,8 +185,12 @@ export async function buildBankReconciliationReportExcel(
     styleCell(row.getCell(2), { horizontal: "right" });
     styleCell(row.getCell(3));
     bold(row.getCell(1));
-    if (label === "Tổng tiền ghi có") row.getCell(2).numFmt = moneyFormat;
-    const color = label === "Đã xác nhận" ? colors.green : label === "Chưa khớp" || label === "Trùng giao dịch" ? colors.orange : colors.gray;
+    if (typeof label === "string" && ["Tổng tiền ghi có", "Tổng tiền ghi nợ theo sao kê", "Chênh lệch số dư"].includes(label)) row.getCell(2).numFmt = moneyFormat;
+    const color = label === "Đã xác nhận" || (label === "Kiểm tra số dư" && value === "Sao kê cân")
+      ? colors.green
+      : label === "Chưa khớp" || label === "Trùng giao dịch" || (label === "Kiểm tra số dư" && value !== "Sao kê cân")
+        ? colors.orange
+        : colors.gray;
     fill(row.getCell(1), color);
     fill(row.getCell(2), color);
     fill(row.getCell(3), color);
@@ -197,17 +216,17 @@ export async function buildBankReconciliationReportExcel(
   const detail = workbook.addWorksheet("Chi tiết đối soát");
   detail.columns = [
     { width: 7 }, { width: 8 }, { width: 20 }, { width: 25 }, { width: 54 },
-    { width: 18 }, { width: 18 }, { width: 20 }, { width: 22 }, { width: 18 },
+    { width: 44 }, { width: 18 }, { width: 18 }, { width: 20 }, { width: 22 }, { width: 18 },
     { width: 16 }, { width: 30 }, { width: 32 }, { width: 18 }, { width: 24 }, { width: 18 },
     { width: 30 },
   ];
   const detailHeaders = [
     "STT", "Dòng", "Ngày giao dịch", "Mã giao dịch", "Diễn giải / chi tiết",
-    "Ghi có", "Ghi nợ", "Số dư", "Trạng thái", "Mã đợt thu", "Mã học viên",
+    "Nội dung đối soát", "Ghi có", "Ghi nợ", "Số dư", "Trạng thái", "Mã đợt thu", "Mã học viên",
     "Học viên", "Lớp / môn học", "Tổng đợt thu", "Số biên lai", "Số ứng viên", "Ghi chú",
   ];
   applyHeader(detail.getRow(1), detailHeaders);
-  report.items.forEach((item, index) => {
+  reportItems.forEach((item, index) => {
     const row = detail.getRow(index + 2);
     const batch = batchSummary(item.paymentBatches);
     const candidateCount = item.paymentBatchCandidateCount + item.paymentBatchGroupCandidateCount;
@@ -226,6 +245,7 @@ export async function buildBankReconciliationReportExcel(
       formatDateTime(item.transactionDate),
       item.bankTransactionNo || "-",
       item.description,
+      item.reconciliationContent || "-",
       item.creditAmount,
       item.debitAmount,
       item.balanceAmount,
@@ -240,18 +260,18 @@ export async function buildBankReconciliationReportExcel(
       note,
     ];
     row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      styleCell(cell, { horizontal: [1, 2, 6, 7, 8, 10, 14, 16].includes(columnNumber) ? "right" : "left" });
-      if ([6, 7, 8, 14].includes(columnNumber)) cell.numFmt = moneyFormat;
+      styleCell(cell, { horizontal: [1, 2, 7, 8, 9, 11, 15, 17].includes(columnNumber) ? "right" : "left" });
+      if ([7, 8, 9, 15].includes(columnNumber)) cell.numFmt = moneyFormat;
     });
     if (index % 2 === 1) row.eachCell({ includeEmpty: true }, (cell) => fill(cell, colors.lightBlue));
   });
   detail.views = [{ state: "frozen", ySplit: 1 }];
-  detail.autoFilter = { from: "A1", to: `Q${Math.max(1, report.items.length + 1)}` };
+  detail.autoFilter = { from: "A1", to: `R${Math.max(1, reportItems.length + 1)}` };
 
   const unmatched = workbook.addWorksheet("Chưa khớp");
-  unmatched.columns = [{ width: 8 }, { width: 20 }, { width: 25 }, { width: 54 }, { width: 18 }, { width: 18 }, { width: 28 }, { width: 18 }, { width: 32 }];
-  applyHeader(unmatched.getRow(1), ["STT", "Ngày giao dịch", "Mã giao dịch", "Diễn giải / chi tiết", "Ghi có", "Số dư", "Trạng thái", "Số ứng viên", "Hướng xử lý"]);
-  report.items
+  unmatched.columns = [{ width: 8 }, { width: 20 }, { width: 25 }, { width: 54 }, { width: 44 }, { width: 18 }, { width: 18 }, { width: 28 }, { width: 18 }, { width: 32 }];
+  applyHeader(unmatched.getRow(1), ["STT", "Ngày giao dịch", "Mã giao dịch", "Diễn giải / chi tiết", "Nội dung đối soát", "Ghi có", "Số dư", "Trạng thái", "Số ứng viên", "Hướng xử lý"]);
+  reportItems
     .filter((item) => item.reconciliationStatus === "UNMATCHED")
     .forEach((item, index) => {
       const row = unmatched.getRow(index + 2);
@@ -261,6 +281,7 @@ export async function buildBankReconciliationReportExcel(
         formatDateTime(item.transactionDate),
         item.bankTransactionNo || "-",
         item.description,
+        item.reconciliationContent || "-",
         item.creditAmount,
         item.balanceAmount,
         statusLabels[item.reconciliationStatus],
@@ -268,13 +289,13 @@ export async function buildBankReconciliationReportExcel(
         candidates ? "Mở chi tiết và chọn đúng đợt/nhóm đợt" : "Kiểm tra lại nội dung hoặc tạo đợt thu",
       ];
       row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-        styleCell(cell, { horizontal: [1, 5, 6, 8].includes(columnNumber) ? "right" : "left" });
-        if ([5, 6].includes(columnNumber)) cell.numFmt = moneyFormat;
+        styleCell(cell, { horizontal: [1, 6, 7, 9].includes(columnNumber) ? "right" : "left" });
+        if ([6, 7].includes(columnNumber)) cell.numFmt = moneyFormat;
       });
       if (index % 2 === 1) row.eachCell({ includeEmpty: true }, (cell) => fill(cell, colors.lightBlue));
     });
   unmatched.views = [{ state: "frozen", ySplit: 1 }];
-  unmatched.autoFilter = { from: "A1", to: `I${Math.max(1, unmatched.rowCount)}` };
+  unmatched.autoFilter = { from: "A1", to: `J${Math.max(1, unmatched.rowCount)}` };
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

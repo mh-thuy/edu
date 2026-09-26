@@ -10,6 +10,7 @@ export type ParsedBankRow = {
   rowNo: number;
   transactionDate: Date;
   description: string;
+  reconciliationContent: string;
   amount: Prisma.Decimal;
   balance: Prisma.Decimal | null;
   transactionNo: string | null;
@@ -45,17 +46,39 @@ type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "IGNORED" | "DUPLICAT
 type ReconciliationTokenPayload = {
   version: 1;
   expiresAt: number;
+  importSessionId?: string;
   bankAccountId: string;
   transactionHash: string;
   rowNo: number;
   transactionDate: string;
   bankTransactionNo: string | null;
   description: string;
+  reconciliationContent?: string;
   creditAmount: string;
   debitAmount: string;
   balanceAmount: string | null;
   paymentBatchId: string | null;
   paymentBatchIds?: string[];
+  reconciliationStatus?: ReconciliationStatus;
+};
+
+type BankStatementTokenPayload = {
+  version: 1;
+  expiresAt: number;
+  importSessionId: string;
+  bankAccountId: string;
+  fileName: string;
+  statement: {
+    bankFormat: BankStatementMetadata["bankFormat"];
+    fromDate: string | null;
+    toDate: string | null;
+    accountNo: string | null;
+    accountName: string | null;
+    currencyCode: string | null;
+    openingBalance: string | null;
+    closingBalance: string | null;
+  };
+  invalidRowErrors: ParsedBankRowError[];
 };
 
 type PaymentBatchMatch = {
@@ -89,10 +112,12 @@ export type BankImportItem = {
   paymentBatch: PaymentBatchMatch | null;
   paymentBatchCandidates: Array<PaymentBatchMatch & { confirmationToken: string }>;
   paymentBatchGroupCandidates: Array<PaymentBatchGroupMatch & { confirmationToken: string }>;
+  reconciliationContent: string;
 };
 
 export type BankImportResult = {
   fileName: string;
+  statementToken: string;
   totalRows: number;
   validRows: number;
   invalidRows: number;
@@ -236,6 +261,7 @@ type BidvTableColumns = {
 type TechcombankTableColumns = {
   date: number;
   description: number;
+  reconciliationContent: number;
   detail: number;
   debit: number;
   credit: number;
@@ -296,6 +322,7 @@ function parseBidvTable(worksheet: ExcelJS.Worksheet, header: { rowNumber: numbe
         rowNo: rowNumber,
         transactionDate: parseExcelDate(dateCell.value, dateText),
         description: row.getCell(header.columns.description).text.trim(),
+        reconciliationContent: "",
         amount: parseMoney(amountText),
         balance: parseMoney(row.getCell(header.columns.balance).text),
         transactionNo: row.getCell(header.columns.transactionNo).text.trim() || null,
@@ -317,19 +344,21 @@ function findTechcombankTableHeader(worksheet: ExcelJS.Worksheet) {
   let header: { rowNumber: number; columns: TechcombankTableColumns } | null = null;
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (header) return;
-    const cells = Array.from({ length: Math.max(row.cellCount, 6) }, (_, index) =>
+    const cells = Array.from({ length: Math.max(row.cellCount, 7) }, (_, index) =>
       normalize(row.getCell(index + 1).text),
     );
     const findColumn = (name: string) => cells.findIndex((cell) => cell === name) + 1;
     const columns = {
       date: findColumn("ngay"),
       description: findColumn("dien giai"),
+      reconciliationContent: findColumn("noi dung doi soat"),
       detail: findColumn("chi tiet"),
       debit: findColumn("no"),
       credit: findColumn("co"),
       balance: findColumn("so du"),
     };
-    if (Object.values(columns).every((column) => column > 0)) {
+    if ([columns.date, columns.description, columns.detail, columns.debit, columns.credit, columns.balance]
+      .every((column) => column > 0)) {
       header = { rowNumber, columns };
     }
   });
@@ -360,6 +389,9 @@ function parseTechcombankTable(
         throw new Error(`Dòng ${rowNumber} trong file Techcombank có cả ghi nợ và ghi có`);
       }
       const detail = row.getCell(header.columns.detail).text.trim();
+      const reconciliationContent = header.columns.reconciliationContent
+        ? row.getCell(header.columns.reconciliationContent).text.trim()
+        : "";
       const description = [row.getCell(header.columns.description).text.trim(), detail]
         .filter(Boolean)
         .join(" | ");
@@ -367,6 +399,7 @@ function parseTechcombankTable(
         rowNo: rowNumber,
         transactionDate: parseExcelDate(dateCell.value, dateText),
         description,
+        reconciliationContent,
         amount: credit.greaterThan(0) ? credit : debit.mul(-1),
         balance: parseMoney(row.getCell(header.columns.balance).text),
         // Techcombank's CHI TIET is narrative content, not a transaction ID.
@@ -421,7 +454,11 @@ async function parseBankStatement(buffer: Buffer, bankCode: string) {
 }
 
 function normalize(value: string) {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase();
 }
 
 function normalizeBatchReference(value: string) {
@@ -440,7 +477,7 @@ function getTransactionHashes(bankAccountId: string, row: ParsedBankRow) {
   const transactionNo = getBankTransactionNo(row);
   const identity = transactionNo
     ? `${bankAccountId}:transaction-no:${transactionNo}`
-    : `${bankAccountId}:row:${row.transactionDate.toISOString()}:${row.amount.toString()}:${normalize(row.description)}:${row.balance?.toString() ?? ""}`;
+    : `${bankAccountId}:row:${row.transactionDate.toISOString()}:${row.amount.toString()}:${normalize(row.description)}:${normalize(row.reconciliationContent)}:${row.balance?.toString() ?? ""}`;
   const transactionHash = hashTransactionIdentity(identity);
   const legacyTransactionHashes = row.transactionNoIsExplicit === false
     ? [
@@ -469,6 +506,54 @@ function createConfirmationToken(payload: ReconciliationTokenPayload) {
   const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
   const signature = crypto.createHmac("sha256", getTokenSecret()).update(encodedPayload).digest("base64url");
   return `${encodedPayload}.${signature}`;
+}
+
+function createStatementToken(payload: BankStatementTokenPayload) {
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", getTokenSecret()).update(encodedPayload).digest("base64url");
+  return `${encodedPayload}.${signature}`;
+}
+
+export function verifyBankStatementToken(token: string): BankStatementTokenPayload {
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) throw new ConflictError("Token phiên sao kê không hợp lệ");
+  const expected = crypto.createHmac("sha256", getTokenSecret()).update(encodedPayload).digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  ) throw new ConflictError("Token phiên sao kê không hợp lệ");
+
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
+  } catch {
+    throw new ConflictError("Token phiên sao kê không hợp lệ");
+  }
+  if (
+    !isRecord(decoded) ||
+    decoded.version !== 1 ||
+    typeof decoded.expiresAt !== "number" ||
+    decoded.expiresAt < Date.now() ||
+    typeof decoded.importSessionId !== "string" ||
+    typeof decoded.bankAccountId !== "string" ||
+    typeof decoded.fileName !== "string" ||
+    !isRecord(decoded.statement) ||
+    !["BIDV", "TECHCOMBANK"].includes(decoded.statement.bankFormat as string) ||
+    (decoded.statement.fromDate !== null && typeof decoded.statement.fromDate !== "string") ||
+    (decoded.statement.toDate !== null && typeof decoded.statement.toDate !== "string") ||
+    (decoded.statement.accountNo !== null && typeof decoded.statement.accountNo !== "string") ||
+    (decoded.statement.accountName !== null && typeof decoded.statement.accountName !== "string") ||
+    (decoded.statement.currencyCode !== null && typeof decoded.statement.currencyCode !== "string") ||
+    (decoded.statement.openingBalance !== null && typeof decoded.statement.openingBalance !== "string") ||
+    (decoded.statement.closingBalance !== null && typeof decoded.statement.closingBalance !== "string") ||
+    !Array.isArray(decoded.invalidRowErrors) ||
+    decoded.invalidRowErrors.some(
+      (error) => !isRecord(error) || typeof error.rowNo !== "number" || typeof error.message !== "string",
+    )
+  ) throw new ConflictError("Token phiên sao kê không hợp lệ");
+  return decoded as BankStatementTokenPayload;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -503,6 +588,7 @@ function verifyConfirmationToken(token: string): ReconciliationTokenPayload {
     typeof decoded.transactionDate !== "string" ||
     (decoded.bankTransactionNo !== null && typeof decoded.bankTransactionNo !== "string") ||
     typeof decoded.description !== "string" ||
+    (decoded.reconciliationContent !== undefined && typeof decoded.reconciliationContent !== "string") ||
     typeof decoded.creditAmount !== "string" ||
     typeof decoded.debitAmount !== "string" ||
     (decoded.balanceAmount !== null && typeof decoded.balanceAmount !== "string") ||
@@ -511,31 +597,43 @@ function verifyConfirmationToken(token: string): ReconciliationTokenPayload {
       (!Array.isArray(decoded.paymentBatchIds) ||
         decoded.paymentBatchIds.length < 2 ||
         decoded.paymentBatchIds.some((batchId) => typeof batchId !== "string")))
+    ||
+    (decoded.reconciliationStatus !== undefined &&
+      !["AUTO_MATCHED", "UNMATCHED", "IGNORED", "DUPLICATED"].includes(decoded.reconciliationStatus as string))
   ) throw new ConflictError("Token đối soát không hợp lệ");
   return decoded as ReconciliationTokenPayload;
 }
 
+export function verifyBankReconciliationToken(token: string) {
+  return verifyConfirmationToken(token);
+}
+
 function createTokenPayload(
+  importSessionId: string,
   bankAccountId: string,
   transactionHash: string,
   row: ParsedBankRow,
   paymentBatchId: string | null,
   paymentBatchIds?: string[],
+  reconciliationStatus?: ReconciliationStatus,
 ): ReconciliationTokenPayload {
   return {
     version: 1,
     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    importSessionId,
     bankAccountId,
     transactionHash,
     rowNo: row.rowNo,
     transactionDate: row.transactionDate.toISOString(),
     bankTransactionNo: getBankTransactionNo(row),
     description: row.description,
+    reconciliationContent: row.reconciliationContent,
     creditAmount: row.amount.toString(),
     debitAmount: row.amount.isNegative() ? row.amount.abs().toString() : "0",
     balanceAmount: row.balance?.toString() ?? null,
     paymentBatchId,
     ...(paymentBatchIds?.length ? { paymentBatchIds } : {}),
+    ...(reconciliationStatus ? { reconciliationStatus } : {}),
   };
 }
 
@@ -618,6 +716,7 @@ export async function importBankStatement(args: {
   if (!bank.isActive) throw new ConflictError("Tài khoản ngân hàng đã ngừng hoạt động");
   const parsed = await parseBankStatement(args.buffer, bank.bankCode);
   const { rows, errors: invalidRowErrors } = parsed;
+  const importSessionId = crypto.randomUUID();
 
   const rowHashes = rows.map((row) => getTransactionHashes(args.bankAccountId, row));
   const transactionHashes = rowHashes.flatMap(({ transactionHash, legacyTransactionHashes }) => [
@@ -671,7 +770,9 @@ export async function importBankStatement(args: {
 
   for (const [index, row] of rows.entries()) {
     if (!row.amount.greaterThan(0)) continue;
-    const description = normalizeBatchReference(row.description);
+    const description = normalizeBatchReference(
+      [row.description, row.reconciliationContent].filter(Boolean).join(" "),
+    );
     const candidates = pendingBatches.filter(
       (candidate) =>
         candidate.totalAmount.equals(row.amount) &&
@@ -702,14 +803,26 @@ export async function importBankStatement(args: {
     const { transactionHash } = rowHashes[index]!;
     const transactionNumber = getBankTransactionNo(row);
     const isCredit = row.amount.greaterThan(0);
+    const isDuplicate =
+      importedHashes.has(transactionHash) ||
+      rowHashes[index]!.legacyTransactionHashes.some((hash) => importedHashes.has(hash)) ||
+      existingReferences.has(transactionHash) ||
+      rowHashes[index]!.legacyTransactionHashes.some((hash) => existingReferences.has(hash)) ||
+      (transactionNumber !== null && existingReferences.has(transactionNumber));
+    const initialStatus: ReconciliationStatus = isDuplicate
+      ? "DUPLICATED"
+      : isCredit
+        ? "UNMATCHED"
+        : "IGNORED";
     const baseItem = {
       confirmationToken: createConfirmationToken(
-        createTokenPayload(args.bankAccountId, transactionHash, row, null),
+        createTokenPayload(importSessionId, args.bankAccountId, transactionHash, row, null, undefined, initialStatus),
       ),
       rowNo: row.rowNo,
       transactionDate: row.transactionDate,
       bankTransactionNo: transactionNumber,
       description: row.description,
+      reconciliationContent: row.reconciliationContent,
       creditAmount: isCredit ? row.amount : new Prisma.Decimal(0),
       debitAmount: isCredit ? new Prisma.Decimal(0) : row.amount.abs(),
       balanceAmount: row.balance,
@@ -718,13 +831,7 @@ export async function importBankStatement(args: {
       paymentBatchCandidates: [] as BankImportItem["paymentBatchCandidates"],
       paymentBatchGroupCandidates: [] as BankImportItem["paymentBatchGroupCandidates"],
     };
-    if (
-      importedHashes.has(transactionHash) ||
-      rowHashes[index]!.legacyTransactionHashes.some((hash) => importedHashes.has(hash)) ||
-      existingReferences.has(transactionHash) ||
-      rowHashes[index]!.legacyTransactionHashes.some((hash) => existingReferences.has(hash)) ||
-      (transactionNumber !== null && existingReferences.has(transactionNumber))
-    ) {
+    if (isDuplicate) {
       duplicatedRows += 1;
       items.push({ ...baseItem, reconciliationStatus: "DUPLICATED" });
       continue;
@@ -748,7 +855,7 @@ export async function importBankStatement(args: {
       items.push({
         ...baseItem,
         confirmationToken: createConfirmationToken(
-          createTokenPayload(args.bankAccountId, transactionHash, row, batch.id),
+          createTokenPayload(importSessionId, args.bankAccountId, transactionHash, row, batch.id, undefined, "AUTO_MATCHED"),
         ),
         reconciliationStatus: "AUTO_MATCHED",
         paymentBatch,
@@ -766,7 +873,7 @@ export async function importBankStatement(args: {
       .map((candidate) => ({
         ...toPaymentBatchMatch(candidate),
         confirmationToken: createConfirmationToken(
-          createTokenPayload(args.bankAccountId, transactionHash, row, candidate.id),
+          createTokenPayload(importSessionId, args.bankAccountId, transactionHash, row, candidate.id, undefined, "UNMATCHED"),
         ),
       }));
     const paymentBatchGroups = findExactBatchGroups(
@@ -780,7 +887,7 @@ export async function importBankStatement(args: {
         totalAmount: row.amount,
         batches,
         confirmationToken: createConfirmationToken(
-          createTokenPayload(args.bankAccountId, transactionHash, row, null, batchIds),
+          createTokenPayload(importSessionId, args.bankAccountId, transactionHash, row, null, batchIds, "UNMATCHED"),
         ),
       };
     });
@@ -794,6 +901,19 @@ export async function importBankStatement(args: {
 
   const result = {
     fileName: args.fileName,
+    statementToken: createStatementToken({
+      version: 1,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      importSessionId,
+      bankAccountId: args.bankAccountId,
+      fileName: args.fileName,
+      statement: {
+        ...parsed.statement,
+        openingBalance: parsed.statement.openingBalance?.toString() ?? null,
+        closingBalance: parsed.statement.closingBalance?.toString() ?? null,
+      },
+      invalidRowErrors,
+    }),
     statement: {
       ...parsed.statement,
       openingBalance: parsed.statement.openingBalance?.toString() ?? null,

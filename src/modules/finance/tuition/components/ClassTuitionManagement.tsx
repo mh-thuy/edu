@@ -20,6 +20,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TableSortLabel,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -71,6 +72,7 @@ type Fee = {
     paymentBatch: { id: string; batchNo: string; status: string };
   }>;
 };
+type FeeSortKey = "student" | "item" | "finalAmount" | "paidAmount" | "remainingAmount" | "status";
 
 const currentMonth = () => {
   return getVietnamMonth();
@@ -80,11 +82,21 @@ const statusLabel: Record<Fee["status"], string> = { UNPAID: "Chưa thu", PARTIA
 const statusColor: Record<Fee["status"], "warning" | "success" | "error" | "info" | "default"> = { UNPAID: "warning", PARTIAL: "info", PAID: "success", OVERDUE: "error", EXEMPTED: "info", CANCELLED: "default" };
 const classStatusLabel: Record<ClassData["status"], string> = { DRAFT: "Bản nháp", ACTIVE: "Đang hoạt động", COMPLETED: "Đã hoàn thành", CANCELLED: "Đã hủy" };
 const classStatusColor: Record<ClassData["status"], "default" | "success" | "info" | "error"> = { DRAFT: "default", ACTIVE: "success", COMPLETED: "info", CANCELLED: "error" };
+const feeStatusOrder: Record<Fee["status"], number> = {
+  UNPAID: 1,
+  PARTIAL: 2,
+  OVERDUE: 3,
+  PAID: 4,
+  EXEMPTED: 5,
+  CANCELLED: 6,
+};
 
 export function ClassTuitionManagement({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [fees, setFees] = useState<Fee[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
+  const [sortKey, setSortKey] = useState<FeeSortKey>("student");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [month, setMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -133,11 +145,37 @@ export function ClassTuitionManagement({ id }: { id: string }) {
 
   const filteredFees = useMemo(() => {
     const query = studentSearch.trim().toLocaleLowerCase("vi-VN");
-    if (!query) return fees;
-    return fees.filter((fee) =>
-      fee.student.fullName.toLocaleLowerCase("vi-VN").includes(query),
-    );
-  }, [fees, studentSearch]);
+    const filtered = query
+      ? fees.filter((fee) => fee.student.fullName.toLocaleLowerCase("vi-VN").includes(query))
+      : fees;
+    return [...filtered].sort((left, right) => {
+      let comparison = 0;
+      if (sortKey === "student") {
+        comparison = left.student.fullName.localeCompare(right.student.fullName, "vi", { sensitivity: "base" });
+        if (comparison === 0) comparison = left.student.code.localeCompare(right.student.code, "vi", { sensitivity: "base" });
+      } else if (sortKey === "item") {
+        comparison = left.items.map((item) => item.itemName).join(", ").localeCompare(
+          right.items.map((item) => item.itemName).join(", "),
+          "vi",
+          { sensitivity: "base" },
+        );
+      } else if (sortKey === "status") {
+        comparison = feeStatusOrder[left.status] - feeStatusOrder[right.status];
+      } else {
+        comparison = Number(left[sortKey]) - Number(right[sortKey]);
+      }
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [fees, sortDirection, sortKey, studentSearch]);
+
+  function handleSort(nextKey: FeeSortKey) {
+    if (sortKey === nextKey) {
+      setSortDirection((current) => current === "asc" ? "desc" : "asc");
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDirection("asc");
+  }
 
   const totals = useMemo(() => ({
     amount: filteredFees
@@ -340,7 +378,15 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       {loading && <LinearProgress />}
       <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 900 }}>
-          <TableHead><TableRow><TableCell>Học viên</TableCell><TableCell>Môn tính phí</TableCell><TableCell>Tổng phải thu</TableCell><TableCell>Đã thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell><TableCell align="right">Thao tác</TableCell></TableRow></TableHead>
+          <TableHead><TableRow>
+            <SortableHeader label="Học viên" sortKey="student" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+            <SortableHeader label="Môn tính phí" sortKey="item" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+            <SortableHeader label="Tổng phải thu" sortKey="finalAmount" activeKey={sortKey} direction={sortDirection} onSort={handleSort} align="right" />
+            <SortableHeader label="Đã thu" sortKey="paidAmount" activeKey={sortKey} direction={sortDirection} onSort={handleSort} align="right" />
+            <SortableHeader label="Còn nợ" sortKey="remainingAmount" activeKey={sortKey} direction={sortDirection} onSort={handleSort} align="right" />
+            <SortableHeader label="Trạng thái" sortKey="status" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+            <TableCell align="right">Thao tác</TableCell>
+          </TableRow></TableHead>
           <TableBody>
             {filteredFees.map((fee) => {
               const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
@@ -382,6 +428,34 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     />
     {Snackbar}
   </Stack>;
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeKey,
+  direction,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  sortKey: FeeSortKey;
+  activeKey: FeeSortKey;
+  direction: "asc" | "desc";
+  onSort: (key: FeeSortKey) => void;
+  align?: "left" | "right";
+}) {
+  return (
+    <TableCell align={align}>
+      <TableSortLabel
+        active={activeKey === sortKey}
+        direction={activeKey === sortKey ? direction : "asc"}
+        onClick={() => onSort(sortKey)}
+      >
+        {label}
+      </TableSortLabel>
+    </TableCell>
+  );
 }
 
 type MetricTone = "blue" | "violet" | "green" | "orange";

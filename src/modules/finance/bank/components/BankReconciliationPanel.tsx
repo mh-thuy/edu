@@ -73,6 +73,7 @@ type Transaction = {
   transactionDate: string;
   bankTransactionNo: string | null;
   description: string;
+  reconciliationContent: string;
   creditAmount: number;
   debitAmount: number;
   balanceAmount: number | null;
@@ -83,6 +84,7 @@ type Transaction = {
 };
 type ImportResult = {
   fileName: string;
+  statementToken: string;
   totalRows: number;
   validRows: number;
   invalidRows: number;
@@ -165,15 +167,11 @@ export function BankReconciliationPanel() {
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<Transaction[]>([]);
   const [statement, setStatement] = useState<ImportResult["statement"] | null>(null);
-  const [sourceFileName, setSourceFileName] = useState("");
-  const [invalidRowErrors, setInvalidRowErrors] = useState<ImportResult["invalidRowErrors"]>([]);
+  const [statementToken, setStatementToken] = useState("");
   const [confirmedTokens, setConfirmedTokens] = useState<Set<string>>(
     () => new Set(),
   );
-  const [confirmedBatches, setConfirmedBatches] = useState<Map<string, Batch[]>>(
-    () => new Map(),
-  );
-  const [confirmedReceiptNos, setConfirmedReceiptNos] = useState<Map<string, string[]>>(
+  const [confirmedMappingTokens, setConfirmedMappingTokens] = useState<Map<string, string>>(
     () => new Map(),
   );
   const [message, setMessage] = useState<{
@@ -270,6 +268,7 @@ export function BankReconciliationPanel() {
         [
           item.bankTransactionNo,
           item.description,
+          item.reconciliationContent,
           item.paymentBatch?.batchNo,
           item.paymentBatch?.student.code,
           item.paymentBatch?.student.fullName,
@@ -374,11 +373,9 @@ export function BankReconciliationPanel() {
     clearFileSelection();
     setItems([]);
     setStatement(null);
-    setSourceFileName("");
-    setInvalidRowErrors([]);
+    setStatementToken("");
     setConfirmedTokens(new Set());
-    setConfirmedBatches(new Map());
-    setConfirmedReceiptNos(new Map());
+    setConfirmedMappingTokens(new Map());
     setHasAnalysis(false);
     setPendingConfirmation(null);
     setResultFilter("ALL");
@@ -389,39 +386,6 @@ export function BankReconciliationPanel() {
     setResetDialogOpen(false);
   }
 
-  function findSelectedBatches(
-    item: Transaction | undefined,
-    selection: { batchId?: string; batchIds?: string[] },
-  ) {
-    if (!item) return [];
-    if (selection.batchId) {
-      const batches = [
-        item.paymentBatch,
-        ...item.paymentBatchCandidates,
-      ].filter((batch): batch is Batch => Boolean(batch));
-      const batch = batches.find((candidate) => candidate.id === selection.batchId);
-      return batch ? [batch] : [];
-    }
-    if (selection.batchIds?.length) {
-      const group = item.paymentBatchGroupCandidates.find(
-        (candidate) =>
-          candidate.batchIds.length === selection.batchIds!.length &&
-          candidate.batchIds.every((batchId) => selection.batchIds!.includes(batchId)),
-      );
-      return group?.batches || [];
-    }
-    return [];
-  }
-
-  function toReportBatch(batch: Batch) {
-    return {
-      batchNo: batch.batchNo,
-      totalAmount: batch.totalAmount,
-      student: batch.student,
-      allocations: batch.allocations,
-    };
-  }
-
   async function exportReport(scope: "ALL" | "MATCHED" | "UNMATCHED" = "ALL") {
     const account = accounts.find((candidate) => candidate.id === accountId);
     if (!account || !statement || !items.length) {
@@ -430,43 +394,17 @@ export function BankReconciliationPanel() {
     }
     setExportingReport(true);
     try {
-      const sourceItems = displayedItems.filter((item) => {
-        if (scope === "MATCHED") return ["AUTO_MATCHED", "CONFIRMED"].includes(item.reconciliationStatus);
-        if (scope === "UNMATCHED") return item.reconciliationStatus === "UNMATCHED";
-        return true;
-      });
       const response = await fetch("/api/bank-reconciliation-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fileName: sourceFileName || "sao-ke-ngan-hang.xlsx",
-          bankName: account.bankName,
-          accountNo: account.accountNo,
-          accountName: account.accountName,
-          statement,
-          invalidRowErrors,
-          items: sourceItems.map((item) => {
-            const mappedBatches = confirmedBatches.get(item.confirmationToken);
-            const batches = mappedBatches?.length
-              ? mappedBatches
-              : item.paymentBatch
-                ? [item.paymentBatch]
-                : [];
-            return {
-              rowNo: item.rowNo,
-              transactionDate: item.transactionDate,
-              bankTransactionNo: item.bankTransactionNo,
-              description: item.description,
-              creditAmount: item.creditAmount,
-              debitAmount: item.debitAmount,
-              balanceAmount: item.balanceAmount,
-              reconciliationStatus: item.reconciliationStatus,
-              paymentBatches: batches.map(toReportBatch),
-              receiptNos: confirmedReceiptNos.get(item.confirmationToken) || [],
-              paymentBatchCandidateCount: item.paymentBatchCandidates.length,
-              paymentBatchGroupCandidateCount: item.paymentBatchGroupCandidates.length,
-            };
-          }),
+          bankAccountId: accountId,
+          statementToken,
+          scope,
+          items: items.map((item) => ({
+            confirmationToken: item.confirmationToken,
+            mappingConfirmationToken: confirmedMappingTokens.get(item.confirmationToken) || null,
+          })),
         }),
       });
       if (!response.ok) {
@@ -517,8 +455,7 @@ export function BankReconciliationPanel() {
       const result = await unwrapApiResponse<ImportResult>(response);
       setItems(result.items);
       setStatement(result.statement);
-      setSourceFileName(result.fileName);
-      setInvalidRowErrors(result.invalidRowErrors);
+      setStatementToken(result.statementToken);
       setHasAnalysis(true);
       setResultFilter("ALL");
       setSearchTerm("");
@@ -571,36 +508,14 @@ export function BankReconciliationPanel() {
         throw new Error(
           await extractApiErrorMessage(response, "Không thể xác nhận đối soát"),
         );
-      const result = await unwrapApiResponse<{
-        receipt?: { receiptNo: string } | null;
-        batches?: Array<{ receipt?: { receiptNo: string } | null }>;
-      }>(response);
+      await unwrapApiResponse(response);
       const token = pendingConfirmation.itemToken;
-      const selectedBatches = findSelectedBatches(
-        items.find((item) => item.confirmationToken === token),
-        pendingConfirmation.body,
-      );
       setConfirmedTokens((current) => new Set(current).add(token));
-      if (selectedBatches.length) {
-        setConfirmedBatches((current) => {
-          const next = new Map(current);
-          next.set(token, selectedBatches);
-          return next;
-        });
-      }
-      const receiptNos = [
-        ...(result.receipt?.receiptNo ? [result.receipt.receiptNo] : []),
-        ...(result.batches || [])
-          .map((batch) => batch.receipt?.receiptNo)
-          .filter((receiptNo): receiptNo is string => Boolean(receiptNo)),
-      ];
-      if (receiptNos.length) {
-        setConfirmedReceiptNos((current) => {
-          const next = new Map(current);
-          next.set(token, receiptNos);
-          return next;
-        });
-      }
+      setConfirmedMappingTokens((current) => {
+        const next = new Map(current);
+        next.set(token, pendingConfirmation.body.confirmationToken);
+        return next;
+      });
       showSuccess("Đã xác nhận đối soát và tạo thanh toán/biên lai");
       setPendingConfirmation(null);
     } catch (reason) {
@@ -637,9 +552,7 @@ export function BankReconciliationPanel() {
             "Không thể xác nhận các giao dịch khớp tự động",
           ),
         );
-      const result = await unwrapApiResponse<{
-        batches?: Array<{ receipt?: { receiptNo: string } | null }>;
-      }>(response);
+      await unwrapApiResponse(response);
       setConfirmedTokens(
         (current) =>
           new Set([
@@ -647,19 +560,9 @@ export function BankReconciliationPanel() {
             ...autoMatchedItems.map((item) => item.confirmationToken),
           ]),
       );
-      setConfirmedBatches((current) => {
+      setConfirmedMappingTokens((current) => {
         const next = new Map(current);
-        autoMatchedItems.forEach((item) => {
-          if (item.paymentBatch) next.set(item.confirmationToken, [item.paymentBatch]);
-        });
-        return next;
-      });
-      setConfirmedReceiptNos((current) => {
-        const next = new Map(current);
-        autoMatchedItems.forEach((item, index) => {
-          const receiptNo = result.batches?.[index]?.receipt?.receiptNo;
-          if (receiptNo) next.set(item.confirmationToken, [receiptNo]);
-        });
+        autoMatchedItems.forEach((item) => next.set(item.confirmationToken, item.confirmationToken));
         return next;
       });
       setBulkConfirmationOpen(false);
@@ -969,6 +872,7 @@ export function BankReconciliationPanel() {
               <TableCell>Ngày</TableCell>
               <TableCell>Mã giao dịch</TableCell>
               <TableCell>Nội dung</TableCell>
+              <TableCell>Nội dung đối soát</TableCell>
               <TableCell align="right">Ghi có</TableCell>
               <TableCell align="right">Ghi nợ</TableCell>
               <TableCell>Trạng thái</TableCell>
@@ -988,6 +892,7 @@ export function BankReconciliationPanel() {
                 </TableCell>
                 <TableCell sx={{ minWidth: 150, whiteSpace: "nowrap" }}>{item.bankTransactionNo || "-"}</TableCell>
                 <TableCell sx={{ minWidth: 280, maxWidth: 360, whiteSpace: "normal", wordBreak: "break-word" }}>{item.description}</TableCell>
+                <TableCell sx={{ minWidth: 280, maxWidth: 360, whiteSpace: "normal", wordBreak: "break-word" }}>{item.reconciliationContent || "-"}</TableCell>
                 <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
                   {money(item.creditAmount)} VND
                 </TableCell>
@@ -1129,6 +1034,11 @@ export function BankReconciliationPanel() {
                 <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                   {selectedItem.description}
                 </Typography>
+                {selectedItem.reconciliationContent && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    <strong>Nội dung đối soát:</strong> {selectedItem.reconciliationContent}
+                  </Typography>
+                )}
               </Box>
               <Divider />
               {confirmedTokens.has(selectedItem.confirmationToken) ? (
