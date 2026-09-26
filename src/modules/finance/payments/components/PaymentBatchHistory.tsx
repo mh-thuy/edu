@@ -286,9 +286,9 @@ export function PaymentBatchHistory() {
           <Chip size="small" variant="outlined" icon={<CalendarMonthOutlinedIcon />} label="Lịch sử thu học phí" />
         </Stack>
         <Stack
-          direction={{ xs: "column", sm: "row" }}
+          direction={{ xs: "column", md: "row" }}
           spacing={1}
-          alignItems={{ xs: "stretch", sm: "center" }}
+          alignItems={{ xs: "stretch", md: "center" }}
         >
           <AppTextField
             size="small"
@@ -296,7 +296,7 @@ export function PaymentBatchHistory() {
             placeholder="Mã giao dịch hoặc dán nội dung QR"
             value={pendingTransactionCode}
             onChange={(event) => setPendingTransactionCode(event.target.value)}
-            sx={{ flex: 1, minWidth: 240 }}
+            sx={{ flex: 1, minWidth: { md: 240 } }}
           />
           <MasterSelectField
             label="Học viên"
@@ -305,7 +305,7 @@ export function PaymentBatchHistory() {
             size="small"
             codeLabel="Mã học sinh"
             nameLabel="Họ tên"
-            sx={{ flex: 1, minWidth: 260 }}
+            sx={{ flex: 1, minWidth: { md: 260 } }}
           />
           <AppTextField
             size="small"
@@ -313,7 +313,7 @@ export function PaymentBatchHistory() {
             label="Trạng thái"
             value={pendingStatus}
             onChange={(event) => setPendingStatus(event.target.value)}
-            sx={{ minWidth: 180 }}
+            sx={{ minWidth: { md: 180 } }}
           >
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="SUCCESS">Đã thanh toán</MenuItem>
@@ -321,13 +321,14 @@ export function PaymentBatchHistory() {
             <MenuItem value="FAILED">Thất bại</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </AppTextField>
-          <Button variant="contained" onClick={applySearch}>
+          <Button variant="contained" onClick={applySearch} sx={{ minWidth: { xs: "100%", md: 100 }, whiteSpace: "nowrap" }}>
             Tìm kiếm
           </Button>
           <Button
             variant="outlined"
             onClick={clearSearch}
             disabled={!transactionCode && !studentCode && !status && !pendingTransactionCode && !pendingStudentCode && !pendingStatus && page === 0}
+            sx={{ minWidth: { xs: "100%", md: 136 }, whiteSpace: "nowrap" }}
           >
             Xóa tìm kiếm
           </Button>
@@ -345,6 +346,13 @@ export function PaymentBatchHistory() {
           <Chip size="small" label={status ? statusLabels[status] : "Tất cả trạng thái"} variant="outlined" />
         </Stack>
         {loading && <LinearProgress />}
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: { xs: "block", md: "none" }, px: { xs: 2, md: 0 }, pb: 1 }}
+        >
+          Vuốt ngang để xem đầy đủ thông tin và thao tác.
+        </Typography>
         <Box sx={{ overflowX: "auto" }}>
         <Table sx={{ minWidth: 900 }} size="small">
           <TableHead>

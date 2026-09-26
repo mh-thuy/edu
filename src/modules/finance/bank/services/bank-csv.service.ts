@@ -26,6 +26,18 @@ type ParsedBankRows = {
   rows: ParsedBankRow[];
   errors: ParsedBankRowError[];
   totalRows: number;
+  statement: BankStatementMetadata;
+};
+
+export type BankStatementMetadata = {
+  bankFormat: "BIDV" | "TECHCOMBANK";
+  fromDate: string | null;
+  toDate: string | null;
+  accountNo: string | null;
+  accountName: string | null;
+  currencyCode: string | null;
+  openingBalance: Prisma.Decimal | null;
+  closingBalance: Prisma.Decimal | null;
 };
 
 type ReconciliationStatus = "AUTO_MATCHED" | "UNMATCHED" | "IGNORED" | "DUPLICATED";
@@ -118,6 +130,53 @@ function parseMoney(value: string): Prisma.Decimal {
   } catch {
     throw new Error(`Số tiền không hợp lệ: ${value}`);
   }
+}
+
+function findStatementValue(worksheet: ExcelJS.Worksheet, labels: string[]) {
+  let result: string | null = null;
+  worksheet.eachRow({ includeEmpty: false }, (row) => {
+    if (result) return;
+    for (let column = 1; column < row.cellCount; column += 1) {
+      const label = normalize(row.getCell(column).text);
+      if (labels.includes(label)) {
+        const value = row.getCell(column + 1).text.trim();
+        if (value) {
+          result = value;
+          return;
+        }
+      }
+    }
+  });
+  return result;
+}
+
+function parseOptionalMoney(value: string | null) {
+  if (!value) return null;
+  try {
+    return parseMoney(value);
+  } catch {
+    return null;
+  }
+}
+
+function extractStatementMetadata(
+  worksheet: ExcelJS.Worksheet,
+  bankFormat: BankStatementMetadata["bankFormat"],
+): BankStatementMetadata {
+  return {
+    bankFormat,
+    fromDate: findStatementValue(worksheet, ["tu ngay", "from date", "ngay bat dau"]),
+    toDate: findStatementValue(worksheet, ["toi ngay", "den ngay", "to date", "ngay ket thuc"]),
+    accountNo: findStatementValue(worksheet, ["so tai khoan", "account number"]),
+    accountName: findStatementValue(worksheet, ["ten tai khoan", "account name"]),
+    currencyCode: findStatementValue(worksheet, ["loai tien", "currency"]),
+    openingBalance: parseOptionalMoney(
+      findStatementValue(worksheet, ["so du dau ky", "so du dau", "opening balance"]),
+    ),
+    closingBalance: parseOptionalMoney(
+      findStatementValue(worksheet, ["so du cuoi ky", "so du cuoi", "closing balance"]),
+    ),
+  };
 }
 
 function createVietnamDate(
@@ -335,7 +394,7 @@ export async function parseBidvExcel(buffer: Buffer): Promise<ParsedBankRows> {
 
   const tableHeader = findBidvTableHeader(worksheet);
   if (!tableHeader) throw new BadRequestError("File Excel BIDV không đúng format bảng hiện tại");
-  return parseBidvTable(worksheet, tableHeader);
+  return { ...parseBidvTable(worksheet, tableHeader), statement: extractStatementMetadata(worksheet, "BIDV") };
 }
 
 export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankRows> {
@@ -346,7 +405,7 @@ export async function parseTechcombankExcel(buffer: Buffer): Promise<ParsedBankR
   if (!worksheet) throw new BadRequestError("File Excel Techcombank không có worksheet");
   const tableHeader = findTechcombankTableHeader(worksheet);
   if (!tableHeader) throw new BadRequestError("Không tìm thấy bảng giao dịch trong file Excel Techcombank");
-  return parseTechcombankTable(worksheet, tableHeader);
+  return { ...parseTechcombankTable(worksheet, tableHeader), statement: extractStatementMetadata(worksheet, "TECHCOMBANK") };
 }
 
 async function parseBankStatement(buffer: Buffer, bankCode: string) {
@@ -735,6 +794,11 @@ export async function importBankStatement(args: {
 
   const result = {
     fileName: args.fileName,
+    statement: {
+      ...parsed.statement,
+      openingBalance: parsed.statement.openingBalance?.toString() ?? null,
+      closingBalance: parsed.statement.closingBalance?.toString() ?? null,
+    },
     totalRows: parsed.totalRows,
     validRows: rows.length,
     invalidRows: invalidRowErrors.length,

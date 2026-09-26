@@ -13,6 +13,7 @@ import {
   InputLabel,
   IconButton,
   LinearProgress,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -37,6 +38,7 @@ import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlin
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import DoneAllOutlinedIcon from "@mui/icons-material/DoneAllOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import ClearOutlinedIcon from "@mui/icons-material/ClearOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
@@ -73,12 +75,14 @@ type Transaction = {
   description: string;
   creditAmount: number;
   debitAmount: number;
+  balanceAmount: number | null;
   reconciliationStatus: string;
   paymentBatch?: Batch | null;
   paymentBatchCandidates: Array<Batch & { confirmationToken: string }>;
   paymentBatchGroupCandidates: BatchGroup[];
 };
 type ImportResult = {
+  fileName: string;
   totalRows: number;
   validRows: number;
   invalidRows: number;
@@ -87,6 +91,16 @@ type ImportResult = {
   unmatchedRows: number;
   ignoredRows: number;
   invalidRowErrors: Array<{ rowNo: number; message: string }>;
+  statement: {
+    bankFormat: "BIDV" | "TECHCOMBANK";
+    fromDate: string | null;
+    toDate: string | null;
+    accountNo: string | null;
+    accountName: string | null;
+    currencyCode: string | null;
+    openingBalance: number | null;
+    closingBalance: number | null;
+  };
   items: Transaction[];
 };
 type PendingConfirmation = {
@@ -150,8 +164,17 @@ export function BankReconciliationPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<Transaction[]>([]);
+  const [statement, setStatement] = useState<ImportResult["statement"] | null>(null);
+  const [sourceFileName, setSourceFileName] = useState("");
+  const [invalidRowErrors, setInvalidRowErrors] = useState<ImportResult["invalidRowErrors"]>([]);
   const [confirmedTokens, setConfirmedTokens] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [confirmedBatches, setConfirmedBatches] = useState<Map<string, Batch[]>>(
+    () => new Map(),
+  );
+  const [confirmedReceiptNos, setConfirmedReceiptNos] = useState<Map<string, string[]>>(
+    () => new Map(),
   );
   const [message, setMessage] = useState<{
     text: string;
@@ -170,6 +193,8 @@ export function BankReconciliationPanel() {
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [drawerStudentSearchTerm, setDrawerStudentSearchTerm] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [reportMenuAnchor, setReportMenuAnchor] = useState<HTMLElement | null>(null);
+  const [exportingReport, setExportingReport] = useState(false);
   const { showSuccess, Snackbar } = useSnackbar();
 
   const loadAccounts = useCallback(async () => {
@@ -348,7 +373,12 @@ export function BankReconciliationPanel() {
   function resetSession() {
     clearFileSelection();
     setItems([]);
+    setStatement(null);
+    setSourceFileName("");
+    setInvalidRowErrors([]);
     setConfirmedTokens(new Set());
+    setConfirmedBatches(new Map());
+    setConfirmedReceiptNos(new Map());
     setHasAnalysis(false);
     setPendingConfirmation(null);
     setResultFilter("ALL");
@@ -357,6 +387,110 @@ export function BankReconciliationPanel() {
     setStep(0);
     setMessage({ text: "", severity: "info" });
     setResetDialogOpen(false);
+  }
+
+  function findSelectedBatches(
+    item: Transaction | undefined,
+    selection: { batchId?: string; batchIds?: string[] },
+  ) {
+    if (!item) return [];
+    if (selection.batchId) {
+      const batches = [
+        item.paymentBatch,
+        ...item.paymentBatchCandidates,
+      ].filter((batch): batch is Batch => Boolean(batch));
+      const batch = batches.find((candidate) => candidate.id === selection.batchId);
+      return batch ? [batch] : [];
+    }
+    if (selection.batchIds?.length) {
+      const group = item.paymentBatchGroupCandidates.find(
+        (candidate) =>
+          candidate.batchIds.length === selection.batchIds!.length &&
+          candidate.batchIds.every((batchId) => selection.batchIds!.includes(batchId)),
+      );
+      return group?.batches || [];
+    }
+    return [];
+  }
+
+  function toReportBatch(batch: Batch) {
+    return {
+      batchNo: batch.batchNo,
+      totalAmount: batch.totalAmount,
+      student: batch.student,
+      allocations: batch.allocations,
+    };
+  }
+
+  async function exportReport(scope: "ALL" | "MATCHED" | "UNMATCHED" = "ALL") {
+    const account = accounts.find((candidate) => candidate.id === accountId);
+    if (!account || !statement || !items.length) {
+      setMessage({ text: "Chưa có phiên phân tích để xuất báo cáo", severity: "error" });
+      return;
+    }
+    setExportingReport(true);
+    try {
+      const sourceItems = displayedItems.filter((item) => {
+        if (scope === "MATCHED") return ["AUTO_MATCHED", "CONFIRMED"].includes(item.reconciliationStatus);
+        if (scope === "UNMATCHED") return item.reconciliationStatus === "UNMATCHED";
+        return true;
+      });
+      const response = await fetch("/api/bank-reconciliation-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: sourceFileName || "sao-ke-ngan-hang.xlsx",
+          bankName: account.bankName,
+          accountNo: account.accountNo,
+          accountName: account.accountName,
+          statement,
+          invalidRowErrors,
+          items: sourceItems.map((item) => {
+            const mappedBatches = confirmedBatches.get(item.confirmationToken);
+            const batches = mappedBatches?.length
+              ? mappedBatches
+              : item.paymentBatch
+                ? [item.paymentBatch]
+                : [];
+            return {
+              rowNo: item.rowNo,
+              transactionDate: item.transactionDate,
+              bankTransactionNo: item.bankTransactionNo,
+              description: item.description,
+              creditAmount: item.creditAmount,
+              debitAmount: item.debitAmount,
+              balanceAmount: item.balanceAmount,
+              reconciliationStatus: item.reconciliationStatus,
+              paymentBatches: batches.map(toReportBatch),
+              receiptNos: confirmedReceiptNos.get(item.confirmationToken) || [],
+              paymentBatchCandidateCount: item.paymentBatchCandidates.length,
+              paymentBatchGroupCandidateCount: item.paymentBatchGroupCandidates.length,
+            };
+          }),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await extractApiErrorMessage(response, "Không thể xuất báo cáo đối soát"));
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "bao-cao-doi-soat.xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+      setReportMenuAnchor(null);
+      showSuccess("Đã xuất báo cáo đối soát Excel");
+    } catch (reason) {
+      setMessage({
+        text: reason instanceof Error ? reason.message : "Không thể xuất báo cáo đối soát",
+        severity: "error",
+      });
+    } finally {
+      setExportingReport(false);
+    }
   }
 
   async function importFile() {
@@ -382,6 +516,9 @@ export function BankReconciliationPanel() {
         );
       const result = await unwrapApiResponse<ImportResult>(response);
       setItems(result.items);
+      setStatement(result.statement);
+      setSourceFileName(result.fileName);
+      setInvalidRowErrors(result.invalidRowErrors);
       setHasAnalysis(true);
       setResultFilter("ALL");
       setSearchTerm("");
@@ -434,8 +571,36 @@ export function BankReconciliationPanel() {
         throw new Error(
           await extractApiErrorMessage(response, "Không thể xác nhận đối soát"),
         );
+      const result = await unwrapApiResponse<{
+        receipt?: { receiptNo: string } | null;
+        batches?: Array<{ receipt?: { receiptNo: string } | null }>;
+      }>(response);
       const token = pendingConfirmation.itemToken;
+      const selectedBatches = findSelectedBatches(
+        items.find((item) => item.confirmationToken === token),
+        pendingConfirmation.body,
+      );
       setConfirmedTokens((current) => new Set(current).add(token));
+      if (selectedBatches.length) {
+        setConfirmedBatches((current) => {
+          const next = new Map(current);
+          next.set(token, selectedBatches);
+          return next;
+        });
+      }
+      const receiptNos = [
+        ...(result.receipt?.receiptNo ? [result.receipt.receiptNo] : []),
+        ...(result.batches || [])
+          .map((batch) => batch.receipt?.receiptNo)
+          .filter((receiptNo): receiptNo is string => Boolean(receiptNo)),
+      ];
+      if (receiptNos.length) {
+        setConfirmedReceiptNos((current) => {
+          const next = new Map(current);
+          next.set(token, receiptNos);
+          return next;
+        });
+      }
       showSuccess("Đã xác nhận đối soát và tạo thanh toán/biên lai");
       setPendingConfirmation(null);
     } catch (reason) {
@@ -472,6 +637,9 @@ export function BankReconciliationPanel() {
             "Không thể xác nhận các giao dịch khớp tự động",
           ),
         );
+      const result = await unwrapApiResponse<{
+        batches?: Array<{ receipt?: { receiptNo: string } | null }>;
+      }>(response);
       setConfirmedTokens(
         (current) =>
           new Set([
@@ -479,6 +647,21 @@ export function BankReconciliationPanel() {
             ...autoMatchedItems.map((item) => item.confirmationToken),
           ]),
       );
+      setConfirmedBatches((current) => {
+        const next = new Map(current);
+        autoMatchedItems.forEach((item) => {
+          if (item.paymentBatch) next.set(item.confirmationToken, [item.paymentBatch]);
+        });
+        return next;
+      });
+      setConfirmedReceiptNos((current) => {
+        const next = new Map(current);
+        autoMatchedItems.forEach((item, index) => {
+          const receiptNo = result.batches?.[index]?.receipt?.receiptNo;
+          if (receiptNo) next.set(item.confirmationToken, [receiptNo]);
+        });
+        return next;
+      });
       setBulkConfirmationOpen(false);
       showSuccess(`Đã xác nhận ${confirmations.length} giao dịch khớp tự động`);
     } catch (reason) {
@@ -638,6 +821,31 @@ export function BankReconciliationPanel() {
             </Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+            {items.length > 0 && (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DownloadOutlinedIcon />}
+                  onClick={(event) => setReportMenuAnchor(event.currentTarget)}
+                  disabled={loading || exportingReport}
+                  aria-controls={reportMenuAnchor ? "bank-reconciliation-report-menu" : undefined}
+                  aria-haspopup="true"
+                >
+                  {exportingReport ? "Đang xuất..." : "Xuất báo cáo"}
+                </Button>
+                <Menu
+                  id="bank-reconciliation-report-menu"
+                  anchorEl={reportMenuAnchor}
+                  open={Boolean(reportMenuAnchor)}
+                  onClose={() => setReportMenuAnchor(null)}
+                >
+                  <MenuItem onClick={() => void exportReport("ALL")}>Toàn bộ giao dịch</MenuItem>
+                  <MenuItem onClick={() => void exportReport("MATCHED")}>Chỉ giao dịch đã khớp</MenuItem>
+                  <MenuItem onClick={() => void exportReport("UNMATCHED")}>Chỉ giao dịch chưa khớp</MenuItem>
+                </Menu>
+              </>
+            )}
             {autoMatchedItems.length > 0 && (
               <Button
                 size="small"
