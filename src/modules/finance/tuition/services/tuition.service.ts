@@ -166,10 +166,36 @@ export class TuitionService {
       include: feeInclude,
     });
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
+    const auditLogs = await prisma.tuitionAuditLog.findMany({
+      where: { entityType: "TUITION_FEE", entityId: id },
+      orderBy: { performedAt: "desc" },
+      select: {
+        id: true,
+        action: true,
+        reason: true,
+        performedAt: true,
+        performedBy: true,
+      },
+    });
+    const actorIds = [...new Set(auditLogs.map((log) => log.performedBy))];
+    const actors = actorIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const actorNames = new Map(actors.map((actor) => [actor.id, actor.fullName]));
     const balanced = addPaymentBalances(fee);
     return {
       ...balanced,
       status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate),
+      auditLogs: auditLogs.map((log) => ({
+        id: log.id,
+        action: log.action,
+        reason: log.reason,
+        performedAt: log.performedAt,
+        performedByName: actorNames.get(log.performedBy) ?? "Không xác định",
+      })),
     };
   }
 
@@ -653,6 +679,14 @@ export class TuitionService {
     auditContext?: AuditContext,
   ) {
     return prisma.$transaction(async (tx) => {
+      const feeReference = await tx.tuitionFee.findUnique({
+        where: { id },
+        select: { classId: true },
+      });
+      if (!feeReference) throw new NotFoundError("Không tìm thấy khoản học phí");
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${feeReference.classId}`}))`,
+      );
       await tx.$executeRaw(
         Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
       );
@@ -716,13 +750,21 @@ export class TuitionService {
     });
   }
 
-  static async restoreCancelledFee(
+  static async restoreFee(
     id: string,
     data: { reason: string; version: number },
     actorId: string,
     auditContext?: AuditContext,
   ) {
     return prisma.$transaction(async (tx) => {
+      const feeReference = await tx.tuitionFee.findUnique({
+        where: { id },
+        select: { classId: true },
+      });
+      if (!feeReference) throw new NotFoundError("Không tìm thấy khoản học phí");
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${feeReference.classId}`}))`,
+      );
       await tx.$executeRaw(
         Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${id}::uuid FOR UPDATE`,
       );
@@ -743,9 +785,12 @@ export class TuitionService {
           "Khoản học phí đã thay đổi, vui lòng tải lại",
           "VERSION_CONFLICT",
         );
-      if (current.status !== TuitionFeeStatus.CANCELLED)
+      if (
+        current.status !== TuitionFeeStatus.CANCELLED &&
+        current.status !== TuitionFeeStatus.EXEMPTED
+      )
         throw new ConflictError(
-          "Chỉ có thể khôi phục khoản học phí đã hủy",
+          "Chỉ có thể khôi phục khoản học phí đã hủy hoặc đã miễn",
         );
       if (current.class.status === "COMPLETED" || current.class.status === "CANCELLED")
         throw new ConflictError(
@@ -765,6 +810,7 @@ export class TuitionService {
         data: {
           status: TuitionFeeStatus.UNPAID,
           cancellationReason: null,
+          exemptionReason: null,
           version: { increment: 1 },
           updatedBy: actorId,
         },
@@ -774,7 +820,10 @@ export class TuitionService {
         data: {
           entityType: "TUITION_FEE",
           entityId: id,
-          action: "TUITION_FEE_RESTORED",
+          action:
+            current.status === TuitionFeeStatus.EXEMPTED
+              ? "TUITION_FEE_EXEMPTION_REVERSED"
+              : "TUITION_FEE_RESTORED",
           reason: data.reason,
           dataBefore: current as unknown as Prisma.InputJsonValue,
           dataAfter: updated as unknown as Prisma.InputJsonValue,

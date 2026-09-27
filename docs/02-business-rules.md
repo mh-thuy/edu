@@ -617,9 +617,19 @@ thanh toán của batch và payment.
 Payment `FAILED` hoặc `CANCELLED` vẫn được lưu để tra cứu lịch sử, nhưng không
 được tính là đã thanh toán và không được tạo receipt.
 
+## 11.4 Khôi phục miễn học phí
+
+Học phí `EXEMPTED` có thể được khôi phục về trạng thái có thể thu bằng thao tác
+có lý do và audit log. Trạng thái lưu là `UNPAID`; khi hiển thị, hệ thống tự
+chuyển thành `OVERDUE` nếu đã quá hạn.
+
+Chỉ cho khôi phục khi khoản học phí chưa có payment `SUCCESS`, chưa thuộc batch
+`PENDING`, và lớp chưa `COMPLETED` hoặc `CANCELLED`. Khi khôi phục, xóa
+`exemption_reason`, tăng `version` và giữ nguyên toàn bộ lịch sử miễn học phí.
+
 ---
 
-## 11.4 Payment Status Update
+## 11.5 Payment Status Update
 
 Trạng thái học phí được tính theo tổng payment SUCCESS:
 

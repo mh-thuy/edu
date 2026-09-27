@@ -61,6 +61,13 @@ type Fee = {
     paymentDate: string;
     receipt?: { id: string } | null;
   }>;
+  auditLogs?: Array<{
+    id: string;
+    action: string;
+    reason?: string | null;
+    performedAt: string;
+    performedByName: string;
+  }>;
 };
 const labels = {
   UNPAID: "Chưa thanh toán",
@@ -82,6 +89,16 @@ const paymentStatusLabels: Record<string, string> = {
   CANCELLED: "Đã hủy",
   REFUNDED: "Đã hoàn tiền",
 };
+const auditActionLabels: Record<string, string> = {
+  CREATED: "Tạo học phí",
+  UPDATE: "Cập nhật học phí",
+  EXEMPT: "Miễn học phí",
+  CANCEL: "Hủy học phí",
+  TUITION_FEE_RESTORED: "Khôi phục học phí",
+  TUITION_FEE_EXEMPTION_REVERSED: "Bỏ miễn học phí",
+  PAID: "Đã thu đủ học phí",
+  PARTIAL: "Thu một phần học phí",
+};
 const money = (value: number) => `${Number(value).toLocaleString("vi-VN")} ₫`;
 const date = (value?: string | null) =>
   value
@@ -89,6 +106,10 @@ const date = (value?: string | null) =>
         timeZone: "Asia/Ho_Chi_Minh",
       })
     : "Chưa xác định";
+const dateTime = (value: string) =>
+  new Date(value).toLocaleString("vi-VN", {
+    timeZone: "Asia/Ho_Chi_Minh",
+  });
 
 export function TuitionDetail({ id }: { id: string }) {
   const [fee, setFee] = useState<Fee | null>(null);
@@ -181,16 +202,26 @@ export function TuitionDetail({ id }: { id: string }) {
         throw new Error(
           await extractApiErrorMessage(
             response,
-            "Không thể khôi phục học phí",
+            fee.status === "EXEMPTED"
+              ? "Không thể bỏ miễn học phí"
+              : "Không thể khôi phục học phí",
           ),
         );
       setRestoreOpen(false);
       setRestoreReason("");
-      showSuccess("Đã khôi phục học phí, có thể thu tiền lại");
+      showSuccess(
+        fee.status === "EXEMPTED"
+          ? "Đã bỏ miễn học phí, có thể thu tiền lại"
+          : "Đã khôi phục học phí, có thể thu tiền lại",
+      );
       await load();
     } catch (reason) {
       setError(
-        reason instanceof Error ? reason.message : "Không thể khôi phục học phí",
+        reason instanceof Error
+          ? reason.message
+          : fee.status === "EXEMPTED"
+            ? "Không thể bỏ miễn học phí"
+            : "Không thể khôi phục học phí",
       );
     } finally {
       setRestoreSaving(false);
@@ -314,14 +345,16 @@ export function TuitionDetail({ id }: { id: string }) {
               </Button>
             </>
           )}
-          {fee.status === "CANCELLED" && (
+          {(fee.status === "CANCELLED" || fee.status === "EXEMPTED") && (
             <Button
               variant="contained"
               color="success"
               startIcon={<RestoreOutlinedIcon />}
               onClick={() => setRestoreOpen(true)}
             >
-              Khôi phục học phí
+              {fee.status === "EXEMPTED"
+                ? "Bỏ miễn, thu lại"
+                : "Khôi phục học phí"}
             </Button>
           )}
           {editableStatus && (
@@ -635,6 +668,74 @@ export function TuitionDetail({ id }: { id: string }) {
           </Typography>
         )}
       </Paper>
+      <Paper
+        sx={{
+          p: { xs: 2, md: 3 },
+          border: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          gap={1}
+          sx={{ mb: 1 }}
+        >
+          <Box>
+            <Typography variant="h6" fontWeight={800}>
+              Lịch sử nghiệp vụ
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Lịch sử thay đổi trạng thái và số tiền của khoản phí
+            </Typography>
+          </Box>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`${fee.auditLogs?.length ?? 0} thao tác`}
+          />
+        </Stack>
+        {fee.auditLogs?.length ? (
+          fee.auditLogs.map((log, index) => (
+            <Box
+              key={log.id}
+              sx={{
+                py: 1.5,
+                borderTop: index ? "1px solid" : undefined,
+                borderColor: "divider",
+              }}
+            >
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                gap={1}
+              >
+                <Box>
+                  <Typography fontWeight={700}>
+                    {auditActionLabels[log.action] ?? log.action}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {log.reason || "Không có lý do"}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  textAlign={{ sm: "right" }}
+                >
+                  {dateTime(log.performedAt)}
+                  <br />
+                  {log.performedByName}
+                </Typography>
+              </Stack>
+            </Box>
+          ))
+        ) : (
+          <Typography color="text.secondary" sx={{ py: 2 }}>
+            Chưa có lịch sử nghiệp vụ.
+          </Typography>
+        )}
+      </Paper>
       <Dialog
         open={Boolean(statusAction)}
         onClose={() => !statusSaving && setStatusAction(null)}
@@ -684,15 +785,19 @@ export function TuitionDetail({ id }: { id: string }) {
       </Dialog>
       <ConfirmDialog
         open={restoreOpen}
-        title="Khôi phục học phí"
-        message="Khoản phí sẽ chuyển về trạng thái chưa thanh toán để có thể thu lại. Lịch sử hủy vẫn được lưu trong nhật ký nghiệp vụ."
+        title={fee.status === "EXEMPTED" ? "Bỏ miễn học phí" : "Khôi phục học phí"}
+        message={
+          fee.status === "EXEMPTED"
+            ? "Khoản phí sẽ bỏ trạng thái miễn và chuyển về chưa thanh toán hoặc quá hạn để có thể thu lại. Lịch sử miễn vẫn được lưu trong nhật ký nghiệp vụ."
+            : "Khoản phí sẽ chuyển về trạng thái chưa thanh toán để có thể thu lại. Lịch sử hủy vẫn được lưu trong nhật ký nghiệp vụ."
+        }
         content={
           <AppTextField
             fullWidth
             required
             multiline
             minRows={2}
-            label="Lý do khôi phục"
+            label={fee.status === "EXEMPTED" ? "Lý do bỏ miễn" : "Lý do khôi phục"}
             value={restoreReason}
             onChange={(event) => setRestoreReason(event.target.value)}
             inputProps={{ maxLength: 500 }}
@@ -708,7 +813,7 @@ export function TuitionDetail({ id }: { id: string }) {
         }}
         isLoading={restoreSaving}
         confirmDisabled={!restoreReason.trim()}
-        confirmLabel="Khôi phục"
+        confirmLabel={fee.status === "EXEMPTED" ? "Bỏ miễn và thu lại" : "Khôi phục"}
         confirmColor="success"
       />
       {Snackbar}

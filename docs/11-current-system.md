@@ -40,6 +40,9 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Dashboard hiển thị riêng tổng thu tiền mặt và tổng thu chuyển khoản; hai số liệu tuân theo bộ lọc ngày và chỉ tính payment `SUCCESS`.
 - Xóa học viên/giáo viên/lớp/lịch chỉ là soft delete hoặc chuyển trạng thái; không hard delete bản ghi.
 - Thanh toán bắt đầu từ chi tiết học phí bằng nút `Thanh toán học phí`.
+- Học phí `EXEMPTED` có thể được bỏ miễn để thu lại bằng lý do bắt buộc; backend
+  kiểm tra payment/batch/lớp, giữ lịch sử audit và chuyển về `UNPAID` hoặc hiển
+  thị `OVERDUE` nếu đã quá hạn.
 - Thông báo thanh toán, biên lai tổng hợp và phiếu thu đều hiển thị các môn đã đăng ký của học viên.
 
 ## Thanh toán và đối soát

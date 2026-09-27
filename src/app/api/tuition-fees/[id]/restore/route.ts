@@ -17,7 +17,7 @@ export async function POST(
     if (user instanceof Response) return user;
     const { id } = routeParamsSchema.parse(await params);
     const data = tuitionFeeRestoreSchema.parse(await request.json());
-    const fee = await TuitionService.restoreCancelledFee(
+    const fee = await TuitionService.restoreFee(
       id,
       data,
       user.id,

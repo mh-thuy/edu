@@ -716,11 +716,15 @@ export function BankReconciliationPanel() {
       <Paper sx={{ overflow: "hidden" }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={0.5} sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
           <Box>
-            <Typography variant="subtitle1" fontWeight={700}>Bước 3 · Đối soát giao dịch</Typography>
+            <Typography variant="subtitle1" fontWeight={700}>
+              {items.length ? "Bước 3 · Đối soát giao dịch" : "Kết quả đối soát"}
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               {items.length
                 ? `${items.length} giao dịch trong phiên · ${money(summary.creditAmount)} VND ghi có`
-                : "Chưa có giao dịch trong phiên"}
+                : hasAnalysis
+                  ? "Không có giao dịch trong phiên"
+                  : "Chưa có phiên phân tích"}
             </Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
@@ -846,40 +850,61 @@ export function BankReconciliationPanel() {
             </Stack>
           </Stack>
         )}
-        <TableContainer sx={{ maxHeight: 640, overflowX: "auto" }}>
-        <Table
-          size="small"
-          stickyHeader
-          sx={{
-            minWidth: 1080,
-            "& tbody tr:nth-of-type(even)": { bgcolor: "action.hover" },
-            "& th:last-of-type, & td:last-of-type": {
-              position: "sticky",
-              right: 0,
-              bgcolor: "background.paper",
-              boxShadow: "-4px 0 8px rgba(0, 0, 0, 0.04)",
-            },
-            "& th:last-of-type": { zIndex: 3 },
-            "& td:last-of-type": { zIndex: 1 },
-            "& tbody tr:nth-of-type(even) td:last-of-type": {
-              bgcolor: "action.hover",
-            },
-          }}
-        >
-          <TableHead>
-            <TableRow>
-              <TableCell>Dòng</TableCell>
-              <TableCell>Ngày</TableCell>
-              <TableCell>Mã giao dịch</TableCell>
-              <TableCell>Nội dung</TableCell>
-              <TableCell>Nội dung đối soát</TableCell>
-              <TableCell align="right">Ghi có</TableCell>
-              <TableCell align="right">Ghi nợ</TableCell>
-              <TableCell>Trạng thái</TableCell>
-              <TableCell>Chi tiết đối soát</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+        {items.length === 0 ? (
+          <Box sx={{ p: { xs: 3, md: 5 }, textAlign: "center" }}>
+            <Typography color="text.secondary">
+              {!hasAnalysis
+                ? "Chưa có dữ liệu phân tích trong phiên này"
+                : "Đã xử lý hết giao dịch trong phiên này"}
+            </Typography>
+            {!hasAnalysis && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                Chọn file sao kê ở bước 1 để bắt đầu phân tích.
+              </Typography>
+            )}
+          </Box>
+        ) : (
+          <TableContainer sx={{ maxHeight: 640, overflowX: "auto" }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: { xs: "block", md: "none" }, px: 2, pt: 1.25 }}
+            >
+              Vuốt ngang để xem đầy đủ giao dịch và thao tác.
+            </Typography>
+            <Table
+              size="small"
+              stickyHeader
+              sx={{
+                minWidth: 1080,
+                "& tbody tr:nth-of-type(even)": { bgcolor: "action.hover" },
+                "& th:last-of-type, & td:last-of-type": {
+                  position: "sticky",
+                  right: 0,
+                  bgcolor: "background.paper",
+                  boxShadow: "-4px 0 8px rgba(0, 0, 0, 0.04)",
+                },
+                "& th:last-of-type": { zIndex: 3 },
+                "& td:last-of-type": { zIndex: 1 },
+                "& tbody tr:nth-of-type(even) td:last-of-type": {
+                  bgcolor: "action.hover",
+                },
+              }}
+            >
+              <TableHead>
+                <TableRow>
+                  <TableCell>Dòng</TableCell>
+                  <TableCell>Ngày</TableCell>
+                  <TableCell>Mã giao dịch</TableCell>
+                  <TableCell>Nội dung</TableCell>
+                  <TableCell>Nội dung đối soát</TableCell>
+                  <TableCell align="right">Ghi có</TableCell>
+                  <TableCell align="right">Ghi nợ</TableCell>
+                  <TableCell>Trạng thái</TableCell>
+                  <TableCell>Chi tiết đối soát</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
             {searchedItems.map((item) => (
               <TableRow
                 hover
@@ -943,24 +968,9 @@ export function BankReconciliationPanel() {
                 </TableCell>
               </TableRow>
             ))}
-            {!items.length && (
-              <TableRow>
-                <TableCell colSpan={8}>
-                  <Typography
-                    sx={{ p: 3 }}
-                    color="text.secondary"
-                    textAlign="center"
-                  >
-                    {!hasAnalysis
-                      ? "Chưa có dữ liệu phân tích trong phiên này"
-                      : "Đã xử lý hết giao dịch trong phiên này"}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
             {items.length > 0 && !filteredItems.length && (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <Typography sx={{ p: 3 }} color="text.secondary" textAlign="center">
                     Không có giao dịch thuộc trạng thái đã chọn
                   </Typography>
@@ -969,16 +979,17 @@ export function BankReconciliationPanel() {
             )}
             {filteredItems.length > 0 && !searchedItems.length && (
               <TableRow>
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <Typography sx={{ p: 3 }} color="text.secondary" textAlign="center">
                     Không tìm thấy giao dịch phù hợp với từ khóa “{searchTerm}”
                   </Typography>
                 </TableCell>
               </TableRow>
             )}
-          </TableBody>
-        </Table>
-        </TableContainer>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
         {items.length > 0 && (
           <Drawer
             anchor="right"

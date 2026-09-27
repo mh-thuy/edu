@@ -4,6 +4,13 @@
 
 Chọn lớp -> chọn các môn -> đăng ký enrollment subject -> tự động tạo tuition fee items -> tính final amount -> mở chi tiết học phí -> thanh toán.
 
+## Bỏ miễn để thu lại
+
+Mở khoản phí `EXEMPTED` -> nhập lý do bỏ miễn -> backend khóa cùng lớp và khoản
+phí -> kiểm tra chưa có payment `SUCCESS`, chưa thuộc batch `PENDING`, lớp chưa
+`COMPLETED`/`CANCELLED` -> xóa `exemption_reason` -> chuyển về `UNPAID` hoặc
+hiển thị `OVERDUE` nếu đã quá hạn -> ghi audit -> thu tiền.
+
 ## Cash/bank/VietQR payment
 
 Mở fee -> backend lấy final_amount -> tạo payment attempt PENDING -> nhận/xác nhận -> lock fee -> kiểm tra amount/status/idempotency -> SUCCESS -> fee PAID -> receipt -> audit.
