@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
@@ -109,6 +109,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
   const [bankAccountsError, setBankAccountsError] = useState("");
   const [error, setError] = useState("");
+  const requestVersion = useRef(0);
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const classNotActive = classData?.status !== "ACTIVE";
   const classStartMonth = classData?.startDate?.slice(0, 7) ?? null;
@@ -119,6 +120,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   }, [classEndMonth, classStartMonth]);
 
   const load = useCallback(async () => {
+    const currentRequest = ++requestVersion.current;
     setLoading(true);
     setError("");
     try {
@@ -141,12 +143,15 @@ export function ClassTuitionManagement({ id }: { id: string }) {
           }),
         ),
       );
+      if (currentRequest !== requestVersion.current) return;
       setClassData(classResult);
       setFees([feeResult.items, ...remainingPages.map((page) => page.items)].flat());
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Không thể tải dữ liệu");
+      if (currentRequest === requestVersion.current) {
+        setError(reason instanceof Error ? reason.message : "Không thể tải dữ liệu");
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestVersion.current) setLoading(false);
     }
   }, [id, month]);
 
