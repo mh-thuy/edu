@@ -206,9 +206,9 @@ Tạo học phí không tạo item trùng
 Tính phí tháng trọn tháng theo mức phí của từng môn
 Enrollment tạm nghỉ không phát sinh học phí tháng
 Enrollment ACTIVE nhưng vắng không làm giảm học phí tháng
-Không tạo học phí trước tháng đăng ký/tái đăng ký
+Có thể tạo học phí cho tháng trước ngày đăng ký/tái đăng ký nếu tháng đó nằm trong thời gian của lớp
 Không tạo học phí ngoài thời gian của lớp
-Không tạo khoảng tạm nghỉ trước tháng đăng ký hoặc ngoài thời gian của lớp
+Không tạo khoảng tạm nghỉ ngoài thời gian của lớp
 Hủy tạm nghỉ giữ bản ghi lịch sử và không còn chặn tạo học phí
 Không tạo học phí/item trùng môn
 Thanh toán vượt số tiền còn nợ -> CONFLICT
@@ -416,6 +416,10 @@ Student Fees
 Khi chuyển lớp `ACTIVE -> COMPLETED`, kiểm tra enrollment và các môn đang
 `ACTIVE` chuyển sang `COMPLETED`, audit log được ghi, danh sách học viên vẫn
 hiển thị để xem và mọi thao tác thay đổi bị từ chối.
+
+Kiểm tra thêm: lớp `DRAFT` không cho đăng ký/import/thay đổi enrollment và không
+cho tạo học phí; các API trả `409 Conflict`. Bộ chọn kỳ học phí không cho chọn
+tháng ngoài khoảng bắt đầu/kết thúc của lớp.
 
 ## Sửa Payment
 

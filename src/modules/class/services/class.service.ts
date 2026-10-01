@@ -124,10 +124,8 @@ async function assertClassAllowsEnrollmentChanges(
     select: { status: true },
   });
   if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
-  if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
-    throw new ConflictError(
-      "Không thể thay đổi đăng ký của lớp đã kết thúc hoặc đã hủy",
-    );
+  if (classData.status !== "ACTIVE") {
+    throw new ConflictError("Chỉ có thể thay đổi đăng ký khi lớp đang hoạt động");
   }
 }
 
@@ -166,7 +164,9 @@ export async function getClassById(
   if (!classData) return null;
   return {
     ...classData,
-    classSubjects: await queryClassSubjects(prisma, id, { includeCompleted: true }),
+    classSubjects: await queryClassSubjects(prisma, id, {
+      includeCompleted: true,
+    }),
   };
 }
 
@@ -212,7 +212,11 @@ export async function getClasses(filter: ClassFilter) {
   return {
     items: classes.map(({ classSubjects, ...classData }) => ({
       ...classData,
-      teacherNames: [...new Set(classSubjects.map((item) => item.teacher?.fullName).filter(Boolean))],
+      teacherNames: [
+        ...new Set(
+          classSubjects.map((item) => item.teacher?.fullName).filter(Boolean),
+        ),
+      ],
     })),
     total,
     page,
@@ -251,14 +255,16 @@ export async function updateClass(
 
     if (!current) throw new NotFoundError("Không tìm thấy lớp học");
 
-    const startDate = data.startDate === undefined
-      ? current.startDate
-      : new Date(data.startDate);
-    const endDate = data.endDate === undefined
-      ? current.endDate
-      : new Date(data.endDate);
+    const startDate =
+      data.startDate === undefined
+        ? current.startDate
+        : new Date(data.startDate);
+    const endDate =
+      data.endDate === undefined ? current.endDate : new Date(data.endDate);
     if (startDate && endDate && endDate < startDate) {
-      throw new ConflictError("Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu");
+      throw new ConflictError(
+        "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu",
+      );
     }
 
     if (data.startDate !== undefined || data.endDate !== undefined) {
@@ -314,7 +320,9 @@ export async function updateClass(
         where: { classId: id, status: "ACTIVE" },
         select: { id: true, studentId: true },
       });
-      const enrollmentIds = activeEnrollments.map((enrollment) => enrollment.id);
+      const enrollmentIds = activeEnrollments.map(
+        (enrollment) => enrollment.id,
+      );
 
       if (enrollmentIds.length > 0) {
         await tx.enrollmentSubject.updateMany({
@@ -474,16 +482,18 @@ export async function assignStudentToClass(
       );
     }
 
-  const classData = await tx.class.findUnique({ where: { id: classId } });
-  if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
-  if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
-    throw new ConflictError("Không thể đăng ký học viên vào lớp đã kết thúc hoặc đã hủy");
-  }
-  const student = await tx.student.findUnique({ where: { id: studentId } });
-  if (!student) throw new NotFoundError("Không tìm thấy học viên");
-  if (student.status !== "ACTIVE") {
-    throw new ConflictError("Không thể đăng ký học viên đã ngừng hoạt động");
-  }
+    const classData = await tx.class.findUnique({ where: { id: classId } });
+    if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
+    if (classData.status !== "ACTIVE") {
+      throw new ConflictError(
+        "Chỉ có thể đăng ký học viên khi lớp đang hoạt động",
+      );
+    }
+    const student = await tx.student.findUnique({ where: { id: studentId } });
+    if (!student) throw new NotFoundError("Không tìm thấy học viên");
+    if (student.status !== "ACTIVE") {
+      throw new ConflictError("Không thể đăng ký học viên đã ngừng hoạt động");
+    }
 
     const existingSubjectRows = existing
       ? await tx.$queryRaw<
@@ -507,19 +517,24 @@ export async function assignStudentToClass(
     }
 
     const reactivationStart = getVietnamCalendarDateStart();
-    const reactivationMonthStart = new Date(Date.UTC(
-      reactivationStart.getUTCFullYear(),
-      reactivationStart.getUTCMonth(),
-      1,
-    ));
-    const clearedPauses = existing?.status === "LEFT"
-      ? await tx.$queryRaw<Array<{
-          id: string;
-          enrollmentId: string;
-          startMonth: Date;
-          endMonth: Date;
-          reason: string | null;
-        }>>`
+    const reactivationMonthStart = new Date(
+      Date.UTC(
+        reactivationStart.getUTCFullYear(),
+        reactivationStart.getUTCMonth(),
+        1,
+      ),
+    );
+    const clearedPauses =
+      existing?.status === "LEFT"
+        ? await tx.$queryRaw<
+            Array<{
+              id: string;
+              enrollmentId: string;
+              startMonth: Date;
+              endMonth: Date;
+              reason: string | null;
+            }>
+          >`
           SELECT id,
                  enrollment_id AS "enrollmentId",
                  start_month AS "startMonth",
@@ -530,7 +545,7 @@ export async function assignStudentToClass(
             AND status = 'ACTIVE'::enrollment_pause_status
             AND end_month >= ${reactivationMonthStart}::date
         `
-      : [];
+        : [];
     const clearedPauseIds = clearedPauses.map((pause) => pause.id);
     if (clearedPauseIds.length > 0) {
       await tx.$executeRaw`
@@ -660,7 +675,10 @@ export async function removeSubjectFromEnrollment(
     }
     const subject = await tx.enrollmentSubject.findUnique({
       where: {
-        enrollmentId_classSubjectId: { enrollmentId: enrollment.id, classSubjectId },
+        enrollmentId_classSubjectId: {
+          enrollmentId: enrollment.id,
+          classSubjectId,
+        },
       },
       include: { classSubject: { include: { subject: true } } },
     });
@@ -737,7 +755,9 @@ export async function pauseStudentEnrollment(
   const startMonth = parseBillingMonth(data.startMonth);
   const endMonth = parseBillingMonth(data.endMonth);
   if (startMonth > endMonth) {
-    throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
+    throw new ConflictError(
+      "Tháng bắt đầu phải trước hoặc bằng tháng kết thúc",
+    );
   }
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsEnrollmentChanges(tx, classId);
@@ -758,27 +778,35 @@ export async function pauseStudentEnrollment(
     if (!enrollment || enrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
     }
-    const enrollmentMonth = new Date(Date.UTC(
-      enrollment.currentPeriodStart.getUTCFullYear(),
-      enrollment.currentPeriodStart.getUTCMonth(),
-      1,
-    ));
     const classStartMonth = enrollment.class.startDate
-      ? new Date(Date.UTC(enrollment.class.startDate.getUTCFullYear(), enrollment.class.startDate.getUTCMonth(), 1))
+      ? new Date(
+          Date.UTC(
+            enrollment.class.startDate.getUTCFullYear(),
+            enrollment.class.startDate.getUTCMonth(),
+            1,
+          ),
+        )
       : null;
     const classEndMonth = enrollment.class.endDate
-      ? new Date(Date.UTC(enrollment.class.endDate.getUTCFullYear(), enrollment.class.endDate.getUTCMonth(), 1))
+      ? new Date(
+          Date.UTC(
+            enrollment.class.endDate.getUTCFullYear(),
+            enrollment.class.endDate.getUTCMonth(),
+            1,
+          ),
+        )
       : null;
-    if (startMonth < enrollmentMonth) {
-      throw new ConflictError("Không thể tạm nghỉ trước tháng học viên đăng ký");
-    }
     if (
       (classStartMonth && startMonth < classStartMonth) ||
       (classEndMonth && endMonth > classEndMonth)
     ) {
-      throw new ConflictError("Khoảng tạm nghỉ nằm ngoài thời gian của lớp học");
+      throw new ConflictError(
+        "Khoảng tạm nghỉ nằm ngoài thời gian của lớp học",
+      );
     }
-    const existingFees = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+    const existingFees = await tx.$queryRaw<
+      Array<{ id: string; status: string }>
+    >`
       SELECT id, status::text AS status
       FROM tuition_fees
       WHERE enrollment_id = ${enrollment.id}::uuid
@@ -837,7 +865,9 @@ export async function updateEnrollmentPause(
   const startMonth = parseBillingMonth(data.startMonth);
   const endMonth = parseBillingMonth(data.endMonth);
   if (startMonth > endMonth) {
-    throw new ConflictError("Tháng bắt đầu phải trước hoặc bằng tháng kết thúc");
+    throw new ConflictError(
+      "Tháng bắt đầu phải trước hoặc bằng tháng kết thúc",
+    );
   }
 
   return prisma.$transaction(async (tx) => {
@@ -861,7 +891,10 @@ export async function updateEnrollmentPause(
         status: "ACTIVE",
       },
     });
-    if (!pause) throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ đang hoạt động");
+    if (!pause)
+      throw new NotFoundError(
+        "Không tìm thấy thời gian tạm nghỉ đang hoạt động",
+      );
     const enrollment = await tx.classStudent.findUnique({
       where: { id: pause.enrollmentId },
       include: { class: true },
@@ -869,25 +902,31 @@ export async function updateEnrollmentPause(
     if (!enrollment || enrollment.status !== "ACTIVE") {
       throw new NotFoundError("Không tìm thấy học viên đang học trong lớp");
     }
-    const enrollmentMonth = new Date(Date.UTC(
-      enrollment.currentPeriodStart.getUTCFullYear(),
-      enrollment.currentPeriodStart.getUTCMonth(),
-      1,
-    ));
     const classStartMonth = enrollment.class.startDate
-      ? new Date(Date.UTC(enrollment.class.startDate.getUTCFullYear(), enrollment.class.startDate.getUTCMonth(), 1))
+      ? new Date(
+          Date.UTC(
+            enrollment.class.startDate.getUTCFullYear(),
+            enrollment.class.startDate.getUTCMonth(),
+            1,
+          ),
+        )
       : null;
     const classEndMonth = enrollment.class.endDate
-      ? new Date(Date.UTC(enrollment.class.endDate.getUTCFullYear(), enrollment.class.endDate.getUTCMonth(), 1))
+      ? new Date(
+          Date.UTC(
+            enrollment.class.endDate.getUTCFullYear(),
+            enrollment.class.endDate.getUTCMonth(),
+            1,
+          ),
+        )
       : null;
-    if (startMonth < enrollmentMonth) {
-      throw new ConflictError("Không thể tạm nghỉ trước tháng học viên đăng ký");
-    }
     if (
       (classStartMonth && startMonth < classStartMonth) ||
       (classEndMonth && endMonth > classEndMonth)
     ) {
-      throw new ConflictError("Khoảng tạm nghỉ nằm ngoài thời gian của lớp học");
+      throw new ConflictError(
+        "Khoảng tạm nghỉ nằm ngoài thời gian của lớp học",
+      );
     }
     const existingFee = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM tuition_fees
@@ -967,7 +1006,9 @@ export async function deleteEnrollmentPause(
       RETURNING id, status::text AS status
     `;
     if (cancelled.length === 0) {
-      throw new NotFoundError("Không tìm thấy thời gian tạm nghỉ đang hoạt động");
+      throw new NotFoundError(
+        "Không tìm thấy thời gian tạm nghỉ đang hoạt động",
+      );
     }
     await tx.tuitionAuditLog.create({
       data: {
@@ -1004,7 +1045,12 @@ async function generateSubjectCode() {
   const prefix = `MH-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const code = `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`;
-    if (!(await prisma.subject.findUnique({ where: { code }, select: { id: true } }))) {
+    if (
+      !(await prisma.subject.findUnique({
+        where: { code },
+        select: { id: true },
+      }))
+    ) {
       return code;
     }
   }
@@ -1075,7 +1121,9 @@ export async function addClassSubject(
         select: { id: true, status: true },
       });
       if (!teacher || teacher.status !== "ACTIVE")
-        throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
+        throw new ConflictError(
+          "Giáo viên không hợp lệ hoặc đã ngừng hoạt động",
+        );
     }
     const rows = await tx.$queryRaw<Array<{ id: string }>>`
       INSERT INTO class_subjects (id, class_id, subject_id, teacher_id, tuition_fee, total_sessions, max_students, status, created_at, updated_at)
@@ -1124,7 +1172,9 @@ export async function updateClassSubject(
         select: { id: true, status: true },
       });
       if (!teacher || teacher.status !== "ACTIVE")
-        throw new ConflictError("Giáo viên không hợp lệ hoặc đã ngừng hoạt động");
+        throw new ConflictError(
+          "Giáo viên không hợp lệ hoặc đã ngừng hoạt động",
+        );
     }
     if (data.teacherId !== undefined && data.teacherId !== existing.teacherId) {
       const activeSchedule = await tx.classSchedule.findFirst({
@@ -1175,7 +1225,8 @@ export async function updateClassSubject(
     const updated = (await queryClassSubjects(tx, classId)).find(
       (item) => item.id === classSubjectId,
     );
-    if (!updated) throw new NotFoundError("Không tìm thấy môn học vừa cập nhật");
+    if (!updated)
+      throw new NotFoundError("Không tìm thấy môn học vừa cập nhật");
     await tx.tuitionAuditLog.create({
       data: {
         entityType: "CLASS_SUBJECT",
@@ -1208,9 +1259,15 @@ export async function removeClassSubject(
     if (!existing) throw new NotFoundError("Không tìm thấy môn học trong lớp");
 
     const [enrollments, tuitionItems, schedules] = await Promise.all([
-      tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM enrollment_subjects WHERE class_subject_id = ${classSubjectId}::uuid`,
-      tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM tuition_fee_items WHERE class_subject_id = ${classSubjectId}::uuid`,
-      tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM class_schedules WHERE class_subject_id = ${classSubjectId}::uuid AND deleted_at IS NULL`,
+      tx.$queryRaw<
+        Array<{ count: bigint }>
+      >`SELECT COUNT(*)::bigint AS count FROM enrollment_subjects WHERE class_subject_id = ${classSubjectId}::uuid`,
+      tx.$queryRaw<
+        Array<{ count: bigint }>
+      >`SELECT COUNT(*)::bigint AS count FROM tuition_fee_items WHERE class_subject_id = ${classSubjectId}::uuid`,
+      tx.$queryRaw<
+        Array<{ count: bigint }>
+      >`SELECT COUNT(*)::bigint AS count FROM class_schedules WHERE class_subject_id = ${classSubjectId}::uuid AND deleted_at IS NULL`,
     ]);
     if (
       Number(enrollments[0]?.count ?? 0) > 0 ||
@@ -1267,13 +1324,8 @@ export async function removeStudentFromClass(
       throw new NotFoundError("Không tìm thấy học viên đang đăng ký trong lớp");
     }
 
-    if (
-      lockedEnrollment.tuitionFees.length > 0 &&
-      options?.force !== true
-    ) {
-      throw new ConflictError(
-        "Không thể xóa học viên đã phát sinh học phí",
-      );
+    if (lockedEnrollment.tuitionFees.length > 0 && options?.force !== true) {
+      throw new ConflictError("Không thể xóa học viên đã phát sinh học phí");
     }
 
     if (lockedEnrollment.tuitionFees.length > 0 && !options?.reason?.trim()) {
@@ -1315,9 +1367,7 @@ export async function removeStudentFromClass(
   });
 }
 
-export async function getClassStudents(
-  classId: string,
-): Promise<
+export async function getClassStudents(classId: string): Promise<
   Array<
     ClassStudentWithStudent & {
       subjects: Array<{ classSubjectId: string }>;
@@ -1339,162 +1389,13 @@ export async function getClassStudents(
     }
   >
 > {
-  return prisma.classStudent.findMany({
-    where: { classId, status: { in: ["ACTIVE", "COMPLETED"] } },
-    include: {
-      student: true,
-      subjects: {
-        where: { status: { in: ["ACTIVE", "COMPLETED"] } },
-        select: { classSubjectId: true },
-      },
-        tuitionFees: {
-          select: {
-            id: true,
-            status: true,
-            finalAmount: true,
-            dueDate: true,
-            billingYear: true,
-            billingMonth: true,
-            billingType: true,
-            items: { select: { classSubjectId: true } },
-            payments: {
-              where: { paymentStatus: "SUCCESS" },
-              select: { amount: true },
-            },
-        },
-      },
-      pauses: {
-        select: {
-          id: true,
-          startMonth: true,
-          endMonth: true,
-          reason: true,
-        },
-      },
-    },
-  }).then(async (students) => {
-    const pauseIds = students.flatMap((student) => student.pauses.map((pause) => pause.id));
-    const pauseStatuses = pauseIds.length > 0
-      ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
-          SELECT id, status::text AS status FROM enrollment_pauses
-          WHERE id = ANY(${pauseIds}::uuid[])
-        `
-      : [];
-    const statusById = new Map(pauseStatuses.map((pause) => [pause.id, pause.status]));
-    return students.map((student) => ({
-      ...student,
-      pauses: student.pauses.map((pause) => ({
-        ...pause,
-        status: statusById.get(pause.id) ?? "ACTIVE",
-      })),
-      tuitionFees: student.tuitionFees.map((fee) => {
-        const { dueDate, ...feeData } = fee;
-        const paidAmount = fee.payments.reduce(
-          (total, payment) => total.add(payment.amount),
-          new Prisma.Decimal(0),
-        );
-        const remainingAmount = fee.finalAmount.sub(paidAmount);
-        return {
-          ...feeData,
-          paidAmount,
-          remainingAmount: remainingAmount.greaterThan(0) ? remainingAmount : new Prisma.Decimal(0),
-          status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
-        };
-      }),
-    }));
-  });
-}
-
-function parseStudentListMonth(value: string) {
-  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
-  if (!match) throw new ConflictError("Kỳ học phí phải có định dạng YYYY-MM");
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  return {
-    start: new Date(Date.UTC(year, month - 1, 1)),
-    end: new Date(Date.UTC(year, month, 0)),
-    year,
-    month,
-  };
-}
-
-export async function getClassStudentsPage(
-  classId: string,
-  options: {
-    page: number;
-    pageSize: number;
-    search?: string;
-    status?: "ACTIVE" | "PAUSED" | "COMPLETED" | "LEFT";
-    subjectId?: string;
-    month: string;
-  },
-) {
-  const period = parseStudentListMonth(options.month);
-  const nextPeriodStart = new Date(Date.UTC(period.year, period.month, 1));
-  const subjectForPeriodWhere: Prisma.EnrollmentSubjectWhereInput = {
-    enrolledAt: { lt: nextPeriodStart },
-    OR: [
-      { status: { in: ["ACTIVE", "COMPLETED"] } },
-      { droppedAt: { gte: period.start } },
-    ],
-  };
-  const pauseWhere: Prisma.EnrollmentPauseWhereInput = {
-    status: "ACTIVE",
-    startMonth: { lte: period.end },
-    endMonth: { gte: period.start },
-  };
-  const activeInPeriod: Prisma.ClassStudentWhereInput = {
-    status: "ACTIVE",
-    currentPeriodStart: { lte: period.end },
-  };
-  const statusWhere: Prisma.ClassStudentWhereInput =
-    options.status === "COMPLETED"
-      ? { status: "COMPLETED" }
-      : options.status === "LEFT"
-        ? { status: "LEFT" }
-      : options.status === "PAUSED"
-        ? { ...activeInPeriod, pauses: { some: pauseWhere } }
-        : options.status === "ACTIVE"
-          ? { ...activeInPeriod, pauses: { none: pauseWhere } }
-          : { OR: [activeInPeriod, { status: "COMPLETED" }] };
-  const where: Prisma.ClassStudentWhereInput = {
-    classId,
-    ...statusWhere,
-    ...(options.search?.trim() && {
-      student: {
-        OR: [
-          { code: { contains: options.search.trim(), mode: "insensitive" } },
-          { fullName: { contains: options.search.trim(), mode: "insensitive" } },
-          { phone: { contains: options.search.trim(), mode: "insensitive" } },
-        ],
-      },
-    }),
-    ...(options.subjectId && {
-      subjects: {
-        some: {
-          ...subjectForPeriodWhere,
-          classSubjectId: options.subjectId,
-        },
-      },
-    }),
-  };
-
-  const activeWhere: Prisma.ClassStudentWhereInput = {
-    classId,
-    status: "ACTIVE",
-    currentPeriodStart: { lte: period.end },
-    pauses: { none: pauseWhere },
-  };
-  const [students, total, active, paused, completed, activeWithFee] = await Promise.all([
-    prisma.classStudent.findMany({
-      where,
-      skip: (options.page - 1) * options.pageSize,
-      take: options.pageSize,
-      orderBy: { student: { fullName: "asc" } },
+  return prisma.classStudent
+    .findMany({
+      where: { classId, status: { in: ["ACTIVE", "COMPLETED"] } },
       include: {
         student: true,
         subjects: {
-          where: subjectForPeriodWhere,
+          where: { status: { in: ["ACTIVE", "COMPLETED"] } },
           select: { classSubjectId: true },
         },
         tuitionFees: {
@@ -1522,24 +1423,179 @@ export async function getClassStudentsPage(
           },
         },
       },
-    }),
-    prisma.classStudent.count({ where }),
-    prisma.classStudent.count({ where: activeWhere }),
-    prisma.classStudent.count({
-      where: {
-        classId,
-        status: "ACTIVE",
-        currentPeriodStart: { lte: period.end },
-        pauses: { some: pauseWhere },
+    })
+    .then(async (students) => {
+      const pauseIds = students.flatMap((student) =>
+        student.pauses.map((pause) => pause.id),
+      );
+      const pauseStatuses =
+        pauseIds.length > 0
+          ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+          SELECT id, status::text AS status FROM enrollment_pauses
+          WHERE id = ANY(${pauseIds}::uuid[])
+        `
+          : [];
+      const statusById = new Map(
+        pauseStatuses.map((pause) => [pause.id, pause.status]),
+      );
+      return students.map((student) => ({
+        ...student,
+        pauses: student.pauses.map((pause) => ({
+          ...pause,
+          status: statusById.get(pause.id) ?? "ACTIVE",
+        })),
+        tuitionFees: student.tuitionFees.map((fee) => {
+          const { dueDate, ...feeData } = fee;
+          const paidAmount = fee.payments.reduce(
+            (total, payment) => total.add(payment.amount),
+            new Prisma.Decimal(0),
+          );
+          const remainingAmount = fee.finalAmount.sub(paidAmount);
+          return {
+            ...feeData,
+            paidAmount,
+            remainingAmount: remainingAmount.greaterThan(0)
+              ? remainingAmount
+              : new Prisma.Decimal(0),
+            status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
+          };
+        }),
+      }));
+    });
+}
+
+function parseStudentListMonth(value: string) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(value);
+  if (!match) throw new ConflictError("Kỳ học phí phải có định dạng YYYY-MM");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1)),
+    end: new Date(Date.UTC(year, month, 0)),
+    year,
+    month,
+  };
+}
+
+export async function getClassStudentsPage(
+  classId: string,
+  options: {
+    page: number;
+    pageSize: number;
+    search?: string;
+    status?: "ACTIVE" | "PAUSED" | "COMPLETED" | "LEFT";
+    subjectId?: string;
+    month: string;
+  },
+) {
+  const period = parseStudentListMonth(options.month);
+  const subjectForPeriodWhere: Prisma.EnrollmentSubjectWhereInput = {
+    OR: [
+      { status: { in: ["ACTIVE", "COMPLETED"] } },
+      { droppedAt: { gte: period.start } },
+    ],
+  };
+  const pauseWhere: Prisma.EnrollmentPauseWhereInput = {
+    status: "ACTIVE",
+    startMonth: { lte: period.end },
+    endMonth: { gte: period.start },
+  };
+  const activeInPeriod: Prisma.ClassStudentWhereInput = {
+    status: "ACTIVE",
+  };
+  const statusWhere: Prisma.ClassStudentWhereInput =
+    options.status === "COMPLETED"
+      ? { status: "COMPLETED" }
+      : options.status === "LEFT"
+        ? { status: "LEFT" }
+        : options.status === "PAUSED"
+          ? { ...activeInPeriod, pauses: { some: pauseWhere } }
+          : options.status === "ACTIVE"
+            ? { ...activeInPeriod, pauses: { none: pauseWhere } }
+            : { OR: [activeInPeriod, { status: "COMPLETED" }] };
+  const where: Prisma.ClassStudentWhereInput = {
+    classId,
+    ...statusWhere,
+    ...(options.search?.trim() && {
+      student: {
+        OR: [
+          { code: { contains: options.search.trim(), mode: "insensitive" } },
+          {
+            fullName: { contains: options.search.trim(), mode: "insensitive" },
+          },
+          { phone: { contains: options.search.trim(), mode: "insensitive" } },
+        ],
       },
     }),
-    prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
-    prisma.$queryRaw<Array<{ count: bigint }>>`
+    ...(options.subjectId && {
+      subjects: {
+        some: {
+          ...subjectForPeriodWhere,
+          classSubjectId: options.subjectId,
+        },
+      },
+    }),
+  };
+
+  const activeWhere: Prisma.ClassStudentWhereInput = {
+    classId,
+    status: "ACTIVE",
+    pauses: { none: pauseWhere },
+  };
+  const [students, total, active, paused, completed, activeWithFee] =
+    await Promise.all([
+      prisma.classStudent.findMany({
+        where,
+        skip: (options.page - 1) * options.pageSize,
+        take: options.pageSize,
+        orderBy: { student: { fullName: "asc" } },
+        include: {
+          student: true,
+          subjects: {
+            where: subjectForPeriodWhere,
+            select: { classSubjectId: true },
+          },
+          tuitionFees: {
+            select: {
+              id: true,
+              status: true,
+              finalAmount: true,
+              dueDate: true,
+              billingYear: true,
+              billingMonth: true,
+              billingType: true,
+              items: { select: { classSubjectId: true } },
+              payments: {
+                where: { paymentStatus: "SUCCESS" },
+                select: { amount: true },
+              },
+            },
+          },
+          pauses: {
+            select: {
+              id: true,
+              startMonth: true,
+              endMonth: true,
+              reason: true,
+            },
+          },
+        },
+      }),
+      prisma.classStudent.count({ where }),
+      prisma.classStudent.count({ where: activeWhere }),
+      prisma.classStudent.count({
+        where: {
+          classId,
+          status: "ACTIVE",
+          pauses: { some: pauseWhere },
+        },
+      }),
+      prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
+      prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count
       FROM class_students cs
       WHERE cs.class_id = ${classId}::uuid
         AND cs.status = 'ACTIVE'::enrollment_status
-        AND cs.current_period_start <= ${period.end}::date
         AND NOT EXISTS (
           SELECT 1
           FROM enrollment_pauses ep
@@ -1563,7 +1619,6 @@ export async function getClassStudentsPage(
               JOIN subjects s ON s.id = csu.subject_id
               WHERE es.enrollment_id = cs.id
                 AND es.status = 'ACTIVE'::enrollment_subject_status
-                AND es.enrolled_at::date < ${nextPeriodStart}::date
                 AND csu.status = 'ACTIVE'::class_subject_status
                 AND s.status = 'ACTIVE'::subject_status
                 AND NOT EXISTS (
@@ -1575,16 +1630,21 @@ export async function getClassStudentsPage(
             )
         )
     `.then((rows) => Number(rows[0]?.count ?? 0)),
-  ]);
+    ]);
 
-  const pauseIds = students.flatMap((student) => student.pauses.map((pause) => pause.id));
-  const pauseStatuses = pauseIds.length > 0
-    ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
+  const pauseIds = students.flatMap((student) =>
+    student.pauses.map((pause) => pause.id),
+  );
+  const pauseStatuses =
+    pauseIds.length > 0
+      ? await prisma.$queryRaw<Array<{ id: string; status: string }>>`
         SELECT id, status::text AS status FROM enrollment_pauses
         WHERE id = ANY(${pauseIds}::uuid[])
       `
-    : [];
-  const statusById = new Map(pauseStatuses.map((pause) => [pause.id, pause.status]));
+      : [];
+  const statusById = new Map(
+    pauseStatuses.map((pause) => [pause.id, pause.status]),
+  );
   const items = students.map((student) => ({
     ...student,
     pauses: student.pauses.map((pause) => ({
@@ -1601,7 +1661,9 @@ export async function getClassStudentsPage(
       return {
         ...feeData,
         paidAmount,
-        remainingAmount: remainingAmount.greaterThan(0) ? remainingAmount : new Prisma.Decimal(0),
+        remainingAmount: remainingAmount.greaterThan(0)
+          ? remainingAmount
+          : new Prisma.Decimal(0),
         status: getEffectiveTuitionFeeStatus(fee.status, dueDate),
       };
     }),

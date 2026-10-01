@@ -632,7 +632,7 @@ Rule:
 - Học viên đã `LEFT` xuất hiện lại trong hộp chọn và có thể tái đăng ký môn.
 - Tạm nghỉ phải chọn khoảng tháng bắt đầu/kết thúc và lý do; UI phải cho sửa
   hoặc hủy khoảng tạm nghỉ đã tạo.
-- Với lớp `COMPLETED` hoặc `CANCELLED`, màn hình chỉ cho xem và khóa toàn bộ nút
+- Với lớp chưa ở trạng thái `ACTIVE` (`DRAFT`, `COMPLETED` hoặc `CANCELLED`), màn hình chỉ cho xem và khóa toàn bộ nút
   đăng ký, thêm/bỏ môn, rời lớp và quản lý tạm nghỉ.
 
 ---
@@ -739,8 +739,11 @@ báo chuyển khoản` và xác nhận trước khi tạo payment batch.
 Rule:
 
 - Chỉ tạo phí từ enrollment đã tồn tại.
+- Chỉ cho đăng ký học viên và tạo học phí khi lớp ở trạng thái `ACTIVE`; lớp chưa
+  `ACTIVE` chỉ được xem.
 - Tạo phí là thao tác riêng, không chạy tự động khi đăng ký môn.
 - Tạo phí theo lớp được thực hiện khi người dùng chọn `Tạo học phí tháng`; tạo thông báo chuyển khoản là thao tác riêng và có xác nhận.
+- Bộ chọn kỳ học phí chỉ cho chọn các tháng nằm trong thời gian bắt đầu/kết thúc của lớp.
 - Học phí được tính trọn tháng theo mức phí của từng môn, không theo số buổi.
 - Chi tiết học phí hiển thị kỳ học phí và thông tin tính trọn tháng trong từng item.
 - Một học viên có thể học một phần môn trong lớp.

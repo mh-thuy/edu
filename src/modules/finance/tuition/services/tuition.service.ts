@@ -40,10 +40,12 @@ export type TuitionBillingPeriod = {
   billingMonth: number;
 };
 
-function addPaymentBalances<T extends {
-  finalAmount: Prisma.Decimal;
-  payments: Array<{ amount: Prisma.Decimal }>;
-}>(fee: T) {
+function addPaymentBalances<
+  T extends {
+    finalAmount: Prisma.Decimal;
+    payments: Array<{ amount: Prisma.Decimal }>;
+  },
+>(fee: T) {
   const paidAmount = fee.payments.reduce(
     (total, payment) => total.add(payment.amount),
     new Prisma.Decimal(0),
@@ -111,9 +113,9 @@ export class TuitionService {
                 status: PARTIAL_FEE_STATUS,
                 OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
               }
-          : params.status
-            ? { status: params.status }
-            : {};
+            : params.status
+              ? { status: params.status }
+              : {};
     const where: Prisma.TuitionFeeWhereInput = {
       ...statusFilter,
       ...(params.billingType ? { billingType: params.billingType } : {}),
@@ -142,7 +144,11 @@ export class TuitionService {
       const balanced = addPaymentBalances(fee);
       return {
         ...balanced,
-        status: getEffectiveTuitionFeeStatus(balanced.status, balanced.dueDate, asOf),
+        status: getEffectiveTuitionFeeStatus(
+          balanced.status,
+          balanced.dueDate,
+          asOf,
+        ),
       };
     });
     return {
@@ -184,7 +190,9 @@ export class TuitionService {
           select: { id: true, fullName: true },
         })
       : [];
-    const actorNames = new Map(actors.map((actor) => [actor.id, actor.fullName]));
+    const actorNames = new Map(
+      actors.map((actor) => [actor.id, actor.fullName]),
+    );
     const balanced = addPaymentBalances(fee);
     return {
       ...balanced,
@@ -210,10 +218,9 @@ export class TuitionService {
       const periodStart = new Date(
         Date.UTC(data.billingYear, data.billingMonth - 1, 1),
       );
-      const nextPeriodStart = new Date(
-        Date.UTC(data.billingYear, data.billingMonth, 1),
+      const periodEnd = new Date(
+        Date.UTC(data.billingYear, data.billingMonth, 0),
       );
-      const periodEnd = new Date(Date.UTC(data.billingYear, data.billingMonth, 0));
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
       );
@@ -242,7 +249,6 @@ export class TuitionService {
           subjects: {
             where: {
               status: "ACTIVE",
-              enrolledAt: { lt: nextPeriodStart },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
@@ -255,14 +261,12 @@ export class TuitionService {
       if (!enrollment) {
         throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
       }
-      if (enrollment.class.status === "COMPLETED" || enrollment.class.status === "CANCELLED") {
-        throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
-      }
-      if (enrollment.currentPeriodStart > periodEnd) {
-        throw new ConflictError("Không thể tạo học phí trước tháng học viên đăng ký");
+      if (enrollment.class.status !== "ACTIVE") {
+        throw new ConflictError("Chỉ có thể tạo học phí khi lớp đang hoạt động");
       }
       if (
-        (enrollment.class.startDate && enrollment.class.startDate > periodEnd) ||
+        (enrollment.class.startDate &&
+          enrollment.class.startDate > periodEnd) ||
         (enrollment.class.endDate && enrollment.class.endDate < periodStart)
       ) {
         throw new ConflictError("Kỳ học phí nằm ngoài thời gian của lớp học");
@@ -371,10 +375,8 @@ export class TuitionService {
         : null;
       const dueDate = classEnd && classEnd < periodEnd ? classEnd : periodEnd;
       const nextDisplayOrder = existingFee
-        ? Math.max(
-            -1,
-            ...existingFee.items.map((item) => item.displayOrder),
-          ) + 1
+        ? Math.max(-1, ...existingFee.items.map((item) => item.displayOrder)) +
+          1
         : 0;
       const fee = existingFee
         ? await tx.tuitionFee.update({
@@ -441,7 +443,9 @@ export class TuitionService {
         data: {
           entityType: "TUITION_FEE",
           entityId: fee.id,
-          action: existingFee ? "UPDATED_MONTHLY_FROM_ENROLLMENT" : "CREATED_MONTHLY_FROM_ENROLLMENT",
+          action: existingFee
+            ? "UPDATED_MONTHLY_FROM_ENROLLMENT"
+            : "CREATED_MONTHLY_FROM_ENROLLMENT",
           dataAfter: {
             enrollmentId: enrollment.id,
             classId: data.classId,
@@ -488,15 +492,14 @@ export class TuitionService {
         select: { status: true, startDate: true, endDate: true },
       });
       if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
-      if (classData.status === "COMPLETED" || classData.status === "CANCELLED") {
-        throw new ConflictError("Không thể tạo học phí cho lớp đã kết thúc hoặc đã hủy");
+      if (classData.status !== "ACTIVE") {
+        throw new ConflictError("Chỉ có thể tạo học phí khi lớp đang hoạt động");
       }
       const periodStart = new Date(
         Date.UTC(period.billingYear, period.billingMonth - 1, 1),
       );
-      const periodEnd = new Date(Date.UTC(period.billingYear, period.billingMonth, 0));
-      const nextPeriodStart = new Date(
-        Date.UTC(period.billingYear, period.billingMonth, 1),
+      const periodEnd = new Date(
+        Date.UTC(period.billingYear, period.billingMonth, 0),
       );
       if (
         (classData.startDate && classData.startDate > periodEnd) ||
@@ -508,7 +511,6 @@ export class TuitionService {
         where: {
           classId,
           status: "ACTIVE",
-          currentPeriodStart: { lte: periodEnd },
         },
         select: {
           id: true,
@@ -516,7 +518,6 @@ export class TuitionService {
           subjects: {
             where: {
               status: "ACTIVE",
-              enrolledAt: { lt: nextPeriodStart },
               classSubject: {
                 status: "ACTIVE",
                 subject: { status: "ACTIVE" },
@@ -526,7 +527,9 @@ export class TuitionService {
           },
         },
       });
-      const pausedEnrollments = await tx.$queryRaw<Array<{ enrollmentId: string }>>`
+      const pausedEnrollments = await tx.$queryRaw<
+        Array<{ enrollmentId: string }>
+      >`
         SELECT enrollment_id AS "enrollmentId" FROM enrollment_pauses
         WHERE status = 'ACTIVE'::enrollment_pause_status
           AND start_month <= ${periodEnd}::date
@@ -541,7 +544,10 @@ export class TuitionService {
       let created = 0;
       let skipped = 0;
       for (const enrollment of enrollments) {
-        if (pausedEnrollmentIds.has(enrollment.id) || enrollment.subjects.length === 0) {
+        if (
+          pausedEnrollmentIds.has(enrollment.id) ||
+          enrollment.subjects.length === 0
+        ) {
           skipped += 1;
           continue;
         }
@@ -565,10 +571,7 @@ export class TuitionService {
           { allowExistingComplete: true },
           auditContext,
         );
-        if (
-          existingFee &&
-          result.items.length === existingFee.items.length
-        ) {
+        if (existingFee && result.items.length === existingFee.items.length) {
           skipped += 1;
         } else {
           created += 1;
@@ -683,7 +686,8 @@ export class TuitionService {
         where: { id },
         select: { classId: true },
       });
-      if (!feeReference) throw new NotFoundError("Không tìm thấy khoản học phí");
+      if (!feeReference)
+        throw new NotFoundError("Không tìm thấy khoản học phí");
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${feeReference.classId}`}))`,
       );
@@ -707,7 +711,9 @@ export class TuitionService {
           "VERSION_CONFLICT",
         );
       if (current.payments.length)
-        throw new ConflictError("Không thể miễn hoặc hủy khoản học phí đã thanh toán");
+        throw new ConflictError(
+          "Không thể miễn hoặc hủy khoản học phí đã thanh toán",
+        );
       if (current.paymentAllocations.length)
         throw new ConflictError(
           `Không thể miễn hoặc hủy khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
@@ -716,15 +722,19 @@ export class TuitionService {
         current.status !== TuitionFeeStatus.UNPAID &&
         current.status !== TuitionFeeStatus.OVERDUE
       ) {
-        throw new ConflictError("Khoản học phí không còn ở trạng thái có thể miễn hoặc hủy");
+        throw new ConflictError(
+          "Khoản học phí không còn ở trạng thái có thể miễn hoặc hủy",
+        );
       }
 
       const updated = await tx.tuitionFee.update({
         where: { id },
         data: {
           status: data.status,
-          exemptionReason: data.status === TuitionFeeStatus.EXEMPTED ? data.reason : null,
-          cancellationReason: data.status === TuitionFeeStatus.CANCELLED ? data.reason : null,
+          exemptionReason:
+            data.status === TuitionFeeStatus.EXEMPTED ? data.reason : null,
+          cancellationReason:
+            data.status === TuitionFeeStatus.CANCELLED ? data.reason : null,
           version: { increment: 1 },
           updatedBy: actorId,
         },
@@ -734,7 +744,8 @@ export class TuitionService {
         data: {
           entityType: "TUITION_FEE",
           entityId: id,
-          action: data.status === TuitionFeeStatus.EXEMPTED ? "EXEMPT" : "CANCEL",
+          action:
+            data.status === TuitionFeeStatus.EXEMPTED ? "EXEMPT" : "CANCEL",
           reason: data.reason,
           dataBefore: current as unknown as Prisma.InputJsonValue,
           dataAfter: updated as unknown as Prisma.InputJsonValue,
@@ -761,7 +772,8 @@ export class TuitionService {
         where: { id },
         select: { classId: true },
       });
-      if (!feeReference) throw new NotFoundError("Không tìm thấy khoản học phí");
+      if (!feeReference)
+        throw new NotFoundError("Không tìm thấy khoản học phí");
       await tx.$executeRaw(
         Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${feeReference.classId}`}))`,
       );
@@ -792,7 +804,10 @@ export class TuitionService {
         throw new ConflictError(
           "Chỉ có thể khôi phục khoản học phí đã hủy hoặc đã miễn",
         );
-      if (current.class.status === "COMPLETED" || current.class.status === "CANCELLED")
+      if (
+        current.class.status === "COMPLETED" ||
+        current.class.status === "CANCELLED"
+      )
         throw new ConflictError(
           "Không thể khôi phục học phí của lớp đã kết thúc hoặc đã hủy",
         );
@@ -838,5 +853,4 @@ export class TuitionService {
       };
     });
   }
-
 }

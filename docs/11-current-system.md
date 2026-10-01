@@ -24,14 +24,19 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 ## Học phí
 
 - Đăng ký môn và tạo học phí là hai thao tác độc lập.
+- Chỉ lớp `ACTIVE` cho phép đăng ký/import/thay đổi enrollment và tạo học phí;
+  lớp `DRAFT`, `COMPLETED`, `CANCELLED` chỉ được xem đối với các nghiệp vụ này.
 - Khi đăng ký môn, hệ thống chỉ tạo enrollment subject; chưa tạo học phí.
 - Chi tiết lớp chỉ hiển thị tổng quan; nghiệp vụ học viên nằm ở `/admin/classes/{classId}/students` và học phí nằm ở `/admin/classes/{classId}/tuition`.
 - Trang học phí nhận một kỳ `YYYY-MM`; `Tạo học phí tháng` chỉ tạo các khoản phí. Phương thức thanh toán được chọn ở màn hình thu học phí. Nếu cần gửi thông báo chuyển khoản hàng loạt, nhân viên phải chủ động bấm `Tạo thông báo chuyển khoản` và xác nhận; thao tác này mới tạo payment batch `PENDING`.
 - Không tạo học phí độc lập ngoài enrollment.
 - Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng, không phụ thuộc mức độ tham gia thực tế; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
-- Không tạo học phí trước tháng đăng ký/tái đăng ký hoặc ngoài thời gian của lớp.
-- Tái đăng ký giữ lịch sử enrollment cũ và dùng `currentPeriodStart` cho giai
-  đoạn hiện tại; lớp đã kết thúc/hủy chỉ cho xem enrollment.
+- Có thể tạo học phí cho bất kỳ tháng nào trong thời gian của lớp, không phụ
+  thuộc ngày đăng ký/tái đăng ký; lớp đã kết thúc/hủy chỉ cho xem enrollment.
+- UI giới hạn bộ chọn kỳ học phí theo tháng bắt đầu và kết thúc của lớp; backend
+  vẫn kiểm tra lại trạng thái lớp và phạm vi kỳ.
+- Tái đăng ký giữ lịch sử enrollment cũ và dùng `currentPeriodStart` để lưu mốc
+  giai đoạn hiện tại, không dùng mốc này để giới hạn kỳ học phí.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
 - Khi lớp chuyển `ACTIVE -> COMPLETED`, enrollment và môn đang `ACTIVE` được chuyển sang `COMPLETED` cùng transaction, có audit log; lịch sử vẫn hiển thị nhưng chỉ đọc.
 - Lớp `CANCELLED` có thể được khôi phục về `ACTIVE`; thao tác xóa `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`. Lớp `COMPLETED` không thể khôi phục.

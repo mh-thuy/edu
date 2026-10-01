@@ -225,6 +225,10 @@ COMPLETED
 CANCELLED
 ```
 
+Chỉ lớp `ACTIVE` được đăng ký học viên, thay đổi enrollment hoặc tạo học phí.
+Lớp `DRAFT` chỉ dùng để chuẩn bị lớp; lớp `COMPLETED` và `CANCELLED` chỉ được
+xem. Các API nghiệp vụ phải kiểm tra điều kiện này ở backend.
+
 Không cho:
 
 ```text
@@ -311,9 +315,10 @@ còn học môn nào, phải dùng thao tác rời lớp để enrollment chuy�
 Remove enrollment không hard-delete bản ghi. Hệ thống đánh dấu enrollment `LEFT` và các môn `DROPPED`; chỉ enrollment `LEFT` mới có thể được kích hoạt lại khi đăng ký lại môn phù hợp. Enrollment `COMPLETED` hoặc `SUSPENDED` không được tự động mở lại.
 
 Khi kích hoạt lại enrollment `LEFT`, giữ nguyên `enrolled_at` để bảo toàn lịch
-sử và đặt `current_period_start` thành ngày tái đăng ký. Không được tạo học phí
-cho kỳ trước tháng đăng ký/tái đăng ký hiện tại. Các khoảng nghỉ chưa kết thúc
-từ giai đoạn cũ được hủy để không ảnh hưởng giai đoạn mới.
+sử và đặt `current_period_start` thành ngày tái đăng ký. `current_period_start`
+chỉ lưu mốc của giai đoạn hiện tại, không giới hạn kỳ được tạo học phí. Các
+khoảng nghỉ chưa kết thúc từ giai đoạn cũ được hủy để không ảnh hưởng giai đoạn
+mới.
 
 Khoảng tạm nghỉ có thể được sửa hoặc hủy. Hủy chỉ chuyển trạng thái sang
 `CANCELLED`, không hard-delete, để bảo toàn lịch sử. Khi sửa vẫn phải kiểm tra không chồng
@@ -321,8 +326,7 @@ lấn khoảng nghỉ khác và không phủ tháng đã phát sinh học phí. 
 sửa, hủy khoảng nghỉ phải ghi audit log. Chỉ khoảng nghỉ `ACTIVE` mới chặn tạo
 học phí.
 
-Khoảng tạm nghỉ không được bắt đầu trước tháng đăng ký/tái đăng ký hiện tại và
-không được nằm ngoài tháng bắt đầu/kết thúc của lớp.
+Khoảng tạm nghỉ không được nằm ngoài tháng bắt đầu/kết thúc của lớp.
 
 ## 6.4 Enrollment và Student Fee độc lập
 
@@ -486,8 +490,8 @@ Quy tắc nghỉ:
 Enrollment ACTIVE nhưng không đi học -> vẫn tính đủ tháng
 Enrollment có khoảng tạm nghỉ bao phủ tháng -> không tạo phí
 Đăng ký giữa tháng -> vẫn tính đủ tháng
-Không tạo học phí trước tháng đăng ký/tái đăng ký
-Không tạo học phí ngoài thời gian bắt đầu/kết thúc của lớp
+Ngày đăng ký/tái đăng ký không giới hạn kỳ tạo học phí
+Chỉ tạo học phí trong thời gian bắt đầu/kết thúc của lớp
 ```
 
 Không được thu hẹp thời gian lớp nếu làm học phí hoặc khoảng tạm nghỉ đã tồn tại

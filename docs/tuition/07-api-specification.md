@@ -34,7 +34,7 @@ API khôi phục `CANCELLED` hoặc `EXEMPTED` về `UNPAID`, giữ nguyên bả
 API chi tiết học phí trả thêm `auditLogs`, gồm thao tác, lý do, thời gian và tên
 người thực hiện để màn hình chi tiết hiển thị lịch sử nghiệp vụ.
 
-`POST /api/tuition-fees` không còn được hỗ trợ. Học phí được tạo trong transaction đăng ký môn tại API enrollment; client không được tự gửi số tiền để tạo fee.
+`POST /api/tuition-fees` không còn được hỗ trợ. Học phí được tạo trong transaction riêng từ enrollment qua API tạo học phí theo lớp hoặc theo học viên; lớp phải ở trạng thái `ACTIVE`; client chỉ gửi kỳ `YYYY-MM`, không được tự gửi số tiền. Kỳ học phí phải nằm trong thời gian của lớp và không bị giới hạn bởi ngày đăng ký.
 
 `POST /api/bank-statement-imports` chỉ parse và trả kết quả tạm thời; không lưu file hoặc transaction sao kê. `POST /api/bank-reconciliations` nhận token xác nhận và chỉ tạo payment/receipt sau khi backend kiểm tra lại toàn bộ điều kiện nghiệp vụ.
 

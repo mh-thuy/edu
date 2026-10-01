@@ -218,6 +218,8 @@ Rule:
 class.code unique, chỉ gồm ký tự chữ cái ASCII (A-Z/a-z), chữ số (0-9) và dấu gạch ngang (-)
 Sĩ số được giới hạn riêng theo từng class_subject
 active_subject_enrollment_count <= class_subject.max_students
+Chỉ được đăng ký học viên/thay đổi enrollment và tạo học phí khi class.status = ACTIVE
+Lớp DRAFT chỉ dùng để chuẩn bị cấu hình; lớp COMPLETED/CANCELLED chỉ được xem
 Không cho xóa nếu đã phát sinh học phí
 ```
 
@@ -350,7 +352,7 @@ Học phí theo tháng được tính trọn tháng theo từng môn:
 phí môn = phí tháng chuẩn
 ```
 
-Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học phí; enrollment còn `ACTIVE` phát sinh đủ phí tháng dù học viên vắng hoặc đăng ký giữa tháng.
+Enrollment có khoảng tạm nghỉ bao phủ tháng không phát sinh học phí; enrollment còn `ACTIVE` phát sinh đủ phí tháng dù học viên vắng hoặc đăng ký giữa tháng. Ngày đăng ký không giới hạn kỳ được tạo học phí; kỳ được chọn chỉ cần nằm trong thời gian của lớp.
 
 ---
 
@@ -485,14 +487,15 @@ FEE_CANCELLED
 # 14. Luồng phát sinh học phí hiện hành
 
 ```text
-1. Nhân viên chọn học viên và các môn muốn đăng ký trong lớp.
-2. Backend kiểm tra học viên chưa đăng ký các môn đó.
-3. Tạo enrollment subject cho từng môn hợp lệ.
-4. Hoàn tất đăng ký; chưa tạo học phí ở bước này.
-5. Nhân viên chọn `Tạo học phí tháng` cho lớp; thao tác này chỉ tạo tuition fee và tuition fee item.
-6. Nếu cần gửi thông báo chuyển khoản hàng loạt, nhân viên chọn riêng `Tạo thông báo chuyển khoản` và xác nhận.
-7. Backend tạo payment batch `BANK_TRANSFER` `PENDING` và PDF thông báo cho các khoản chưa thu.
-8. Trường hợp thu trực tiếp, người dùng mở chi tiết học phí hoặc màn hình thu học phí để chọn `CASH` hoặc `BANK_TRANSFER`.
+1. Backend kiểm tra lớp đang ở trạng thái `ACTIVE`.
+2. Nhân viên chọn học viên và các môn muốn đăng ký trong lớp.
+3. Backend kiểm tra học viên chưa đăng ký các môn đó.
+4. Tạo enrollment subject cho từng môn hợp lệ.
+5. Hoàn tất đăng ký; chưa tạo học phí ở bước này.
+6. Nhân viên chọn `Tạo học phí tháng` cho lớp; thao tác này chỉ tạo tuition fee và tuition fee item.
+7. Nếu cần gửi thông báo chuyển khoản hàng loạt, nhân viên chọn riêng `Tạo thông báo chuyển khoản` và xác nhận.
+8. Backend tạo payment batch `BANK_TRANSFER` `PENDING` và PDF thông báo cho các khoản chưa thu.
+9. Trường hợp thu trực tiếp, người dùng mở chi tiết học phí hoặc màn hình thu học phí để chọn `CASH` hoặc `BANK_TRANSFER`.
 
 Không tạo học phí độc lập ngoài enrollment; mọi khoản học phí phải truy được về lớp, học viên và môn học. Đăng ký và tạo học phí là hai thao tác độc lập.
 ```

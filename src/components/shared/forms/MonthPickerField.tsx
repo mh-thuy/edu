@@ -3,6 +3,7 @@
 import dayjs from "dayjs";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import type { TextFieldProps } from "@mui/material";
+import { clampMonth } from "@/utils/date";
 
 type MonthPickerTextFieldProps = Pick<
   TextFieldProps,
@@ -19,6 +20,8 @@ type MonthPickerFieldProps = {
   label: string;
   value?: string | null;
   onChange: (value: string) => void;
+  minMonth?: string | null;
+  maxMonth?: string | null;
   textFieldProps?: MonthPickerTextFieldProps;
 };
 
@@ -27,6 +30,8 @@ export function MonthPickerField({
   label,
   value,
   onChange,
+  minMonth,
+  maxMonth,
   textFieldProps,
 }: MonthPickerFieldProps) {
   return (
@@ -36,8 +41,10 @@ export function MonthPickerField({
       openTo="month"
       format="MM/YYYY"
       value={value ? dayjs(`${value}-01`) : null}
+      minDate={minMonth ? dayjs(`${minMonth}-01`) : undefined}
+      maxDate={maxMonth ? dayjs(`${maxMonth}-01`) : undefined}
       onChange={(date) =>
-        onChange(date?.isValid() ? date.format("YYYY-MM") : "")
+        onChange(date?.isValid() ? clampMonth(date.format("YYYY-MM"), minMonth, maxMonth) : "")
       }
       slotProps={{
         textField: {

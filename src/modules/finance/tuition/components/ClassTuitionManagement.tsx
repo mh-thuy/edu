@@ -43,12 +43,15 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { getVietnamMonth } from "@/lib/vietnam-time";
+import { clampMonth } from "@/utils/date";
 
 type ClassData = {
   id: string;
   code: string;
   name: string;
   status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+  startDate?: string | null;
+  endDate?: string | null;
 };
 type BankAccount = {
   id: string;
@@ -107,7 +110,13 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const [bankAccountsError, setBankAccountsError] = useState("");
   const [error, setError] = useState("");
   const { showSuccess, showError, Snackbar } = useSnackbar();
-  const classClosed = classData?.status === "COMPLETED" || classData?.status === "CANCELLED";
+  const classNotActive = classData?.status !== "ACTIVE";
+  const classStartMonth = classData?.startDate?.slice(0, 7) ?? null;
+  const classEndMonth = classData?.endDate?.slice(0, 7) ?? null;
+
+  useEffect(() => {
+    setMonth((current) => clampMonth(current, classStartMonth, classEndMonth));
+  }, [classEndMonth, classStartMonth]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -307,7 +316,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
             </Box>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
-            <MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} textFieldProps={{ size: "small" }} />
+            <MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} minMonth={classStartMonth} maxMonth={classEndMonth} textFieldProps={{ size: "small" }} />
             <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading} sx={{ whiteSpace: "nowrap" }}>Làm mới</Button>
           </Stack>
         </Stack>
@@ -324,10 +333,10 @@ export function ClassTuitionManagement({ id }: { id: string }) {
             </Box>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button variant="contained" startIcon={<AddCardOutlinedIcon />} onClick={() => void createFees()} disabled={busy || Boolean(classClosed)} sx={{ flex: 1 }}>
+            <Button variant="contained" startIcon={<AddCardOutlinedIcon />} onClick={() => void createFees()} disabled={busy || classNotActive} sx={{ flex: 1 }}>
               Tạo học phí tháng
             </Button>
-            <Button variant="outlined" color="primary" startIcon={<PictureAsPdfOutlinedIcon />} onClick={() => void openNoticeDialog()} disabled={busy || Boolean(classClosed)} sx={{ flex: 1 }}>
+            <Button variant="outlined" color="primary" startIcon={<PictureAsPdfOutlinedIcon />} onClick={() => void openNoticeDialog()} disabled={busy || classNotActive} sx={{ flex: 1 }}>
               Thông báo chuyển khoản
             </Button>
           </Stack>
@@ -335,7 +344,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       </Paper>
     </Box>
 
-    {classClosed && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp đã hoàn thành hoặc đã hủy; học phí chỉ được xem, không thể tạo mới.</Alert>}
+    {classNotActive && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp chưa ở trạng thái ACTIVE; học phí chỉ được xem, không thể tạo mới.</Alert>}
     {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
     <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
       Học phí tính trọn tháng theo môn đang đăng ký. Dùng <strong>Thu học phí</strong> để ghi nhận thanh toán từng khoản; dùng thông báo chuyển khoản cho cả lớp.

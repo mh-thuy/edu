@@ -2,7 +2,7 @@
 
 ## Tuition
 
-Chọn lớp -> chọn các môn -> đăng ký enrollment subject -> tự động tạo tuition fee items -> tính final amount -> mở chi tiết học phí -> thanh toán.
+Chọn lớp ACTIVE -> chọn các môn -> đăng ký enrollment subject -> chọn kỳ trong thời gian lớp -> tạo tuition fee items -> tính final amount -> mở chi tiết học phí -> thanh toán.
 
 ## Bỏ miễn để thu lại
 

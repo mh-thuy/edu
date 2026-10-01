@@ -228,6 +228,8 @@ classSubjectIds = UUID môn học (có thể gửi nhiều lần)
 
 API áp dụng toàn bộ nghiệp vụ đăng ký hiện hành cho từng dòng; kết quả trả về số
 đăng ký thành công, số dòng bỏ qua và danh sách lỗi theo số dòng Excel.
+Lớp phải ở trạng thái `ACTIVE`; lớp `DRAFT`, `COMPLETED` hoặc `CANCELLED` trả
+`409 Conflict` và không đăng ký dòng nào.
 
 Xuất danh sách học viên của một lớp dùng mã học viên trong cột MÃ HỌC VIÊN để có
 thể import lại:
@@ -693,9 +695,12 @@ Body:
 ```
 
 API này chỉ tạo hoặc bổ sung enrollment subject. API không tạo `tuition_fee`.
+Lớp phải ở trạng thái `ACTIVE`; lớp `DRAFT`, `COMPLETED` hoặc `CANCELLED` bị từ
+chối với `409 Conflict`.
 Khi tái đăng ký enrollment `LEFT`, backend giữ ngày đăng ký ban đầu, đặt
 `currentPeriodStart` cho giai đoạn mới và xóa các khoảng nghỉ chưa kết thúc của
-giai đoạn cũ. Kỳ trước lần tái đăng ký không phát sinh học phí mới.
+giai đoạn cũ. `currentPeriodStart` chỉ phục vụ lưu lịch sử giai đoạn hiện tại,
+không giới hạn kỳ được tạo học phí.
 
 ## 19.1.2 Tạo học phí từ enrollment
 
@@ -711,6 +716,10 @@ Lấy các môn ACTIVE chưa có tuition fee item
 Tạo tuition_fee và tuition_fee_items trong một transaction
 Ghi audit log
 ```
+
+Lớp phải ở trạng thái `ACTIVE`. Kỳ `month` phải nằm trong thời gian của lớp;
+không giới hạn theo ngày đăng ký hoặc tái đăng ký của học viên. Lớp chưa ACTIVE
+hoặc kỳ nằm ngoài thời gian lớp trả `409 Conflict`.
 
 Nếu tất cả môn đã được lập phí, API trả `409 Conflict`. Enrollment không có học phí vẫn hợp lệ và có thể bị xóa theo Enrollment Remove Rules.
 
@@ -745,11 +754,10 @@ PATCH /api/classes/{classId}/students/{studentId}/pause
 Body gồm `pauseId`, `startMonth`, `endMonth`, `reason`. Khoảng mới không được
 trùng khoảng nghỉ khác hoặc phủ kỳ đã phát sinh học phí.
 
-Với cả tạo và sửa, khoảng nghỉ không được trước tháng đăng ký hiện tại hoặc
-ngoài thời gian của lớp.
+Với cả tạo và sửa, khoảng nghỉ không được nằm ngoài thời gian của lớp.
 
-Các API thay đổi enrollment trả `409 Conflict` khi lớp đã `COMPLETED` hoặc
-`CANCELLED`.
+Các API thay đổi enrollment trả `409 Conflict` khi lớp chưa ở trạng thái
+`ACTIVE` (`DRAFT`, `COMPLETED` hoặc `CANCELLED`).
 
 ```http
 DELETE /api/classes/{classId}/students/{studentId}/pause
@@ -765,7 +773,9 @@ POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
 ```
 
 API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông báo. Mỗi môn ACTIVE được tính trọn mức `ClassSubject.tuitionFee` của tháng; enrollment được tạm nghỉ trong kỳ sẽ được bỏ qua.
-Kỳ yêu cầu phải từ tháng đăng ký hiện tại trở đi và nằm trong thời gian của lớp.
+Kỳ yêu cầu chỉ cần nằm trong thời gian của lớp; không phụ thuộc ngày đăng ký hoặc
+ngày tái đăng ký của học viên. Lớp phải ở trạng thái `ACTIVE`; lớp `DRAFT`,
+`COMPLETED` hoặc `CANCELLED` trả `409 Conflict`.
 
 ## 19.1.5 Tạo thông báo chuyển khoản theo lớp
 
