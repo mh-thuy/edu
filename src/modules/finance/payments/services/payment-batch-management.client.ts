@@ -12,7 +12,7 @@ export type NoticeFee = {
   remainingAmount: number;
   status: NoticeFeeStatus;
   student: { id: string; code: string; fullName: string };
-  class: { name: string };
+  class: { id: string; name: string; code: string };
   items: Array<{ itemName: string; amount: number }>;
   paymentAllocations?: Array<{
     paymentBatch: { id: string; batchNo: string; status: string };
@@ -33,7 +33,7 @@ export type PendingBatch = {
       feeNo: string;
       billingYear: number;
       billingMonth: number;
-      class: { name: string } | null;
+      class: { id: string; name: string; code: string } | null;
     };
   }>;
 };
@@ -113,7 +113,7 @@ export async function fetchNoticeBankAccounts() {
 
 export async function issueNoticeBatches(input: {
   tuitionFeeIds: string[];
-  mode: "GROUPED" | "SEPARATE";
+  mode: "BY_STUDENT";
   bankAccountId: string;
   idempotencyKey: string;
 }) {
@@ -126,6 +126,18 @@ export async function issueNoticeBatches(input: {
     throw new Error(await extractApiErrorMessage(response, "Không thể phát hành thông báo học phí"));
   }
   return unwrapApiResponse<{ batches: Array<{ id: string; batchNo: string; totalAmount: number }> }>(response);
+}
+
+export async function downloadNoticeBatchesPdf(batchIds: string[]) {
+  const response = await fetch("/api/payment-batches/notice/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ batchIds }),
+  });
+  if (!response.ok) {
+    throw new Error(await extractApiErrorMessage(response, "Không thể tải PDF thông báo"));
+  }
+  return response.blob();
 }
 
 export async function restructurePendingBatches(input:

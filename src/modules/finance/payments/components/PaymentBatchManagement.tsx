@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   Box,
@@ -47,12 +47,14 @@ import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import {
   fetchNoticeBankAccounts,
   fetchOutstandingFees,
   fetchPendingBatches,
   fetchSuccessfulBatches,
+  downloadNoticeBatchesPdf,
   issueNoticeBatches,
   restructurePendingBatches,
   type NoticeBankAccount,
@@ -61,7 +63,6 @@ import {
 } from "@/modules/finance/payments/services/payment-batch-management.client";
 
 type View = "UNISSUED" | "PENDING" | "SUCCESS";
-type NoticeMode = "GROUPED" | "SEPARATE";
 type RestructureMode = "SPLIT" | "MERGE";
 type IssuedBatch = { id: string; batchNo: string; totalAmount: number };
 
@@ -113,7 +114,7 @@ export function PaymentBatchManagement() {
   const [bankAccounts, setBankAccounts] = useState<NoticeBankAccount[]>([]);
   const [selectedFeeIds, setSelectedFeeIds] = useState<string[]>([]);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
-  const [noticeMode, setNoticeMode] = useState<NoticeMode | null>(null);
+  const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [bankAccountId, setBankAccountId] = useState("");
   const [restructureMode, setRestructureMode] = useState<RestructureMode | null>(null);
   const [reason, setReason] = useState("");
@@ -122,7 +123,9 @@ export function PaymentBatchManagement() {
   const [error, setError] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [issuedBatches, setIssuedBatches] = useState<IssuedBatch[]>([]);
+  const [isDownloadingNoticePdf, setIsDownloadingNoticePdf] = useState(false);
   const { showSuccess, showError, Snackbar } = useSnackbar();
+  const appliedUrlFilters = useRef(false);
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
@@ -160,13 +163,13 @@ export function PaymentBatchManagement() {
 
   const query = search.trim().toLocaleLowerCase("vi-VN");
   const studentFilter = student?.id ?? "ALL";
-  const classFilter = selectedClass?.name ?? "ALL";
+  const classFilter = selectedClass?.id ?? "ALL";
   const unissuedFees = useMemo(
     () => fees.filter((fee) => {
       const hasPendingBatch = Boolean(fee.paymentAllocations?.length);
       const matchesStudent = studentFilter === "ALL" || fee.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || fee.class.name === classFilter;
-      const matchesSearch = !query || [fee.feeNo, fee.student.code, fee.student.fullName, fee.class.name]
+      const matchesClass = classFilter === "ALL" || fee.class.id === classFilter;
+      const matchesSearch = !query || [fee.feeNo, fee.student.code, fee.student.fullName, fee.class.code, fee.class.name]
         .join(" ")
         .toLocaleLowerCase("vi-VN")
         .includes(query);
@@ -181,10 +184,11 @@ export function PaymentBatchManagement() {
         (allocation) => `${allocation.tuitionFee.billingYear}-${String(allocation.tuitionFee.billingMonth).padStart(2, "0")}` === month,
       );
       const matchesStudent = studentFilter === "ALL" || batch.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.name === classFilter);
+      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.id === classFilter);
       const matchesSearch = !query || [batch.batchNo, batch.student.code, batch.student.fullName]
         .concat(batch.allocations.flatMap((allocation) => [
           allocation.tuitionFee.feeNo,
+          allocation.tuitionFee.class?.code || "",
           allocation.tuitionFee.class?.name || "",
         ]))
         .join(" ")
@@ -201,10 +205,11 @@ export function PaymentBatchManagement() {
         (allocation) => `${allocation.tuitionFee.billingYear}-${String(allocation.tuitionFee.billingMonth).padStart(2, "0")}` === month,
       );
       const matchesStudent = studentFilter === "ALL" || batch.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.name === classFilter);
+      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.id === classFilter);
       const matchesSearch = !query || [batch.batchNo, batch.student.code, batch.student.fullName]
         .concat(batch.allocations.flatMap((allocation) => [
           allocation.tuitionFee.feeNo,
+          allocation.tuitionFee.class?.code || "",
           allocation.tuitionFee.class?.name || "",
         ]))
         .join(" ")
@@ -223,7 +228,7 @@ export function PaymentBatchManagement() {
   const selectedBatches = pendingBatches.filter((batch) => selectedBatchIds.includes(batch.id));
   const selectedFeeTotal = selectedFees.reduce((sum, fee) => sum + Number(fee.remainingAmount), 0);
   const selectedBatchTotal = selectedBatches.reduce((sum, batch) => sum + Number(batch.totalAmount), 0);
-  const canGroupFees = selectedFees.length > 0 && sameStudent(selectedFees);
+  const selectedStudentCount = new Set(selectedFees.map((fee) => fee.student.id)).size;
   const canMergeBatches = selectedBatches.length >= 2 &&
     sameStudent(selectedBatches) &&
     new Set(selectedBatches.map((batch) => batch.bankAccountId)).size <= 1;
@@ -241,6 +246,26 @@ export function PaymentBatchManagement() {
     const visibleIds = new Set(visiblePendingBatches.map((batch) => batch.id));
     setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)));
   }, [visiblePendingBatches]);
+
+  useEffect(() => {
+    if (appliedUrlFilters.current) return;
+    appliedUrlFilters.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const queryMonth = params.get("month");
+    const queryClassId = params.get("classId");
+    if (queryMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(queryMonth)) setMonth(queryMonth);
+    if (!queryClassId) return;
+    setShowAdvancedFilters(true);
+    void fetch(`/api/classes/${encodeURIComponent(queryClassId)}`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"));
+        return unwrapApiResponse<ClassItem>(response);
+      })
+      .then((item) => setSelectedClass({ id: item.id, code: item.code, name: item.name }))
+      .catch((reasonValue: unknown) => {
+        showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải lớp đã chọn");
+      });
+  }, [showError]);
 
   function toggleFee(id: string) {
     setSelectedFeeIds((current) => current.includes(id)
@@ -264,21 +289,21 @@ export function PaymentBatchManagement() {
     classDialog.onClose();
   }
 
-  function openNoticeDialog(mode: NoticeMode) {
+  function openNoticeDialog() {
     if (!selectedFees.length) {
       showError("Hãy chọn ít nhất một khoản học phí");
       return;
     }
-    if (mode === "GROUPED" && !canGroupFees) {
-      showError("Chỉ được gộp học phí của cùng một học sinh");
+    if (selectedFees.length > 500) {
+      showError("Mỗi lần phát hành tối đa 500 khoản học phí");
       return;
     }
-    setNoticeMode(mode);
+    setNoticeDialogOpen(true);
     setDialogError("");
   }
 
   async function submitNotice() {
-    if (!noticeMode || !bankAccountId) {
+    if (!noticeDialogOpen || !bankAccountId) {
       setDialogError("Tài khoản nhận tiền là bắt buộc");
       return;
     }
@@ -287,18 +312,48 @@ export function PaymentBatchManagement() {
     try {
       const result = await issueNoticeBatches({
         tuitionFeeIds: selectedFeeIds,
-        mode: noticeMode,
+        mode: "BY_STUDENT",
         bankAccountId,
         idempotencyKey: crypto.randomUUID(),
       });
-      setNoticeMode(null);
-      await load();
+      setNoticeDialogOpen(false);
       setIssuedBatches(result.batches);
-      showSuccess(`Đã phát hành ${result.batches.length} thông báo học phí`);
+      await load();
+      setView("PENDING");
+      showSuccess(`Đã phát hành ${result.batches.length} đợt thu cho ${selectedStudentCount} học viên`);
+      try {
+        const pdf = await downloadNoticeBatchesPdf(result.batches.map((batch) => batch.id));
+        const url = URL.createObjectURL(pdf);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `thong-bao-hoc-phi-${month}.pdf`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        showError("Đợt thu đã được tạo. Có thể tải lại PDF từ thông báo vừa phát hành.");
+      }
     } catch (reasonValue) {
       setDialogError(reasonValue instanceof Error ? reasonValue.message : "Không thể phát hành thông báo");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function downloadIssuedNoticePdf() {
+    if (!issuedBatches.length) return;
+    setIsDownloadingNoticePdf(true);
+    try {
+      const pdf = await downloadNoticeBatchesPdf(issuedBatches.map((batch) => batch.id));
+      const url = URL.createObjectURL(pdf);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `thong-bao-hoc-phi-${month}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (reasonValue) {
+      showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải PDF thông báo");
+    } finally {
+      setIsDownloadingNoticePdf(false);
     }
   }
 
@@ -340,7 +395,6 @@ export function PaymentBatchManagement() {
       const result = await restructurePendingBatches(input);
       setRestructureMode(null);
       await load();
-      setIssuedBatches(result.batches);
       showSuccess(`Đã tạo lại ${result.batches.length} đợt thanh toán`);
     } catch (reasonValue) {
       setDialogError(reasonValue instanceof Error ? reasonValue.message : "Không thể tách hoặc gộp đợt thu");
@@ -474,14 +528,17 @@ export function PaymentBatchManagement() {
             </Box>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap>
-            {issuedBatches.map((batch) => <Fragment key={batch.id}><Button component="a" href={`/api/payment-batches/${batch.id}/notice/pdf`} size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải {batch.batchNo}</Button><Button component={Link} href={`/admin/tuition-fees/payment-history/${batch.id}`} size="small">Xem chi tiết</Button></Fragment>)}
+            <Button size="small" variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void downloadIssuedNoticePdf()} disabled={isDownloadingNoticePdf}>
+              {isDownloadingNoticePdf ? "Đang tạo PDF..." : `Tải PDF gộp (${issuedBatches.length} đợt)`}
+            </Button>
+            {issuedBatches.map((batch) => <Button key={batch.id} component={Link} href={`/admin/tuition-fees/payment-history/${batch.id}`} size="small">Chi tiết {batch.batchNo}</Button>)}
           </Stack>
         </Stack>
       </Paper>}
 
       {view === "UNISSUED" ? (
         <Stack spacing={1.5}>
-          <SectionHeader icon={<CampaignOutlinedIcon />} title="Khoản học phí chưa phát thông báo" subtitle="Chọn từng khoản hoặc chọn theo học sinh để phát hành thông báo tổng." />
+          <SectionHeader icon={<CampaignOutlinedIcon />} title="Khoản học phí chưa phát thông báo" subtitle="Chọn các khoản cần thu. Hệ thống tự gom thành một đợt cho mỗi học viên." />
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 300px" }, gap: 2 }}>
           <Paper sx={{ overflow: "hidden" }}>
             <Box sx={{ overflowX: "auto" }}>
@@ -513,9 +570,11 @@ export function PaymentBatchManagement() {
             </Box>
           </Paper>
           <SelectionSummary count={selectedFeeIds.length} total={selectedFeeTotal} details={selectedFees.slice(0, 5).map((fee) => `${fee.feeNo} · ${fee.student.fullName}`)}>
-            <Button fullWidth variant="contained" startIcon={<MergeTypeOutlinedIcon />} onClick={() => openNoticeDialog("GROUPED")} disabled={!canGroupFees}>Phát hành 1 thông báo tổng</Button>
-            <Button fullWidth variant="outlined" startIcon={<SendOutlinedIcon />} onClick={() => openNoticeDialog("SEPARATE")} disabled={!selectedFeeIds.length}>Phát hành riêng từng khoản</Button>
-            {!sameStudent(selectedFees) && <Alert severity="info">Muốn gộp, các khoản phải thuộc cùng một học sinh.</Alert>}
+            <Button fullWidth variant="contained" startIcon={<SendOutlinedIcon />} onClick={openNoticeDialog} disabled={!selectedFeeIds.length || selectedFeeIds.length > 500}>
+              Phát hành cho {selectedStudentCount} học viên
+            </Button>
+            {selectedFeeIds.length > 500 && <Alert severity="warning">Mỗi lần phát hành tối đa 500 khoản học phí.</Alert>}
+            {selectedFeeIds.length > 0 && <Alert severity="info">Các khoản đã chọn của cùng học viên sẽ được gom vào một đợt thu.</Alert>}
           </SelectionSummary>
           </Box>
         </Stack>
@@ -598,15 +657,15 @@ export function PaymentBatchManagement() {
       </Paper>
 
       <ConfirmDialog
-        open={Boolean(noticeMode)}
-        title={noticeMode === "GROUPED" ? "Phát hành thông báo tổng" : "Phát hành thông báo riêng"}
-        message={noticeMode === "GROUPED" ? `Hệ thống sẽ gom ${selectedFeeIds.length} khoản thành một đợt chuyển khoản tổng ${money(selectedFeeTotal)}.` : `Hệ thống sẽ tạo ${selectedFeeIds.length} đợt chuyển khoản riêng, tổng cộng ${money(selectedFeeTotal)}.`}
+        open={noticeDialogOpen}
+        title="Phát hành thông báo chuyển khoản"
+        message={`Hệ thống sẽ phát hành ${selectedFeeIds.length} khoản cho ${selectedStudentCount} học viên, tự gom theo từng học viên. Tổng số tiền còn nợ: ${money(selectedFeeTotal)}.`}
         content={<Stack spacing={1.5} sx={{ mt: 2 }}><FormControl fullWidth required error={Boolean(dialogError)}><InputLabel id="notice-bank-account-label">Tài khoản nhận tiền</InputLabel><Select labelId="notice-bank-account-label" label="Tài khoản nhận tiền" value={bankAccountId} onChange={(event) => { setBankAccountId(event.target.value); setDialogError(""); }}><MenuItem value="">Chọn tài khoản nhận tiền</MenuItem>{bankAccounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.bankName} — {account.accountNo} — {account.accountName}</MenuItem>)}</Select><FormHelperText>{dialogError || (bankAccounts.length ? "Tài khoản này sẽ được gắn vào batch mới." : "Chưa cấu hình tài khoản nhận tiền")}</FormHelperText></FormControl></Stack>}
         confirmLabel="Phát hành"
         cancelLabel="Hủy"
         confirmColor="primary"
         onConfirm={() => void submitNotice()}
-        onCancel={() => { if (!busy) setNoticeMode(null); }}
+        onCancel={() => { if (!busy) setNoticeDialogOpen(false); }}
         isLoading={busy}
         confirmDisabled={!bankAccountId || !bankAccounts.length}
       />

@@ -79,6 +79,47 @@ export async function generatePaymentBatchNoticePdf(
   return { pdf, batchNo: data.batch.batchNo };
 }
 
+export async function generatePaymentBatchNoticesPdf(
+  batchIds: string[],
+  exportedByName: string,
+  exportedById: string,
+  auditContext?: AuditContext,
+) {
+  const uniqueIds = [...new Set(batchIds)];
+  if (uniqueIds.length !== batchIds.length) {
+    throw new ConflictError("Danh sách đợt thu bị trùng");
+  }
+
+  const batches = await prisma.paymentBatch.findMany({
+    where: { id: { in: uniqueIds } },
+    select: { id: true, status: true, paymentMethod: true, bankAccountId: true },
+  });
+  if (batches.length !== uniqueIds.length) {
+    throw new NotFoundError("Không tìm thấy đầy đủ các đợt thu đã chọn");
+  }
+  if (batches.some((batch) => batch.status !== PaymentBatchStatus.PENDING || batch.paymentMethod !== "BANK_TRANSFER" || !batch.bankAccountId)) {
+    throw new ConflictError("Chỉ có thể gộp PDF của các đợt chuyển khoản đang chờ");
+  }
+  if (new Set(batches.map((batch) => batch.bankAccountId)).size !== 1) {
+    throw new ConflictError("Các đợt thu phải dùng cùng một tài khoản nhận tiền để gộp PDF");
+  }
+
+  const combinedPdf = await PDFDocument.create();
+  for (const batchId of uniqueIds) {
+    const notice = await generatePaymentBatchNoticePdf(
+      batchId,
+      exportedByName,
+      exportedById,
+      auditContext,
+    );
+    const sourcePdf = await PDFDocument.load(notice.pdf);
+    const pages = await combinedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+    for (const page of pages) combinedPdf.addPage(page);
+  }
+
+  return Buffer.from(await combinedPdf.save());
+}
+
 async function loadPaymentBatchNoticeData(
   client: Prisma.TransactionClient,
   batchId: string,

@@ -54,8 +54,12 @@ export const cashPaymentSchema = z.object({
 });
 
 export const noticeBatchCreateSchema = z.object({
-  tuitionFeeIds: z.array(z.string().uuid()).min(1).max(100),
-  mode: z.enum(["GROUPED", "SEPARATE"]),
+  tuitionFeeIds: z.array(z.string().uuid()).min(1).max(500).superRefine((ids, ctx) => {
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Danh sách khoản học phí bị trùng" });
+    }
+  }),
+  mode: z.enum(["GROUPED", "SEPARATE", "BY_STUDENT"]),
   bankAccountId: z.string().uuid(),
   idempotencyKey: z.string().trim().min(1).max(150),
 });

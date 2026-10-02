@@ -552,8 +552,10 @@ due_date
 Thì batch đang chờ phải được hủy hoặc thay thế trước khi tạo batch mới. PDF notice
 được tạo lại theo batch hiện hành và không lưu lịch sử bản PDF trong database.
 
-Việc tạo học phí tháng không tự tạo payment batch. Chỉ thao tác chủ động `Tạo
-thông báo chuyển khoản` mới tạo batch `BANK_TRANSFER` `PENDING`; nếu học viên
+Việc tạo học phí tháng không tự tạo payment batch. Chỉ thao tác phát hành tại
+màn hình `Thông báo & đợt thu` mới tạo batch `BANK_TRANSFER` `PENDING` từ các
+khoản học phí còn nợ đã tồn tại; thao tác này không tự tạo học phí. Các khoản
+được chọn phải được gom thành tối đa một batch cho mỗi học viên. Nếu học viên
 nộp tiền mặt, nhân viên phải thu từ màn hình thanh toán với phương thức `CASH`.
 
 ---

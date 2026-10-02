@@ -723,6 +723,7 @@ export async function createNoticeBatches(
     const feeRefs = await tx.tuitionFee.findMany({
       where: { id: { in: data.tuitionFeeIds } },
       select: { id: true, studentId: true },
+      orderBy: [{ studentId: "asc" }, { id: "asc" }],
     });
     if (feeRefs.length !== data.tuitionFeeIds.length) {
       throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
@@ -735,7 +736,14 @@ export async function createNoticeBatches(
 
     const groups = data.mode === "GROUPED"
       ? [feeRefs]
-      : feeRefs.map((fee) => [fee]);
+      : data.mode === "BY_STUDENT"
+        ? [...feeRefs.reduce((byStudent, fee) => {
+            const group = byStudent.get(fee.studentId) ?? [];
+            group.push(fee);
+            byStudent.set(fee.studentId, group);
+            return byStudent;
+          }, new Map<string, typeof feeRefs>()).values()]
+        : feeRefs.map((fee) => [fee]);
     const batches = [];
     for (const [index, group] of groups.entries()) {
       const batch = await createPaymentBatch(
@@ -759,7 +767,7 @@ export async function createNoticeBatches(
         totalAmount: batch.totalAmount,
       })),
     };
-  });
+  }, { timeout: 30_000 });
 }
 
 async function cancelPendingBatchInTransaction(

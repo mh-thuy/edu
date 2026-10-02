@@ -781,7 +781,7 @@ Kỳ yêu cầu chỉ cần nằm trong thời gian của lớp; không phụ th
 ngày tái đăng ký của học viên. Lớp phải ở trạng thái `ACTIVE`; lớp `DRAFT`,
 `COMPLETED` hoặc `CANCELLED` trả `409 Conflict`.
 
-## 19.1.5 Tạo thông báo chuyển khoản theo lớp
+## 19.1.5 API cũ tạo thông báo chuyển khoản theo lớp
 
 ```http
 POST /api/classes/{classId}/tuition-notice/pdf
@@ -801,15 +801,35 @@ Body bắt buộc:
 }
 ```
 
-Đây là thao tác chủ động, tách khỏi `POST /api/classes/{classId}/tuition-fees`.
-Backend tạo hoặc bổ sung học phí còn thiếu, gom các khoản chưa thu theo từng học
-viên thành batch `BANK_TRANSFER` `PENDING`, rồi xuất PDF thông báo chuyển khoản.
-Không gọi endpoint này khi học viên dự kiến nộp tiền mặt; trường hợp đó phải mở
-màn hình thu học phí và chọn `CASH`.
+Endpoint này được giữ để tương thích API; giao diện quản trị không còn gọi
+endpoint này. Luồng giao diện hiện hành tạo học phí riêng, sau đó phát hành từ
+các khoản đã tồn tại tại `POST /api/payment-batches/notice`.
+
+## 19.1.6 Phát hành thông báo từ các khoản học phí đã chọn
+
+```http
+POST /api/payment-batches/notice
+```
+
+Body gồm `tuitionFeeIds` (1–500 UUID), `mode: "BY_STUDENT"`,
+`bankAccountId` và `idempotencyKey`. Backend kiểm tra khoản còn nợ, chưa thuộc
+batch đang chờ, tài khoản nhận tiền đang hoạt động; sau đó gom các khoản theo
+học viên và tạo một batch `BANK_TRANSFER` `PENDING` cho mỗi học viên. API không
+tạo học phí.
+
+## 19.1.7 Xuất PDF gộp thông báo
+
+```http
+POST /api/payment-batches/notice/pdf
+```
+
+Body gồm `batchIds` (1–500 UUID). Tất cả batch phải đang `PENDING`, dùng phương
+thức `BANK_TRANSFER` và cùng một tài khoản nhận tiền. Response thành công là
+file PDF gộp các thông báo.
 
 ---
 
-## 19.1.6 Ngày nhận khi thanh toán tiền mặt
+## 19.1.8 Ngày nhận khi thanh toán tiền mặt
 
 Khi gọi `POST /api/payment-batches`, nếu `paymentMethod` là `CASH`, body bắt
 buộc có `paymentDate` dạng `YYYY-MM-DD`:

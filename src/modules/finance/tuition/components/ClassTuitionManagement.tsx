@@ -7,14 +7,9 @@ import {
   Button,
   Chip,
   CircularProgress,
-  FormControl,
-  FormHelperText,
-  InputLabel,
   InputAdornment,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -32,12 +27,10 @@ import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutli
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
-import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Link from "next/link";
-import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
@@ -52,12 +45,6 @@ type ClassData = {
   status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
   startDate?: string | null;
   endDate?: string | null;
-};
-type BankAccount = {
-  id: string;
-  bankName: string;
-  accountNo: string;
-  accountName: string;
 };
 type Fee = {
   id: string;
@@ -103,11 +90,6 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const [month, setMonth] = useState(currentMonth);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [noticeConfirmOpen, setNoticeConfirmOpen] = useState(false);
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
-  const [bankAccountId, setBankAccountId] = useState("");
-  const [bankAccountsLoading, setBankAccountsLoading] = useState(false);
-  const [bankAccountsError, setBankAccountsError] = useState("");
   const [error, setError] = useState("");
   const requestVersion = useRef(0);
   const { showSuccess, showError, Snackbar } = useSnackbar();
@@ -214,61 +196,6 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     }
   }
 
-  async function createPaymentNotice() {
-    if (!bankAccountId) {
-      setBankAccountsError("Hãy chọn tài khoản nhận tiền");
-      return;
-    }
-    setNoticeConfirmOpen(false);
-    setBusy(true);
-    try {
-      const response = await fetch(`/api/classes/${id}/tuition-notice/pdf?month=${encodeURIComponent(month)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bankAccountId }),
-      });
-      if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo thông báo chuyển khoản"));
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `thong-bao-hoc-phi-${classData?.code ?? "lop"}-${month}.pdf`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-      await load();
-      showSuccess("Đã tạo đợt chuyển khoản và xuất thông báo");
-    } catch (reason) {
-      showError(reason instanceof Error ? reason.message : "Không thể tạo thông báo chuyển khoản");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function openNoticeDialog() {
-    setNoticeConfirmOpen(true);
-    setBankAccountsLoading(true);
-    setBankAccountsError("");
-    try {
-      const response = await fetch("/api/bank-accounts");
-      if (!response.ok)
-        throw new Error(await extractApiErrorMessage(response, "Không thể tải tài khoản ngân hàng"));
-      const accounts = await unwrapApiResponse<BankAccount[]>(response);
-      setBankAccounts(accounts);
-      setBankAccountId((current) =>
-        accounts.some((account) => account.id === current)
-          ? current
-          : accounts[0]?.id || "",
-      );
-      if (!accounts.length) setBankAccountsError("Chưa cấu hình tài khoản nhận tiền");
-    } catch (reason) {
-      setBankAccounts([]);
-      setBankAccountId("");
-      setBankAccountsError(reason instanceof Error ? reason.message : "Không thể tải tài khoản ngân hàng");
-    } finally {
-      setBankAccountsLoading(false);
-    }
-  }
-
   if (!classData && loading) {
     return (
       <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 360 }}>
@@ -334,15 +261,21 @@ export function ClassTuitionManagement({ id }: { id: string }) {
             </Box>
             <Box>
               <Typography variant="subtitle1" fontWeight={800}>Thao tác thu học phí</Typography>
-              <Typography variant="body2" color="text.secondary">Tạo phí trước, sau đó ghi nhận tiền mặt hoặc chuyển khoản.</Typography>
+              <Typography variant="body2" color="text.secondary">Tạo học phí tại đây; phát hành yêu cầu chuyển khoản ở màn hình thông báo tập trung.</Typography>
             </Box>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <Button variant="contained" startIcon={<AddCardOutlinedIcon />} onClick={() => void createFees()} disabled={busy || classNotActive} sx={{ flex: 1 }}>
               Tạo học phí tháng
             </Button>
-            <Button variant="outlined" color="primary" startIcon={<PictureAsPdfOutlinedIcon />} onClick={() => void openNoticeDialog()} disabled={busy || classNotActive} sx={{ flex: 1 }}>
-              Thông báo chuyển khoản
+            <Button
+              component={Link}
+              href={`/admin/tuition-fees/notice-management?classId=${encodeURIComponent(id)}&month=${encodeURIComponent(month)}`}
+              variant="outlined"
+              color="primary"
+              sx={{ flex: 1 }}
+            >
+              Mở thông báo & đợt thu
             </Button>
           </Stack>
         </Stack>
@@ -352,7 +285,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     {classNotActive && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp chưa ở trạng thái ACTIVE; học phí chỉ được xem, không thể tạo mới.</Alert>}
     {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
     <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
-      Học phí tính trọn tháng theo môn đang đăng ký. Dùng <strong>Thu học phí</strong> để ghi nhận thanh toán từng khoản; dùng thông báo chuyển khoản cho cả lớp.
+      Học phí tính trọn tháng theo môn đang đăng ký. Sau khi tạo phí, mở <strong>Thông báo & đợt thu</strong> để chọn khoản cần yêu cầu chuyển khoản.
     </Alert>
 
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4, 1fr)" }, gap: 1.5 }}>
@@ -428,18 +361,6 @@ export function ClassTuitionManagement({ id }: { id: string }) {
         </Table>
       </Box>
     </Paper>
-    <ConfirmDialog
-      open={noticeConfirmOpen}
-      title="Tạo thông báo chuyển khoản"
-      message={`Hệ thống sẽ gom các khoản chưa thu của kỳ ${month} theo từng học viên, tạo đợt chuyển khoản đang chờ đối soát và xuất PDF thông báo. Nếu học viên nộp tiền mặt, hãy dùng “Thu học phí” thay vì thao tác này.`}
-      content={<Stack spacing={1.5} sx={{ mt: 2 }}><FormControl fullWidth required error={Boolean(bankAccountsError)}><InputLabel id="class-bank-account-label">Tài khoản nhận tiền</InputLabel><Select labelId="class-bank-account-label" label="Tài khoản nhận tiền" value={bankAccountId} onChange={(event) => { setBankAccountId(event.target.value); setBankAccountsError(""); }} disabled={bankAccountsLoading || !bankAccounts.length}><MenuItem value="">{bankAccountsLoading ? "Đang tải tài khoản..." : "Chọn tài khoản nhận tiền"}</MenuItem>{bankAccounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.bankName} — {account.accountNo} — {account.accountName}</MenuItem>)}</Select><FormHelperText>{bankAccountsError || (fees.some((fee) => fee.paymentAllocations?.length) ? "Các đợt đang chờ sẽ giữ tài khoản đã lưu; tài khoản này chỉ áp dụng cho đợt mới." : "Tài khoản này sẽ được gắn vào các đợt chuyển khoản mới của lớp")}</FormHelperText></FormControl></Stack>}
-      confirmLabel="Tạo thông báo"
-      cancelLabel="Quay lại"
-      onConfirm={() => void createPaymentNotice()}
-      onCancel={() => setNoticeConfirmOpen(false)}
-      isLoading={busy || bankAccountsLoading}
-      confirmDisabled={!bankAccountId || Boolean(bankAccountsError)}
-    />
     {Snackbar}
   </Stack>;
 }
