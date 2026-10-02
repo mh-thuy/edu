@@ -37,16 +37,10 @@ type SidebarItem = {
 
 const items: SidebarItem[] = [
   {
-    label: "Dashboard",
+    label: "Tổng quan",
     href: "/admin",
     icon: <HomeOutlinedIcon fontSize="small" />,
     section: "Tổng quan",
-  },
-  {
-    label: "Giáo viên",
-    href: "/admin/teachers",
-    icon: <SchoolOutlinedIcon fontSize="small" />,
-    section: "Đào tạo",
   },
   {
     label: "Học viên",
@@ -58,6 +52,12 @@ const items: SidebarItem[] = [
     label: "Lớp học",
     href: "/admin/classes",
     icon: <ClassOutlinedIcon fontSize="small" />,
+    section: "Đào tạo",
+  },
+  {
+    label: "Giáo viên",
+    href: "/admin/teachers",
+    icon: <SchoolOutlinedIcon fontSize="small" />,
     section: "Đào tạo",
   },
   {
@@ -79,13 +79,13 @@ const items: SidebarItem[] = [
     section: "Tài chính",
   },
   {
-    label: "Tách/gộp đợt thu",
+    label: "Thông báo & đợt thu",
     href: "/admin/tuition-fees/notice-management",
     icon: <CallSplitOutlinedIcon fontSize="small" />,
     section: "Tài chính",
   },
   {
-    label: "Giao dịch thu học phí",
+    label: "Lịch sử thanh toán",
     href: "/admin/tuition-fees/payment-history",
     icon: <HistoryOutlinedIcon fontSize="small" />,
     section: "Tài chính",

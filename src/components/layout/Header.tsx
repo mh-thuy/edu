@@ -5,7 +5,6 @@ import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
 import {
   Avatar,
   Box,
-  Breadcrumbs,
   IconButton,
   ListItemIcon,
   Menu,
@@ -20,11 +19,9 @@ import type { SessionUser } from "@/types/auth";
 type HeaderProps = {
   user: SessionUser;
   onToggleSidebar: () => void;
-  currentTitle?: string;
-  currentSection?: string;
 };
 
-export function Header({ user, onToggleSidebar, currentTitle = "Dashboard", currentSection = "Tổng quan" }: HeaderProps): ReactElement {
+export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const open = Boolean(anchorEl);
@@ -55,21 +52,12 @@ export function Header({ user, onToggleSidebar, currentTitle = "Dashboard", curr
       }}
     >
       <Stack direction="row" alignItems="center" spacing={1.5} minWidth={0}>
-        <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" sx={{ bgcolor: "#f1f5f9", "&:hover": { bgcolor: "#e2e8f0" } }}>
+        <IconButton onClick={onToggleSidebar} aria-label="Mở hoặc thu gọn menu" sx={{ bgcolor: "action.hover", "&:hover": { bgcolor: "action.selected" } }}>
           <MenuOutlinedIcon />
         </IconButton>
-        <Box minWidth={0}>
-          <Breadcrumbs
-            separator="/"
-            sx={{ display: { xs: "none", sm: "flex" }, "& .MuiBreadcrumbs-li": { lineHeight: 1 } }}
-          >
-            <Typography variant="caption" color="text.secondary">EduCenter</Typography>
-            <Typography variant="caption" color="text.secondary">{currentSection}</Typography>
-          </Breadcrumbs>
-          <Typography variant="h6" fontWeight={800} lineHeight={1.2} noWrap>
-            {currentTitle}
-          </Typography>
-        </Box>
+        <Typography variant="subtitle1" fontWeight={800} color="text.primary" noWrap>
+          EduCenter
+        </Typography>
       </Stack>
 
       <Stack direction="row" alignItems="center" spacing={1.5}>

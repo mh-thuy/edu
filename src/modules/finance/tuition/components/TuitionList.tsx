@@ -28,6 +28,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { StudentSelectDialog, type StudentItem } from "@/components/shared/dialogs/StudentSelectDialog";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
@@ -184,17 +185,20 @@ export function TuitionList() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={2}>
-        <BoxTitle />
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+      <PageHeader
+        title="Các khoản học phí"
+        description="Theo dõi khoản phải thu theo học viên, lớp và kỳ học."
+        actions={
+          <>
           <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => void exportCsv()} disabled={exporting}>
             {exporting ? "Đang xuất..." : "Xuất CSV"}
           </Button>
           <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()}>
             Làm mới
           </Button>
-        </Stack>
-      </Stack>
+          </>
+        }
+      />
 
       <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack spacing={1.5}>
@@ -294,14 +298,5 @@ export function TuitionList() {
       <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); studentDialog.onClose(); }} title="Chọn học viên xem học phí" />
       <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); classDialog.onClose(); }} />
     </Stack>
-  );
-}
-
-function BoxTitle() {
-  return (
-    <Box>
-      <Typography variant="h5" fontWeight={800}>Các khoản học phí</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Theo dõi khoản phải thu theo học viên, lớp và kỳ học.</Typography>
-    </Box>
   );
 }

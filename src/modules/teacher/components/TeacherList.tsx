@@ -7,17 +7,16 @@ import {
   Button,
   Chip,
   Paper,
-  Typography,
   InputAdornment,
   MenuItem,
   Select,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
-import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { useList } from "@/hooks/useList";
@@ -284,60 +283,11 @@ export function TeacherList(): ReactElement {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 2, md: 3 },
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.paper",
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          alignItems={{ xs: "stretch", md: "center" }}
-          justifyContent="space-between"
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: 2,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                bgcolor: "primary.main",
-                color: "primary.contrastText",
-              }}
-            >
-              <SchoolOutlinedIcon />
-            </Box>
-
-            <Box>
-              <Typography variant="h6" fontWeight={700}>
-                Quản lý giáo viên
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Danh sách giáo viên, chuyên môn và trạng thái hoạt động
-              </Typography>
-            </Box>
-          </Box>
-
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreate}
-            sx={{
-              whiteSpace: "nowrap",
-            }}
-          >
-            Thêm giáo viên
-          </Button>
-        </Stack>
-      </Paper>
+      <PageHeader
+        title="Quản lý giáo viên"
+        description="Danh sách giáo viên, chuyên môn và trạng thái hoạt động."
+        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Thêm giáo viên</Button>}
+      />
 
       <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack

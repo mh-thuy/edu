@@ -174,9 +174,7 @@ const theme = createTheme({
         size: "small",
       },
       styleOverrides: {
-        root: {
-          minWidth: 720,
-        },
+        root: { width: "100%" },
       },
     },
     MuiTablePagination: {

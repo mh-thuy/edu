@@ -114,7 +114,7 @@ export function BaseTable<T extends GridValidRowModel>({
           sx={{
             border: "none",
             minHeight: 320,
-            minWidth: 720,
+            minWidth: 0,
             "& .MuiDataGrid-cell": {
               borderBottom: "1px solid var(--mui-palette-divider)",
             },
