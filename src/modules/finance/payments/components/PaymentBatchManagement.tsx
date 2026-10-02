@@ -355,8 +355,7 @@ export function PaymentBatchManagement() {
         sx={{
           p: { xs: 2, md: 3 },
           color: "common.white",
-          background: "linear-gradient(120deg, #123b63 0%, #176b87 58%, #159b8a 100%)",
-          boxShadow: "0 12px 28px rgba(18, 59, 99, 0.18)",
+          bgcolor: "primary.dark",
         }}
       >
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
@@ -366,7 +365,7 @@ export function PaymentBatchManagement() {
             </Box>
             <Box>
               <Typography variant="h5" fontWeight={800}>Quản lý thông báo và đợt thu</Typography>
-              <Typography variant="body2" sx={{ mt: 0.5, color: "rgba(255,255,255,0.78)" }}>
+        <Typography variant="body2" sx={{ mt: 0.5, color: "primary.contrastText", opacity: 0.8 }}>
                 Phát hành, theo dõi và điều chỉnh thông báo chuyển khoản theo từng học sinh.
               </Typography>
             </Box>
@@ -377,7 +376,7 @@ export function PaymentBatchManagement() {
             startIcon={<RefreshOutlinedIcon />}
             onClick={() => void load()}
             disabled={loading}
-            sx={{ alignSelf: { xs: "stretch", md: "auto" }, borderColor: "rgba(255,255,255,0.45)", color: "common.white" }}
+            sx={{ alignSelf: { xs: "stretch", md: "auto" }, borderColor: "primary.light", color: "common.white" }}
           >
             Làm mới dữ liệu
           </Button>
@@ -589,7 +588,7 @@ export function PaymentBatchManagement() {
         </Stack>
       )}
 
-      <Paper sx={{ p: 2, bgcolor: "#f8fafc" }}>
+      <Paper sx={{ p: 2, bgcolor: "action.hover" }}>
         <Stack direction="row" spacing={1} alignItems="flex-start">
           <AccountBalanceWalletOutlinedIcon color="primary" />
           <Typography variant="body2" color="text.secondary">
@@ -642,10 +641,10 @@ export function PaymentBatchManagement() {
 }
 
 const metricTones = {
-  primary: { color: "#176b87", background: "#edf8fa" },
-  warning: { color: "#b45309", background: "#fff8eb" },
-  success: { color: "#15803d", background: "#effbf3" },
-  info: { color: "#5b4abf", background: "#f3f1ff" },
+  primary: { color: "primary.dark", background: "primary.light" },
+  warning: { color: "warning.dark", background: "warning.light" },
+  success: { color: "success.dark", background: "success.light" },
+  info: { color: "info.dark", background: "info.light" },
 } as const;
 
 function DashboardMetric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: keyof typeof metricTones; detail?: string }) {
@@ -666,7 +665,7 @@ function DashboardMetric({ icon, label, value, tone, detail }: { icon: ReactNode
 
 function SectionHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
   return <Stack direction="row" spacing={1} alignItems="flex-start">
-    <Box sx={{ display: "grid", placeItems: "center", width: 34, height: 34, mt: 0.25, borderRadius: 1.5, color: "primary.main", bgcolor: "primary.50" }}>{icon}</Box>
+    <Box sx={{ display: "grid", placeItems: "center", width: 34, height: 34, mt: 0.25, borderRadius: 1.5, color: "primary.main", bgcolor: "primary.light" }}>{icon}</Box>
     <Box>
       <Typography variant="subtitle1" fontWeight={800}>{title}</Typography>
       <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
@@ -675,7 +674,7 @@ function SectionHeader({ icon, title, subtitle }: { icon: ReactNode; title: stri
 }
 
 function SelectionSummary({ count, total, details, children }: { count: number; total: number; details: string[]; children: ReactNode }) {
-  return <Paper sx={{ p: { xs: 1.75, md: 2 }, alignSelf: "start", position: { lg: "sticky" }, top: { lg: 24 }, border: "1px solid", borderColor: "primary.100", bgcolor: "#f7fbfc" }}>
+  return <Paper sx={{ p: { xs: 1.75, md: 2 }, alignSelf: "start", position: { lg: "sticky" }, top: { lg: 24 }, border: "1px solid", borderColor: "primary.light", bgcolor: "background.paper" }}>
     <Stack spacing={1.5}>
       <Stack direction="row" spacing={1} alignItems="center">
         <InfoOutlinedIcon color="primary" fontSize="small" />

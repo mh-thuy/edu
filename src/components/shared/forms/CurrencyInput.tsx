@@ -54,18 +54,17 @@ export function CurrencyInput({
           letterSpacing: "0.3px",
         },
         "& .MuiInputBase-root": {
-          backgroundColor: disabled ? "#f5f5f5" : "white",
+          backgroundColor: disabled ? "action.disabledBackground" : "background.paper",
         },
         ...sx,
       }}
       InputProps={{
         readOnly,
         endAdornment: (
-          <InputAdornment position="end">
+          <InputAdornment position="end" sx={{ color: "text.secondary" }}>
             <span
               style={{
                 fontSize: 13,
-                color: "#757575",
                 fontWeight: 500,
               }}
             >

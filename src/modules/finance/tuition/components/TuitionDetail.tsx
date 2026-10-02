@@ -400,10 +400,7 @@ export function TuitionDetail({ id }: { id: string }) {
           border: "1px solid",
           borderColor:
             fee.remainingAmount > 0 ? "warning.light" : "success.light",
-          background:
-            fee.remainingAmount > 0
-              ? "linear-gradient(135deg, #fffaf0 0%, #ffffff 65%)"
-              : "linear-gradient(135deg, #f0fdf4 0%, #ffffff 65%)",
+          bgcolor: "background.paper",
         }}
       >
         <Box

@@ -4,6 +4,14 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v15-appRouter";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import type { ReactNode } from "react";
 
+const uiTokens = {
+  divider: "#e2e8f0",
+  surface: "#ffffff",
+  mutedSurface: "#f8fafc",
+  mutedText: "#475569",
+  subtleShadow: "0 2px 12px rgba(15, 23, 42, 0.04)",
+};
+
 const theme = createTheme({
   palette: {
     mode: "light",
@@ -29,9 +37,14 @@ const theme = createTheme({
       main: "#dc2626",
       light: "#fee2e2",
     },
+    info: {
+      main: "#2563eb",
+      light: "#dbeafe",
+      dark: "#1d4ed8",
+    },
     background: {
-      default: "#f8fafc",
-      paper: "#ffffff",
+      default: uiTokens.mutedSurface,
+      paper: uiTokens.surface,
     },
     text: {
       primary: "#0f172a",
@@ -43,6 +56,12 @@ const theme = createTheme({
   },
   typography: {
     fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
+    h1: { fontSize: "2rem", fontWeight: 800, lineHeight: 1.2 },
+    h2: { fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.25 },
+    h3: { fontSize: "1.5rem", fontWeight: 800, lineHeight: 1.3 },
+    h4: { fontSize: "1.25rem", fontWeight: 750, lineHeight: 1.35 },
+    h5: { fontSize: "1.125rem", fontWeight: 750, lineHeight: 1.4 },
+    h6: { fontSize: "1rem", fontWeight: 700, lineHeight: 1.45 },
   },
   components: {
     MuiButton: {
@@ -67,9 +86,10 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          border: "1px solid #e2e8f0",
+          border: "1px solid",
+          borderColor: uiTokens.divider,
           borderRadius: 16,
-          boxShadow: "0 4px 18px rgba(15, 23, 42, 0.035)",
+          boxShadow: uiTokens.subtleShadow,
         },
       },
     },
@@ -93,7 +113,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 10,
-          backgroundColor: "#ffffff",
+          backgroundColor: uiTokens.surface,
         },
       },
     },
@@ -114,10 +134,10 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: "none",
-          border: "1px solid #e2e8f0",
-          borderColor: "#e2e8f0",
+          border: "1px solid",
+          borderColor: uiTokens.divider,
           borderRadius: 16,
-          boxShadow: "0 4px 18px rgba(15, 23, 42, 0.035)",
+          boxShadow: uiTokens.subtleShadow,
         },
       },
     },
@@ -125,7 +145,8 @@ const theme = createTheme({
       styleOverrides: {
         paper: {
           borderRadius: 18,
-          border: "1px solid #e2e8f0",
+          border: "1px solid",
+          borderColor: uiTokens.divider,
           boxShadow: "0 18px 48px rgba(15, 23, 42, 0.16)",
         },
       },
@@ -157,13 +178,13 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderColor: "#e2e8f0",
+          borderColor: uiTokens.divider,
           padding: "12px 16px",
           verticalAlign: "middle",
         },
         head: {
-          backgroundColor: "#f8fafc",
-          color: "#475569",
+          backgroundColor: uiTokens.mutedSurface,
+          color: uiTokens.mutedText,
           fontWeight: 700,
           whiteSpace: "nowrap",
         },
@@ -180,7 +201,8 @@ const theme = createTheme({
     MuiTablePagination: {
       styleOverrides: {
         root: {
-          borderTop: "1px solid #e2e8f0",
+          borderTop: "1px solid",
+          borderColor: uiTokens.divider,
         },
         toolbar: {
           minHeight: 52,
@@ -195,8 +217,8 @@ const theme = createTheme({
           overflow: "hidden",
         },
         ".MuiDataGrid-columnHeaders": {
-          backgroundColor: "#f8fafc",
-          color: "#475569",
+          backgroundColor: uiTokens.mutedSurface,
+          color: uiTokens.mutedText,
           fontWeight: 700,
         },
         ".MuiDataGrid-cell:focus, .MuiDataGrid-cell:focus-within": {
@@ -207,7 +229,8 @@ const theme = createTheme({
         },
         ".MuiDataGrid-footerContainer": {
           minHeight: 56,
-          borderTop: "1px solid #e2e8f0",
+          borderTop: "1px solid",
+          borderColor: uiTokens.divider,
         },
       },
     },

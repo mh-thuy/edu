@@ -1,6 +1,5 @@
 "use client";
 
-import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
   Alert,
@@ -48,19 +47,12 @@ export function DailyPaymentReportCard() {
   return (
     <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
       <Stack spacing={2}>
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1.5}>
-          <Stack direction="row" spacing={1.25} alignItems="flex-start">
-            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
-              <CalendarMonthOutlinedIcon fontSize="small" />
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight={800}>Báo cáo thu trong ngày</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Xuất Excel các khoản thanh toán thành công theo ngày nhận tiền.
-              </Typography>
-            </Box>
-          </Stack>
-        </Stack>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={700}>Điều kiện báo cáo</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            Chọn ngày nhận tiền để xuất danh sách thanh toán thành công.
+          </Typography>
+        </Box>
         {error && <Alert severity="error">{error}</Alert>}
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>

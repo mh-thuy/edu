@@ -377,7 +377,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "0.9fr 1.1fr" }, gap: 2 }}>
           <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ mb: 2 }}>
-              <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main" }}><EventNoteOutlinedIcon fontSize="small" /></Box>
+              <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}><EventNoteOutlinedIcon fontSize="small" /></Box>
               <Box><Typography variant="h6" fontWeight={800}>Thông tin lớp</Typography><Typography variant="body2" color="text.secondary">Thông tin cơ bản và thời gian hoạt động.</Typography></Box>
             </Stack>
             <Stack spacing={1.5}>
@@ -611,7 +611,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
 function InfoRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <Stack direction="row" spacing={1.25} alignItems="center">
-      <Box sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", bgcolor: "#f8fafc", color: "primary.main", border: "1px solid", borderColor: "divider" }}>{icon}</Box>
+      <Box sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", bgcolor: "action.hover", color: "primary.main", border: "1px solid", borderColor: "divider" }}>{icon}</Box>
       <Box minWidth={0}>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{label}</Typography>
         <Typography variant="body2" fontWeight={700}>{value}</Typography>
@@ -624,10 +624,10 @@ type OverviewMetricTone = "blue" | "violet" | "green" | "orange";
 
 function OverviewMetric({ icon, label, value, loading, tone }: { icon: ReactNode; label: string; value: number; loading: boolean; tone: OverviewMetricTone }) {
   const tones: Record<OverviewMetricTone, { background: string; color: string }> = {
-    blue: { background: "#eff6ff", color: "#2563eb" },
-    violet: { background: "#f5f3ff", color: "#7c3aed" },
-    green: { background: "#f0fdf4", color: "#16a34a" },
-    orange: { background: "#fff7ed", color: "#ea580c" },
+    blue: { background: "primary.light", color: "primary.dark" },
+    violet: { background: "info.light", color: "info.dark" },
+    green: { background: "success.light", color: "success.dark" },
+    orange: { background: "warning.light", color: "warning.dark" },
   };
   const style = tones[tone];
 

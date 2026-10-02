@@ -5,7 +5,6 @@ import {
   Alert,
   Box,
   Button,
-  Chip,
   FormControl,
   InputLabel,
   MenuItem,
@@ -18,11 +17,13 @@ import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { DailyPaymentReportCard } from "@/modules/finance/reports/components/DailyPaymentReportCard";
@@ -49,19 +50,19 @@ const reportDefinitions: Array<{
   {
     key: "CLASS_TUITION",
     title: "Thu học phí theo lớp",
-    description: "Theo dõi số đã thu theo lớp, môn học và kỳ.",
+    description: "Đã thu theo lớp, môn học và kỳ.",
     icon: <AssessmentOutlinedIcon fontSize="small" />,
   },
   {
     key: "DAILY_PAYMENT",
     title: "Thu học phí theo ngày",
-    description: "Xuất danh sách thanh toán thành công trong ngày.",
+    description: "Các khoản thanh toán thành công theo ngày nhận tiền.",
     icon: <CalendarMonthOutlinedIcon fontSize="small" />,
   },
   {
     key: "BANK_RECONCILIATION",
     title: "Đối soát ngân hàng",
-    description: "Tổng hợp giao dịch sao kê theo khoảng ngày.",
+    description: "Giao dịch sao kê theo tài khoản và khoảng ngày.",
     icon: <AccountBalanceOutlinedIcon fontSize="small" />,
   },
 ];
@@ -137,50 +138,58 @@ export function ClassTuitionReportPage() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "flex-end" }} gap={2}>
-        <Stack direction="row" spacing={1.5} alignItems="flex-start">
-          <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 2.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark" }}>
-            <AssessmentOutlinedIcon />
-          </Box>
-          <Box>
-            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Trung tâm báo cáo</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Chọn loại báo cáo, thiết lập phạm vi và xuất dữ liệu theo nhu cầu.</Typography>
-          </Box>
-        </Stack>
-        <Chip label={`${reportDefinitions.length} báo cáo`} color="primary" variant="outlined" />
-      </Stack>
+      <PageHeader
+        title="Báo cáo"
+        description="Chọn báo cáo, điền điều kiện cần thiết rồi xuất dữ liệu."
+      />
 
-      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
-        <Stack spacing={2}>
-          <Box>
-            <Typography variant="h6" fontWeight={800}>Danh mục báo cáo</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Các báo cáo được nhóm theo mục đích sử dụng và có thể mở rộng thêm sau này.</Typography>
-          </Box>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
-            {reportDefinitions.map((report) => (
+      <Box component="section" aria-label="Chọn loại báo cáo">
+        <Stack direction="row" justifyContent="space-between" alignItems="baseline" sx={{ mb: 1.25 }}>
+          <Typography variant="subtitle1" fontWeight={700}>Loại báo cáo</Typography>
+          <Typography variant="caption" color="text.secondary">{reportDefinitions.length} loại</Typography>
+        </Stack>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
+          {reportDefinitions.map((report) => {
+            const selected = activeReport === report.key;
+            return (
               <Button
                 key={report.key}
-                variant={activeReport === report.key ? "contained" : "outlined"}
+                variant="outlined"
+                aria-pressed={selected}
                 onClick={() => {
                   setActiveReport(report.key);
                   setError("");
                 }}
-                sx={{ minHeight: 92, p: 1.5, justifyContent: "flex-start", textAlign: "left", alignItems: "flex-start" }}
+                sx={{
+                  minHeight: 92,
+                  p: 1.5,
+                  justifyContent: "flex-start",
+                  textAlign: "left",
+                  alignItems: "stretch",
+                  borderColor: selected ? "primary.main" : "divider",
+                  bgcolor: selected ? "primary.light" : "background.paper",
+                  color: selected ? "primary.dark" : "text.primary",
+                  "&:hover": {
+                    borderColor: "primary.main",
+                    bgcolor: selected ? "primary.light" : "action.hover",
+                  },
+                }}
               >
-                <Stack direction="row" spacing={1.25} alignItems="flex-start">
-                  <Box sx={{ width: 32, height: 32, borderRadius: 1.25, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: activeReport === report.key ? "rgba(255,255,255,0.16)" : "primary.light", color: activeReport === report.key ? "inherit" : "primary.dark" }}>
+                <Stack direction="row" spacing={1.25} alignItems="center" sx={{ width: "100%" }}>
+                  <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: "background.paper", color: "primary.main" }}>
                     {report.icon}
                   </Box>
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight={800}>{report.title}</Typography>
-                    <Typography variant="caption" sx={{ display: "block", mt: 0.25, opacity: 0.82 }}>{report.description}</Typography>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="subtitle2" fontWeight={700}>{report.title}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25 }}>{report.description}</Typography>
                   </Box>
+                  {selected && <CheckCircleOutlineOutlinedIcon fontSize="small" color="primary" />}
                 </Stack>
               </Button>
-            ))}
-          </Box>
-        </Stack>
-      </Paper>
+            );
+          })}
+        </Box>
+      </Box>
 
       {activeReport === "DAILY_PAYMENT" && <DailyPaymentReportCard />}
       {activeReport === "BANK_RECONCILIATION" && <BankReconciliationReportCard />}
@@ -190,11 +199,11 @@ export function ClassTuitionReportPage() {
       {activeReport === "CLASS_TUITION" && <Paper sx={{ p: { xs: 2, md: 2.5 }, overflow: "hidden" }}>
         <Stack spacing={2.5}>
           <Stack direction="row" spacing={1.25} alignItems="flex-start">
-            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
-              <AssessmentOutlinedIcon fontSize="small" />
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark", flexShrink: 0 }}>
+            <AssessmentOutlinedIcon fontSize="small" />
             </Box>
             <Box>
-              <Typography variant="h6" fontWeight={800}>Thiết lập phạm vi báo cáo</Typography>
+              <Typography variant="h6" fontWeight={800}>Điều kiện báo cáo</Typography>
               <Typography variant="body2" color="text.secondary">Chọn lớp, môn học và kỳ thu để tạo file Excel.</Typography>
             </Box>
           </Stack>
@@ -236,7 +245,7 @@ export function ClassTuitionReportPage() {
             Báo cáo chỉ ghi nhận các khoản thanh toán thành công trong kỳ đã chọn và được phân bổ cho môn học tương ứng.
           </Alert>
 
-          <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: "#f8fafc", border: "1px solid", borderColor: "divider" }}>
+          <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}>
             <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: "uppercase", letterSpacing: "0.06em" }}>Phạm vi đang chọn</Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 1.5, mt: 1.25 }}>
               <ReportScopeItem icon={<MenuBookOutlinedIcon fontSize="small" />} label="Lớp học" value={selectedClass?.name || "Chưa chọn lớp"} />
@@ -263,7 +272,7 @@ export function ClassTuitionReportPage() {
 function ReportScopeItem({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
     <Stack direction="row" spacing={1} alignItems="flex-start" minWidth={0}>
-      <Box sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", bgcolor: "#ffffff", color: "primary.main", border: "1px solid", borderColor: "divider" }}>{icon}</Box>
+      <Box sx={{ width: 30, height: 30, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", bgcolor: "background.paper", color: "primary.main", border: "1px solid", borderColor: "divider" }}>{icon}</Box>
       <Box minWidth={0}>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{label}</Typography>
         <Typography variant="body2" fontWeight={700} noWrap title={value}>{value}</Typography>

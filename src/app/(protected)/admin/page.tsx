@@ -140,14 +140,14 @@ function SummaryMetric({
 }) {
   return (
     <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.1)" }}>
-      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: "#dbeafe" }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: "primary.light" }}>
         {icon}
         <Typography variant="caption" noWrap>{label}</Typography>
       </Stack>
       {loading ? (
         <Skeleton width="85%" height={28} sx={{ bgcolor: "rgba(255,255,255,0.12)" }} />
       ) : (
-        <Typography variant="body1" fontWeight={800} noWrap sx={{ color: "#f8fafc", mt: 0.5 }}>{value}</Typography>
+        <Typography variant="body1" fontWeight={800} noWrap sx={{ color: "common.white", mt: 0.5 }}>{value}</Typography>
       )}
     </Box>
   );
@@ -290,16 +290,16 @@ export default function AdminPage() {
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Card sx={{ bgcolor: "#2563eb", background: "linear-gradient(135deg, #1d4ed8 0%, #2563eb 56%, #3b82f6 100%)", color: "#ffffff", borderColor: "#2563eb", overflow: "hidden", position: "relative" }}>
+      <Card sx={{ bgcolor: "primary.dark", color: "common.white", borderColor: "primary.dark", overflow: "hidden", position: "relative" }}>
         <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
           <Stack direction={{ xs: "column", lg: "row" }} spacing={{ xs: 2.5, lg: 5 }} alignItems={{ lg: "center" }}>
             <Box sx={{ minWidth: { lg: 280 }, flex: 1 }}>
               <Stack direction="row" spacing={1} alignItems="center">
-                <CheckCircleOutlineOutlinedIcon sx={{ color: "#86efac" }} />
-                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "#dbeafe" }}>Đã thu trong kỳ</Typography>
+                <CheckCircleOutlineOutlinedIcon color="success" />
+                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "primary.light" }}>Đã thu trong kỳ</Typography>
               </Stack>
               {loading ? <Skeleton width={230} height={58} sx={{ bgcolor: "rgba(255,255,255,0.12)" }} /> : <Typography variant="h3" fontWeight={800} sx={{ mt: 0.5, letterSpacing: "-0.03em" }}>{money(stats?.totalCollected ?? 0)}</Typography>}
-              <Typography variant="body2" sx={{ color: "#bfdbfe", mt: 0.5 }}>Payment thành công theo khoảng thời gian đã chọn</Typography>
+              <Typography variant="body2" sx={{ color: "primary.light", mt: 0.5 }}>Payment thành công theo khoảng thời gian đã chọn</Typography>
             </Box>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, minmax(0, 1fr))" }, gap: { xs: 1.5, sm: 2 }, width: { xs: "100%", lg: "auto" }, flex: { lg: 1.2 } }}>
               <SummaryMetric icon={<AccountBalanceWalletIcon />} label="Tiền mặt" value={money(stats?.cashCollected ?? 0)} loading={loading} />

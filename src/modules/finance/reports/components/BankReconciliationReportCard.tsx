@@ -1,6 +1,5 @@
 "use client";
 
-import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import {
   Alert,
@@ -95,18 +94,13 @@ export function BankReconciliationReportCard() {
 
   return (
     <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
-      <Stack spacing={2.5}>
-        <Stack direction="row" spacing={1.25} alignItems="flex-start">
-          <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
-            <AccountBalanceOutlinedIcon fontSize="small" />
-          </Box>
-          <Box>
-            <Typography variant="h6" fontWeight={800}>Đối soát ngân hàng theo ngày</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              Tổng hợp giao dịch từ các phiên sao kê đã lưu và xuất file Excel.
-            </Typography>
-          </Box>
-        </Stack>
+        <Stack spacing={2.5}>
+        <Box>
+          <Typography variant="subtitle1" fontWeight={700}>Điều kiện báo cáo</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            Chọn tài khoản, khoảng ngày giao dịch và trạng thái cần tổng hợp.
+          </Typography>
+        </Box>
         {error && <Alert severity="error">{error}</Alert>}
         {!loadingAccounts && !accounts.length && <Alert severity="warning">Chưa có tài khoản ngân hàng đang hoạt động.</Alert>}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>

@@ -13,7 +13,6 @@ import {
   InputLabel,
   IconButton,
   LinearProgress,
-  Menu,
   MenuItem,
   Paper,
   Select,
@@ -34,11 +33,10 @@ import {
 } from "@mui/material";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
-import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
+import { PageHeader } from "@/components/shared/PageHeader";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import DoneAllOutlinedIcon from "@mui/icons-material/DoneAllOutlined";
-import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import ClearOutlinedIcon from "@mui/icons-material/ClearOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
@@ -84,7 +82,6 @@ type Transaction = {
 };
 type ImportResult = {
   fileName: string;
-  statementToken: string;
   totalRows: number;
   validRows: number;
   invalidRows: number;
@@ -166,13 +163,8 @@ export function BankReconciliationPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [step, setStep] = useState(0);
   const [items, setItems] = useState<Transaction[]>([]);
-  const [statement, setStatement] = useState<ImportResult["statement"] | null>(null);
-  const [statementToken, setStatementToken] = useState("");
   const [confirmedTokens, setConfirmedTokens] = useState<Set<string>>(
     () => new Set(),
-  );
-  const [confirmedMappingTokens, setConfirmedMappingTokens] = useState<Map<string, string>>(
-    () => new Map(),
   );
   const [message, setMessage] = useState<{
     text: string;
@@ -191,12 +183,6 @@ export function BankReconciliationPanel() {
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [drawerStudentSearchTerm, setDrawerStudentSearchTerm] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const [reportMenuAnchor, setReportMenuAnchor] = useState<HTMLElement | null>(null);
-  const [exportingReport, setExportingReport] = useState(false);
-  const [reportFromDate, setReportFromDate] = useState("");
-  const [reportToDate, setReportToDate] = useState("");
-  const [dateReportScope, setDateReportScope] = useState<"ALL" | "MATCHED" | "UNMATCHED">("ALL");
-  const [exportingDateReport, setExportingDateReport] = useState(false);
   const { showSuccess, Snackbar } = useSnackbar();
 
   const loadAccounts = useCallback(async () => {
@@ -376,10 +362,7 @@ export function BankReconciliationPanel() {
   function resetSession() {
     clearFileSelection();
     setItems([]);
-    setStatement(null);
-    setStatementToken("");
     setConfirmedTokens(new Set());
-    setConfirmedMappingTokens(new Map());
     setHasAnalysis(false);
     setPendingConfirmation(null);
     setResultFilter("ALL");
@@ -388,95 +371,6 @@ export function BankReconciliationPanel() {
     setStep(0);
     setMessage({ text: "", severity: "info" });
     setResetDialogOpen(false);
-  }
-
-  async function exportReport(scope: "ALL" | "MATCHED" | "UNMATCHED" = "ALL") {
-    const account = accounts.find((candidate) => candidate.id === accountId);
-    if (!account || !statement || !items.length) {
-      setMessage({ text: "Chưa có phiên phân tích để xuất báo cáo", severity: "error" });
-      return;
-    }
-    setExportingReport(true);
-    try {
-      const response = await fetch("/api/bank-reconciliation-reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bankAccountId: accountId,
-          statementToken,
-          scope,
-          items: items.map((item) => ({
-            confirmationToken: item.confirmationToken,
-            mappingConfirmationToken: confirmedMappingTokens.get(item.confirmationToken) || null,
-          })),
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(await extractApiErrorMessage(response, "Không thể xuất báo cáo đối soát"));
-      }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "bao-cao-doi-soat.xlsx";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-      setReportMenuAnchor(null);
-      showSuccess("Đã xuất báo cáo đối soát Excel");
-    } catch (reason) {
-      setMessage({
-        text: reason instanceof Error ? reason.message : "Không thể xuất báo cáo đối soát",
-        severity: "error",
-      });
-    } finally {
-      setExportingReport(false);
-    }
-  }
-
-  async function exportDateReport() {
-    if (!accountId || !reportFromDate || !reportToDate) {
-      setMessage({ text: "Chọn tài khoản và khoảng ngày cần xuất báo cáo", severity: "error" });
-      return;
-    }
-    if (reportFromDate > reportToDate) {
-      setMessage({ text: "Đến ngày phải lớn hơn hoặc bằng Từ ngày", severity: "error" });
-      return;
-    }
-    setExportingDateReport(true);
-    try {
-      const response = await fetch("/api/bank-reconciliation-reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bankAccountId: accountId,
-          fromDate: reportFromDate,
-          toDate: reportToDate,
-          scope: dateReportScope,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(await extractApiErrorMessage(response, "Không thể xuất báo cáo theo ngày"));
-      }
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = objectUrl;
-      anchor.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "bao-cao-doi-soat-theo-ngay.xlsx";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(objectUrl);
-      showSuccess("Đã xuất báo cáo đối soát theo ngày");
-    } catch (reason) {
-      setMessage({
-        text: reason instanceof Error ? reason.message : "Không thể xuất báo cáo theo ngày",
-        severity: "error",
-      });
-    } finally {
-      setExportingDateReport(false);
-    }
   }
 
   async function importFile() {
@@ -503,8 +397,6 @@ export function BankReconciliationPanel() {
       const result = await unwrapApiResponse<ImportResult>(response);
       window.dispatchEvent(new Event("bank-reconciliation-sessions-updated"));
       setItems(result.items);
-      setStatement(result.statement);
-      setStatementToken(result.statementToken);
       setHasAnalysis(true);
       setResultFilter("ALL");
       setSearchTerm("");
@@ -513,7 +405,7 @@ export function BankReconciliationPanel() {
       if (fileInputRef.current) fileInputRef.current.value = "";
       setStep(2);
       setMessage({
-        text: `Đã phân tích ${result.totalRows} dòng: hợp lệ ${result.validRows}, lỗi ${result.invalidRows}. Khớp ${result.matchedRows}, chưa khớp ${result.unmatchedRows}, bỏ qua ${result.ignoredRows}, trùng ${result.duplicatedRows}. Phiên và các dòng sao kê đã được lưu để báo cáo theo ngày.`,
+        text: `Đã phân tích ${result.totalRows} dòng: hợp lệ ${result.validRows}, lỗi ${result.invalidRows}. Khớp ${result.matchedRows}, chưa khớp ${result.unmatchedRows}, bỏ qua ${result.ignoredRows}, trùng ${result.duplicatedRows}. Phiên đối soát đã được lưu vào lịch sử.`,
         severity: "success",
       });
     } catch (reason) {
@@ -560,11 +452,6 @@ export function BankReconciliationPanel() {
       await unwrapApiResponse(response);
       const token = pendingConfirmation.itemToken;
       setConfirmedTokens((current) => new Set(current).add(token));
-      setConfirmedMappingTokens((current) => {
-        const next = new Map(current);
-        next.set(token, pendingConfirmation.body.confirmationToken);
-        return next;
-      });
       showSuccess("Đã xác nhận đối soát và tạo thanh toán/biên lai");
       window.dispatchEvent(new Event("bank-reconciliation-sessions-updated"));
       setPendingConfirmation(null);
@@ -610,11 +497,6 @@ export function BankReconciliationPanel() {
             ...autoMatchedItems.map((item) => item.confirmationToken),
           ]),
       );
-      setConfirmedMappingTokens((current) => {
-        const next = new Map(current);
-        autoMatchedItems.forEach((item) => next.set(item.confirmationToken, item.confirmationToken));
-        return next;
-      });
       setBulkConfirmationOpen(false);
       showSuccess(`Đã xác nhận ${confirmations.length} giao dịch khớp tự động`);
       window.dispatchEvent(new Event("bank-reconciliation-sessions-updated"));
@@ -633,30 +515,22 @@ export function BankReconciliationPanel() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }} sx={{ width: "100%", minWidth: 0 }}>
-      <Paper elevation={0} sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }} justifyContent="space-between">
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
-              <AccountBalanceOutlinedIcon />
-            </Box>
-            <Box>
-              <Typography variant="h5" fontWeight={700}>Phân tích và đối soát sao kê</Typography>
-              <Typography variant="body2" color="text.secondary">Chỉ giao dịch được xác nhận mới tạo thanh toán và biên lai.</Typography>
-            </Box>
-          </Stack>
-          {items.length > 0 && (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<RefreshOutlinedIcon />}
-              onClick={() => setResetDialogOpen(true)}
-              disabled={loading}
-            >
-              Phiên mới
-            </Button>
-          )}
-        </Stack>
-        <Box sx={{ mt: { xs: 2, md: 3 }, pt: { xs: 2, md: 2.5 }, borderTop: "1px solid", borderColor: "divider" }}>
+      <PageHeader
+        title="Đối soát ngân hàng"
+        description="Nhập sao kê, kiểm tra giao dịch khớp và xác nhận khoản thu. Chỉ giao dịch được xác nhận mới tạo thanh toán và biên lai."
+        actions={items.length > 0 ? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<RefreshOutlinedIcon />}
+            onClick={() => setResetDialogOpen(true)}
+            disabled={loading}
+          >
+            Phiên mới
+          </Button>
+        ) : undefined}
+      />
+      <Paper sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: { xs: 1, sm: 1.5 } }}>
           <Stepper activeStep={step} alternativeLabel sx={{ width: "100%", minWidth: 0, "& .MuiStep-root": { minWidth: 0, px: 0.25 }, "& .MuiStepLabel-label": { fontSize: { xs: "0.7rem", sm: "0.875rem" }, overflowWrap: "anywhere" } }}>
             {steps.map((label) => (
               <Step key={label} sx={{ minWidth: 0 }}>
@@ -664,59 +538,6 @@ export function BankReconciliationPanel() {
               </Step>
             ))}
           </Stepper>
-        </Box>
-      </Paper>
-      <Paper sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: { xs: 1.5, md: 2 } }}>
-        <Stack spacing={2}>
-          <Box>
-            <Typography variant="subtitle1" fontWeight={700}>Báo cáo đối soát theo ngày</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Lọc theo ngày giao dịch ngân hàng trên tất cả phiên sao kê đã lưu.
-            </Typography>
-          </Box>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "center" }}>
-            <TextField
-              label="Từ ngày"
-              type="date"
-              value={reportFromDate}
-              onChange={(event) => setReportFromDate(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-              sx={{ flex: { md: "1 1 0" }, minWidth: { md: 0 } }}
-            />
-            <TextField
-              label="Đến ngày"
-              type="date"
-              value={reportToDate}
-              onChange={(event) => setReportToDate(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-              sx={{ flex: { md: "1 1 0" }, minWidth: { md: 0 } }}
-            />
-            <FormControl fullWidth sx={{ flex: { md: "1 1 0" }, minWidth: { md: 0 } }}>
-              <InputLabel id="date-report-scope-label">Phạm vi</InputLabel>
-              <Select
-                labelId="date-report-scope-label"
-                value={dateReportScope}
-                label="Phạm vi"
-                onChange={(event) => setDateReportScope(event.target.value as "ALL" | "MATCHED" | "UNMATCHED")}
-              >
-                <MenuItem value="ALL">Tất cả giao dịch</MenuItem>
-                <MenuItem value="MATCHED">Đã khớp</MenuItem>
-                <MenuItem value="UNMATCHED">Chưa khớp</MenuItem>
-              </Select>
-            </FormControl>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadOutlinedIcon />}
-              onClick={() => void exportDateReport()}
-              disabled={accountsLoading || !accountId || exportingDateReport}
-              sx={{ minWidth: 132, flexShrink: 0, whiteSpace: "nowrap" }}
-            >
-              {exportingDateReport ? "Đang xuất..." : "Xuất Excel"}
-            </Button>
-          </Stack>
-        </Stack>
       </Paper>
       <Paper sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: { xs: 1.5, md: 2 } }}>
         <Stack spacing={2}>
@@ -831,31 +652,6 @@ export function BankReconciliationPanel() {
             </Typography>
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
-            {items.length > 0 && (
-              <>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<DownloadOutlinedIcon />}
-                  onClick={(event) => setReportMenuAnchor(event.currentTarget)}
-                  disabled={loading || exportingReport}
-                  aria-controls={reportMenuAnchor ? "bank-reconciliation-report-menu" : undefined}
-                  aria-haspopup="true"
-                >
-                  {exportingReport ? "Đang xuất..." : "Xuất báo cáo"}
-                </Button>
-                <Menu
-                  id="bank-reconciliation-report-menu"
-                  anchorEl={reportMenuAnchor}
-                  open={Boolean(reportMenuAnchor)}
-                  onClose={() => setReportMenuAnchor(null)}
-                >
-                  <MenuItem onClick={() => void exportReport("ALL")}>Toàn bộ giao dịch</MenuItem>
-                  <MenuItem onClick={() => void exportReport("MATCHED")}>Chỉ giao dịch đã khớp</MenuItem>
-                  <MenuItem onClick={() => void exportReport("UNMATCHED")}>Chỉ giao dịch chưa khớp</MenuItem>
-                </Menu>
-              </>
-            )}
             {autoMatchedItems.length > 0 && (
               <Button
                 size="small"

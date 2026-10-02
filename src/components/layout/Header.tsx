@@ -41,7 +41,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
         px: { xs: 1.5, md: 3 },
         borderBottom: "1px solid",
         borderColor: "divider",
-        bgcolor: "rgba(255,255,255,0.88)",
+        bgcolor: "background.paper",
         backdropFilter: "blur(14px)",
         position: "sticky",
         top: 0,

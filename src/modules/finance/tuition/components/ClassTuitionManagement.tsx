@@ -312,7 +312,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       <Paper sx={{ p: { xs: 2, md: 2.5 }, height: "100%" }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1.25} alignItems="flex-start">
-            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "primary.light", color: "primary.dark", flexShrink: 0 }}>
               <CalendarMonthOutlinedIcon fontSize="small" />
             </Box>
             <Box>
@@ -329,7 +329,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       <Paper sx={{ p: { xs: 2, md: 2.5 }, height: "100%" }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1.25} alignItems="flex-start">
-            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#f0fdf4", color: "success.main", flexShrink: 0 }}>
+            <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "success.light", color: "success.dark", flexShrink: 0 }}>
               <AddCardOutlinedIcon fontSize="small" />
             </Box>
             <Box>
@@ -483,10 +483,10 @@ type MetricCardProps = {
 
 function MetricCard({ icon, label, value, tone }: MetricCardProps) {
   const toneStyles: Record<MetricTone, { background: string; color: string }> = {
-    blue: { background: "#eff6ff", color: "#2563eb" },
-    violet: { background: "#f5f3ff", color: "#7c3aed" },
-    green: { background: "#f0fdf4", color: "#16a34a" },
-    orange: { background: "#fff7ed", color: "#ea580c" },
+    blue: { background: "primary.light", color: "primary.dark" },
+    violet: { background: "info.light", color: "info.dark" },
+    green: { background: "success.light", color: "success.dark" },
+    orange: { background: "warning.light", color: "warning.dark" },
   };
   const style = toneStyles[tone];
 

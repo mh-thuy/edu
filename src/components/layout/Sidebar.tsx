@@ -159,7 +159,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
               color: "white",
               fontWeight: 800,
               bgcolor: "primary.main",
-              boxShadow: "0 8px 16px rgba(37,99,235,.22)",
+              boxShadow: 2,
             }}
           >
               E
@@ -228,9 +228,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
                     borderRadius: 3,
                     bgcolor: "primary.main",
                   },
-                  "&:hover": { bgcolor: "#bfdbfe" },
+                  "&:hover": { bgcolor: "primary.light" },
                 },
-                "&:hover": { bgcolor: "#f8fafc", color: "text.primary" },
+                "&:hover": { bgcolor: "action.hover", color: "text.primary" },
               }}
             >
               <ListItemIcon sx={{ minWidth: collapsed ? 0 : 36, justifyContent: "center" }}>
