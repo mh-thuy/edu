@@ -129,6 +129,23 @@ async function assertClassAllowsEnrollmentChanges(
   }
 }
 
+async function assertClassAllowsStudentRegistration(
+  tx: Prisma.TransactionClient,
+  classId: string,
+) {
+  await tx.$executeRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${classId}`}))`,
+  );
+  const classData = await tx.class.findUnique({
+    where: { id: classId },
+    select: { status: true },
+  });
+  if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
+  if (classData.status !== "ACTIVE" && classData.status !== "DRAFT") {
+    throw new ConflictError("Chỉ có thể đăng ký học viên khi lớp đang chuẩn bị hoặc hoạt động");
+  }
+}
+
 export async function createClass(data: ClassCreate): Promise<Class> {
   if (data.status !== "DRAFT") {
     throw new ConflictError("Lớp học mới phải bắt đầu ở trạng thái nháp");
@@ -443,7 +460,7 @@ export async function assignStudentToClass(
   auditContext?: AuditContext,
 ): Promise<ClassStudentWithRelations> {
   return prisma.$transaction(async (tx) => {
-    await assertClassAllowsEnrollmentChanges(tx, classId);
+    await assertClassAllowsStudentRegistration(tx, classId);
     if (classSubjectIds.length === 0) {
       throw new ConflictError("Hãy chọn ít nhất một môn học");
     }
@@ -485,10 +502,8 @@ export async function assignStudentToClass(
 
     const classData = await tx.class.findUnique({ where: { id: classId } });
     if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
-    if (classData.status !== "ACTIVE") {
-      throw new ConflictError(
-        "Chỉ có thể đăng ký học viên khi lớp đang hoạt động",
-      );
+    if (classData.status !== "ACTIVE" && classData.status !== "DRAFT") {
+      throw new ConflictError("Không thể đăng ký học viên vào lớp đã kết thúc hoặc đã hủy");
     }
     const student = await tx.student.findUnique({ where: { id: studentId } });
     if (!student) throw new NotFoundError("Không tìm thấy học viên");

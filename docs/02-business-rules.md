@@ -225,9 +225,10 @@ COMPLETED
 CANCELLED
 ```
 
-Chỉ lớp `ACTIVE` được đăng ký học viên, thay đổi enrollment hoặc tạo học phí.
-Lớp `DRAFT` chỉ dùng để chuẩn bị lớp; lớp `COMPLETED` và `CANCELLED` chỉ được
-xem. Các API nghiệp vụ phải kiểm tra điều kiện này ở backend.
+Lớp `DRAFT` và `ACTIVE` được đăng ký học viên. Lớp `DRAFT` chỉ cho phép chuẩn
+bị danh sách học viên; thay đổi enrollment sau đăng ký và tạo học phí chỉ thực
+hiện khi lớp `ACTIVE`. Lớp `COMPLETED` và `CANCELLED` chỉ được xem. Các API
+nghiệp vụ phải kiểm tra điều kiện này ở backend.
 
 Không cho:
 

@@ -402,6 +402,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
   if (!classData && loading) return <Typography>Đang tải quản lý học viên...</Typography>;
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
   const classNotActive = classData.status !== "ACTIVE";
+  const canRegisterStudents = classData.status === "ACTIVE" || classData.status === "DRAFT";
   const hasActiveClassSubjects = classData.classSubjects.some((subject) => subject.subject.status !== "INACTIVE");
   const selectedFee = selectedStudent ? getFee(selectedStudent) : null;
   const selectedExpectedAmount = selectedStudent?.subjects.reduce(
@@ -425,13 +426,14 @@ export function ClassStudentManagement({ id }: { id: string }) {
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
           <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={() => void exportStudents()} disabled={busy || loading}>Xuất Excel</Button>
-          <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={openImportDialog} disabled={classNotActive || !hasActiveClassSubjects}>Import Excel</Button>
-          <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={classNotActive || !hasActiveClassSubjects}>Đăng ký học viên</Button>
+          <Button variant="outlined" startIcon={<UploadFileOutlinedIcon />} onClick={openImportDialog} disabled={!canRegisterStudents || !hasActiveClassSubjects}>Import Excel</Button>
+          <Button variant="contained" onClick={() => setStudentPickerOpen(true)} disabled={!canRegisterStudents || !hasActiveClassSubjects}>Đăng ký học viên</Button>
         </Stack>
       </Stack>
     </Paper>
     {error && <Alert severity="error">{error}</Alert>}
-    {classNotActive && <Alert severity="info">Lớp chưa ở trạng thái ACTIVE; thông tin đăng ký chỉ được xem.</Alert>}
+    {classData.status === "DRAFT" && <Alert severity="info">Lớp đang Nháp: có thể đăng ký học viên trước; các thao tác quản lý enrollment và tạo học phí thực hiện khi lớp Hoạt động.</Alert>}
+    {classData.status !== "ACTIVE" && classData.status !== "DRAFT" && <Alert severity="info">Lớp đã kết thúc hoặc đã hủy; thông tin đăng ký chỉ được xem.</Alert>}
     {!classNotActive && !hasActiveClassSubjects && <Alert severity="warning">Lớp chưa có môn đang hoạt động; hãy mở môn học trước khi đăng ký học viên.</Alert>}
     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
       {[["Tổng số", activeCount + pausedCount + completedCount], ["Đang học", activeCount], ["Tạm nghỉ", pausedCount], ["Đã hoàn thành", completedCount], ["Chưa tạo phí", Math.max(0, uncreatedCount)]].map(([label, value]) => <Paper key={String(label)} sx={{ p: 2, flex: 1 }}><Typography variant="body2" color="text.secondary">{label}</Typography><Typography variant="h5" fontWeight={700}>{value}</Typography></Paper>)}

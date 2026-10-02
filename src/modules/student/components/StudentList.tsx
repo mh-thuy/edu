@@ -4,7 +4,9 @@ import {
   Box,
   Stack,
   Button,
+  Alert,
   Chip,
+  Collapse,
   Paper,
   Typography,
   InputAdornment,
@@ -16,11 +18,12 @@ import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import SearchIcon from "@mui/icons-material/Search";
-import SchoolIcon from "@mui/icons-material/School";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
+import HelpOutlineOutlinedIcon from "@mui/icons-material/HelpOutlineOutlined";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { useList } from "@/hooks/useList";
@@ -202,6 +205,7 @@ export function StudentList(): ReactElement {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showImportHelp, setShowImportHelp] = useState(false);
 
   const { showSuccess, showError, Snackbar } = useSnackbar();
 
@@ -343,53 +347,12 @@ export function StudentList(): ReactElement {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper
-        elevation={0}
-        sx={{
-          p: { xs: 0, md: 0.5 },
-          border: 0,
-          bgcolor: "transparent",
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={2}
-          alignItems={{ xs: "stretch", md: "flex-end" }}
-          justifyContent="space-between"
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box
-              sx={{
-                width: 48,
-                height: 48,
-                flexShrink: 0,
-                borderRadius: 2.5,
-                display: "grid",
-                placeItems: "center",
-                bgcolor: "primary.light",
-                color: "primary.dark",
-              }}
-            >
-              <SchoolIcon />
-            </Box>
-
-            <Box>
-              <Typography
-                variant="h4"
-                fontWeight={800}
-                letterSpacing="-0.025em"
-                sx={{ lineHeight: 1.15 }}
-              >
-                Quản lý học viên
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Danh sách học sinh, thông tin liên hệ và trạng thái
-              </Typography>
-            </Box>
-          </Box>
-
-          <Box>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+      <Box>
+        <PageHeader
+          title="Quản lý học viên"
+          description="Danh sách học viên, thông tin liên hệ và trạng thái."
+          actions={
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
@@ -466,6 +429,15 @@ export function StudentList(): ReactElement {
               </Button>
               <Button
                 variant="outlined"
+                startIcon={<HelpOutlineOutlinedIcon />}
+                onClick={() => setShowImportHelp((current) => !current)}
+                aria-expanded={showImportHelp}
+                aria-controls="student-import-help"
+              >
+                Hướng dẫn CSV
+              </Button>
+              <Button
+                variant="outlined"
                 startIcon={<DownloadOutlinedIcon />}
                 onClick={() => void exportExcel()}
                 disabled={isSubmitting || isExporting}
@@ -474,18 +446,16 @@ export function StudentList(): ReactElement {
                 {isExporting ? "Đang xuất..." : "Xuất Excel"}
               </Button>
             </Stack>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 1, display: "block" }}
-            >
+          }
+        />
+        <Collapse in={showImportHelp}>
+          <Alert id="student-import-help" severity="info" sx={{ mt: 1.5 }}>
               CSV hỗ trợ cột “Họ tên” và “Số điện thoại”, hoặc tách riêng “Họ”
               và “Tên”. File danh sách đăng ký dạng cột 1 mã đăng ký/lớp, cột 2
               họ tên, cột 5 số điện thoại sẽ đưa cột 1 vào “Địa chỉ”.
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
+          </Alert>
+        </Collapse>
+      </Box>
 
       <Paper
         elevation={0}

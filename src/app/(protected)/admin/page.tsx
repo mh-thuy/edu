@@ -221,7 +221,7 @@ export default function AdminPage() {
             fontWeight={800}
             sx={{ mt: 0.25 }}
           >
-            Dashboard
+            Tổng quan
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
             Theo dõi tài chính, học phí và công việc cần xử lý.
