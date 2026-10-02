@@ -425,8 +425,10 @@ và receipt liên quan, mở lại học phí về `UNPAID`/`OVERDUE`, chuyển 
 
 # 12. Import và đối soát sao kê ngân hàng
 
-Sao kê chỉ được phân tích tạm trong response/token của phiên làm việc; không
-lưu lịch sử dòng sao kê. Chỉ giao dịch ghi có mới được đối soát.
+Mỗi lần import tạo một phiên sao kê và lưu lịch sử các dòng sao kê, trạng thái
+phân tích, file nguồn, khoảng ngày, số dư và mapping đợt thanh toán. Token trong
+phiên vẫn chỉ có thời hạn ngắn để xác nhận an toàn; lịch sử đã lưu được dùng để
+tra cứu và xuất báo cáo theo ngày. Chỉ giao dịch ghi có mới được đối soát.
 
 Luồng:
 

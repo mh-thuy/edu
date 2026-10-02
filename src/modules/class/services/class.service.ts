@@ -171,7 +171,7 @@ export async function getClassById(
 }
 
 export async function getClasses(filter: ClassFilter) {
-  const { search, status, page, pageSize } = filter;
+  const { search, status, statuses, page, pageSize } = filter;
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.ClassWhereInput = {
@@ -182,6 +182,7 @@ export async function getClasses(filter: ClassFilter) {
       ],
     }),
     ...(status && { status }),
+    ...(!status && statuses?.length && { status: { in: statuses } }),
     ...(!status && { deletedAt: null }),
   };
 
@@ -1391,7 +1392,7 @@ export async function getClassStudents(classId: string): Promise<
 > {
   return prisma.classStudent
     .findMany({
-      where: { classId, status: { in: ["ACTIVE", "COMPLETED"] } },
+      where: { classId, status: { in: ["ACTIVE", "COMPLETED", "LEFT"] } },
       include: {
         student: true,
         subjects: {
@@ -1489,10 +1490,11 @@ export async function getClassStudentsPage(
   },
 ) {
   const period = parseStudentListMonth(options.month);
+  const periodEndExclusive = new Date(Date.UTC(period.year, period.month, 1));
   const subjectForPeriodWhere: Prisma.EnrollmentSubjectWhereInput = {
     OR: [
       { status: { in: ["ACTIVE", "COMPLETED"] } },
-      { droppedAt: { gte: period.start } },
+      { droppedAt: { gte: period.start, lt: periodEndExclusive } },
     ],
   };
   const pauseWhere: Prisma.EnrollmentPauseWhereInput = {

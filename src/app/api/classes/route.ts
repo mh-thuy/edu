@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
     const filter = classFilterSchema.parse({
       search: searchParams.get("search") || undefined,
       status: searchParams.get("status") || undefined,
+      statuses: searchParams.get("statuses")?.split(",").filter(Boolean),
       page: Number(searchParams.get("page") || "1"),
       pageSize: Number(searchParams.get("pageSize") || "10"),
     });

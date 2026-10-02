@@ -51,26 +51,31 @@ function getSubjectPaidAmount(
 ) {
   const subjectGross = fee.items
     .filter((item) => item.classSubjectId === classSubjectId)
-    .reduce((total, item) => total + Number(item.amount), 0);
-  if (subjectGross <= 0) return 0;
+    .reduce((total, item) => total.add(item.amount), new Prisma.Decimal(0));
+  if (!subjectGross.greaterThan(0)) return 0;
 
-  const originalAmount = Number(fee.originalAmount);
-  const adjustmentRatio = originalAmount > 0
-    ? Math.min(Math.max(subjectGross / originalAmount, 0), 1)
-    : 1;
-  const subjectFinal = Math.max(
-    0,
+  const originalAmount = fee.originalAmount;
+  const adjustmentRatio = originalAmount.greaterThan(0)
+    ? Prisma.Decimal.min(Prisma.Decimal.max(subjectGross.div(originalAmount), 0), 1)
+    : new Prisma.Decimal(1);
+  const subjectFinal = Prisma.Decimal.max(
     subjectGross
-      - Number(fee.discountAmount) * adjustmentRatio
-      + Number(fee.additionalAmount) * adjustmentRatio,
-  );
-  const finalAmount = Number(fee.finalAmount);
-  const paymentRatio = finalAmount > 0 ? subjectFinal / finalAmount : 0;
-
-  return fee.payments.reduce(
-    (total, payment) => total + Number(payment.amount) * paymentRatio,
+      .minus(fee.discountAmount.mul(adjustmentRatio))
+      .plus(fee.additionalAmount.mul(adjustmentRatio)),
     0,
   );
+  const finalAmount = fee.finalAmount;
+  const paymentRatio = finalAmount.greaterThan(0)
+    ? subjectFinal.div(finalAmount)
+    : new Prisma.Decimal(0);
+
+  return fee.payments
+    .reduce(
+      (total, payment) => total.plus(payment.amount.mul(paymentRatio)),
+      new Prisma.Decimal(0),
+    )
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+    .toNumber();
 }
 
 export async function getClassTuitionReport(

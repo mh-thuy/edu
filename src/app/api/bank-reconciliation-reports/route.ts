@@ -4,6 +4,7 @@ import { ConflictError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { PaymentBatchStatus, Prisma } from "@prisma/client";
 import {
+  bankReconciliationDateReportSchema,
   bankReconciliationReportSchema,
   reportItemDataSchema,
   type BankReconciliationReportDocument,
@@ -15,6 +16,7 @@ import {
   type PaymentBatchMatch,
 } from "@/modules/finance/bank/services/bank-csv.service";
 import { buildBankReconciliationReportExcel } from "@/modules/finance/bank/services/bank-reconciliation-report-excel.service";
+import { buildHistoricalBankReconciliationReport } from "@/modules/finance/bank/services/bank-reconciliation-history.service";
 
 export const runtime = "nodejs";
 
@@ -267,15 +269,15 @@ async function buildVerifiedReport(
   const statement = statementToken.statement;
   const openingBalance = statement.openingBalance === null ? null : decimal(statement.openingBalance, "Số dư đầu kỳ");
   const closingBalance = statement.closingBalance === null ? null : decimal(statement.closingBalance, "Số dư cuối kỳ");
-  const totalCredit = verified.reduce(
-    (sum, item) => sum.add(decimal(item.source.creditAmount, "Ghi có")),
+  const totalCredit = selectedItems.reduce(
+    (sum, item) => sum.add(item.creditAmount),
     new Prisma.Decimal(0),
   );
-  const totalDebit = verified.reduce(
-    (sum, item) => sum.add(decimal(item.source.debitAmount, "Ghi nợ")),
+  const totalDebit = selectedItems.reduce(
+    (sum, item) => sum.add(item.debitAmount),
     new Prisma.Decimal(0),
   );
-  const variance = openingBalance && closingBalance
+  const variance = input.scope === "ALL" && openingBalance && closingBalance
     ? openingBalance.add(totalCredit).sub(totalDebit).sub(closingBalance)
     : null;
   return {
@@ -306,14 +308,17 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiUser();
     if (user instanceof Response) return user;
-    const input = bankReconciliationReportSchema.parse(await request.json());
-    const report = await buildVerifiedReport(input);
+    const body: unknown = await request.json();
+    const isDateReport = typeof body === "object" && body !== null && "fromDate" in body;
+    const report = isDateReport
+      ? await buildHistoricalBankReconciliationReport(bankReconciliationDateReportSchema.parse(body))
+      : await buildVerifiedReport(bankReconciliationReportSchema.parse(body));
     const file = await buildBankReconciliationReportExcel(report);
     const period = [report.statement.fromDate, report.statement.toDate]
       .filter(Boolean)
       .map((value) => safeFilePart(value!))
       .join("-");
-    const fileName = `bao-cao-doi-soat-${safeFilePart(report.bankName)}-${safeFilePart(report.accountNo)}${period ? `-${period}` : ""}.xlsx`;
+    const fileName = `${isDateReport ? "bao-cao-doi-soat-theo-ngay" : "bao-cao-doi-soat"}-${safeFilePart(report.bankName)}-${safeFilePart(report.accountNo)}${period ? `-${period}` : ""}.xlsx`;
     return new Response(file as BodyInit, {
       status: 200,
       headers: {

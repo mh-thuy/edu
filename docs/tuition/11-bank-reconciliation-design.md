@@ -1,6 +1,9 @@
 # Bank reconciliation design
 
-Transaction hash gồm bank account, mã giao dịch hoặc nội dung dòng. Dữ liệu tạm chỉ tồn tại trong response/token của phiên phân tích; payment đã xác nhận lưu transaction hash trong `transaction_reference`.
+Transaction hash gồm bank account, mã giao dịch hoặc nội dung dòng. Phiên import
+và dòng sao kê được lưu để tra cứu/báo cáo; token xác nhận vẫn chỉ tồn tại tạm
+thời. Payment đã xác nhận lưu transaction hash trong `transaction_reference` và
+liên kết lại với dòng sao kê lịch sử.
 Đối soát chỉ xét batch `BANK_TRANSFER` đang `PENDING`, đã gắn đúng tài khoản
 ngân hàng được import và có số tiền ghi có bằng chính xác tổng đợt thanh toán.
 Hệ thống ưu tiên `batchNo` xuất hiện trong nội dung giao dịch. Nếu không có

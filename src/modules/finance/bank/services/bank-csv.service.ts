@@ -117,6 +117,7 @@ export type BankImportItem = {
 };
 
 export type BankImportResult = {
+  sessionId: string;
   fileName: string;
   statementToken: string;
   totalRows: number;
@@ -915,6 +916,7 @@ export async function importBankStatement(args: {
   }
 
   const result = {
+    sessionId: importSessionId,
     fileName: args.fileName,
     statementToken: createStatementToken({
       version: 1,
@@ -948,44 +950,149 @@ export async function importBankStatement(args: {
     invalidRowErrors,
     items,
   };
-  await prisma.tuitionAuditLog.createMany({
-    data: items.map((item, index) => ({
-      entityType: "BANK_ACCOUNT",
-      entityId: args.bankAccountId,
-      action: `STATEMENT_ROW_${item.reconciliationStatus}`,
-      dataAfter: {
-        fileName: args.fileName,
-        rowNo: item.rowNo,
-        transactionHash: rowHashes[index]?.transactionHash ?? null,
-        bankTransactionNo: item.bankTransactionNo,
-        creditAmount: item.creditAmount.toString(),
-        debitAmount: item.debitAmount.toString(),
-        paymentBatchId: item.paymentBatch?.id ?? null,
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      INSERT INTO "bank_statement_import_sessions" (
+        "id", "bank_account_id", "file_name", "bank_format", "statement_from_date", "statement_to_date",
+        "account_no", "account_name", "currency_code", "opening_balance", "closing_balance",
+        "total_rows", "valid_rows", "invalid_rows", "duplicated_rows", "matched_rows", "unmatched_rows",
+        "ignored_rows", "invalid_row_errors", "performed_by"
+      ) VALUES (
+        ${importSessionId}::uuid, ${args.bankAccountId}::uuid, ${args.fileName}, ${parsed.statement.bankFormat},
+        ${parsed.statement.fromDate}, ${parsed.statement.toDate}, ${parsed.statement.accountNo},
+        ${parsed.statement.accountName}, ${parsed.statement.currencyCode}, ${parsed.statement.openingBalance},
+        ${parsed.statement.closingBalance}, ${result.totalRows}, ${result.validRows}, ${result.invalidRows},
+        ${result.duplicatedRows}, ${result.matchedRows}, ${result.unmatchedRows}, ${result.ignoredRows},
+        ${JSON.stringify(result.invalidRowErrors)}::jsonb, ${args.actorId}::uuid
+      )
+    `);
+    for (const [index, row] of rows.entries()) {
+      const item = items[index]!;
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "bank_statement_import_rows" (
+          "session_id", "row_no", "transaction_hash", "transaction_date", "bank_transaction_no",
+          "description", "reconciliation_content", "credit_amount", "debit_amount", "balance_amount",
+          "status", "payment_batch_candidate_count", "payment_batch_group_candidate_count", "raw_data"
+        ) VALUES (
+          ${importSessionId}::uuid, ${row.rowNo}, ${rowHashes[index]!.transactionHash}, ${row.transactionDate},
+          ${item.bankTransactionNo}, ${item.description}, ${item.reconciliationContent}, ${item.creditAmount},
+          ${item.debitAmount}, ${item.balanceAmount}, ${item.reconciliationStatus}::bank_statement_row_status,
+          ${item.paymentBatchCandidates.length}, ${item.paymentBatchGroupCandidates.length}, ${row.raw}
+        )
+      `);
+    }
+    const persistedRows = await tx.$queryRaw<Array<{ id: string; rowNo: number }>>(Prisma.sql`
+      SELECT "id", "row_no" AS "rowNo"
+      FROM "bank_statement_import_rows"
+      WHERE "session_id" = ${importSessionId}::uuid
+    `);
+    const rowIdByRowNo = new Map(persistedRows.map((row) => [row.rowNo, row.id]));
+    const suggestedMatches = items.flatMap((item) => {
+      if (item.reconciliationStatus !== "AUTO_MATCHED" || !item.paymentBatch) return [];
+      const rowId = rowIdByRowNo.get(item.rowNo);
+      return rowId ? [{ rowId, paymentBatchId: item.paymentBatch.id, isConfirmed: false }] : [];
+    });
+    if (suggestedMatches.length) {
+      for (const suggestedMatch of suggestedMatches) {
+        await tx.$executeRaw(Prisma.sql`
+          INSERT INTO "bank_statement_import_row_batches" ("row_id", "payment_batch_id", "is_confirmed")
+          VALUES (${suggestedMatch.rowId}::uuid, ${suggestedMatch.paymentBatchId}::uuid, false)
+        `);
+      }
+    }
+    await tx.tuitionAuditLog.createMany({
+      data: items.map((item, index) => ({
+        entityType: "BANK_ACCOUNT",
+        entityId: args.bankAccountId,
+        action: `STATEMENT_ROW_${item.reconciliationStatus}`,
+        dataAfter: {
+          sessionId: importSessionId,
+          fileName: args.fileName,
+          rowNo: item.rowNo,
+          transactionHash: rowHashes[index]?.transactionHash ?? null,
+          bankTransactionNo: item.bankTransactionNo,
+          creditAmount: item.creditAmount.toString(),
+          debitAmount: item.debitAmount.toString(),
+          paymentBatchId: item.paymentBatch?.id ?? null,
+        },
+        performedBy: args.actorId,
+        ...auditFields(args.auditContext),
+      })),
+    });
+    await tx.tuitionAuditLog.create({
+      data: {
+        entityType: "BANK_ACCOUNT",
+        entityId: args.bankAccountId,
+        action: "STATEMENT_IMPORTED",
+        reason: args.fileName,
+        dataAfter: {
+          sessionId: importSessionId,
+          fileName: args.fileName,
+          totalRows: result.totalRows,
+          matchedRows: result.matchedRows,
+          unmatchedRows: result.unmatchedRows,
+          duplicatedRows: result.duplicatedRows,
+          ignoredRows: result.ignoredRows,
+          invalidRows: result.invalidRows,
+        },
+        performedBy: args.actorId,
+        ...auditFields(args.auditContext),
       },
-      performedBy: args.actorId,
-      ...auditFields(args.auditContext),
-    })),
-  });
-  await prisma.tuitionAuditLog.create({
-    data: {
-      entityType: "BANK_ACCOUNT",
-      entityId: args.bankAccountId,
-      action: "STATEMENT_IMPORTED",
-      reason: args.fileName,
-      dataAfter: {
-        fileName: args.fileName,
-        totalRows: result.totalRows,
-        matchedRows: result.matchedRows,
-        unmatchedRows: result.unmatchedRows,
-        duplicatedRows: result.duplicatedRows,
-        ignoredRows: result.ignoredRows,
-        invalidRows: result.invalidRows,
-      },
-      performedBy: args.actorId,
-      ...auditFields(args.auditContext),
-    },
+    });
   });
   return result;
+}
+
+async function recordConfirmedStatementRow(
+  tx: Prisma.TransactionClient,
+  payload: ReconciliationTokenPayload,
+  batchIds: string[],
+) {
+  if (!payload.importSessionId) return;
+  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id"
+    FROM "bank_statement_import_rows"
+    WHERE "session_id" = ${payload.importSessionId}::uuid
+      AND "row_no" = ${payload.rowNo}
+      AND "transaction_hash" = ${payload.transactionHash}
+    LIMIT 1
+  `);
+  const row = rows[0];
+  if (!row) throw new ConflictError("Không tìm thấy dòng sao kê cần lưu kết quả đối soát");
+  await tx.$executeRaw(Prisma.sql`
+    DELETE FROM "bank_statement_import_row_batches" WHERE "row_id" = ${row.id}::uuid
+  `);
+  if (batchIds.length) {
+    for (const paymentBatchId of batchIds) {
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO "bank_statement_import_row_batches" ("row_id", "payment_batch_id", "is_confirmed")
+        VALUES (${row.id}::uuid, ${paymentBatchId}::uuid, true)
+      `);
+    }
+  }
+  await tx.$executeRaw(Prisma.sql`
+    UPDATE "bank_statement_import_rows"
+    SET "status" = 'CONFIRMED'::bank_statement_row_status
+    WHERE "id" = ${row.id}::uuid
+  `);
+  await tx.$executeRaw(Prisma.sql`
+    UPDATE "bank_statement_import_sessions" session
+    SET
+      "matched_rows" = counts."matchedRows",
+      "unmatched_rows" = counts."unmatchedRows",
+      "duplicated_rows" = counts."duplicatedRows",
+      "ignored_rows" = counts."ignoredRows"
+    FROM (
+      SELECT
+        count(*) FILTER (WHERE "status" IN ('AUTO_MATCHED', 'CONFIRMED'))::int AS "matchedRows",
+        count(*) FILTER (WHERE "status" = 'UNMATCHED')::int AS "unmatchedRows",
+        count(*) FILTER (WHERE "status" = 'DUPLICATED')::int AS "duplicatedRows",
+        count(*) FILTER (WHERE "status" = 'IGNORED')::int AS "ignoredRows"
+      FROM "bank_statement_import_rows"
+      WHERE "session_id" = ${payload.importSessionId}::uuid
+    ) counts
+    WHERE session."id" = ${payload.importSessionId}::uuid
+  `);
 }
 
 async function confirmPaymentBatch(
@@ -1066,6 +1173,7 @@ async function confirmPaymentBatch(
         ...auditFields(auditContext),
       },
     });
+    await recordConfirmedStatementRow(tx, payload, [batchId]);
     return completed;
   };
   return transaction ? execute(transaction) : prisma.$transaction(execute);
@@ -1205,6 +1313,7 @@ export async function confirmBankReconciliationGroup(args: {
       });
       completed.push(completedBatch);
     }
+    await recordConfirmedStatementRow(tx, payload, batchIds);
     return { confirmedCount: completed.length, batches: completed };
   });
 }

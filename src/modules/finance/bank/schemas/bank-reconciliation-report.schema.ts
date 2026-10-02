@@ -49,8 +49,29 @@ export const bankReconciliationReportSchema = z.object({
   items: z.array(reportItemRequestSchema).max(10000),
 });
 
+const reportDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày báo cáo không hợp lệ");
+
+export const bankReconciliationDateReportSchema = z.object({
+  bankAccountId: z.string().uuid(),
+  fromDate: reportDateSchema,
+  toDate: reportDateSchema,
+  scope: z.enum(["ALL", "MATCHED", "UNMATCHED"]).default("ALL"),
+}).superRefine((value, context) => {
+  if (value.fromDate > value.toDate) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["toDate"],
+      message: "Đến ngày phải lớn hơn hoặc bằng Từ ngày",
+    });
+  }
+});
+
 export type BankReconciliationReportInput = z.infer<
   typeof bankReconciliationReportSchema
+>;
+
+export type BankReconciliationDateReportInput = z.infer<
+  typeof bankReconciliationDateReportSchema
 >;
 
 export type BankReconciliationReportItem = z.infer<typeof reportItemDataSchema>;
@@ -61,7 +82,7 @@ export type BankReconciliationReportDocument = {
   accountNo: string;
   accountName: string;
   statement: {
-    bankFormat: "BIDV" | "TECHCOMBANK";
+    bankFormat: "BIDV" | "TECHCOMBANK" | "MIXED";
     fromDate: string | null;
     toDate: string | null;
     accountNo: string | null;

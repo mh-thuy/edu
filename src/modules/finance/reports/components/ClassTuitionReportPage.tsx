@@ -15,6 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
@@ -24,6 +25,8 @@ import { MasterSelectField, type MasterSelectValue } from "@/components/shared/f
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamMonth } from "@/lib/vietnam-time";
+import { DailyPaymentReportCard } from "@/modules/finance/reports/components/DailyPaymentReportCard";
+import { BankReconciliationReportCard } from "@/modules/finance/reports/components/BankReconciliationReportCard";
 
 type ClassSubject = {
   id: string;
@@ -35,11 +38,40 @@ type ClassDetail = {
   classSubjects: ClassSubject[];
 };
 
+type ReportKey = "CLASS_TUITION" | "DAILY_PAYMENT" | "BANK_RECONCILIATION";
+
+const reportDefinitions: Array<{
+  key: ReportKey;
+  title: string;
+  description: string;
+  icon: ReactNode;
+}> = [
+  {
+    key: "CLASS_TUITION",
+    title: "Thu học phí theo lớp",
+    description: "Theo dõi số đã thu theo lớp, môn học và kỳ.",
+    icon: <AssessmentOutlinedIcon fontSize="small" />,
+  },
+  {
+    key: "DAILY_PAYMENT",
+    title: "Thu học phí theo ngày",
+    description: "Xuất danh sách thanh toán thành công trong ngày.",
+    icon: <CalendarMonthOutlinedIcon fontSize="small" />,
+  },
+  {
+    key: "BANK_RECONCILIATION",
+    title: "Đối soát ngân hàng",
+    description: "Tổng hợp giao dịch sao kê theo khoảng ngày.",
+    icon: <AccountBalanceOutlinedIcon fontSize="small" />,
+  },
+];
+
 function currentMonth() {
   return getVietnamMonth();
 }
 
 export function ClassTuitionReportPage() {
+  const [activeReport, setActiveReport] = useState<ReportKey>("CLASS_TUITION");
   const [classDialogOpen, setClassDialogOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [subjects, setSubjects] = useState<ClassSubject[]>([]);
@@ -111,16 +143,51 @@ export function ClassTuitionReportPage() {
             <AssessmentOutlinedIcon />
           </Box>
           <Box>
-            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Báo cáo thu học phí</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Theo dõi tiền đã thu theo lớp, môn học và kỳ báo cáo.</Typography>
+            <Typography variant="h4" fontWeight={800} letterSpacing="-0.02em">Trung tâm báo cáo</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Chọn loại báo cáo, thiết lập phạm vi và xuất dữ liệu theo nhu cầu.</Typography>
           </Box>
         </Stack>
-        <Chip label="Báo cáo tài chính" color="primary" variant="outlined" />
+        <Chip label={`${reportDefinitions.length} báo cáo`} color="primary" variant="outlined" />
       </Stack>
+
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack spacing={2}>
+          <Box>
+            <Typography variant="h6" fontWeight={800}>Danh mục báo cáo</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Các báo cáo được nhóm theo mục đích sử dụng và có thể mở rộng thêm sau này.</Typography>
+          </Box>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
+            {reportDefinitions.map((report) => (
+              <Button
+                key={report.key}
+                variant={activeReport === report.key ? "contained" : "outlined"}
+                onClick={() => {
+                  setActiveReport(report.key);
+                  setError("");
+                }}
+                sx={{ minHeight: 92, p: 1.5, justifyContent: "flex-start", textAlign: "left", alignItems: "flex-start" }}
+              >
+                <Stack direction="row" spacing={1.25} alignItems="flex-start">
+                  <Box sx={{ width: 32, height: 32, borderRadius: 1.25, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: activeReport === report.key ? "rgba(255,255,255,0.16)" : "primary.light", color: activeReport === report.key ? "inherit" : "primary.dark" }}>
+                    {report.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={800}>{report.title}</Typography>
+                    <Typography variant="caption" sx={{ display: "block", mt: 0.25, opacity: 0.82 }}>{report.description}</Typography>
+                  </Box>
+                </Stack>
+              </Button>
+            ))}
+          </Box>
+        </Stack>
+      </Paper>
+
+      {activeReport === "DAILY_PAYMENT" && <DailyPaymentReportCard />}
+      {activeReport === "BANK_RECONCILIATION" && <BankReconciliationReportCard />}
 
       {error && <Alert severity="error">{error}</Alert>}
 
-      <Paper sx={{ p: { xs: 2, md: 2.5 }, overflow: "hidden" }}>
+      {activeReport === "CLASS_TUITION" && <Paper sx={{ p: { xs: 2, md: 2.5 }, overflow: "hidden" }}>
         <Stack spacing={2.5}>
           <Stack direction="row" spacing={1.25} alignItems="flex-start">
             <Box sx={{ width: 36, height: 36, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "#eff6ff", color: "primary.main", flexShrink: 0 }}>
@@ -186,9 +253,9 @@ export function ClassTuitionReportPage() {
             </Button>
           </Stack>
         </Stack>
-      </Paper>
+      </Paper>}
 
-      <ClassSelectDialog open={classDialogOpen} onClose={() => setClassDialogOpen(false)} onSelect={(classItem) => void handleClassSelect(classItem)} />
+      <ClassSelectDialog open={classDialogOpen} onClose={() => setClassDialogOpen(false)} onSelect={(classItem) => void handleClassSelect(classItem)} reportableOnly />
     </Stack>
   );
 }

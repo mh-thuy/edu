@@ -5,7 +5,6 @@ import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
-import DownloadIcon from "@mui/icons-material/Download";
 import GroupIcon from "@mui/icons-material/Group";
 import PaymentIcon from "@mui/icons-material/Payment";
 import ReceiptIcon from "@mui/icons-material/Receipt";
@@ -25,7 +24,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
-import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { unwrapApiResponse } from "@/lib/api-client";
 
 interface DashboardStats {
   totalFeeAmount: number;
@@ -51,9 +50,6 @@ type StatCardProps = {
 
 const money = (value: number) =>
   `${new Intl.NumberFormat("vi-VN").format(Number(value))} ₫`;
-
-const currentVietnamDate = () =>
-  new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 function StatCard({
   icon,
@@ -163,8 +159,6 @@ export default function AdminPage() {
   const [dateTo, setDateTo] = useState("");
   const [appliedDateFrom, setAppliedDateFrom] = useState("");
   const [appliedDateTo, setAppliedDateTo] = useState("");
-  const [dailyReportDate, setDailyReportDate] = useState(currentVietnamDate);
-  const [exportingDailyReport, setExportingDailyReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -210,36 +204,6 @@ export default function AdminPage() {
     setError(null);
     setAppliedDateFrom(dateFrom);
     setAppliedDateTo(dateTo);
-  };
-
-  const exportDailyReport = async () => {
-    setExportingDailyReport(true);
-    setError(null);
-    try {
-      const response = await fetch(
-        `/api/reports/daily-payments/export?date=${dailyReportDate}`,
-      );
-      if (!response.ok) {
-        throw new Error(
-          await extractApiErrorMessage(response, "Không thể xuất báo cáo ngày"),
-        );
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `bao-cao-thu-hoc-phi-ngay-${dailyReportDate}.xlsx`;
-      anchor.click();
-      URL.revokeObjectURL(url);
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Không thể xuất báo cáo ngày",
-      );
-    } finally {
-      setExportingDailyReport(false);
-    }
   };
 
   return (
@@ -372,21 +336,6 @@ export default function AdminPage() {
         </Card>
 
         <Stack spacing={2}>
-          <Card>
-            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1.5}>
-                <Box>
-                  <Typography variant="h6" fontWeight={800}>Báo cáo trong ngày</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Xuất file Excel các khoản đã thu.</Typography>
-                </Box>
-                <DownloadIcon color="primary" />
-              </Stack>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 2 }}>
-                <Box sx={{ flex: 1 }}><DatePickerField label="Ngày báo cáo" value={dailyReportDate} onChange={setDailyReportDate} textFieldProps={{ size: "small" }} /></Box>
-                <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => void exportDailyReport()} disabled={exportingDailyReport || !dailyReportDate} sx={{ whiteSpace: "nowrap" }}>{exportingDailyReport ? "Đang xuất..." : "Xuất Excel"}</Button>
-              </Stack>
-            </CardContent>
-          </Card>
           <Card>
             <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
               <Typography variant="h6" fontWeight={800}>Thao tác nhanh</Typography>

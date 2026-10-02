@@ -111,7 +111,7 @@ export async function buildBankReconciliationReportExcel(
     counts[item.reconciliationStatus] = (counts[item.reconciliationStatus] || 0) + 1;
     return counts;
   }, {});
-  const totalCredit = reportItems.reduce((sum, item) => sum + item.creditAmount, 0);
+  const totalCredit = new Prisma.Decimal(report.balanceCheck.totalCredit).toNumber();
   const totalDebit = new Prisma.Decimal(report.balanceCheck.totalDebit).toNumber();
   const balanceVariance = report.balanceCheck.variance === null
     ? null
@@ -167,7 +167,7 @@ export async function buildBankReconciliationReportExcel(
   const summaryRows = [
     ["Tổng giao dịch trong phạm vi", reportItems.length, "dòng"],
     ["Tổng tiền ghi có", totalCredit, "VND"],
-    ["Tổng tiền ghi nợ theo sao kê", totalDebit, "VND"],
+    ["Tổng tiền ghi nợ trong phạm vi", totalDebit, "VND"],
     ["Kiểm tra số dư", balanceVariance === null ? "Không đủ dữ liệu" : balanceVariance === 0 ? "Sao kê cân" : "Sao kê lệch", ""],
     ["Tự động khớp", statusCounts.AUTO_MATCHED || 0, "dòng"],
     ["Đã xác nhận", statusCounts.CONFIRMED || 0, "dòng"],
@@ -185,7 +185,7 @@ export async function buildBankReconciliationReportExcel(
     styleCell(row.getCell(2), { horizontal: "right" });
     styleCell(row.getCell(3));
     bold(row.getCell(1));
-    if (typeof label === "string" && ["Tổng tiền ghi có", "Tổng tiền ghi nợ theo sao kê", "Chênh lệch số dư"].includes(label)) row.getCell(2).numFmt = moneyFormat;
+    if (typeof label === "string" && ["Tổng tiền ghi có", "Tổng tiền ghi nợ trong phạm vi", "Chênh lệch số dư"].includes(label)) row.getCell(2).numFmt = moneyFormat;
     const color = label === "Đã xác nhận" || (label === "Kiểm tra số dư" && value === "Sao kê cân")
       ? colors.green
       : label === "Chưa khớp" || label === "Trùng giao dịch" || (label === "Kiểm tra số dư" && value !== "Sao kê cân")

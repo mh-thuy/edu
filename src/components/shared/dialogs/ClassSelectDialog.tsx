@@ -15,12 +15,14 @@ export interface ClassSelectDialogProps {
   open: boolean;
   onClose: () => void;
   onSelect: (classItem: ClassItem) => void;
+  reportableOnly?: boolean;
 }
 
 export function ClassSelectDialog({
   open,
   onClose,
   onSelect,
+  reportableOnly = false,
 }: ClassSelectDialogProps): ReactElement {
   const columns: GridColDef<ClassItem>[] = [
     { field: "code", headerName: "Mã lớp", width: 120 },
@@ -47,7 +49,8 @@ export function ClassSelectDialog({
       onClose={onClose}
       onSelect={onSelect}
       endpoint="/api/classes"
-      title="Chọn lớp học"
+      query={reportableOnly ? { statuses: "ACTIVE,COMPLETED" } : undefined}
+      title={reportableOnly ? "Chọn lớp đang hoạt động hoặc đã hoàn thành" : "Chọn lớp học"}
       columns={columns}
       searchPlaceholder="Nhập mã lớp hoặc tên lớp"
       maxWidth="md"

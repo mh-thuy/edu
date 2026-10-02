@@ -184,6 +184,10 @@ Ví dụ:
 GET /api/students?search=nguyen&status=ACTIVE&page=1&pageSize=20
 ```
 
+`GET /api/classes` nhận thêm `statuses` dạng danh sách phân tách bằng dấu phẩy.
+Ví dụ `statuses=ACTIVE,COMPLETED` chỉ trả lớp đang hoạt động hoặc đã hoàn
+thành; dùng cho bộ chọn lớp trong báo cáo học phí.
+
 Rule:
 
 ```text
@@ -971,6 +975,43 @@ Không trả:
 ```text
 10000 records
 ```
+
+---
+
+# 19.3. Báo cáo đối soát ngân hàng theo ngày
+
+```http
+POST /api/bank-reconciliation-reports
+```
+
+Body:
+
+```json
+{
+  "bankAccountId": "uuid",
+  "fromDate": "2026-10-01",
+  "toDate": "2026-10-31",
+  "scope": "ALL"
+}
+```
+
+`scope` nhận `ALL`, `MATCHED` hoặc `UNMATCHED`. Báo cáo lọc theo ngày giao dịch
+ngân hàng, lấy dữ liệu từ tất cả phiên sao kê đã lưu của tài khoản và trả file
+Excel. API vẫn hỗ trợ request cũ dùng `statementToken` để xuất báo cáo cho phiên
+đang mở.
+
+Khi báo cáo theo ngày gộp nhiều phiên, dòng `DUPLICATED` vẫn hiển thị để tra cứu
+nhưng không cộng vào tổng tiền, tránh tính lặp một giao dịch đã import nhiều
+lần. Tổng ghi có và ghi nợ luôn cùng phạm vi với `scope`. Chỉ `ALL` mới kiểm tra
+được chênh lệch số dư của sao kê; báo cáo lọc `MATCHED`/`UNMATCHED` không đưa ra
+kết luận cân sao kê.
+
+```http
+GET /api/bank-statement-imports?page=1&pageSize=20&bankAccountId=uuid
+```
+
+API trả danh sách phiên import mới nhất, thông tin tài khoản, khoảng ngày sao kê
+và bộ đếm trạng thái. Các bộ đếm khớp được cập nhật khi xác nhận thủ công.
 
 ---
 

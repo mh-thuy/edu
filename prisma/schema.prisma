@@ -150,6 +150,16 @@ enum PaymentBatchStatus {
   @@map("payment_batch_status")
 }
 
+enum BankStatementRowStatus {
+  AUTO_MATCHED
+  UNMATCHED
+  IGNORED
+  DUPLICATED
+  CONFIRMED
+
+  @@map("bank_statement_row_status")
+}
+
 model User {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email        String     @unique(map: "uq_users_email") @db.VarChar(255)
@@ -511,6 +521,7 @@ model PaymentBatch {
   allocations PaymentAllocation[]
   payments    TuitionPayment[]
   receipt     PaymentBatchReceipt?
+  statementRowLinks BankStatementImportRowPaymentBatch[]
 
   @@index([studentId], map: "idx_payment_batches_student_id")
   @@index([status], map: "idx_payment_batches_status")
@@ -586,9 +597,80 @@ model BankAccount {
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   paymentBatches PaymentBatch[]
+  statementImportSessions BankStatementImportSession[]
 
   @@unique([bankCode, accountNo], map: "uq_bank_accounts_bank_account")
   @@map("bank_accounts")
+}
+
+model BankStatementImportSession {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bankAccountId     String   @map("bank_account_id") @db.Uuid
+  fileName          String   @map("file_name") @db.VarChar(255)
+  bankFormat        String   @map("bank_format") @db.VarChar(30)
+  statementFromDate String?  @map("statement_from_date") @db.VarChar(50)
+  statementToDate   String?  @map("statement_to_date") @db.VarChar(50)
+  accountNo         String?  @map("account_no") @db.VarChar(100)
+  accountName       String?  @map("account_name") @db.VarChar(255)
+  currencyCode      String?  @map("currency_code") @db.VarChar(10)
+  openingBalance    Decimal? @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance    Decimal? @map("closing_balance") @db.Decimal(15, 2)
+  totalRows         Int      @map("total_rows")
+  validRows         Int      @map("valid_rows")
+  invalidRows       Int      @map("invalid_rows")
+  duplicatedRows    Int      @map("duplicated_rows")
+  matchedRows       Int      @map("matched_rows")
+  unmatchedRows     Int      @map("unmatched_rows")
+  ignoredRows       Int      @map("ignored_rows")
+  invalidRowErrors  Json?    @map("invalid_row_errors")
+  performedBy       String   @map("performed_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bankAccount BankAccount             @relation(fields: [bankAccountId], references: [id], onDelete: Restrict)
+  rows        BankStatementImportRow[]
+
+  @@index([bankAccountId, createdAt], map: "idx_bank_statement_sessions_account_created")
+  @@map("bank_statement_import_sessions")
+}
+
+model BankStatementImportRow {
+  id                         String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId                  String                  @map("session_id") @db.Uuid
+  rowNo                     Int                     @map("row_no")
+  transactionHash           String                  @map("transaction_hash") @db.VarChar(255)
+  transactionDate           DateTime                @map("transaction_date") @db.Timestamptz(6)
+  bankTransactionNo         String?                 @map("bank_transaction_no") @db.VarChar(150)
+  description               String                  @db.Text
+  reconciliationContent     String                  @default("") @map("reconciliation_content") @db.Text
+  creditAmount              Decimal                 @default(0) @map("credit_amount") @db.Decimal(15, 2)
+  debitAmount               Decimal                 @default(0) @map("debit_amount") @db.Decimal(15, 2)
+  balanceAmount             Decimal?                @map("balance_amount") @db.Decimal(15, 2)
+  status                    BankStatementRowStatus  @default(UNMATCHED)
+  paymentBatchCandidateCount      Int               @default(0) @map("payment_batch_candidate_count")
+  paymentBatchGroupCandidateCount Int               @default(0) @map("payment_batch_group_candidate_count")
+  rawData                   String?                 @map("raw_data") @db.Text
+  createdAt                 DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session       BankStatementImportSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  paymentBatches BankStatementImportRowPaymentBatch[]
+
+  @@unique([sessionId, rowNo], map: "uq_bank_statement_rows_session_row")
+  @@index([transactionDate], map: "idx_bank_statement_rows_transaction_date")
+  @@index([transactionHash], map: "idx_bank_statement_rows_transaction_hash")
+  @@map("bank_statement_import_rows")
+}
+
+model BankStatementImportRowPaymentBatch {
+  rowId         String @map("row_id") @db.Uuid
+  paymentBatchId String @map("payment_batch_id") @db.Uuid
+  isConfirmed   Boolean @default(false) @map("is_confirmed")
+
+  row          BankStatementImportRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  paymentBatch PaymentBatch            @relation(fields: [paymentBatchId], references: [id], onDelete: Restrict)
+
+  @@id([rowId, paymentBatchId])
+  @@index([paymentBatchId], map: "idx_bank_statement_row_batches_batch")
+  @@map("bank_statement_import_row_batches")
 }
 
 model TuitionAuditLog {

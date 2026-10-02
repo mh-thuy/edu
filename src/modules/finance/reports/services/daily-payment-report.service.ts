@@ -51,9 +51,13 @@ function formatMethod(method: string) {
   return method === "CASH" ? "Tiền mặt" : method === "BANK_TRANSFER" ? "Chuyển khoản" : method;
 }
 
+type DailyPaymentReportAccumulator = Omit<DailyPaymentReportRow, "total"> & {
+  total: Prisma.Decimal;
+};
+
 function addRow(
-  groups: Map<string, DailyPaymentReportRow>,
-  paymentAmount: number,
+  groups: Map<string, DailyPaymentReportAccumulator>,
+  paymentAmount: Prisma.Decimal,
   fee: {
     originalAmount: Prisma.Decimal;
     discountAmount: Prisma.Decimal;
@@ -74,18 +78,23 @@ function addRow(
   },
   feeClassName: string,
   paymentMethod: string,
-) {
+): Prisma.Decimal {
   const classSubject = item.classSubject;
 
-  const grossAmount = Number(item.amount);
-  const originalAmount = Number(fee.originalAmount);
-  const ratio = originalAmount > 0 ? Math.min(Math.max(grossAmount / originalAmount, 0), 1) : 1;
-  const itemFinalAmount = Math.max(
+  const grossAmount = item.amount;
+  const ratio = fee.originalAmount.greaterThan(0)
+    ? Prisma.Decimal.min(Prisma.Decimal.max(grossAmount.div(fee.originalAmount), 0), 1)
+    : new Prisma.Decimal(1);
+  const itemFinalAmount = Prisma.Decimal.max(
+    grossAmount
+      .minus(fee.discountAmount.mul(ratio))
+      .plus(fee.additionalAmount.mul(ratio)),
     0,
-    grossAmount - Number(fee.discountAmount) * ratio + Number(fee.additionalAmount) * ratio,
   );
-  const finalAmount = Number(fee.finalAmount);
-  const paidAmount = finalAmount > 0 ? paymentAmount * (itemFinalAmount / finalAmount) : 0;
+  const paidAmount = fee.finalAmount.greaterThan(0)
+    ? paymentAmount.mul(itemFinalAmount).div(fee.finalAmount)
+        .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
+    : new Prisma.Decimal(0);
   const teacherName = classSubject
     ? classSubject.teacher?.fullName || "Chưa phân công"
     : "Chưa phân bổ";
@@ -99,13 +108,13 @@ function addRow(
   const current = groups.get(key);
   if (current) {
     current.count += 1;
-    current.total += paidAmount;
+    current.total = current.total.plus(paidAmount);
     return paidAmount;
   }
   groups.set(key, {
     teacherName,
     className,
-    tuitionFee: Number(item.unitPrice),
+    tuitionFee: item.unitPrice.toNumber(),
     count: 1,
     total: paidAmount,
     note,
@@ -189,26 +198,26 @@ export async function getDailyPaymentReport(
     bankAccounts.map((account) => [account.id, account]),
   );
 
-  const groups = new Map<string, DailyPaymentReportRow>();
+  const groups = new Map<string, DailyPaymentReportAccumulator>();
   const details: DailyPaymentReportDetail[] = payments.map((payment) => {
-    let allocatedAmount = 0;
+    let allocatedAmount = new Prisma.Decimal(0);
     for (const item of payment.tuitionFee.items) {
-      allocatedAmount += addRow(
+      allocatedAmount = allocatedAmount.plus(addRow(
         groups,
-        Number(payment.amount),
+        payment.amount,
         payment.tuitionFee,
         item,
         payment.tuitionFee.class.name,
         payment.paymentMethod,
-      ) ?? 0;
+      ));
     }
-    const unallocatedAmount = Number(payment.amount) - allocatedAmount;
-    if (payment.tuitionFee.items.length === 0 || Math.abs(unallocatedAmount) >= 0.005) {
+    const unallocatedAmount = payment.amount.minus(allocatedAmount);
+    if (payment.tuitionFee.items.length === 0 || !unallocatedAmount.isZero()) {
       const key = `UNALLOCATED:RESIDUAL:${payment.tuitionFee.class.name}:${payment.paymentMethod}`;
       const current = groups.get(key);
       if (current) {
         current.count += 1;
-        current.total += unallocatedAmount;
+        current.total = current.total.plus(unallocatedAmount);
       } else {
         groups.set(key, {
           teacherName: "Chưa phân bổ",
@@ -228,7 +237,7 @@ export async function getDailyPaymentReport(
       className: payment.tuitionFee.class.name,
       feeNo: payment.tuitionFee.feeNo,
       paymentMethod: formatMethod(payment.paymentMethod),
-      amount: Number(payment.amount),
+      amount: payment.amount.toNumber(),
       bankName:
         bankAccountById.get(payment.bankAccountId ?? "")?.bankName ??
         payment.paymentBatch?.bankAccount?.bankName ??
@@ -242,21 +251,23 @@ export async function getDailyPaymentReport(
       paymentContent: payment.paymentContent,
     };
   });
-  const totalCollected = payments.reduce((total, payment) => total + Number(payment.amount), 0);
+  const totalCollected = payments.reduce((total, payment) => total.plus(payment.amount), new Prisma.Decimal(0));
   const cashCollected = payments
     .filter((payment) => payment.paymentMethod === "CASH")
-    .reduce((total, payment) => total + Number(payment.amount), 0);
+    .reduce((total, payment) => total.plus(payment.amount), new Prisma.Decimal(0));
   const bankTransferCollected = payments
     .filter((payment) => payment.paymentMethod === "BANK_TRANSFER")
-    .reduce((total, payment) => total + Number(payment.amount), 0);
+    .reduce((total, payment) => total.plus(payment.amount), new Prisma.Decimal(0));
 
   return {
     date: input.date,
-    rows: [...groups.values()].sort((a, b) => a.teacherName.localeCompare(b.teacherName, "vi")),
+    rows: [...groups.values()]
+      .map((row) => ({ ...row, total: row.total.toNumber() }))
+      .sort((a, b) => a.teacherName.localeCompare(b.teacherName, "vi")),
     details,
     paymentCount: payments.length,
-    totalCollected,
-    cashCollected,
-    bankTransferCollected,
+    totalCollected: totalCollected.toNumber(),
+    cashCollected: cashCollected.toNumber(),
+    bankTransferCollected: bankTransferCollected.toNumber(),
   };
 }
