@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "classes:normalize-codes": "tsx scripts/normalize-class-codes.ts",
     "bank:import": "tsx prisma/helpers/import-bank-statement.ts"
   },
   "prisma": {
