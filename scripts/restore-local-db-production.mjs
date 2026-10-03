@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const confirmation = "RESTORE PRODUCTION";
 const postgresClientImage = "postgres:18-alpine";
+const vercelProject = "edu";
+const vercelScope = "trinhan";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryDir = mkdtempSync(path.join(os.tmpdir(), "edu-db-restore-"));
 chmodSync(temporaryDir, 0o700);
@@ -157,7 +159,11 @@ try {
 
 	console.log("\n▶ Tải cấu hình Production vào thư mục tạm bảo vệ");
 	const productionEnvFile = path.join(temporaryDir, "production.env");
-	run("npx", ["vercel", "env", "pull", productionEnvFile, "--environment=production", "--yes"]);
+	run("npx", [
+		"vercel", "env", "pull", productionEnvFile,
+		"--environment=production", "--yes",
+		"--project", vercelProject, "--scope", vercelScope,
+	]);
 	chmodSync(productionEnvFile, 0o600);
 	const productionVars = parseEnvFile(productionEnvFile);
 	const rawDirectUrl = productionVars.get("DATABASE_URL_UNPOOLED");
