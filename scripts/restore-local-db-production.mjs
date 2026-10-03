@@ -144,7 +144,16 @@ try {
 	console.log("⚠ Restore sẽ thay thế schema và dữ liệu hiện có trên Neon Production.");
 
 	console.log("\n▶ Kiểm tra xác thực Vercel");
-	run("npx", ["vercel", "whoami"]);
+	const vercelIdentity = spawnSync("npx", ["vercel", "whoami"], {
+		cwd: rootDir,
+		stdio: "inherit",
+	});
+	if (vercelIdentity.error) throw vercelIdentity.error;
+	if (vercelIdentity.status !== 0) {
+		console.log("Chưa đăng nhập. Vercel CLI sẽ yêu cầu xác thực trong terminal/trình duyệt.");
+		run("npx", ["vercel", "login"]);
+		run("npx", ["vercel", "whoami"]);
+	}
 
 	console.log("\n▶ Tải cấu hình Production vào thư mục tạm bảo vệ");
 	const productionEnvFile = path.join(temporaryDir, "production.env");
