@@ -100,10 +100,13 @@ function pgArgs(connection) {
 function runWithFileOutput(command, args, outputPath, options = {}) {
 	const fd = openSync(outputPath, "w", 0o600);
 	fchmodSync(fd, 0o600);
+	let completed = false;
 	try {
 		run(command, args, { stdio: ["ignore", fd, "inherit"], ...options });
+		completed = true;
 	} finally {
 		closeSync(fd);
+		if (!completed) rmSync(outputPath, { force: true });
 	}
 }
 
