@@ -107,6 +107,39 @@
 				"showReuseMessage": false
 			},
 			"problemMatcher": []
+		},
+		{
+			"label": "Setup PostgreSQL Neon (Free · Singapore · Production)",
+			"type": "process",
+			"command": "npx",
+			"args": [
+				"vercel",
+				"integration",
+				"add",
+				"neon",
+				"--plan",
+				"free_v3",
+				"--environment",
+				"production",
+				"--no-env-pull",
+				"--name",
+				"edu-production-db",
+				"--metadata",
+				"region=sin1",
+				"--metadata",
+				"auth=false",
+				"--json"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true,
+				"showReuseMessage": false
+			},
+			"problemMatcher": []
 		}
 	],
 	"inputs": [
