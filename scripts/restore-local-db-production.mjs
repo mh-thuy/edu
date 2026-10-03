@@ -5,11 +5,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const confirmation = "RESTORE PRODUCTION";
+const postgresClientImage = "postgres:18-alpine";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryDir = mkdtempSync(path.join(os.tmpdir(), "edu-db-restore-"));
 chmodSync(temporaryDir, 0o700);
 let containerId = "";
-let containerPassFile = "";
 
 function run(command, args, options = {}) {
 	const result = spawnSync(command, args, {
@@ -117,10 +117,19 @@ function runWithFileInput(command, args, inputPath, options = {}) {
 }
 
 function cleanup() {
-	if (containerId && containerPassFile) {
-		spawnSync("docker", ["exec", containerId, "rm", "-f", containerPassFile], { stdio: "ignore" });
-	}
 	rmSync(temporaryDir, { recursive: true, force: true });
+}
+
+function postgresClientArgs(passFile, command, args) {
+	return [
+		"run", "--rm", "-i",
+		"-v", `${passFile}:/run/secrets/edu-pgpass:ro`,
+		"-e", "PGPASSFILE=/run/secrets/edu-pgpass",
+		"-e", "PGSSLMODE=require",
+		postgresClientImage,
+		command,
+		...args,
+	];
 }
 
 try {
@@ -151,6 +160,8 @@ try {
 	if (!containerId) {
 		throw new Error("Không tìm thấy container service postgres. Hãy khởi động DB local trước.");
 	}
+	const postgresClientVersion = capture("docker", ["run", "--rm", postgresClientImage, "pg_dump", "--version"]);
+	console.log(`✓ Client PostgreSQL cho Neon: ${postgresClientVersion}`);
 	const localEnv = existsSync(path.join(rootDir, ".env"))
 		? parseEnvFile(path.join(rootDir, ".env"))
 		: new Map();
@@ -185,36 +196,30 @@ try {
 		escapePgPass(production.password),
 	].join(":")}\n`, { mode: 0o600 });
 	chmodSync(passFile, 0o600);
-	containerPassFile = `/tmp/edu-production-pgpass-${process.pid}`;
-	run("docker", ["cp", passFile, `${containerId}:${containerPassFile}`]);
-	run("docker", ["exec", containerId, "chmod", "600", containerPassFile]);
 
 	console.log(`\n▶ Backup Neon Production trước khi thay thế → ${productionBackup}`);
-	runWithFileOutput("docker", [
-		"exec", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
-		containerId, "pg_dump", ...pgArgs(production),
+	runWithFileOutput("docker", postgresClientArgs(passFile, "pg_dump", [
+		...pgArgs(production),
 		"--format=custom", "--no-owner", "--no-privileges",
-	], productionBackup);
+	]), productionBackup);
 	if (statSync(productionBackup).size === 0) {
 		throw new Error("Backup Production rỗng; dừng, chưa chạy restore.");
 	}
 
 	console.log("\n▶ Restore backup local lên Neon Production (thay thế dữ liệu đích)");
 	try {
-		runWithFileInput("docker", [
-			"exec", "-i", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
-			containerId, "pg_restore", ...pgArgs(production),
+		runWithFileInput("docker", postgresClientArgs(passFile, "pg_restore", [
+			...pgArgs(production),
 			"--clean", "--if-exists", "--exit-on-error", "--no-owner", "--no-privileges",
-		], localBackup);
+		]), localBackup);
 	} catch (restoreError) {
 		console.error("✖ Restore local gặp lỗi; đang thử khôi phục Production từ backup vừa tạo.");
 		let recoveryError;
 		try {
-			runWithFileInput("docker", [
-				"exec", "-i", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
-				containerId, "pg_restore", ...pgArgs(production),
+			runWithFileInput("docker", postgresClientArgs(passFile, "pg_restore", [
+				...pgArgs(production),
 				"--clean", "--if-exists", "--exit-on-error", "--no-owner", "--no-privileges",
-			], productionBackup);
+			]), productionBackup);
 		} catch (error) {
 			recoveryError = error;
 		}
@@ -225,8 +230,9 @@ try {
 	}
 
 	console.log("\n▶ Xác minh số tài khoản sau restore");
-	const userCount = capture("docker", ["exec", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
-		containerId, "psql", ...pgArgs(production), "-Atqc", "SELECT count(*) FROM users"]);
+	const userCount = capture("docker", postgresClientArgs(passFile, "psql", [
+		...pgArgs(production), "-Atqc", "SELECT count(*) FROM users",
+	]));
 	console.log(`✓ Số tài khoản trong Production sau restore: ${userCount}`);
 	console.log(`✓ Backup local và backup Production được giữ tại: ${backupDir}`);
 	console.log("✓ Hoàn tất restore. Chưa deploy lại ứng dụng.");
