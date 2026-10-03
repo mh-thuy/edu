@@ -91,11 +91,12 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "Build frontend → push",
+			"label": "Deploy code lên Vercel (không backup DB/commit/push)",
 			"type": "process",
 			"command": "bash",
 			"args": [
-				"${workspaceFolder}/scripts/build-frontend-push.sh"
+				"${workspaceFolder}/scripts/deploy-code-only.sh",
+				"${input:confirmCodeOnlyDeploy}"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -166,6 +167,11 @@
 			"id": "confirmProductionDeploy",
 			"type": "promptString",
 			"description": "Nhập DEPLOY để xác nhận backup DB, git push và deploy production lên Vercel"
+		},
+		{
+			"id": "confirmCodeOnlyDeploy",
+			"type": "promptString",
+			"description": "Nhập DEPLOY CODE để build và deploy code hiện tại lên Vercel production (không backup DB, không commit/push)"
 		},
 		{
 			"id": "confirmDatabaseRestore",
