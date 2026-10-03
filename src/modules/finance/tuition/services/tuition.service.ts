@@ -80,6 +80,9 @@ export class TuitionService {
     studentCode?: string;
     classId?: string;
     status?: TuitionFeeStatus;
+    statuses?: TuitionFeeStatus[];
+    search?: string;
+    unissuedOnly?: boolean;
     billingType?: TuitionFeeBillingType;
     billingYear?: number;
     billingMonth?: number;
@@ -94,8 +97,10 @@ export class TuitionService {
       : 50;
     const asOf = new Date();
     const todayStart = getVietnamDayStart(asOf);
-    const statusFilter: Prisma.TuitionFeeWhereInput =
-      params.status === TuitionFeeStatus.OVERDUE
+    const getStatusFilter = (
+      status: TuitionFeeStatus,
+    ): Prisma.TuitionFeeWhereInput =>
+      status === TuitionFeeStatus.OVERDUE
         ? {
             OR: [
               { status: TuitionFeeStatus.OVERDUE },
@@ -103,22 +108,45 @@ export class TuitionService {
               { status: PARTIAL_FEE_STATUS, dueDate: { lt: todayStart } },
             ],
           }
-        : params.status === TuitionFeeStatus.UNPAID
+        : status === TuitionFeeStatus.UNPAID
           ? {
               status: TuitionFeeStatus.UNPAID,
               OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
             }
-          : params.status === PARTIAL_FEE_STATUS
+          : status === PARTIAL_FEE_STATUS
             ? {
                 status: PARTIAL_FEE_STATUS,
                 OR: [{ dueDate: null }, { dueDate: { gte: todayStart } }],
               }
-            : params.status
-              ? { status: params.status }
-              : {};
+            : { status };
+    const statuses = params.statuses?.length
+      ? params.statuses
+      : params.status
+        ? [params.status]
+        : [];
+    const statusFilters = statuses.map(getStatusFilter);
+    const search = params.search?.trim();
+    const searchFilter: Prisma.TuitionFeeWhereInput = search
+      ? {
+          OR: [
+            { feeNo: { contains: search, mode: "insensitive" } },
+            { student: { code: { contains: search, mode: "insensitive" } } },
+            {
+              student: { fullName: { contains: search, mode: "insensitive" } },
+            },
+            { class: { code: { contains: search, mode: "insensitive" } } },
+            { class: { name: { contains: search, mode: "insensitive" } } },
+          ],
+        }
+      : {};
     const where: Prisma.TuitionFeeWhereInput = {
-      ...statusFilter,
+      ...(statusFilters.length
+        ? { AND: [{ OR: statusFilters }, searchFilter] }
+        : search
+          ? searchFilter
+          : {}),
       ...(params.billingType ? { billingType: params.billingType } : {}),
+      ...(params.unissuedOnly ? { paymentAllocations: { none: {} } } : {}),
       ...(params.studentCode
         ? {
             student: {
@@ -262,7 +290,9 @@ export class TuitionService {
         throw new NotFoundError("Không tìm thấy đăng ký học viên trong lớp");
       }
       if (enrollment.class.status !== "ACTIVE") {
-        throw new ConflictError("Chỉ có thể tạo học phí khi lớp đang hoạt động");
+        throw new ConflictError(
+          "Chỉ có thể tạo học phí khi lớp đang hoạt động",
+        );
       }
       if (
         (enrollment.class.startDate &&
@@ -493,7 +523,9 @@ export class TuitionService {
       });
       if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
       if (classData.status !== "ACTIVE") {
-        throw new ConflictError("Chỉ có thể tạo học phí khi lớp đang hoạt động");
+        throw new ConflictError(
+          "Chỉ có thể tạo học phí khi lớp đang hoạt động",
+        );
       }
       const periodStart = new Date(
         Date.UTC(period.billingYear, period.billingMonth - 1, 1),

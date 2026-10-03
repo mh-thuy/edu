@@ -21,6 +21,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   Tabs,
   Typography,
@@ -103,14 +104,20 @@ function groupByStudent<T extends { student: { id: string; code: string; fullNam
 
 export function PaymentBatchManagement() {
   const [view, setView] = useState<View>("UNISSUED");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [month, setMonth] = useState(getVietnamMonth());
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [fees, setFees] = useState<NoticeFee[]>([]);
+  const [unissuedTotal, setUnissuedTotal] = useState(0);
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
   const [successfulBatches, setSuccessfulBatches] = useState<PendingBatch[]>([]);
+  const [successfulTotal, setSuccessfulTotal] = useState(0);
   const [bankAccounts, setBankAccounts] = useState<NoticeBankAccount[]>([]);
   const [selectedFeeIds, setSelectedFeeIds] = useState<string[]>([]);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
@@ -129,100 +136,91 @@ export function PaymentBatchManagement() {
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
+  const studentFilter = student?.id ?? "ALL";
+  const classFilter = selectedClass?.id ?? "ALL";
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(0);
+    setSelectedFeeIds([]);
+    setSelectedBatchIds([]);
+  }, [classFilter, debouncedSearch, month, pageSize, studentFilter, view]);
+
+  useEffect(() => {
+    setSelectedFeeIds([]);
+    setSelectedBatchIds([]);
+  }, [page]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
+    const filters = {
+      month,
+      page: page + 1,
+      pageSize,
+      search: debouncedSearch,
+      studentId: student?.id,
+      classId: selectedClass?.id,
+    };
     try {
       const [feeItems, batchItems, paidBatchItems, accounts] = await Promise.all([
-        fetchOutstandingFees(month),
-        fetchPendingBatches(),
-        fetchSuccessfulBatches(),
+        fetchOutstandingFees({ ...filters, page: view === "UNISSUED" ? filters.page : 1 }),
+        fetchPendingBatches({ ...filters, page: view === "PENDING" ? filters.page : 1 }),
+        fetchSuccessfulBatches({ ...filters, page: view === "SUCCESS" ? filters.page : 1 }),
         fetchNoticeBankAccounts(),
       ]);
-      setFees(feeItems);
-      setPendingBatches(batchItems);
-      setSuccessfulBatches(paidBatchItems);
+      setFees(feeItems.items);
+      setUnissuedTotal(feeItems.total);
+      setPendingBatches(batchItems.items);
+      setPendingTotal(batchItems.total);
+      setSuccessfulBatches(paidBatchItems.items);
+      setSuccessfulTotal(paidBatchItems.total);
+      const activeTotal = view === "UNISSUED"
+        ? feeItems.total
+        : view === "PENDING"
+          ? batchItems.total
+          : paidBatchItems.total;
+      const lastPage = Math.max(0, Math.ceil(activeTotal / pageSize) - 1);
+      if (page > lastPage) setPage(lastPage);
       setBankAccounts(accounts);
       setBankAccountId((current) =>
         accounts.some((account) => account.id === current)
           ? current
           : accounts[0]?.id ?? "",
       );
-      setSelectedFeeIds([]);
-      setSelectedBatchIds([]);
     } catch (reasonValue) {
       setError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải dữ liệu");
     } finally {
       setLoading(false);
     }
-  }, [month]);
+  }, [debouncedSearch, month, page, pageSize, selectedClass?.id, student?.id, view]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const query = search.trim().toLocaleLowerCase("vi-VN");
-  const studentFilter = student?.id ?? "ALL";
-  const classFilter = selectedClass?.id ?? "ALL";
-  const unissuedFees = useMemo(
-    () => fees.filter((fee) => {
-      const hasPendingBatch = Boolean(fee.paymentAllocations?.length);
-      const matchesStudent = studentFilter === "ALL" || fee.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || fee.class.id === classFilter;
-      const matchesSearch = !query || [fee.feeNo, fee.student.code, fee.student.fullName, fee.class.code, fee.class.name]
-        .join(" ")
-        .toLocaleLowerCase("vi-VN")
-        .includes(query);
-      return !hasPendingBatch && matchesStudent && matchesClass && matchesSearch;
-    }),
-    [classFilter, fees, query, studentFilter],
-  );
-
-  const visiblePendingBatches = useMemo(
-    () => pendingBatches.filter((batch) => {
-      const hasMonth = batch.allocations.some(
-        (allocation) => `${allocation.tuitionFee.billingYear}-${String(allocation.tuitionFee.billingMonth).padStart(2, "0")}` === month,
-      );
-      const matchesStudent = studentFilter === "ALL" || batch.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.id === classFilter);
-      const matchesSearch = !query || [batch.batchNo, batch.student.code, batch.student.fullName]
-        .concat(batch.allocations.flatMap((allocation) => [
-          allocation.tuitionFee.feeNo,
-          allocation.tuitionFee.class?.code || "",
-          allocation.tuitionFee.class?.name || "",
-        ]))
-        .join(" ")
-        .toLocaleLowerCase("vi-VN")
-        .includes(query);
-      return hasMonth && matchesStudent && matchesClass && matchesSearch;
-    }),
-    [classFilter, month, pendingBatches, query, studentFilter],
-  );
-
-  const visibleSuccessfulBatches = useMemo(
-    () => successfulBatches.filter((batch) => {
-      const hasMonth = batch.allocations.some(
-        (allocation) => `${allocation.tuitionFee.billingYear}-${String(allocation.tuitionFee.billingMonth).padStart(2, "0")}` === month,
-      );
-      const matchesStudent = studentFilter === "ALL" || batch.student.id === studentFilter;
-      const matchesClass = classFilter === "ALL" || batch.allocations.some((allocation) => allocation.tuitionFee.class?.id === classFilter);
-      const matchesSearch = !query || [batch.batchNo, batch.student.code, batch.student.fullName]
-        .concat(batch.allocations.flatMap((allocation) => [
-          allocation.tuitionFee.feeNo,
-          allocation.tuitionFee.class?.code || "",
-          allocation.tuitionFee.class?.name || "",
-        ]))
-        .join(" ")
-        .toLocaleLowerCase("vi-VN")
-        .includes(query);
-      return hasMonth && matchesStudent && matchesClass && matchesSearch;
-    }),
-    [classFilter, month, query, studentFilter, successfulBatches],
-  );
+  const unissuedFees = fees;
+  const visiblePendingBatches = pendingBatches;
+  const visibleSuccessfulBatches = successfulBatches;
 
   const unissuedGroups = useMemo(() => groupByStudent(unissuedFees), [unissuedFees]);
   const pendingGroups = useMemo(() => groupByStudent(visiblePendingBatches), [visiblePendingBatches]);
   const successfulGroups = useMemo(() => groupByStudent(visibleSuccessfulBatches), [visibleSuccessfulBatches]);
+  const renderPagination = (count: number, label: string) => count > 0 ? <TablePagination
+    component="div"
+    count={count}
+    page={page}
+    rowsPerPage={pageSize}
+    onPageChange={(_, nextPage) => setPage(nextPage)}
+    onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))}
+    rowsPerPageOptions={[10, 20, 50]}
+    labelRowsPerPage={`${label}/trang`}
+    labelDisplayedRows={({ from, to, count: total }) => `${from}–${to} trên ${total} ${label.toLocaleLowerCase("vi-VN")}`}
+  /> : null;
 
   const selectedFees = fees.filter((fee) => selectedFeeIds.includes(fee.id));
   const selectedBatches = pendingBatches.filter((batch) => selectedBatchIds.includes(batch.id));
@@ -236,16 +234,6 @@ export function PaymentBatchManagement() {
   const selectedBatchStudent = selectedBatches[0]?.student.id;
   const selectedCount = view === "UNISSUED" ? selectedFeeIds.length : selectedBatchIds.length;
   const selectedTotal = view === "UNISSUED" ? selectedFeeTotal : selectedBatchTotal;
-
-  useEffect(() => {
-    const visibleIds = new Set(unissuedFees.map((fee) => fee.id));
-    setSelectedFeeIds((current) => current.filter((id) => visibleIds.has(id)));
-  }, [unissuedFees]);
-
-  useEffect(() => {
-    const visibleIds = new Set(visiblePendingBatches.map((batch) => batch.id));
-    setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)));
-  }, [visiblePendingBatches]);
 
   useEffect(() => {
     if (appliedUrlFilters.current) return;
@@ -318,8 +306,8 @@ export function PaymentBatchManagement() {
       });
       setNoticeDialogOpen(false);
       setIssuedBatches(result.batches);
-      await load();
       setView("PENDING");
+      setPage(0);
       showSuccess(`Đã phát hành ${result.batches.length} đợt thu cho ${selectedStudentCount} học viên`);
       try {
         const pdf = await downloadNoticeBatchesPdf(result.batches.map((batch) => batch.id));
@@ -433,9 +421,9 @@ export function PaymentBatchManagement() {
       </Stack>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))" }, gap: { xs: 1, md: 1.5 } }}>
-        <DashboardMetric icon={<CampaignOutlinedIcon />} label="Chưa phát" value={unissuedFees.length} tone="primary" />
-        <DashboardMetric icon={<HourglassTopOutlinedIcon />} label="Đang chờ" value={visiblePendingBatches.length} tone="warning" />
-        <DashboardMetric icon={<TaskAltOutlinedIcon />} label="Đã thanh toán" value={visibleSuccessfulBatches.length} tone="success" />
+        <DashboardMetric icon={<CampaignOutlinedIcon />} label="Chưa phát" value={unissuedTotal} tone="primary" />
+        <DashboardMetric icon={<HourglassTopOutlinedIcon />} label="Đang chờ" value={pendingTotal} tone="warning" />
+        <DashboardMetric icon={<TaskAltOutlinedIcon />} label="Đã thanh toán" value={successfulTotal} tone="success" />
         <DashboardMetric icon={<CheckCircleOutlineOutlinedIcon />} label="Đang chọn" value={selectedCount} tone="info" detail={selectedCount ? money(selectedTotal) : undefined} />
       </Box>
 
@@ -504,10 +492,10 @@ export function PaymentBatchManagement() {
       </Paper>
 
       <Paper variant="outlined" sx={{ px: { xs: 1, md: 1.5 }, borderRadius: 2.5 }}>
-        <Tabs value={view} variant="scrollable" scrollButtons="auto" onChange={(_, value: View) => { setView(value); setSelectedFeeIds([]); setSelectedBatchIds([]); }}>
-          <Tab icon={<CampaignOutlinedIcon fontSize="small" />} iconPosition="start" value="UNISSUED" label={`Chưa phát · ${unissuedFees.length}`} />
-          <Tab icon={<HourglassTopOutlinedIcon fontSize="small" />} iconPosition="start" value="PENDING" label={`Đang chờ · ${visiblePendingBatches.length}`} />
-          <Tab icon={<TaskAltOutlinedIcon fontSize="small" />} iconPosition="start" value="SUCCESS" label={`Đã thanh toán · ${visibleSuccessfulBatches.length}`} />
+        <Tabs value={view} variant="scrollable" scrollButtons="auto" onChange={(_, value: View) => { setView(value); setPage(0); setSelectedFeeIds([]); setSelectedBatchIds([]); }}>
+          <Tab icon={<CampaignOutlinedIcon fontSize="small" />} iconPosition="start" value="UNISSUED" label={`Chưa phát · ${unissuedTotal}`} />
+          <Tab icon={<HourglassTopOutlinedIcon fontSize="small" />} iconPosition="start" value="PENDING" label={`Đang chờ · ${pendingTotal}`} />
+          <Tab icon={<TaskAltOutlinedIcon fontSize="small" />} iconPosition="start" value="SUCCESS" label={`Đã thanh toán · ${successfulTotal}`} />
         </Tabs>
       </Paper>
 
@@ -563,6 +551,7 @@ export function PaymentBatchManagement() {
                 </TableBody>
               </Table>
             </Box>
+            {renderPagination(unissuedTotal, "Khoản học phí")}
           </Paper>
           <SelectionSummary count={selectedFeeIds.length} total={selectedFeeTotal} details={selectedFees.slice(0, 5).map((fee) => `${fee.feeNo} · ${fee.student.fullName}`)}>
             <Button fullWidth variant="contained" startIcon={<SendOutlinedIcon />} onClick={openNoticeDialog} disabled={!selectedFeeIds.length || selectedFeeIds.length > 500}>
@@ -604,6 +593,7 @@ export function PaymentBatchManagement() {
                 </TableBody>
               </Table>
             </Box>
+            {renderPagination(pendingTotal, "Đợt thu")}
           </Paper>
           <SelectionSummary count={selectedBatchIds.length} total={selectedBatchTotal} details={selectedBatches.slice(0, 5).map((batch) => `${batch.batchNo} · ${batch.student.fullName}`)}>
             <Button fullWidth variant="contained" color="warning" startIcon={<CallSplitOutlinedIcon />} onClick={() => openRestructureDialog("SPLIT")} disabled={!splitTarget || splitTarget.allocations.length < 2}>Tách đợt thu</Button>
@@ -638,6 +628,7 @@ export function PaymentBatchManagement() {
               </TableBody>
             </Table>
             </Box>
+            {renderPagination(successfulTotal, "Đợt thu")}
           </Paper>
         </Stack>
       )}

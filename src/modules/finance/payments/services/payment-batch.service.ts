@@ -909,6 +909,11 @@ export async function restructurePendingBatches(
 export async function listPaymentBatches(params: {
   transactionCode?: string;
   studentCode?: string;
+  studentId?: string;
+  search?: string;
+  classId?: string;
+  billingYear?: number;
+  billingMonth?: number;
   status?: PaymentBatchStatus;
   page: number;
   pageSize: number;
@@ -934,26 +939,71 @@ export async function listPaymentBatches(params: {
         );
       })()
     : [];
+  const search = params.search?.trim();
+  const filters: Prisma.PaymentBatchWhereInput[] = [];
+  if (transactionSearchValues.length) {
+    filters.push({
+      OR: transactionSearchValues.flatMap((value) => [
+        { batchNo: { contains: value, mode: "insensitive" as const } },
+        { bankTransactionNo: { contains: value, mode: "insensitive" as const } },
+        { transactionReference: { contains: value, mode: "insensitive" as const } },
+      ]),
+    });
+  }
+  if (search) {
+    filters.push({
+      OR: [
+        { batchNo: { contains: search, mode: "insensitive" } },
+        { student: { code: { contains: search, mode: "insensitive" } } },
+        { student: { fullName: { contains: search, mode: "insensitive" } } },
+        { allocations: { some: { tuitionFee: { feeNo: { contains: search, mode: "insensitive" } } } } },
+        {
+          allocations: {
+            some: {
+              tuitionFee: {
+                class: { code: { contains: search, mode: "insensitive" } },
+              },
+            },
+          },
+        },
+        {
+          allocations: {
+            some: {
+              tuitionFee: {
+                class: { name: { contains: search, mode: "insensitive" } },
+              },
+            },
+          },
+        },
+      ],
+    });
+  }
   const where: Prisma.PaymentBatchWhereInput = {
-    ...(transactionSearchValues.length
-      ? {
-          OR: [
-            ...transactionSearchValues.flatMap((value) => [
-              { batchNo: { contains: value, mode: "insensitive" as const } },
-              { bankTransactionNo: { contains: value, mode: "insensitive" as const } },
-              { transactionReference: { contains: value, mode: "insensitive" as const } },
-            ]),
-          ],
-        }
-      : {}),
     ...(params.status ? { status: params.status } : {}),
-    ...(params.studentCode
+    ...(params.studentCode || params.studentId
       ? {
           student: {
-            code: { contains: params.studentCode, mode: "insensitive" },
+            ...(params.studentCode
+              ? { code: { contains: params.studentCode, mode: "insensitive" as const } }
+              : {}),
+            ...(params.studentId ? { id: params.studentId } : {}),
           },
         }
       : {}),
+    ...(params.classId || params.billingYear || params.billingMonth
+      ? {
+          allocations: {
+            some: {
+              tuitionFee: {
+                ...(params.classId ? { classId: params.classId } : {}),
+                ...(params.billingYear ? { billingYear: params.billingYear } : {}),
+                ...(params.billingMonth ? { billingMonth: params.billingMonth } : {}),
+              },
+            },
+          },
+        }
+      : {}),
+    ...(filters.length ? { AND: filters } : {}),
   };
   const [items, total] = await Promise.all([
     prisma.paymentBatch.findMany({

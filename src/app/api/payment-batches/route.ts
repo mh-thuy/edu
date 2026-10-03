@@ -26,9 +26,27 @@ export async function GET(request: NextRequest) {
       return apiError("VALIDATION_ERROR", "Trạng thái payment batch không hợp lệ", 422);
     }
     const status = rawStatus ? rawStatus as PaymentBatchStatus : undefined;
+    const rawClassId = params.get("classId");
+    if (rawClassId && !z.string().uuid().safeParse(rawClassId).success) {
+      return apiError("VALIDATION_ERROR", "Mã lớp không hợp lệ", 422);
+    }
+    const rawStudentId = params.get("studentId");
+    if (rawStudentId && !z.string().uuid().safeParse(rawStudentId).success) {
+      return apiError("VALIDATION_ERROR", "Mã học viên không hợp lệ", 422);
+    }
+    const rawMonth = params.get("month");
+    const month = rawMonth ? z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).safeParse(rawMonth) : null;
+    if (rawMonth && (!month || !month.success)) {
+      return apiError("VALIDATION_ERROR", "Kỳ học phí phải có định dạng YYYY-MM", 400);
+    }
     return apiSuccess(await listPaymentBatches({
       transactionCode: params.get("transactionCode") || undefined,
       studentCode: params.get("studentCode") || undefined,
+      studentId: rawStudentId || undefined,
+      search: params.get("search") || undefined,
+      classId: rawClassId || undefined,
+      billingYear: month?.success ? Number(month.data.slice(0, 4)) : undefined,
+      billingMonth: month?.success ? Number(month.data.slice(5, 7)) : undefined,
       status,
       ...pagination,
     }));

@@ -28,6 +28,24 @@ export async function GET(request: NextRequest) {
     if (rawStatus && !validStatuses.includes(rawStatus as TuitionFeeStatus)) {
       return apiError("VALIDATION_ERROR", "Trạng thái học phí không hợp lệ", 422);
     }
+    const rawStatuses = params.get("statuses");
+    const statuses = rawStatuses?.split(",").map((value) => value.trim()).filter(Boolean);
+    if (rawStatus && rawStatuses) {
+      return apiError("VALIDATION_ERROR", "Chỉ được truyền status hoặc statuses", 422);
+    }
+    if (statuses?.some((value) => !validStatuses.includes(value as TuitionFeeStatus))) {
+      return apiError("VALIDATION_ERROR", "Danh sách trạng thái học phí không hợp lệ", 422);
+    }
+    if (statuses && new Set(statuses).size !== statuses.length) {
+      return apiError("VALIDATION_ERROR", "Danh sách trạng thái học phí bị trùng", 422);
+    }
+    if (rawStatuses !== null && !statuses?.length) {
+      return apiError("VALIDATION_ERROR", "Danh sách trạng thái học phí không được để trống", 422);
+    }
+    const rawUnissuedOnly = params.get("unissuedOnly");
+    if (rawUnissuedOnly !== null && !["true", "false"].includes(rawUnissuedOnly)) {
+      return apiError("VALIDATION_ERROR", "Tham số unissuedOnly không hợp lệ", 422);
+    }
     const status = rawStatus ? rawStatus as TuitionFeeStatus : undefined;
     const rawBillingType = params.get("billingType");
     if (rawBillingType && !Object.values(TuitionFeeBillingType).includes(rawBillingType as TuitionFeeBillingType)) {
@@ -43,6 +61,9 @@ export async function GET(request: NextRequest) {
       studentCode: params.get("studentCode") || undefined,
       classId: params.get("classId") || undefined,
       status,
+      statuses: statuses as TuitionFeeStatus[] | undefined,
+      search: params.get("search") || undefined,
+      unissuedOnly: rawUnissuedOnly === "true",
       billingType,
       billingYear,
       billingMonth,

@@ -45,62 +45,62 @@ export type NoticeBankAccount = {
   accountName: string;
 };
 
-type Paginated<T> = {
+export type NoticePage<T> = {
   items: T[];
-  pagination?: { totalPages: number };
+  total: number;
+  page: number;
+  pageSize: number;
+  pagination: { total: number; totalPages: number };
 };
 
-async function fetchAll<T>(
-  endpoint: string,
-  getPageEndpoint: (page: number) => string,
-): Promise<T[]> {
-  const firstResponse = await fetch(endpoint);
-  if (!firstResponse.ok) {
-    throw new Error(await extractApiErrorMessage(firstResponse, "Không thể tải dữ liệu"));
+export type NoticeListFilters = {
+  month: string;
+  page: number;
+  pageSize: number;
+  search: string;
+  studentId?: string;
+  classId?: string;
+};
+
+function buildListQuery(filters: NoticeListFilters) {
+  const params = new URLSearchParams({
+    page: String(filters.page),
+    pageSize: String(filters.pageSize),
+  });
+  if (filters.month) params.set("month", filters.month);
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.studentId) params.set("studentId", filters.studentId);
+  if (filters.classId) params.set("classId", filters.classId);
+  return params;
+}
+
+async function fetchPage<T>(endpoint: string): Promise<NoticePage<T>> {
+  const response = await fetch(endpoint);
+  if (!response.ok) {
+    throw new Error(await extractApiErrorMessage(response, "Không thể tải dữ liệu"));
   }
-  const first = await unwrapApiResponse<Paginated<T>>(firstResponse);
-  const totalPages = first.pagination?.totalPages ?? 1;
-  if (totalPages === 1) return first.items;
-  const rest = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) =>
-      fetch(getPageEndpoint(index + 2)).then(async (response) => {
-        if (!response.ok) {
-          throw new Error(await extractApiErrorMessage(response, "Không thể tải đủ dữ liệu"));
-        }
-        return unwrapApiResponse<Paginated<T>>(response);
-      }),
-    ),
-  );
-  return [first.items, ...rest.map((page) => page.items)].flat();
+  return unwrapApiResponse<NoticePage<T>>(response);
 }
 
-export async function fetchOutstandingFees(month: string) {
-  const statuses: NoticeFeeStatus[] = ["UNPAID", "PARTIAL", "OVERDUE"];
-  const results = await Promise.all(
-    statuses.map((status) => {
-      const query = `status=${status}&month=${encodeURIComponent(month)}&page=1&pageSize=100`;
-      return fetchAll<NoticeFee>(
-        `/api/tuition-fees?${query}`,
-        (page) => `/api/tuition-fees?${status === "OVERDUE" ? "status=OVERDUE" : `status=${status}`}&month=${encodeURIComponent(month)}&page=${page}&pageSize=100`,
-      );
-    }),
-  );
-  return [...new Map(results.flat().map((fee) => [fee.id, fee])).values()];
+export async function fetchOutstandingFees(filters: NoticeListFilters) {
+  const query = buildListQuery(filters);
+  query.set("statuses", ["UNPAID", "PARTIAL", "OVERDUE"].join(","));
+  query.set("unissuedOnly", "true");
+  return fetchPage<NoticeFee>(`/api/tuition-fees?${query}`);
 }
 
-export async function fetchPaymentBatches(status: "PENDING" | "SUCCESS") {
-  return fetchAll<PendingBatch>(
-    `/api/payment-batches?status=${status}&page=1&pageSize=100`,
-    (page) => `/api/payment-batches?status=${status}&page=${page}&pageSize=100`,
-  );
+export async function fetchPaymentBatches(status: "PENDING" | "SUCCESS", filters: NoticeListFilters) {
+  const query = buildListQuery(filters);
+  query.set("status", status);
+  return fetchPage<PendingBatch>(`/api/payment-batches?${query}`);
 }
 
-export async function fetchPendingBatches() {
-  return fetchPaymentBatches("PENDING");
+export async function fetchPendingBatches(filters: NoticeListFilters) {
+  return fetchPaymentBatches("PENDING", filters);
 }
 
-export async function fetchSuccessfulBatches() {
-  return fetchPaymentBatches("SUCCESS");
+export async function fetchSuccessfulBatches(filters: NoticeListFilters) {
+  return fetchPaymentBatches("SUCCESS", filters);
 }
 
 export async function fetchNoticeBankAccounts() {
