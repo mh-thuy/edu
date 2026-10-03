@@ -19,6 +19,13 @@ fi
 
 printf "\n=== BACKUP DATABASE · PUSH · VERCEL PRODUCTION ===\n"
 
+section "Xác thực tài khoản Vercel"
+if ! npx vercel whoami; then
+	printf "Chưa đăng nhập. Vercel CLI sẽ yêu cầu bạn xác thực trong terminal/trình duyệt.\n"
+	npx vercel login
+	npx vercel whoami
+fi
+
 section "Kiểm tra thay đổi"
 dirty_files="$(git status --porcelain --untracked-files=all | awk '
 	substr($0, 4) != ".vscode/tasks.json" &&
