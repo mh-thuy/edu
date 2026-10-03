@@ -25,7 +25,7 @@ import { TeacherForm } from "./TeacherForm";
 import type { ReactElement } from "react";
 import type { z } from "zod";
 import { teacherCreateSchema } from "@/modules/teacher/schemas/teacher.schema";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type TeacherFormData = z.infer<typeof teacherCreateSchema>;
 
@@ -159,8 +159,9 @@ const getColumns = (): GridColDef<TeacherRow>[] => [
 
 export function TeacherList(): ReactElement {
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("ALL");
-  const debouncedSearch = useDebouncedValue(search.trim());
+  const [appliedStatus, setAppliedStatus] = useState("ALL");
 
   const {
     data,
@@ -171,11 +172,25 @@ export function TeacherList(): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Teacher>("/api/teachers", { pageSize: 10, search: debouncedSearch, status });
+  } = useList<Teacher>("/api/teachers", { pageSize: 10, search: appliedSearch, status: appliedStatus });
 
   useEffect(() => {
     setPageNumber(1);
-  }, [debouncedSearch, setPageNumber]);
+  }, [appliedSearch, appliedStatus, setPageNumber]);
+
+  const applyFilters = useCallback(() => {
+    setAppliedSearch(search.trim());
+    setAppliedStatus(status);
+    setPageNumber(1);
+  }, [search, status, setPageNumber]);
+
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setAppliedSearch("");
+    setStatus("ALL");
+    setAppliedStatus("ALL");
+    setPageNumber(1);
+  }, [setPageNumber]);
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -299,6 +314,7 @@ export function TeacherList(): ReactElement {
             placeholder="Tìm theo mã hoặc số điện thoại..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             size="small"
             fullWidth
             InputProps={{
@@ -323,7 +339,6 @@ export function TeacherList(): ReactElement {
             displayEmpty
             onChange={(event) => {
               setStatus(event.target.value);
-              setPageNumber(1);
             }}
             sx={{ minWidth: 180 }}
           >
@@ -331,17 +346,7 @@ export function TeacherList(): ReactElement {
             <MenuItem value="ACTIVE">Đang hoạt động</MenuItem>
             <MenuItem value="INACTIVE">Ngừng hoạt động</MenuItem>
           </Select>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setSearch("");
-              setStatus("ALL");
-              setPageNumber(1);
-            }}
-            disabled={!search && status === "ALL"}
-          >
-            Xóa bộ lọc
-          </Button>
+          <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim()) || status !== "ALL" || Boolean(appliedSearch) || appliedStatus !== "ALL"} isLoading={isLoading} />
         </Stack>
       </Paper>
 

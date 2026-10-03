@@ -29,6 +29,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { FilterActions } from "@/components/shared/FilterActions";
 import { StudentSelectDialog, type StudentItem } from "@/components/shared/dialogs/StudentSelectDialog";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
@@ -234,8 +235,12 @@ export function TuitionList() {
                 {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
               </Select>
             </FormControl>
-            <Button variant="contained" onClick={applyFilters} sx={{ minWidth: { xs: "100%", sm: 96 }, whiteSpace: "nowrap" }}>Tìm kiếm</Button>
-            <Button variant="outlined" onClick={clearFilters} disabled={!studentCode && !classId && !status && !billingType && !billingMonth} sx={{ minWidth: { xs: "100%", sm: 96 }, whiteSpace: "nowrap" }}>Xóa lọc</Button>
+            <FilterActions
+              onSearch={applyFilters}
+              onClear={clearFilters}
+              hasFilters={Boolean(studentCode || classId || status || billingType || billingMonth || appliedStudentCode || appliedClassId || appliedStatus || appliedBillingType || appliedBillingMonth)}
+              isLoading={loading}
+            />
           </Stack>
           <Collapse in={showAdvancedFilters}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>

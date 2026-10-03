@@ -15,11 +15,11 @@ import {
   Typography,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
 import { useState, useCallback, type ReactElement } from "react";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useList } from "@/hooks/useList";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 // Minimum interface selectable items must satisfy
 export interface SelectableItem {
@@ -141,25 +141,12 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 ),
               }}
             />
-            <Stack direction="row" spacing={1} sx={{ width: { xs: "100%", sm: "auto" } }}>
-              <Button
-                variant="contained"
-                onClick={handleSearch}
-                sx={{ whiteSpace: "nowrap", flex: { xs: 1, sm: "initial" } }}
-              >
-                Tìm
-              </Button>
-              {(searchInput || committedSearch) && (
-                <Button
-                  variant="outlined"
-                  onClick={handleClear}
-                  startIcon={<ClearIcon />}
-                  sx={{ whiteSpace: "nowrap", flex: { xs: 1, sm: "initial" } }}
-                >
-                  Xóa
-                </Button>
-              )}
-            </Stack>
+            <FilterActions
+              onSearch={handleSearch}
+              onClear={handleClear}
+              hasFilters={Boolean(searchInput || committedSearch)}
+              isLoading={isLoading}
+            />
           </Stack>
 
           {/* Error state */}

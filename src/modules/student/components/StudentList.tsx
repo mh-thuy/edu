@@ -33,8 +33,8 @@ import { StudentForm } from "./StudentForm";
 import type { ReactElement } from "react";
 import type { z } from "zod";
 import { studentCreateSchema } from "@/modules/student/schemas/student.schema";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type StudentFormData = z.infer<typeof studentCreateSchema>;
 
@@ -182,8 +182,9 @@ const getColumns = (): GridColDef<StudentRow>[] => [
 
 export function StudentList(): ReactElement {
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("ALL");
-  const debouncedSearch = useDebouncedValue(search.trim());
+  const [appliedStatus, setAppliedStatus] = useState("ALL");
 
   const {
     data,
@@ -194,11 +195,25 @@ export function StudentList(): ReactElement {
     setPageNumber,
     setPageSize,
     refresh,
-  } = useList<Student>("/api/students", { pageSize: 10, search: debouncedSearch, status });
+  } = useList<Student>("/api/students", { pageSize: 10, search: appliedSearch, status: appliedStatus });
 
   useEffect(() => {
     setPageNumber(1);
-  }, [debouncedSearch, setPageNumber]);
+  }, [appliedSearch, appliedStatus, setPageNumber]);
+
+  const applyFilters = useCallback(() => {
+    setAppliedSearch(search.trim());
+    setAppliedStatus(status);
+    setPageNumber(1);
+  }, [search, status, setPageNumber]);
+
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setAppliedSearch("");
+    setStatus("ALL");
+    setAppliedStatus("ALL");
+    setPageNumber(1);
+  }, [setPageNumber]);
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -308,8 +323,8 @@ export function StudentList(): ReactElement {
   const exportExcel = useCallback(async () => {
     try {
       setIsExporting(true);
-      const query = new URLSearchParams({ export: "xlsx", status });
-      if (search.trim()) query.set("search", search.trim());
+      const query = new URLSearchParams({ export: "xlsx", status: appliedStatus });
+      if (appliedSearch) query.set("search", appliedSearch);
 
       const response = await fetch(`/api/students?${query.toString()}`);
       if (!response.ok) {
@@ -336,7 +351,7 @@ export function StudentList(): ReactElement {
     } finally {
       setIsExporting(false);
     }
-  }, [search, status, showError]);
+  }, [appliedSearch, appliedStatus, showError]);
 
   const tableData = (data?.items || []).map((row) => ({
     ...row,
@@ -519,6 +534,7 @@ export function StudentList(): ReactElement {
             placeholder="Tìm theo mã học sinh, họ tên hoặc số điện thoại..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             size="small"
             fullWidth
             InputProps={{
@@ -543,7 +559,6 @@ export function StudentList(): ReactElement {
             displayEmpty
             onChange={(event) => {
               setStatus(event.target.value);
-              setPageNumber(1);
             }}
             sx={{ minWidth: 180 }}
           >
@@ -551,17 +566,7 @@ export function StudentList(): ReactElement {
             <MenuItem value="ACTIVE">Đang hoạt động</MenuItem>
             <MenuItem value="INACTIVE">Ngừng hoạt động</MenuItem>
           </Select>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setSearch("");
-              setStatus("ALL");
-              setPageNumber(1);
-            }}
-            disabled={!search && status === "ALL"}
-          >
-            Xóa bộ lọc
-          </Button>
+          <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim()) || status !== "ALL" || Boolean(appliedSearch) || appliedStatus !== "ALL"} isLoading={isLoading} />
         </Stack>
       </Paper>
 

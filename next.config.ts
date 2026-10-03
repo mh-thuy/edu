@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "/api/payment-batches/*/notice/pdf": ["./public/fonts/DejaVuSans.ttf"],
     "/api/payment-batches/notice/pdf": ["./public/fonts/DejaVuSans.ttf"],
     "/api/tuition-receipts/[id]/pdf": ["./public/fonts/DejaVuSans.ttf"],
+    "/api/classes/[id]/tuition-notice/pdf": ["./public/fonts/DejaVuSans.ttf"],
   },
   eslint: {
     ignoreDuringBuilds: true,

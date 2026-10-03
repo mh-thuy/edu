@@ -37,6 +37,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { clampMonth } from "@/utils/date";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type ClassData = {
   id: string;
@@ -85,6 +86,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [fees, setFees] = useState<Fee[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
+  const [appliedStudentSearch, setAppliedStudentSearch] = useState("");
   const [sortKey, setSortKey] = useState<FeeSortKey>("student");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [month, setMonth] = useState(currentMonth);
@@ -140,7 +142,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   useEffect(() => { void load(); }, [load]);
 
   const filteredFees = useMemo(() => {
-    const query = studentSearch.trim().toLocaleLowerCase("vi-VN");
+    const query = appliedStudentSearch.trim().toLocaleLowerCase("vi-VN");
     const filtered = query
       ? fees.filter((fee) => fee.student.fullName.toLocaleLowerCase("vi-VN").includes(query))
       : fees;
@@ -162,7 +164,16 @@ export function ClassTuitionManagement({ id }: { id: string }) {
       }
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [fees, sortDirection, sortKey, studentSearch]);
+  }, [fees, sortDirection, sortKey, appliedStudentSearch]);
+
+  function applyStudentSearch() {
+    setAppliedStudentSearch(studentSearch.trim());
+  }
+
+  function clearStudentSearch() {
+    setStudentSearch("");
+    setAppliedStudentSearch("");
+  }
 
   function handleSort(nextKey: FeeSortKey) {
     if (sortKey === nextKey) {
@@ -302,6 +313,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
             placeholder="Tìm theo tên học viên..."
             value={studentSearch}
             onChange={(event) => setStudentSearch(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applyStudentSearch(); }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -314,6 +326,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
               "& .MuiOutlinedInput-root": { borderRadius: 2 },
             }}
           />
+          <FilterActions onSearch={applyStudentSearch} onClear={clearStudentSearch} hasFilters={Boolean(studentSearch.trim() || appliedStudentSearch)} isLoading={loading} />
           <Chip size="small" variant="outlined" label={`${filteredFees.length} khoản phí`} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
         </Stack>
       </Stack>
@@ -351,7 +364,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
                 </TableRow>
               );
             })}
-            {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{studentSearch.trim() ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{studentSearch.trim() ? "Thử tìm bằng tên khác hoặc xóa nội dung tìm kiếm." : classNotActive ? "Chỉ có thể tạo học phí khi lớp ở trạng thái Hoạt động." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
+            {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{appliedStudentSearch ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{appliedStudentSearch ? "Thử tìm bằng tên khác hoặc xóa bộ lọc." : classNotActive ? "Chỉ có thể tạo học phí khi lớp ở trạng thái Hoạt động." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
           </TableBody>
         </Table>
       </Box>

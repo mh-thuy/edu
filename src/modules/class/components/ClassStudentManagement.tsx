@@ -36,13 +36,13 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { clampMonth } from "@/utils/date";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type ClassSubject = {
   id: string;
@@ -114,9 +114,11 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [month, setMonth] = useState(currentMonth);
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search.trim());
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState("ALL");
   const [subjectFilter, setSubjectFilter] = useState("ALL");
+  const [appliedSubjectFilter, setAppliedSubjectFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [studentPage, setStudentPage] = useState(0);
   const [studentPageSize, setStudentPageSize] = useState(20);
@@ -157,7 +159,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     try {
       const [classResponse, studentsResponse] = await Promise.all([
         fetch(`/api/classes/${id}`),
-        fetch(`/api/classes/${id}/students?page=${studentPage + 1}&pageSize=${studentPageSize}&search=${encodeURIComponent(debouncedSearch)}&status=${statusFilter === "ALL" ? "" : statusFilter}&subjectId=${subjectFilter === "ALL" ? "" : subjectFilter}&month=${encodeURIComponent(month)}`),
+        fetch(`/api/classes/${id}/students?page=${studentPage + 1}&pageSize=${studentPageSize}&search=${encodeURIComponent(appliedSearch)}&status=${appliedStatusFilter === "ALL" ? "" : appliedStatusFilter}&subjectId=${appliedSubjectFilter === "ALL" ? "" : appliedSubjectFilter}&month=${encodeURIComponent(month)}`),
       ]);
       if (!classResponse.ok) throw new Error(await extractApiErrorMessage(classResponse, "Không thể tải lớp học"));
       if (!studentsResponse.ok) throw new Error(await extractApiErrorMessage(studentsResponse, "Không thể tải danh sách học viên"));
@@ -178,7 +180,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     } finally {
       if (currentRequest === requestVersion.current) setLoading(false);
     }
-  }, [id, month, debouncedSearch, statusFilter, studentPage, studentPageSize, subjectFilter]);
+  }, [id, month, appliedSearch, appliedStatusFilter, studentPage, studentPageSize, appliedSubjectFilter]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -204,7 +206,24 @@ export function ClassStudentManagement({ id }: { id: string }) {
 
   useEffect(() => {
     setStudentPage(0);
-  }, [month, debouncedSearch, statusFilter, subjectFilter]);
+  }, [month, appliedSearch, appliedStatusFilter, appliedSubjectFilter]);
+
+  function applyFilters() {
+    setAppliedSearch(search.trim());
+    setAppliedStatusFilter(statusFilter);
+    setAppliedSubjectFilter(subjectFilter);
+    setStudentPage(0);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setAppliedSearch("");
+    setStatusFilter("ALL");
+    setAppliedStatusFilter("ALL");
+    setSubjectFilter("ALL");
+    setAppliedSubjectFilter("ALL");
+    setStudentPage(0);
+  }
 
   function openSubjectDialog(student: StudentItem, existing?: StudentRow) {
     const registered = existing?.subjects.map((item) => item.classSubjectId) ?? [];
@@ -442,10 +461,11 @@ export function ClassStudentManagement({ id }: { id: string }) {
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}><FilterAltOutlinedIcon color="action" fontSize="small" /><Typography fontWeight={700}>Bộ lọc học viên</Typography></Stack>
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <AppTextField size="small" label="Tìm mã, tên, số điện thoại" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ minWidth: 280, flex: 1 }} />
+        <AppTextField size="small" label="Tìm mã, tên, số điện thoại" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }} sx={{ minWidth: 280, flex: 1 }} />
         <FormControl size="small" sx={{ minWidth: 150 }}><InputLabel>Trạng thái</InputLabel><Select label="Trạng thái" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><MenuItem value="ALL">Tất cả</MenuItem><MenuItem value="ACTIVE">Đang học</MenuItem><MenuItem value="PAUSED">Tạm nghỉ</MenuItem><MenuItem value="COMPLETED">Đã hoàn thành</MenuItem><MenuItem value="LEFT">Đã rời lớp</MenuItem></Select></FormControl>
         <FormControl size="small" sx={{ minWidth: 170 }}><InputLabel>Môn học</InputLabel><Select label="Môn học" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}><MenuItem value="ALL">Tất cả môn</MenuItem>{classData.classSubjects.map((subject) => <MenuItem key={subject.id} value={subject.id}>{subject.subject.name}</MenuItem>)}</Select></FormControl>
         <MonthPickerField label="Kỳ học phí" value={month} onChange={setMonth} minMonth={classData.startDate?.slice(0, 7)} maxMonth={classData.endDate?.slice(0, 7)} textFieldProps={{ size: "small" }} />
+        <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim() || appliedSearch) || statusFilter !== "ALL" || appliedStatusFilter !== "ALL" || subjectFilter !== "ALL" || appliedSubjectFilter !== "ALL"} isLoading={loading} />
       </Stack>
     </Paper>
     <Paper sx={{ overflowX: "auto" }}>

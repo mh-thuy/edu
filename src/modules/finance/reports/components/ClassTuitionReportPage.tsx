@@ -17,6 +17,7 @@ import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import RestartAltOutlinedIcon from "@mui/icons-material/RestartAltOutlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
@@ -257,9 +258,14 @@ export function ClassTuitionReportPage() {
 
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5}>
             <Typography variant="body2" color="text.secondary">File Excel gồm danh sách học viên và số tiền đã thu theo môn.</Typography>
-            <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
-              {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
-            </Button>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { setSelectedClass(null); setSubjects([]); setSelectedSubjectId(""); setMonth(currentMonth()); setError(""); }} disabled={exporting || (!selectedClass && !selectedSubjectId && month === currentMonth())} sx={{ whiteSpace: "nowrap" }}>
+                Đặt lại
+              </Button>
+              <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
+                {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
+              </Button>
+            </Stack>
           </Stack>
         </Stack>
       </Paper>}

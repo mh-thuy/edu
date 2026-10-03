@@ -21,12 +21,11 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
-import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type Subject = {
   id: string;
@@ -37,7 +36,7 @@ type Subject = {
 export function SubjectManagement() {
   const [items, setItems] = useState<Subject[]>([]);
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search.trim());
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Subject | null>(null);
   const [name, setName] = useState("");
@@ -51,7 +50,7 @@ export function SubjectManagement() {
     setError("");
     try {
       const response = await fetch(
-        `/api/subjects?includeInactive=true${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ""}`,
+        `/api/subjects?includeInactive=true${appliedSearch ? `&search=${encodeURIComponent(appliedSearch)}` : ""}`,
       );
       if (!response.ok) {
         throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách môn học"));
@@ -62,11 +61,20 @@ export function SubjectManagement() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch]);
+  }, [appliedSearch]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  function applySearch() {
+    setAppliedSearch(search.trim());
+  }
+
+  function clearSearch() {
+    setSearch("");
+    setAppliedSearch("");
+  }
 
   function openCreate() {
     setEditing(null);
@@ -130,13 +138,11 @@ export function SubjectManagement() {
             placeholder="Tìm theo tên môn học..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applySearch(); }}
             sx={{ minWidth: { sm: 280 }, maxWidth: 460, flex: 1 }}
             InputProps={{ startAdornment: <SearchOutlinedIcon fontSize="small" color="action" sx={{ mr: 1 }} /> }}
           />
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
-            <Button variant="outlined" onClick={() => setSearch("")} disabled={!search || loading}>Xóa bộ lọc</Button>
-          </Stack>
+          <FilterActions onSearch={applySearch} onClear={clearSearch} hasFilters={Boolean(search.trim() || appliedSearch)} isLoading={loading} />
         </Stack>
       </Paper>
       <Paper sx={{ overflow: "auto" }}>

@@ -39,6 +39,7 @@ import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ReceiptDetailDialog } from "./ReceiptDetailDialog";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type Receipt = {
   id: string;
@@ -100,9 +101,13 @@ export function ReceiptList() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [appliedStatus, setAppliedStatus] = useState("");
   const [dateFrom, setDateFrom] = useState("");
+  const [appliedDateFrom, setAppliedDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [appliedDateTo, setAppliedDateTo] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -111,7 +116,7 @@ export function ReceiptList() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const hasInvalidDateRange = dateFrom && dateTo && dateFrom > dateTo;
+    const hasInvalidDateRange = appliedDateFrom && appliedDateTo && appliedDateFrom > appliedDateTo;
     if (hasInvalidDateRange) {
       setItems([]);
       setTotal(0);
@@ -123,10 +128,10 @@ export function ReceiptList() {
       setLoading(true);
       setError("");
       const params = new URLSearchParams({ page: String(page + 1), pageSize: String(pageSize) });
-      if (search.trim()) params.set("search", search.trim());
-      if (status) params.set("status", status);
-      if (dateFrom) params.set("dateFrom", dateFrom);
-      if (dateTo) params.set("dateTo", dateTo);
+      if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
+      if (appliedStatus) params.set("status", appliedStatus);
+      if (appliedDateFrom) params.set("dateFrom", appliedDateFrom);
+      if (appliedDateTo) params.set("dateTo", appliedDateTo);
       void fetch(`/api/receipts?${params}`, { signal: controller.signal })
         .then(async (response) => {
           if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải biên lai"));
@@ -149,17 +154,29 @@ export function ReceiptList() {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [page, pageSize, search, status, dateFrom, dateTo, refreshKey]);
+  }, [page, pageSize, appliedSearch, appliedStatus, appliedDateFrom, appliedDateTo, refreshKey]);
 
   const activeCount = items.filter((item) => item.status === "ACTIVE").length;
   const cancelledCount = items.filter((item) => item.status === "CANCELLED").length;
-  const hasFilters = Boolean(search || status || dateFrom || dateTo);
+  const hasFilters = Boolean(search || status || dateFrom || dateTo || appliedSearch || appliedStatus || appliedDateFrom || appliedDateTo);
+
+  function applyFilters() {
+    setAppliedSearch(search.trim());
+    setAppliedStatus(status);
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+    setPage(0);
+  }
 
   function resetFilters() {
     setSearch("");
+    setAppliedSearch("");
     setStatus("");
+    setAppliedStatus("");
     setDateFrom("");
+    setAppliedDateFrom("");
     setDateTo("");
+    setAppliedDateTo("");
     setPage(0);
   }
 
@@ -195,22 +212,23 @@ export function ReceiptList() {
           <AppTextField
             fullWidth
             value={search}
-            onChange={(event) => { setSearch(event.target.value); setPage(0); }}
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             placeholder="Tìm số biên lai, mã học viên, họ tên hoặc mã học phí"
             InputProps={{ startAdornment: <SearchIcon fontSize="small" sx={{ mr: 1, color: "text.secondary" }} /> }}
             sx={{ flex: 1 }}
           />
-          <AppTextField select label="Trạng thái" value={status} onChange={(event) => { setStatus(event.target.value); setPage(0); }} sx={{ minWidth: { md: 190 } }}>
+          <AppTextField select label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value)} sx={{ minWidth: { md: 190 } }}>
             <MenuItem value="">Tất cả trạng thái</MenuItem>
             <MenuItem value="ACTIVE">Đang hiệu lực</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </AppTextField>
-          <Button variant="outlined" onClick={resetFilters} disabled={!hasFilters} sx={{ minWidth: { md: 120 } }}>Xóa bộ lọc</Button>
+          <FilterActions onSearch={applyFilters} onClear={resetFilters} hasFilters={hasFilters} isLoading={loading} />
         </Stack>
         <Collapse in={showDateFilters}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ pt: 1.5 }}>
-            <DatePickerField label="Từ ngày" value={dateFrom} onChange={(value) => { setDateFrom(value); setPage(0); }} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo) }} />
-            <DatePickerField label="Đến ngày" value={dateTo} onChange={(value) => { setDateTo(value); setPage(0); }} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo), helperText: dateFrom && dateTo && dateFrom > dateTo ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc" : undefined }} />
+            <DatePickerField label="Từ ngày" value={dateFrom} onChange={setDateFrom} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo) }} />
+            <DatePickerField label="Đến ngày" value={dateTo} onChange={setDateTo} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo), helperText: dateFrom && dateTo && dateFrom > dateTo ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc" : undefined }} />
           </Stack>
         </Collapse>
       </Paper>

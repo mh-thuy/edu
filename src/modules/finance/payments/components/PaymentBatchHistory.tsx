@@ -43,6 +43,7 @@ import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { getVietnamDate } from "@/lib/vietnam-time";
 import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 
 type Batch = {
   id: string;
@@ -296,6 +297,7 @@ export function PaymentBatchHistory() {
             placeholder="Mã giao dịch hoặc dán nội dung QR"
             value={pendingTransactionCode}
             onChange={(event) => setPendingTransactionCode(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Enter") applySearch(); }}
             sx={{ flex: 1, minWidth: { md: 240 } }}
           />
           <MasterSelectField
@@ -321,17 +323,12 @@ export function PaymentBatchHistory() {
             <MenuItem value="FAILED">Thất bại</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </AppTextField>
-          <Button variant="contained" onClick={applySearch} sx={{ minWidth: { xs: "100%", md: 100 }, whiteSpace: "nowrap" }}>
-            Tìm kiếm
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={clearSearch}
-            disabled={!transactionCode && !studentCode && !status && !pendingTransactionCode && !pendingStudentCode && !pendingStatus && page === 0}
-            sx={{ minWidth: { xs: "100%", md: 136 }, whiteSpace: "nowrap" }}
-          >
-            Xóa tìm kiếm
-          </Button>
+          <FilterActions
+            onSearch={applySearch}
+            onClear={clearSearch}
+            hasFilters={Boolean(transactionCode || studentCode || status || pendingTransactionCode || pendingStudentCode || pendingStatus || student || page)}
+            isLoading={loading}
+          />
         </Stack>
       </Paper>
 

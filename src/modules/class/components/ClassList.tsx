@@ -15,6 +15,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { GridColDef } from "@mui/x-data-grid";
 import { useState, useCallback, useEffect } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
+import { FilterActions } from "@/components/shared/FilterActions";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FormDialog } from "@/components/shared/dialogs/FormDialog";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
@@ -229,11 +230,7 @@ export function ClassList(): ReactElement {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState("");
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
-    return () => window.clearTimeout(timer);
-  }, [search]);
+  const [appliedStatus, setAppliedStatus] = useState("");
 
   const {
     data,
@@ -247,17 +244,18 @@ export function ClassList(): ReactElement {
   } = useList<Class>("/api/classes", {
     pageSize: 10,
     search: debouncedSearch,
-    status: status || undefined,
+    status: appliedStatus || undefined,
   });
 
   useEffect(() => {
     setPageNumber(1);
-  }, [debouncedSearch, status, setPageNumber]);
+  }, [debouncedSearch, appliedStatus, setPageNumber]);
 
   const submitSearch = useCallback(() => {
     setDebouncedSearch(search.trim());
+    setAppliedStatus(status);
     setPageNumber(1);
-  }, [search, setPageNumber]);
+  }, [search, status, setPageNumber]);
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<Class | null>(null);
@@ -451,8 +449,12 @@ export function ClassList(): ReactElement {
             <MenuItem value="COMPLETED">Hoàn thành</MenuItem>
             <MenuItem value="CANCELLED">Đã hủy</MenuItem>
           </Select>
-          <Button variant="contained" onClick={submitSearch}>Tìm kiếm</Button>
-          <Button variant="outlined" onClick={() => { setSearch(""); setDebouncedSearch(""); setStatus(""); setPageNumber(1); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+          <FilterActions
+            onSearch={submitSearch}
+            onClear={() => { setSearch(""); setDebouncedSearch(""); setStatus(""); setAppliedStatus(""); setPageNumber(1); }}
+            hasFilters={Boolean(search.trim() || debouncedSearch || status || appliedStatus)}
+            isLoading={isLoading}
+          />
         </Stack>
       </Paper>
 

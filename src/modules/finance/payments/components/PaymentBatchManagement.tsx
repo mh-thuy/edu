@@ -50,6 +50,7 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { FilterActions } from "@/components/shared/FilterActions";
 import {
   fetchNoticeBankAccounts,
   fetchOutstandingFees,
@@ -108,9 +109,11 @@ export function PaymentBatchManagement() {
   const [pageSize, setPageSize] = useState(20);
   const [month, setMonth] = useState(getVietnamMonth());
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(null);
+  const [appliedStudentId, setAppliedStudentId] = useState<string | undefined>();
+  const [appliedClassId, setAppliedClassId] = useState<string | undefined>();
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [fees, setFees] = useState<NoticeFee[]>([]);
   const [unissuedTotal, setUnissuedTotal] = useState(0);
@@ -136,19 +139,11 @@ export function PaymentBatchManagement() {
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
-  const studentFilter = student?.id ?? "ALL";
-  const classFilter = selectedClass?.id ?? "ALL";
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [search]);
-
   useEffect(() => {
     setPage(0);
     setSelectedFeeIds([]);
     setSelectedBatchIds([]);
-  }, [classFilter, debouncedSearch, month, pageSize, studentFilter, view]);
+  }, [appliedClassId, appliedSearch, appliedStudentId, month, pageSize, view]);
 
   useEffect(() => {
     setSelectedFeeIds([]);
@@ -162,9 +157,9 @@ export function PaymentBatchManagement() {
       month,
       page: page + 1,
       pageSize,
-      search: debouncedSearch,
-      studentId: student?.id,
-      classId: selectedClass?.id,
+      search: appliedSearch,
+      studentId: appliedStudentId,
+      classId: appliedClassId,
     };
     try {
       const [feeItems, batchItems, paidBatchItems, accounts] = await Promise.all([
@@ -197,11 +192,28 @@ export function PaymentBatchManagement() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, month, page, pageSize, selectedClass?.id, student?.id, view]);
+  }, [appliedClassId, appliedSearch, appliedStudentId, month, page, pageSize, view]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  function applyFilters() {
+    setAppliedSearch(search.trim());
+    setAppliedStudentId(student?.id);
+    setAppliedClassId(selectedClass?.id);
+    setPage(0);
+  }
+
+  function clearFilters() {
+    setSearch("");
+    setAppliedSearch("");
+    setStudent(null);
+    setSelectedClass(null);
+    setAppliedStudentId(undefined);
+    setAppliedClassId(undefined);
+    setPage(0);
+  }
 
   const unissuedFees = fees;
   const visiblePendingBatches = pendingBatches;
@@ -249,7 +261,10 @@ export function PaymentBatchManagement() {
         if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"));
         return unwrapApiResponse<ClassItem>(response);
       })
-      .then((item) => setSelectedClass({ id: item.id, code: item.code, name: item.name }))
+      .then((item) => {
+        setSelectedClass({ id: item.id, code: item.code, name: item.name });
+        setAppliedClassId(item.id);
+      })
       .catch((reasonValue: unknown) => {
         showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải lớp đã chọn");
       });
@@ -440,11 +455,11 @@ export function PaymentBatchManagement() {
             <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent={{ sm: "flex-end" }}>
               {student && <Chip size="small" label={`HV: ${student.code}`} onDelete={() => setStudent(null)} />}
               {selectedClass && <Chip size="small" label={`Lớp: ${selectedClass.name}`} onDelete={() => setSelectedClass(null)} />}
-              {search && <Chip size="small" label={`Từ khóa: ${search}`} onDelete={() => setSearch("")} />}
+              {appliedSearch && <Chip size="small" label={`Từ khóa: ${appliedSearch}`} onDelete={() => { setSearch(""); setAppliedSearch(""); setPage(0); }} />}
             </Stack>
           </Stack>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-            <AppTextField label="Tìm học sinh, mã học phí hoặc batch" size="small" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ flex: 1, minWidth: 0 }} />
+            <AppTextField label="Tìm học sinh, mã học phí hoặc batch" size="small" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }} sx={{ flex: 1, minWidth: 0 }} />
             <Button
               size="small"
               variant="text"
@@ -456,15 +471,7 @@ export function PaymentBatchManagement() {
             >
               Bộ lọc nâng cao
             </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => { setSearch(""); setStudent(null); setSelectedClass(null); }}
-              disabled={!search && !student && !selectedClass}
-              sx={{ whiteSpace: "nowrap", alignSelf: { xs: "stretch", md: "center" } }}
-            >
-              Xóa lọc
-            </Button>
+            <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim() || appliedSearch || student || selectedClass)} isLoading={loading} />
           </Stack>
           <Collapse in={showAdvancedFilters}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>

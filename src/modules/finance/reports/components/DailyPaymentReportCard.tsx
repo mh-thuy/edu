@@ -1,6 +1,7 @@
 "use client";
 
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import RestartAltOutlinedIcon from "@mui/icons-material/RestartAltOutlined";
 import {
   Alert,
   Box,
@@ -58,15 +59,20 @@ export function DailyPaymentReportCard() {
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <DatePickerField label="Ngày báo cáo" value={date} onChange={setDate} textFieldProps={{ size: "small" }} />
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<DownloadOutlinedIcon />}
-            onClick={() => void handleExport()}
-            disabled={exporting || !date}
-            sx={{ whiteSpace: "nowrap" }}
-          >
-            {exporting ? "Đang xuất..." : "Xuất Excel"}
-          </Button>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { setDate(getVietnamDate()); setError(""); }} disabled={exporting || date === getVietnamDate()} sx={{ whiteSpace: "nowrap" }}>
+              Đặt lại
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<DownloadOutlinedIcon />}
+              onClick={() => void handleExport()}
+              disabled={exporting || !date}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              {exporting ? "Đang xuất..." : "Xuất Excel"}
+            </Button>
+          </Stack>
         </Stack>
       </Stack>
     </Paper>

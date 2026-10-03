@@ -1,6 +1,7 @@
 "use client";
 
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import RestartAltOutlinedIcon from "@mui/icons-material/RestartAltOutlined";
 import {
   Alert,
   Box,
@@ -133,9 +134,14 @@ export function BankReconciliationReportCard() {
         </Box>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5}>
           <Typography variant="body2" color="text.secondary">Tiêu chí lọc là ngày giao dịch trên sao kê ngân hàng.</Typography>
-          <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || loadingAccounts || !accountId} sx={{ whiteSpace: "nowrap" }}>
-            {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
-          </Button>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { setAccountId(accounts[0]?.id || ""); setFromDate(getVietnamDate()); setToDate(getVietnamDate()); setScope("ALL"); setError(""); }} disabled={exporting || (accountId === (accounts[0]?.id || "") && fromDate === getVietnamDate() && toDate === getVietnamDate() && scope === "ALL")} sx={{ whiteSpace: "nowrap" }}>
+              Đặt lại
+            </Button>
+            <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || loadingAccounts || !accountId} sx={{ whiteSpace: "nowrap" }}>
+              {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
+            </Button>
+          </Stack>
         </Stack>
       </Stack>
     </Paper>

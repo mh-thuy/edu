@@ -34,7 +34,7 @@ import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
-import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { FilterActions } from "@/components/shared/FilterActions";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { userCreateSchema, userUpdateSchema } from "@/modules/user/schemas/user.schema";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
@@ -77,8 +77,9 @@ export function UserManagement() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebouncedValue(search.trim());
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [appliedStatus, setAppliedStatus] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -95,8 +96,8 @@ export function UserManagement() {
         page: String(page + 1),
         pageSize: String(pageSize),
       });
-      if (debouncedSearch) params.set("search", debouncedSearch);
-      if (status) params.set("status", status);
+      if (appliedSearch) params.set("search", appliedSearch);
+      if (appliedStatus) params.set("status", appliedStatus);
       const response = await fetch(`/api/users?${params}`);
       if (!response.ok)
         throw new Error(
@@ -115,10 +116,24 @@ export function UserManagement() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, status]);
+  }, [page, pageSize, appliedSearch, appliedStatus]);
   useEffect(() => {
     void load();
   }, [load]);
+
+  const applyFilters = () => {
+    setAppliedSearch(search.trim());
+    setAppliedStatus(status);
+    setPage(0);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setAppliedSearch("");
+    setStatus("");
+    setAppliedStatus("");
+    setPage(0);
+  };
   const openCreate = () => {
     setEditing(null);
     setForm({ ...emptyForm });
@@ -245,8 +260,8 @@ export function UserManagement() {
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
-              setPage(0);
             }}
+            onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }}
             InputProps={{ startAdornment: <SearchOutlinedIcon fontSize="small" sx={{ mr: 1, color: "text.secondary" }} /> }}
             sx={{ flex: 1 }}
           />
@@ -258,14 +273,13 @@ export function UserManagement() {
               value={status}
               onChange={(event) => {
                 setStatus(event.target.value);
-                setPage(0);
               }}
             >
               <MenuItem value="">Tất cả trạng thái</MenuItem>
               {Object.entries(statusLabel).map(([key, label]) => <MenuItem key={key} value={key}>{label}</MenuItem>)}
             </Select>
           </FormControl>
-          <Button variant="outlined" onClick={() => { setSearch(""); setStatus(""); setPage(0); }} disabled={!search && !status}>Xóa bộ lọc</Button>
+          <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim() || appliedSearch || status || appliedStatus)} isLoading={loading} />
         </Stack>
       </Paper>
 
