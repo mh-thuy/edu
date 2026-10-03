@@ -2,11 +2,11 @@ import { z } from "zod";
 
 const birthdaySchema = z.union([
   z.string().datetime(),
-  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid birthday format"),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày sinh không đúng định dạng"),
 ]);
 
 export const studentCreateSchema = z.object({
-  fullName: z.string().min(1, "Full name is required").max(100),
+  fullName: z.string().min(1, "Họ tên là bắt buộc").max(100, "Họ tên tối đa 100 ký tự"),
   birthday: birthdaySchema.optional(),
   parentName: z.string().optional(),
   phone: z.string().max(50).optional(),

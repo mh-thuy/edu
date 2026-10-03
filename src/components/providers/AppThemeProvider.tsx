@@ -5,25 +5,25 @@ import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import type { ReactNode } from "react";
 
 const uiTokens = {
-  divider: "#e2e8f0",
+  divider: "#dce7eb",
   surface: "#ffffff",
-  mutedSurface: "#f8fafc",
-  mutedText: "#475569",
-  subtleShadow: "0 2px 12px rgba(15, 23, 42, 0.04)",
+  mutedSurface: "#f1f6f8",
+  mutedText: "#60717d",
+  subtleShadow: "0 2px 10px rgba(35, 68, 82, 0.035)",
 };
 
 const theme = createTheme({
   palette: {
     mode: "light",
     primary: {
-      main: "#2563eb",
-      light: "#dbeafe",
-      dark: "#1d4ed8",
+      main: "#3188f5",
+      light: "#e8f3ff",
+      dark: "#2074db",
     },
     secondary: {
-      main: "#0f766e",
-      light: "#ccfbf1",
-      dark: "#115e59",
+      main: "#19aa83",
+      light: "#e4f7f1",
+      dark: "#128563",
     },
     success: {
       main: "#16a34a",
@@ -38,24 +38,24 @@ const theme = createTheme({
       light: "#fee2e2",
     },
     info: {
-      main: "#2563eb",
-      light: "#dbeafe",
-      dark: "#1d4ed8",
+      main: "#3188f5",
+      light: "#e8f3ff",
+      dark: "#2074db",
     },
     background: {
-      default: uiTokens.mutedSurface,
+      default: "#f1f6f8",
       paper: uiTokens.surface,
     },
     text: {
-      primary: "#0f172a",
-      secondary: "#64748b",
+      primary: "#172b38",
+      secondary: "#687d89",
     },
   },
   shape: {
     borderRadius: 12,
   },
   typography: {
-    fontFamily: "'Plus Jakarta Sans', 'Segoe UI', sans-serif",
+    fontFamily: "'Plus Jakarta Sans', 'Inter', 'Segoe UI', sans-serif",
     h1: { fontSize: "2rem", fontWeight: 800, lineHeight: 1.2 },
     h2: { fontSize: "1.75rem", fontWeight: 800, lineHeight: 1.25 },
     h3: { fontSize: "1.5rem", fontWeight: 800, lineHeight: 1.3 },
@@ -88,7 +88,7 @@ const theme = createTheme({
         root: {
           border: "1px solid",
           borderColor: uiTokens.divider,
-          borderRadius: 16,
+          borderRadius: 12,
           boxShadow: uiTokens.subtleShadow,
         },
       },
@@ -136,7 +136,7 @@ const theme = createTheme({
           backgroundImage: "none",
           border: "1px solid",
           borderColor: uiTokens.divider,
-          borderRadius: 16,
+          borderRadius: 12,
           boxShadow: uiTokens.subtleShadow,
         },
       },
@@ -144,7 +144,7 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 18,
+          borderRadius: 12,
           border: "1px solid",
           borderColor: uiTokens.divider,
           boxShadow: "0 18px 48px rgba(15, 23, 42, 0.16)",
@@ -198,6 +198,11 @@ const theme = createTheme({
         root: { width: "100%" },
       },
     },
+    MuiTableRow: {
+      styleOverrides: {
+        root: { "&.MuiTableRow-hover:hover": { backgroundColor: "#f7fafb" } },
+      },
+    },
     MuiTablePagination: {
       styleOverrides: {
         root: {
@@ -213,8 +218,9 @@ const theme = createTheme({
       styleOverrides: {
         ".MuiDataGrid-root": {
           border: 0,
-          borderRadius: 16,
+          borderRadius: 12,
           overflow: "hidden",
+          "--DataGrid-rowBorderColor": uiTokens.divider,
         },
         ".MuiDataGrid-columnHeaders": {
           backgroundColor: uiTokens.mutedSurface,
@@ -231,6 +237,9 @@ const theme = createTheme({
           minHeight: 56,
           borderTop: "1px solid",
           borderColor: uiTokens.divider,
+        },
+        ".MuiDataGrid-row:hover": {
+          backgroundColor: "#f7fafb",
         },
       },
     },

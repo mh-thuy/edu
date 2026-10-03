@@ -752,7 +752,7 @@ export function TuitionPaymentWorkspace({
               Quy trình thu
             </Typography>
             <Stack spacing={1.5} sx={{ mt: 2 }}>
-              {["Chọn học viên", "Chọn khoản và nhập số tiền", "Chọn phương thức thanh toán"].map(
+              {["Chọn học viên", "Chọn khoản và nhập số tiền", "Chọn phương thức thanh toán", "Xác nhận giao dịch"].map(
                 (label, index) => (
                   <Stack key={label} direction="row" spacing={1.25} alignItems="center">
                     <Box

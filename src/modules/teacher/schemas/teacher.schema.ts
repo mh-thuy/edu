@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const teacherCreateSchema = z.object({
-  fullName: z.string().min(1, "Teacher name is required").max(255),
+  fullName: z.string().min(1, "Tên giáo viên là bắt buộc").max(255, "Tên giáo viên tối đa 255 ký tự"),
   phone: z.string().optional(),
   bankAccount: z.string().optional(),
   specialty: z.string().optional(),

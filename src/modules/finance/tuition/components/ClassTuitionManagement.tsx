@@ -356,7 +356,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
                 </TableRow>
               );
             })}
-            {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{studentSearch.trim() ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{studentSearch.trim() ? "Thử tìm bằng tên khác hoặc xóa nội dung tìm kiếm." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
+            {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{studentSearch.trim() ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{studentSearch.trim() ? "Thử tìm bằng tên khác hoặc xóa nội dung tìm kiếm." : classNotActive ? "Chỉ có thể tạo học phí khi lớp ở trạng thái Hoạt động." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
           </TableBody>
         </Table>
       </Box>

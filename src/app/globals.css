@@ -9,13 +9,9 @@ body {
 }
 
 body {
-  font-family:
-    "Segoe UI",
-    "Helvetica Neue",
-    Arial,
-    sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", sans-serif;
+  background: #f1f6f8;
+  color: #172b38;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -25,8 +21,8 @@ a {
 }
 
 ::selection {
-  background: #bfdbfe;
-  color: #1e3a8a;
+  background: #dceeff;
+  color: #145ca8;
 }
 
 button,

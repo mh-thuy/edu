@@ -35,7 +35,7 @@ type SidebarItem = {
   section: "Tổng quan" | "Đào tạo" | "Tài chính" | "Hệ thống";
 };
 
-const items: SidebarItem[] = [
+export const adminNavigationItems: SidebarItem[] = [
   {
     label: "Tổng quan",
     href: "/admin",
@@ -129,14 +129,14 @@ type SidebarProps = {
 
 export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactElement {
   const pathname = usePathname();
-  const activeHref = items
+  const activeHref = adminNavigationItems
     .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     .sort((left, right) => right.href.length - left.href.length)[0]?.href;
 
   return (
     <Box
       sx={{
-        width: collapsed ? 76 : 260,
+        width: collapsed ? 76 : 280,
         height: "100dvh",
         minHeight: 0,
         bgcolor: "background.paper",
@@ -147,23 +147,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
       }}
     >
       {/* Logo */}
-      <Box sx={{ px: collapsed ? 1.5 : 2.5, py: 2.25 }}>
+      <Box sx={{ px: collapsed ? 1.5 : 2.5, py: 2.5 }}>
         <Stack direction="row" spacing={1.25} alignItems="center" justifyContent={collapsed ? "center" : "flex-start"}>
-          <Box
-            sx={{
-              width: 38,
-              height: 38,
-              borderRadius: 2.5,
-              display: "grid",
-              placeItems: "center",
-              color: "white",
-              fontWeight: 800,
-              bgcolor: "primary.main",
-              boxShadow: 2,
-            }}
-          >
-              E
-            </Box>
+          <Box sx={{ width: 38, height: 38, display: "grid", placeItems: "center", flexShrink: 0 }} aria-hidden="true">
+            <svg width="34" height="34" viewBox="0 0 40 40" fill="none">
+              <path d="M6 7c8-4 16 1 28 1v6c-11 0-20-5-28 1V7Z" fill="#A7EDD8" />
+              <path d="M6 17c8-5 17 1 28 1v6c-11 0-19-5-28 1v-8Z" fill="#55D5A9" />
+              <path d="M6 27c8-4 17 1 28 1v6c-11 0-19-4-28 1v-8Z" fill="#21B887" />
+            </svg>
+          </Box>
           <Box sx={{ display: collapsed ? "none" : "block", minWidth: 0 }}>
             <Typography
               variant="subtitle1"
@@ -195,9 +187,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
           scrollbarGutter: "stable",
         }}
       >
-        {items.map((item, index) => {
+        {adminNavigationItems.map((item, index) => {
           const selected = item.href === activeHref;
-          const previousSection = index > 0 ? items[index - 1]?.section : null;
+          const previousSection = index > 0 ? adminNavigationItems[index - 1]?.section : null;
 
           const button = (
             <ListItemButton
@@ -208,7 +200,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
               aria-current={selected ? "page" : undefined}
               sx={{
                 position: "relative",
-                borderRadius: 2,
+                borderRadius: 1.5,
                 mb: 0.5,
                 minHeight: 44,
                 px: collapsed ? 1.25 : 1.5,
@@ -218,16 +210,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
                 "&.Mui-selected": {
                   bgcolor: "primary.light",
                   color: "primary.dark",
-                  "&:before": {
-                    content: '""',
-                    position: "absolute",
-                    left: 0,
-                    top: 8,
-                    bottom: 8,
-                    width: 3,
-                    borderRadius: 3,
-                    bgcolor: "primary.main",
-                  },
                   "&:hover": { bgcolor: "primary.light" },
                 },
                 "&:hover": { bgcolor: "action.hover", color: "text.primary" },
@@ -257,8 +239,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
                   sx={{
                     display: "block",
                     px: 1.5,
-                    mt: index === 0 ? 0 : 2,
-                    mb: 0.5,
+                    mt: index === 0 ? 0 : 2.5,
+                    mb: 0.75,
+                    letterSpacing: "0.09em",
                     fontWeight: 700,
                   }}
                 >

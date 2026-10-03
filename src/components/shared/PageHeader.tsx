@@ -19,7 +19,7 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
       sx={{ minWidth: 0 }}
     >
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="h5" component="h1" fontWeight={750} letterSpacing="-0.025em">
+        <Typography variant="h4" component="h1" fontWeight={750} letterSpacing="-0.025em">
           {title}
         </Typography>
         {description && (

@@ -139,15 +139,15 @@ function SummaryMetric({
   loading: boolean;
 }) {
   return (
-    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: "rgba(255,255,255,0.13)", border: "1px solid rgba(255,255,255,0.1)" }}>
-      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: "primary.light" }}>
+    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: "#f3f7f9", border: "1px solid", borderColor: "divider" }}>
+      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: "text.secondary" }}>
         {icon}
         <Typography variant="caption" noWrap>{label}</Typography>
       </Stack>
       {loading ? (
-        <Skeleton width="85%" height={28} sx={{ bgcolor: "rgba(255,255,255,0.12)" }} />
+        <Skeleton width="85%" height={28} />
       ) : (
-        <Typography variant="body1" fontWeight={800} noWrap sx={{ color: "common.white", mt: 0.5 }}>{value}</Typography>
+        <Typography variant="body1" fontWeight={800} noWrap sx={{ color: "text.primary", mt: 0.5 }}>{value}</Typography>
       )}
     </Box>
   );
@@ -206,8 +206,12 @@ export default function AdminPage() {
     setAppliedDateTo(dateTo);
   };
 
+  const collectedByMethod = (stats?.cashCollected ?? 0) + (stats?.bankTransferCollected ?? 0);
+  const cashShare = collectedByMethod > 0 ? (stats?.cashCollected ?? 0) / collectedByMethod * 100 : 0;
+  const transferShare = collectedByMethod > 0 ? (stats?.bankTransferCollected ?? 0) / collectedByMethod * 100 : 0;
+
   return (
-    <Stack spacing={{ xs: 2.5, md: 3 }}>
+    <Stack spacing={{ xs: 2, md: 2.5 }}>
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
@@ -230,30 +234,18 @@ export default function AdminPage() {
         <Chip icon={<CalendarMonthOutlinedIcon />} label={appliedDateFrom || appliedDateTo ? `${appliedDateFrom || "..."} – ${appliedDateTo || "..."}` : "Tất cả thời gian"} variant="outlined" color="primary" />
       </Stack>
 
-      <Card>
-        <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={2}
-            alignItems={{ lg: "center" }}
-            justifyContent="space-between"
-          >
-            <Box sx={{ minWidth: { lg: 250 } }}>
-              <Typography fontWeight={800}>Khoảng thời gian dữ liệu</Typography>
-              <Typography variant="caption" color="text.secondary">
+      {error && <Alert severity="error">{error}</Alert>}
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(270px, 0.8fr) minmax(0, 2.2fr)" }, gap: 2.5, alignItems: "start" }}>
+        <Stack spacing={2}>
+          <Card>
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Typography fontWeight={800}>Khoảng thời gian</Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.75 }}>
                 Áp dụng cho doanh thu đã thu; công nợ và số lượng là số hiện tại.
               </Typography>
-            </Box>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ width: { xs: "100%", lg: "auto" }, flex: 1 }}>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <DatePickerField
-                  label="Từ ngày"
-                  value={dateFrom}
-                  onChange={setDateFrom}
-                  textFieldProps={{ size: "small" }}
-                />
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack spacing={1.25}>
+                <DatePickerField label="Từ ngày" value={dateFrom} onChange={setDateFrom} textFieldProps={{ size: "small" }} />
                 <DatePickerField
                   label="Đến ngày"
                   value={dateTo}
@@ -266,82 +258,68 @@ export default function AdminPage() {
                       : undefined,
                   }}
                 />
-              </Box>
-
-              <Button
-                variant="contained"
-                sx={{ minWidth: 112, width: { xs: "100%", sm: "auto" } }}
-                onClick={applyFilters}
-              >
-                Áp dụng
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={clearFilters}
-                disabled={!dateFrom && !dateTo}
-                sx={{ minWidth: 112, width: { xs: "100%", sm: "auto" } }}
-              >
-                Xóa lọc
-              </Button>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {error && <Alert severity="error">{error}</Alert>}
-
-      <Card sx={{ bgcolor: "primary.dark", color: "common.white", borderColor: "primary.dark", overflow: "hidden", position: "relative" }}>
-        <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-          <Stack direction={{ xs: "column", lg: "row" }} spacing={{ xs: 2.5, lg: 5 }} alignItems={{ lg: "center" }}>
-            <Box sx={{ minWidth: { lg: 280 }, flex: 1 }}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <CheckCircleOutlineOutlinedIcon color="success" />
-                <Typography variant="subtitle1" fontWeight={700} sx={{ color: "primary.light" }}>Đã thu trong kỳ</Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button fullWidth variant="contained" onClick={applyFilters}>Áp dụng</Button>
+                  <Button fullWidth variant="outlined" onClick={clearFilters} disabled={!dateFrom && !dateTo}>Xóa lọc</Button>
+                </Stack>
               </Stack>
-              {loading ? <Skeleton width={230} height={58} sx={{ bgcolor: "rgba(255,255,255,0.12)" }} /> : <Typography variant="h3" fontWeight={800} sx={{ mt: 0.5, letterSpacing: "-0.03em" }}>{money(stats?.totalCollected ?? 0)}</Typography>}
-              <Typography variant="body2" sx={{ color: "primary.light", mt: 0.5 }}>Payment thành công theo khoảng thời gian đã chọn</Typography>
-            </Box>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, minmax(0, 1fr))" }, gap: { xs: 1.5, sm: 2 }, width: { xs: "100%", lg: "auto" }, flex: { lg: 1.2 } }}>
-              <SummaryMetric icon={<AccountBalanceWalletIcon />} label="Tiền mặt" value={money(stats?.cashCollected ?? 0)} loading={loading} />
-              <SummaryMetric icon={<AccountBalanceIcon />} label="Chuyển khoản" value={money(stats?.bankTransferCollected ?? 0)} loading={loading} />
-              <SummaryMetric icon={<ReceiptIcon />} label="Tổng phải thu" value={money(stats?.totalFeeAmount ?? 0)} loading={loading} />
-              <SummaryMetric icon={<SchoolIcon />} label="Lớp hoạt động" value={String(stats?.activeClasses ?? 0)} loading={loading} />
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Box>
-        <Typography variant="h6" fontWeight={800}>Cần theo dõi</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.5 }}>Các chỉ số vận hành và khoản cần xử lý ngay.</Typography>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" }, gap: 2 }}>
-          <StatCard icon={<PaymentIcon />} title="Còn nợ" value={money(stats?.totalDebt ?? 0)} subtitle="Chưa thanh toán / quá hạn" loading={loading} color="error" />
-          <StatCard icon={<WarningAmberIcon />} title="Học phí quá hạn" value={String(stats?.overdueFees ?? 0)} subtitle="Khoản cần nhắc thu" loading={loading} color="warning" />
-          <StatCard icon={<AccountBalanceWalletIcon />} title="Batch chờ đối soát" value={String(stats?.pendingBatches ?? 0)} subtitle="Chuyển khoản đang chờ" loading={loading} color="warning" />
-          <StatCard icon={<GroupIcon />} title="Học viên hoạt động" value={String(stats?.activeStudents ?? 0)} subtitle="Đang theo học" loading={loading} />
-        </Box>
-      </Box>
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1.15fr 0.85fr" }, gap: 2 }}>
-        <Card>
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Typography variant="h6" fontWeight={800}>Công việc cần xử lý</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Truy cập nhanh các nghiệp vụ đang chờ hoàn tất.</Typography>
-            <Stack spacing={1}>
-              <QuickLink href="/admin/bank-reconciliation" label="Đối soát ngân hàng" icon={<AccountBalanceIcon />} />
-              <QuickLink href="/admin/tuition-fees/payment-history" label={`Batch chờ xử lý (${stats?.pendingBatches ?? 0})`} icon={<PaymentIcon />} />
-              <QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees ?? 0})`} icon={<WarningAmberIcon />} />
-            </Stack>
-          </CardContent>
-        </Card>
-
-        <Stack spacing={2}>
+            </CardContent>
+          </Card>
           <Card>
             <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-              <Typography variant="h6" fontWeight={800}>Thao tác nhanh</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>Bắt đầu một nghiệp vụ thường dùng.</Typography>
-              <Stack direction={{ xs: "column", sm: "row", lg: "column" }} spacing={1}>
+              <Typography variant="h6" fontWeight={750}>Cần theo dõi</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1.75 }}>Các việc đang chờ xử lý.</Typography>
+              <Stack spacing={1}>
+                <QuickLink href="/admin/bank-reconciliation" label="Đối soát ngân hàng" icon={<AccountBalanceIcon />} />
+                <QuickLink href="/admin/tuition-fees/payment-history" label={`Đợt thu chờ xử lý (${stats?.pendingBatches ?? 0})`} icon={<PaymentIcon />} />
+                <QuickLink href="/admin/tuition-fees" label={`Học phí quá hạn (${stats?.overdueFees ?? 0})`} icon={<WarningAmberIcon />} />
+              </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
+
+        <Stack spacing={2}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
+            <StatCard icon={<CheckCircleOutlineOutlinedIcon />} title="Đã thu trong kỳ" value={money(stats?.totalCollected ?? 0)} subtitle="Thanh toán thành công" loading={loading} color="success" />
+            <StatCard icon={<PaymentIcon />} title="Công nợ hiện tại" value={money(stats?.totalDebt ?? 0)} subtitle="Chưa thanh toán hoặc quá hạn" loading={loading} color="warning" />
+          </Box>
+
+          <Card>
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+                <Box>
+                  <Typography variant="h6" fontWeight={750}>Phân bổ khoản thu</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>Theo phương thức thanh toán trong kỳ.</Typography>
+                </Box>
+                <Chip icon={<CalendarMonthOutlinedIcon />} label={appliedDateFrom || appliedDateTo ? `${appliedDateFrom || "…"} – ${appliedDateTo || "…"}` : "Tất cả thời gian"} variant="outlined" size="small" />
+              </Stack>
+              <Box sx={{ mt: 2.25 }}>
+                <Box sx={{ height: 12, display: "flex", overflow: "hidden", borderRadius: 10, bgcolor: "#edf2f4" }}>
+                  <Box sx={{ width: `${cashShare}%`, bgcolor: "#3188f5", transition: "width 200ms ease" }} />
+                  <Box sx={{ width: `${transferShare}%`, bgcolor: "#19aa83", transition: "width 200ms ease" }} />
+                </Box>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(4, minmax(0,1fr))" }, gap: 1.5, mt: 2 }}>
+                  <SummaryMetric icon={<AccountBalanceWalletIcon />} label="Tiền mặt" value={money(stats?.cashCollected ?? 0)} loading={loading} />
+                  <SummaryMetric icon={<AccountBalanceIcon />} label="Chuyển khoản" value={money(stats?.bankTransferCollected ?? 0)} loading={loading} />
+                  <SummaryMetric icon={<ReceiptIcon />} label="Tổng phải thu" value={money(stats?.totalFeeAmount ?? 0)} loading={loading} />
+                  <SummaryMetric icon={<SchoolIcon />} label="Lớp hoạt động" value={String(stats?.activeClasses ?? 0)} loading={loading} />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
+            <StatCard icon={<WarningAmberIcon />} title="Học phí quá hạn" value={String(stats?.overdueFees ?? 0)} subtitle="Khoản cần nhắc thu" loading={loading} color="warning" />
+            <StatCard icon={<GroupIcon />} title="Học viên hoạt động" value={String(stats?.activeStudents ?? 0)} subtitle="Đang theo học" loading={loading} />
+          </Box>
+
+          <Card sx={{ background: "linear-gradient(110deg, #e6f7f1 0%, #f1f8fb 100%)", borderColor: "#d7eee6" }}>
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Typography variant="h6" fontWeight={750}>Bắt đầu công việc</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, mb: 1.75 }}>Truy cập nhanh các nghiệp vụ thu học phí thường dùng.</Typography>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                 <QuickLink href="/admin/tuition-fees/payment" label="Thu học phí" icon={<PaymentIcon />} />
+                <QuickLink href="/admin/tuition-fees/notice-management" label="Thông báo & đợt thu" icon={<AccountBalanceIcon />} />
                 <QuickLink href="/admin/receipts" label="Xem biên lai" icon={<ReceiptIcon />} />
               </Stack>
             </CardContent>

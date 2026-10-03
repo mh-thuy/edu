@@ -39,7 +39,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
       <Box
         sx={{
           display: { xs: "none", lg: "block" },
-          width: desktopCollapsed ? 76 : 260,
+          width: desktopCollapsed ? 76 : 280,
           height: "100vh",
           position: "sticky",
           top: 0,
@@ -50,6 +50,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
           backgroundColor: "background.paper",
           borderRight: 1,
           borderColor: "divider",
+          boxShadow: "4px 0 24px rgba(30, 45, 80, 0.025)",
         }}
       >
         {sidebar}
@@ -61,7 +62,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
         onClose={() => setMobileOpen(false)}
         PaperProps={{
           sx: {
-            width: 260,
+            width: 280,
             height: "100dvh",
             overflow: "hidden",
           },
@@ -77,12 +78,12 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
           component="main"
           sx={{
             minHeight: "calc(100vh - 72px)",
-            px: { xs: 1.5, sm: 2.5, md: 3.5 },
-            py: { xs: 2, md: 3.5 },
+            px: { xs: 1.5, sm: 2.5, lg: 4, xl: 5 },
+            py: { xs: 2, md: 3 },
             bgcolor: "background.default",
           }}
         >
-          <Box sx={{ width: "100%" }}>{children}</Box>
+          <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto" }}>{children}</Box>
         </Box>
       </Box>
     </Box>

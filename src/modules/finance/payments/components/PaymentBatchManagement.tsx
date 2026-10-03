@@ -408,29 +408,30 @@ export function PaymentBatchManagement() {
       <Paper
         sx={{
           p: { xs: 2, md: 3 },
-          color: "common.white",
-          bgcolor: "primary.dark",
+          color: "text.primary",
+          bgcolor: "#eaf5f8",
+          borderColor: "#d6e9ee",
         }}
       >
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ display: "grid", placeItems: "center", width: 48, height: 48, borderRadius: 2, bgcolor: "rgba(255,255,255,0.16)" }}>
-              <CampaignOutlinedIcon sx={{ fontSize: 28 }} />
+            <Box sx={{ display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 2, bgcolor: "#d9f2e9", color: "secondary.dark" }}>
+              <CampaignOutlinedIcon sx={{ fontSize: 24 }} />
             </Box>
             <Box>
               <Typography variant="h5" fontWeight={800}>Quản lý thông báo và đợt thu</Typography>
-        <Typography variant="body2" sx={{ mt: 0.5, color: "primary.contrastText", opacity: 0.8 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 Phát hành, theo dõi và điều chỉnh thông báo chuyển khoản theo từng học sinh.
               </Typography>
             </Box>
           </Stack>
           <Button
             variant="outlined"
-            color="inherit"
+            color="primary"
             startIcon={<RefreshOutlinedIcon />}
             onClick={() => void load()}
             disabled={loading}
-            sx={{ alignSelf: { xs: "stretch", md: "auto" }, borderColor: "primary.light", color: "common.white" }}
+            sx={{ alignSelf: { xs: "stretch", md: "auto" }, bgcolor: "background.paper" }}
           >
             Làm mới dữ liệu
           </Button>
@@ -539,7 +540,7 @@ export function PaymentBatchManagement() {
       {view === "UNISSUED" ? (
         <Stack spacing={1.5}>
           <SectionHeader icon={<CampaignOutlinedIcon />} title="Khoản học phí chưa phát thông báo" subtitle="Chọn các khoản cần thu. Hệ thống tự gom thành một đợt cho mỗi học viên." />
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 300px" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" }, gap: 2 }}>
           <Paper sx={{ overflow: "hidden" }}>
             <Box sx={{ overflowX: "auto" }}>
               <Table sx={{ minWidth: 900 }} size="small">
@@ -581,7 +582,7 @@ export function PaymentBatchManagement() {
       ) : view === "PENDING" ? (
         <Stack spacing={1.5}>
           <SectionHeader icon={<HourglassTopOutlinedIcon />} title="Đợt thu đang chờ thanh toán" subtitle="Có thể xuất lại thông báo, tách một batch thành nhiều batch hoặc gộp các batch cùng điều kiện." />
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 300px" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" }, gap: 2 }}>
           <Paper sx={{ overflow: "hidden" }}>
             <Box sx={{ overflowX: "auto" }}>
               <Table sx={{ minWidth: 900 }} size="small">
