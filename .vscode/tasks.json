@@ -140,6 +140,25 @@
 				"showReuseMessage": false
 			},
 			"problemMatcher": []
+		},
+		{
+			"label": "Backup local DB → restore Neon Production (OVERWRITES)",
+			"type": "process",
+			"command": "node",
+			"args": [
+				"${workspaceFolder}/scripts/restore-local-db-production.mjs",
+				"${input:confirmDatabaseRestore}"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true,
+				"showReuseMessage": false
+			},
+			"problemMatcher": []
 		}
 	],
 	"inputs": [
@@ -147,6 +166,11 @@
 			"id": "confirmProductionDeploy",
 			"type": "promptString",
 			"description": "Nhập DEPLOY để xác nhận backup DB, git push và deploy production lên Vercel"
+		},
+		{
+			"id": "confirmDatabaseRestore",
+			"type": "promptString",
+			"description": "Thao tác sẽ thay thế dữ liệu Neon Production. Nhập RESTORE PRODUCTION để xác nhận"
 		}
 	]
 }
