@@ -405,42 +405,34 @@ export function PaymentBatchManagement() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Paper
-        sx={{
-          p: { xs: 2, md: 3 },
-          color: "text.primary",
-          bgcolor: "background.paper",
-          borderColor: "divider",
-          borderLeft: "3px solid",
-          borderLeftColor: "primary.main",
-        }}
-      >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 2, bgcolor: "primary.light", color: "primary.main" }}>
-              <CampaignOutlinedIcon sx={{ fontSize: 24 }} />
-            </Box>
-            <Box>
-              <Typography variant="h5" fontWeight={800}>Quản lý thông báo và đợt thu</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Phát hành, theo dõi và điều chỉnh thông báo chuyển khoản theo từng học sinh.
-              </Typography>
-            </Box>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
+        <Box>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CampaignOutlinedIcon color="primary" />
+            <Typography variant="h5" fontWeight={800}>Thông báo &amp; đợt thu</Typography>
           </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Phát hành và theo dõi yêu cầu thanh toán theo từng học viên.
+          </Typography>
+        </Box>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+          <Box sx={{ width: { xs: "100%", sm: 190 } }}>
+            <MonthPickerField label="Kỳ học phí" value={month} onChange={(value) => { setIssuedBatches([]); setMonth(value); }} textFieldProps={{ size: "small" }} />
+          </Box>
           <Button
             variant="outlined"
             color="primary"
             startIcon={<RefreshOutlinedIcon />}
             onClick={() => void load()}
             disabled={loading}
-            sx={{ alignSelf: { xs: "stretch", md: "auto" }, bgcolor: "background.paper" }}
+            sx={{ alignSelf: { xs: "stretch", sm: "auto" }, whiteSpace: "nowrap" }}
           >
-            Làm mới dữ liệu
+            Làm mới
           </Button>
         </Stack>
-      </Paper>
+      </Stack>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))" }, gap: { xs: 1, md: 1.5 } }}>
         <DashboardMetric icon={<CampaignOutlinedIcon />} label="Chưa phát" value={unissuedFees.length} tone="primary" />
         <DashboardMetric icon={<HourglassTopOutlinedIcon />} label="Đang chờ" value={visiblePendingBatches.length} tone="warning" />
         <DashboardMetric icon={<TaskAltOutlinedIcon />} label="Đã thanh toán" value={visibleSuccessfulBatches.length} tone="success" />
@@ -448,13 +440,13 @@ export function PaymentBatchManagement() {
       </Box>
 
       <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}>
-        <Stack spacing={1.5}>
+        <Stack spacing={1.75}>
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
             <Stack direction="row" spacing={1} alignItems="center">
               <TuneOutlinedIcon color="primary" fontSize="small" />
               <Box>
-                <Typography variant="subtitle1" fontWeight={800}>Bộ lọc dữ liệu</Typography>
-                <Typography variant="caption" color="text.secondary">Chọn kỳ học phí và tìm nhanh theo mã học sinh, khoản thu hoặc batch.</Typography>
+              <Typography variant="subtitle1" fontWeight={800}>Tìm kiếm &amp; lọc</Typography>
+              <Typography variant="caption" color="text.secondary">Tìm theo học viên, mã học phí, lớp hoặc đợt thu.</Typography>
               </Box>
             </Stack>
             <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent={{ sm: "flex-end" }}>
@@ -464,9 +456,6 @@ export function PaymentBatchManagement() {
             </Stack>
           </Stack>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-            <Box sx={{ width: { xs: "100%", md: 220 }, flexShrink: 0 }}>
-              <MonthPickerField label="Kỳ học phí" value={month} onChange={(value) => { setIssuedBatches([]); setMonth(value); }} textFieldProps={{ size: "small" }} />
-            </Box>
             <AppTextField label="Tìm học sinh, mã học phí hoặc batch" size="small" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ flex: 1, minWidth: 0 }} />
             <Button
               size="small"
@@ -511,12 +500,15 @@ export function PaymentBatchManagement() {
               />
             </Stack>
           </Collapse>
-          <Tabs value={view} variant="scrollable" scrollButtons="auto" onChange={(_, value: View) => { setView(value); setSelectedFeeIds([]); setSelectedBatchIds([]); }}>
-            <Tab icon={<CampaignOutlinedIcon fontSize="small" />} iconPosition="start" value="UNISSUED" label={`Chưa phát thông báo (${unissuedFees.length})`} />
-            <Tab icon={<HourglassTopOutlinedIcon fontSize="small" />} iconPosition="start" value="PENDING" label={`Đang chờ thanh toán (${visiblePendingBatches.length})`} />
-            <Tab icon={<TaskAltOutlinedIcon fontSize="small" />} iconPosition="start" value="SUCCESS" label={`Đã thanh toán (${visibleSuccessfulBatches.length})`} />
-          </Tabs>
         </Stack>
+      </Paper>
+
+      <Paper variant="outlined" sx={{ px: { xs: 1, md: 1.5 }, borderRadius: 2.5 }}>
+        <Tabs value={view} variant="scrollable" scrollButtons="auto" onChange={(_, value: View) => { setView(value); setSelectedFeeIds([]); setSelectedBatchIds([]); }}>
+          <Tab icon={<CampaignOutlinedIcon fontSize="small" />} iconPosition="start" value="UNISSUED" label={`Chưa phát · ${unissuedFees.length}`} />
+          <Tab icon={<HourglassTopOutlinedIcon fontSize="small" />} iconPosition="start" value="PENDING" label={`Đang chờ · ${visiblePendingBatches.length}`} />
+          <Tab icon={<TaskAltOutlinedIcon fontSize="small" />} iconPosition="start" value="SUCCESS" label={`Đã thanh toán · ${visibleSuccessfulBatches.length}`} />
+        </Tabs>
       </Paper>
 
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
@@ -711,7 +703,7 @@ const metricTones = {
 
 function DashboardMetric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: keyof typeof metricTones; detail?: string }) {
   const colors = metricTones[tone];
-  return <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}>
+  return <Paper variant="outlined" sx={{ p: { xs: 1.25, md: 1.75 }, borderRadius: 2.5, borderTop: "2px solid", borderTopColor: colors.color, transition: "box-shadow 160ms ease, transform 160ms ease", "&:hover": { boxShadow: 2, transform: "translateY(-1px)" } }}>
     <Stack direction="row" spacing={1.25} alignItems="center">
       <Box sx={{ display: "grid", placeItems: "center", flexShrink: 0, width: 38, height: 38, borderRadius: 1.75, color: colors.color, bgcolor: colors.background }}>{icon}</Box>
       <Box sx={{ minWidth: 0 }}>
