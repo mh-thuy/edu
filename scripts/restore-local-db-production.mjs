@@ -184,15 +184,17 @@ try {
 		escapePgPass(production.username),
 		escapePgPass(production.password),
 	].join(":")}\n`, { mode: 0o600 });
-	fchmodSync(passFile, 0o600);
+	chmodSync(passFile, 0o600);
 	containerPassFile = `/tmp/edu-production-pgpass-${process.pid}`;
 	run("docker", ["cp", passFile, `${containerId}:${containerPassFile}`]);
 	run("docker", ["exec", containerId, "chmod", "600", containerPassFile]);
-	const pgEnv = { PGPASSFILE: containerPassFile, PGSSLMODE: "require" };
 
 	console.log(`\n▶ Backup Neon Production trước khi thay thế → ${productionBackup}`);
-	runWithFileOutput("docker", ["exec", containerId, "pg_dump", ...pgArgs(production),
-		"--format=custom", "--no-owner", "--no-privileges"], productionBackup, { env: { ...process.env, ...pgEnv } });
+	runWithFileOutput("docker", [
+		"exec", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
+		containerId, "pg_dump", ...pgArgs(production),
+		"--format=custom", "--no-owner", "--no-privileges",
+	], productionBackup);
 	if (statSync(productionBackup).size === 0) {
 		throw new Error("Backup Production rỗng; dừng, chưa chạy restore.");
 	}
@@ -224,7 +226,7 @@ try {
 
 	console.log("\n▶ Xác minh số tài khoản sau restore");
 	const userCount = capture("docker", ["exec", "-e", `PGPASSFILE=${containerPassFile}`, "-e", "PGSSLMODE=require",
-		containerId, "psql", ...pgArgs(production), "-Atqc", "SELECT count(*) FROM users"], { env: { ...process.env, ...pgEnv } });
+		containerId, "psql", ...pgArgs(production), "-Atqc", "SELECT count(*) FROM users"]);
 	console.log(`✓ Số tài khoản trong Production sau restore: ${userCount}`);
 	console.log(`✓ Backup local và backup Production được giữ tại: ${backupDir}`);
 	console.log("✓ Hoàn tất restore. Chưa deploy lại ứng dụng.");
