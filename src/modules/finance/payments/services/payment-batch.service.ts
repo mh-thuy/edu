@@ -1208,7 +1208,7 @@ export async function convertPaymentBatchToCash(
       paymentDate: cashPaymentDate,
       paymentContent: cashPaymentNote,
     }, auditContext);
-  }, { timeout: 30_000 });
+  });
 }
 
 export async function getPaymentBatchQr(
