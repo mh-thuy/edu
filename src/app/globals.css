@@ -10,8 +10,8 @@ body {
 
 body {
   font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", sans-serif;
-  background: #f1f6f8;
-  color: #172b38;
+  background: var(--mui-palette-background-default, #f1f6f8);
+  color: var(--mui-palette-text-primary, #172b38);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -23,6 +23,16 @@ a {
 ::selection {
   background: #dceeff;
   color: #145ca8;
+}
+
+html[data-color-mode="dark"] ::selection {
+  background: #244b70;
+  color: #f4f8fb;
+}
+
+html[data-color-mode="dark"] body {
+  background: #101b24;
+  color: #e7eef3;
 }
 
 button,

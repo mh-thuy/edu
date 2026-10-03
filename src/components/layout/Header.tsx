@@ -1,6 +1,8 @@
 "use client";
 
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
 import {
   Autocomplete,
@@ -22,6 +24,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { logoutAction } from "@/server-actions/auth.actions";
 import type { SessionUser } from "@/types/auth";
 import { adminNavigationItems } from "@/components/layout/Sidebar";
+import { useAppColorMode } from "@/components/providers/AppThemeProvider";
 
 type HeaderProps = {
   user: SessionUser;
@@ -31,6 +34,7 @@ type HeaderProps = {
 export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
   const pathname = usePathname();
   const router = useRouter();
+  const { mode, toggleColorMode } = useAppColorMode();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [isLoggingOut, startLogoutTransition] = useTransition();
   const open = Boolean(anchorEl);
@@ -80,7 +84,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
         px: { xs: 1.5, md: 3 },
         borderBottom: "1px solid",
         borderColor: "divider",
-        bgcolor: "rgba(255,255,255,0.92)",
+        bgcolor: mode === "dark" ? "rgba(16,27,36,0.94)" : "rgba(255,255,255,0.92)",
         backdropFilter: "blur(16px)",
         position: "sticky",
         top: 0,
@@ -121,11 +125,11 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
           "& .MuiOutlinedInput-root": {
             border: 0,
             borderRadius: 10,
-            bgcolor: "#edf4f6",
+            bgcolor: "action.hover",
             py: 0.1,
             pl: 1.5,
             "& fieldset": { border: 0 },
-            "&:hover, &.Mui-focused": { bgcolor: "#e7f0f3" },
+            "&:hover, &.Mui-focused": { bgcolor: "action.selected" },
           },
         }}
         renderInput={(params) => (
@@ -142,6 +146,13 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
       />
 
       <Stack direction="row" alignItems="center" spacing={1.5}>
+        <IconButton
+          onClick={toggleColorMode}
+          aria-label={mode === "dark" ? "Chuyển sang giao diện sáng" : "Chuyển sang giao diện tối"}
+          title={mode === "dark" ? "Giao diện sáng" : "Giao diện tối"}
+        >
+          {mode === "dark" ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
+        </IconButton>
         <Box textAlign="right" sx={{ display: { xs: "none", sm: "block" } }}>
           <Typography variant="body2" fontWeight={600}>
             {user.fullName}

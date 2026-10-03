@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  Box,
   Button,
   Chip,
   Dialog,
@@ -21,11 +20,11 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import LibraryBooksOutlinedIcon from "@mui/icons-material/LibraryBooksOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 
 type Subject = {
@@ -114,21 +113,12 @@ export function SubjectManagement() {
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
-      <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={2}>
-          <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ width: 44, height: 44, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "primary.main", color: "primary.contrastText" }}>
-              <LibraryBooksOutlinedIcon />
-            </Box>
-            <Box>
-              <Typography variant="h5" fontWeight={700}>Danh mục môn học</Typography>
-              <Typography variant="body2" color="text.secondary">Quản lý các môn được sử dụng trong lớp học.</Typography>
-            </Box>
-          </Stack>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>Thêm môn học</Button>
-        </Stack>
-      </Paper>
-      <Paper sx={{ p: 2 }}>
+      <PageHeader
+        title="Quản lý môn học"
+        description="Danh sách môn học được sử dụng trong các lớp."
+        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>Thêm môn học</Button>}
+      />
+      <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
@@ -136,15 +126,15 @@ export function SubjectManagement() {
         >
           <AppTextField
             size="small"
-            label="Tìm theo tên môn"
+            placeholder="Tìm theo tên môn học..."
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            sx={{ minWidth: 280, flex: 1 }}
-            InputProps={{ startAdornment: <SearchOutlinedIcon color="action" sx={{ mr: 1 }} /> }}
+            sx={{ minWidth: { sm: 280 }, maxWidth: 460, flex: 1 }}
+            InputProps={{ startAdornment: <SearchOutlinedIcon fontSize="small" color="action" sx={{ mr: 1 }} /> }}
           />
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" startIcon={<RefreshOutlinedIcon />} onClick={() => void load()} disabled={loading}>Làm mới</Button>
-            <Button variant="outlined" onClick={() => setSearch("")} disabled={!search || loading}>Xóa tìm kiếm</Button>
+            <Button variant="outlined" onClick={() => setSearch("")} disabled={!search || loading}>Xóa bộ lọc</Button>
           </Stack>
         </Stack>
       </Paper>

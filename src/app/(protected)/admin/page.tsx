@@ -139,7 +139,7 @@ function SummaryMetric({
   loading: boolean;
 }) {
   return (
-    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: "#f3f7f9", border: "1px solid", borderColor: "divider" }}>
+    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: "background.default", border: "1px solid", borderColor: "divider" }}>
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ color: "text.secondary" }}>
         {icon}
         <Typography variant="caption" noWrap>{label}</Typography>
@@ -294,7 +294,7 @@ export default function AdminPage() {
                 <Chip icon={<CalendarMonthOutlinedIcon />} label={appliedDateFrom || appliedDateTo ? `${appliedDateFrom || "…"} – ${appliedDateTo || "…"}` : "Tất cả thời gian"} variant="outlined" size="small" />
               </Stack>
               <Box sx={{ mt: 2.25 }}>
-                <Box sx={{ height: 12, display: "flex", overflow: "hidden", borderRadius: 10, bgcolor: "#edf2f4" }}>
+                <Box sx={{ height: 12, display: "flex", overflow: "hidden", borderRadius: 10, bgcolor: "action.hover" }}>
                   <Box sx={{ width: `${cashShare}%`, bgcolor: "#3188f5", transition: "width 200ms ease" }} />
                   <Box sx={{ width: `${transferShare}%`, bgcolor: "#19aa83", transition: "width 200ms ease" }} />
                 </Box>
@@ -313,7 +313,7 @@ export default function AdminPage() {
             <StatCard icon={<GroupIcon />} title="Học viên hoạt động" value={String(stats?.activeStudents ?? 0)} subtitle="Đang theo học" loading={loading} />
           </Box>
 
-          <Card sx={{ background: "linear-gradient(110deg, #e6f7f1 0%, #f1f8fb 100%)", borderColor: "#d7eee6" }}>
+          <Card sx={{ bgcolor: "secondary.light", borderColor: "divider" }}>
             <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
               <Typography variant="h6" fontWeight={750}>Bắt đầu công việc</Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, mb: 1.75 }}>Truy cập nhanh các nghiệp vụ thu học phí thường dùng.</Typography>

@@ -409,13 +409,15 @@ export function PaymentBatchManagement() {
         sx={{
           p: { xs: 2, md: 3 },
           color: "text.primary",
-          bgcolor: "#eaf5f8",
-          borderColor: "#d6e9ee",
+          bgcolor: "background.paper",
+          borderColor: "divider",
+          borderLeft: "3px solid",
+          borderLeftColor: "primary.main",
         }}
       >
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
           <Stack direction="row" spacing={1.5} alignItems="center">
-            <Box sx={{ display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 2, bgcolor: "#d9f2e9", color: "secondary.dark" }}>
+            <Box sx={{ display: "grid", placeItems: "center", width: 44, height: 44, borderRadius: 2, bgcolor: "primary.light", color: "primary.main" }}>
               <CampaignOutlinedIcon sx={{ fontSize: 24 }} />
             </Box>
             <Box>
@@ -519,7 +521,7 @@ export function PaymentBatchManagement() {
 
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
       {loading && <LinearLoading />}
-      {issuedBatches.length > 0 && <Paper sx={{ p: { xs: 1.75, md: 2 }, border: "1px solid", borderColor: "success.light", bgcolor: "success.50" }}>
+      {issuedBatches.length > 0 && <Paper sx={{ p: { xs: 1.75, md: 2 }, border: "1px solid", borderColor: "success.light", bgcolor: "success.light" }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} justifyContent="space-between" alignItems={{ md: "center" }}>
           <Stack direction="row" spacing={1} alignItems="flex-start">
             <CheckCircleOutlineOutlinedIcon color="success" />
@@ -701,10 +703,10 @@ export function PaymentBatchManagement() {
 }
 
 const metricTones = {
-  primary: { color: "primary.dark", background: "primary.light" },
-  warning: { color: "warning.dark", background: "warning.light" },
-  success: { color: "success.dark", background: "success.light" },
-  info: { color: "info.dark", background: "info.light" },
+  primary: { color: "primary.main", background: "primary.light" },
+  warning: { color: "warning.main", background: "warning.light" },
+  success: { color: "success.main", background: "success.light" },
+  info: { color: "info.main", background: "info.light" },
 } as const;
 
 function DashboardMetric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: keyof typeof metricTones; detail?: string }) {
@@ -744,11 +746,11 @@ function SelectionSummary({ count, total, details, children }: { count: number; 
         </Box>
       </Stack>
       <Stack direction="row" spacing={1}>
-        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "common.white" }}>
+        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "background.default" }}>
           <Typography variant="caption" color="text.secondary">Số khoản/đợt</Typography>
           <Typography variant="h6" fontWeight={800}>{count}</Typography>
         </Box>
-        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "common.white" }}>
+        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "background.default" }}>
           <Typography variant="caption" color="text.secondary">Tổng tiền</Typography>
           <Typography variant="body1" fontWeight={800} sx={{ mt: 0.5 }}>{money(total)}</Typography>
         </Box>
