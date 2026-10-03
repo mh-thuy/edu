@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Paper,
-  Skeleton,
   Stack,
   TextField,
   Typography,
@@ -16,6 +15,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import Link from "next/link";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Fee = {
   feeNo: string;
@@ -107,13 +107,7 @@ export function TuitionEditForm({
       setSaving(false);
     }
   }
-  if (loading)
-    return (
-      <Stack spacing={1.5}>
-        <Skeleton variant="text" width={260} height={42} />
-        <Skeleton variant="rounded" height={360} />
-      </Stack>
-    );
+  if (loading) return <LoadingState label="Đang tải dữ liệu học phí..." minHeight={360} />;
   if (error && !fee)
     return (
       <Alert

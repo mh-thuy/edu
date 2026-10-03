@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Session = {
   id: string;
@@ -91,6 +92,7 @@ export function BankReconciliationSessionHistory() {
           </Button>
         </Stack>
         {error && <Alert severity="error">{error}</Alert>}
+        {loading && sessions.length === 0 && !error && <LoadingState label="Đang tải lịch sử đối soát..." minHeight={200} />}
         {!error && sessions.length === 0 && !loading && <Alert severity="info">Chưa có phiên sao kê nào.</Alert>}
         {sessions.length > 0 && (
           <TableContainer>
@@ -132,6 +134,7 @@ export function BankReconciliationSessionHistory() {
             {loading ? "Đang tải…" : "Tải thêm phiên"}
           </Button>
         )}
+        {loading && sessions.length > 0 && <LoadingState label="Đang tải thêm phiên đối soát..." inline size={18} />}
       </Stack>
     </Paper>
   );

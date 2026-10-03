@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -20,6 +19,7 @@ import ClearIcon from "@mui/icons-material/Clear";
 import { useState, useCallback, type ReactElement } from "react";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useList } from "@/hooks/useList";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 // Minimum interface selectable items must satisfy
 export interface SelectableItem {
@@ -173,9 +173,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
 
           {/* Loading state (initial) */}
           {isLoading && rows.length === 0 ? (
-            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-              <CircularProgress />
-            </Box>
+            <LoadingState label="Đang tải danh sách..." minHeight={180} />
           ) : !isLoading && rows.length === 0 ? (
             <Card variant="outlined">
               <CardContent>
@@ -207,6 +205,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 rowCount={total}
                 paginationMode="server"
                 loading={isLoading}
+                slots={{ loadingOverlay: SelectDialogLoadingOverlay }}
                 disableRowSelectionOnClick
                 onRowClick={(params) => handleRowClick(params.row.id as string)}
                 sx={{
@@ -232,4 +231,8 @@ export function BaseSelectDialog<T extends SelectableItem>({
       </DialogActions>
     </Dialog>
   );
+}
+
+function SelectDialogLoadingOverlay() {
+  return <LoadingState label="Đang tải danh sách..." inline size={24} />;
 }

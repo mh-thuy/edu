@@ -7,7 +7,6 @@ import {
   Button,
   Checkbox,
   Chip,
-  CircularProgress,
   Collapse,
   FormControl,
   FormHelperText,
@@ -50,6 +49,7 @@ import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamMonth } from "@/lib/vietnam-time";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 import {
   fetchNoticeBankAccounts,
   fetchOutstandingFees,
@@ -500,7 +500,7 @@ export function PaymentBatchManagement() {
       </Paper>
 
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
-      {loading && <LinearLoading />}
+      {loading && <LoadingState label="Đang tải danh sách thông báo và đợt thu..." inline size={18} />}
       {issuedBatches.length > 0 && <Paper sx={{ p: { xs: 1.75, md: 2 }, border: "1px solid", borderColor: "success.light", bgcolor: "success.light" }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} justifyContent="space-between" alignItems={{ md: "center" }}>
           <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -746,8 +746,4 @@ function SelectionSummary({ count, total, details, children }: { count: number; 
 
 function EmptyState({ message }: { message: string }) {
   return <Stack alignItems="center" spacing={1} sx={{ py: 5 }}><CheckCircleOutlineOutlinedIcon color="disabled" /><Typography color="text.secondary">{message}</Typography></Stack>;
-}
-
-function LinearLoading() {
-  return <Stack direction="row" spacing={1} alignItems="center"><CircularProgress size={18} /><Typography variant="body2" color="text.secondary">Đang tải dữ liệu...</Typography></Stack>;
 }

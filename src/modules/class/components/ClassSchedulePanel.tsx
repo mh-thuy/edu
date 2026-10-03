@@ -5,7 +5,6 @@ import {
   Alert,
   Button,
   Box,
-  CircularProgress,
   FormControl,
   InputLabel,
   MenuItem,
@@ -26,6 +25,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 
 type SubjectOption = {
   id: string;
@@ -324,13 +324,7 @@ export function ClassSchedulePanel({
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  <CircularProgress size={24} sx={{ my: 2 }} />
-                </TableCell>
-              </TableRow>
-            ) : items.map((item) => (
+            {loading ? <LoadingTableRow colSpan={5} label="Đang tải lịch học..." /> : items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.classSubject?.subject.name || "-"}</TableCell>
                 <TableCell>{days[item.dayOfWeek]}</TableCell>

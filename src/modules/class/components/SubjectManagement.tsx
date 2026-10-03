@@ -26,6 +26,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 
 type Subject = {
   id: string;
@@ -148,13 +149,7 @@ export function SubjectManagement() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={3}>
-                  <Typography sx={{ p: 3 }} textAlign="center">Đang tải danh sách môn học...</Typography>
-                </TableCell>
-              </TableRow>
-            ) : items.map((item) => (
+            {loading ? <LoadingTableRow colSpan={3} label="Đang tải danh sách môn học..." /> : items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.name}</TableCell>
                 <TableCell>

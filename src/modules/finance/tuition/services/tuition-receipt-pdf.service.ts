@@ -1,11 +1,11 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { readFile } from "node:fs/promises";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
+import { getPdfFontBytes } from "@/lib/pdf-font";
 import {
   getTuitionReceiptSnapshot,
   parseReceiptSnapshot,
@@ -13,7 +13,6 @@ import {
   toFeeSnapshot,
 } from "@/modules/finance/payments/services/payment-document-snapshot";
 
-const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
 const A5_SCALE = A5_PAGE_SIZE[0] / 595;
@@ -117,7 +116,7 @@ async function generateTuitionReceiptPdfWithClient(
   const isPartialReceipt = receiptPayableAmount < receiptFinalAmount;
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
+  const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
   let page = pdf.addPage(A5_PAGE_SIZE);
   const color = rgb(0.12, 0.16, 0.24);
   const draw = (

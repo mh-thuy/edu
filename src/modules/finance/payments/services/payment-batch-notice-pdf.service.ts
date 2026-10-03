@@ -1,10 +1,10 @@
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
-import { readFile } from "node:fs/promises";
 import { PaymentBatchStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
+import { getPdfFontBytes } from "@/lib/pdf-font";
 import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getPaymentBatchNoticeSnapshot,
@@ -13,7 +13,6 @@ import {
   toFeeSnapshot,
 } from "./payment-document-snapshot";
 
-const FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
 const formatVietnamDateTime = (value: Date) => {
   const parts = new Intl.DateTimeFormat("vi-VN", {
@@ -205,7 +204,7 @@ async function renderPaymentBatchNoticePdf(
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(await readFile(FONT_PATH), { subset: true });
+  const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
   const exportedAt = formatVietnamDateTime(new Date());
   let page = pdf.addPage([595, 842]);
   const color = rgb(0.12, 0.16, 0.24);

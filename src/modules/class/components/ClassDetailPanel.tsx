@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -34,6 +33,7 @@ import EventNoteOutlinedIcon from "@mui/icons-material/EventNoteOutlined";
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import { LoadingState, LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ClassSchedulePanel } from "./ClassSchedulePanel";
@@ -319,7 +319,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
         {error}
       </Alert>
     );
-  if (!classData) return <Typography>Đang tải lớp học...</Typography>;
+  if (!classData) return <LoadingState label="Đang tải thông tin lớp học..." minHeight={320} />;
 
   const statusLabel: Record<string, string> = {
     ACTIVE: "Đang hoạt động",
@@ -425,13 +425,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {loadingRelated ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <CircularProgress size={24} sx={{ my: 2 }} />
-                  </TableCell>
-                </TableRow>
-              ) : classData.classSubjects.map((item) => (
+              {loadingRelated ? <LoadingTableRow colSpan={6} label="Đang tải môn học của lớp..." /> : classData.classSubjects.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.subject.name}</TableCell>
                   <TableCell>

@@ -48,6 +48,7 @@ import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamDate } from "@/lib/vietnam-time";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Fee = {
   id: string;
@@ -696,11 +697,7 @@ export function TuitionPaymentWorkspace({
       </Paper>
 
       {error && <Alert severity="error">{error}</Alert>}
-      {initialLoading && (
-        <Alert severity="info" icon={<CircularProgress size={18} />}>
-          Đang tải khoản học phí được chọn...
-        </Alert>
-      )}
+      {initialLoading && <LoadingState label="Đang tải khoản học phí được chọn..." inline size={18} />}
 
       {step === 0 && (
         <Box
@@ -1104,7 +1101,7 @@ export function TuitionPaymentWorkspace({
                         {bankAccountsError}
                       </Alert>
                     )}
-                    <FormControl fullWidth required>
+                    <FormControl fullWidth required disabled={bankAccountsLoading}>
                       <InputLabel id="bank-account-label">Tài khoản nhận tiền</InputLabel>
                       <Select
                         labelId="bank-account-label"
@@ -1117,7 +1114,7 @@ export function TuitionPaymentWorkspace({
                         error={Boolean(bankAccountError)}
                       >
                         <MenuItem value="">
-                          {bankAccountsLoading ? "Đang tải tài khoản..." : "Chọn tài khoản nhận tiền"}
+                          {bankAccountsLoading ? <LoadingState label="Đang tải tài khoản..." inline size={16} /> : "Chọn tài khoản nhận tiền"}
                         </MenuItem>
                         {!bankAccountsLoading && !bankAccountsError && !bankAccounts.length && (
                           <MenuItem value="" disabled>Chưa cấu hình tài khoản nhận tiền</MenuItem>
@@ -1228,10 +1225,7 @@ export function TuitionPaymentWorkspace({
                       </Alert>
                     )}
                     {qrLoading ? (
-                      <Stack alignItems="center" spacing={1} sx={{ py: 3 }}>
-                        <CircularProgress />
-                        <Typography color="text.secondary">Đang tạo QR...</Typography>
-                      </Stack>
+                      <LoadingState label="Đang tạo mã QR thanh toán..." minHeight={240} />
                     ) : pendingBatch.qrUrl ? (
                       <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 250, height: 250, maxWidth: "100%", border: "1px solid", borderColor: "divider" }} />
                     ) : null}

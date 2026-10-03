@@ -10,6 +10,7 @@ import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 
 type Account = { id: string; bankCode: string; bankName: string; accountNo: string; accountName: string; branchName?: string | null; currencyCode: string; isActive: boolean };
 type FormValues = { bankCode: string; bankName: string; accountNo: string; accountName: string; branchName: string; currencyCode: string };
@@ -83,7 +84,7 @@ export function BankAccountManagement() {
           <TableBody>
             {!loading && items.map((item) => <TableRow key={item.id} hover><TableCell sx={{ minWidth: { xs: 240, md: 0 } }}>{item.bankName}<br /><Typography variant="caption" color="text.secondary">{item.bankCode}</Typography></TableCell><TableCell sx={{ minWidth: { xs: 160, md: 0 } }}>{item.accountNo}</TableCell><TableCell sx={{ minWidth: { xs: 180, md: 0 } }}>{item.accountName}</TableCell><TableCell sx={{ minWidth: { xs: 140, md: 0 } }}>{item.branchName || "-"}</TableCell><TableCell sx={{ minWidth: { xs: 90, md: 0 } }}>{item.currencyCode}</TableCell><TableCell sx={{ minWidth: { xs: 120, md: 0 } }}><Chip size="small" color={item.isActive ? "success" : "default"} label={item.isActive ? "Đang dùng" : "Đã ngưng"} /></TableCell><TableCell sx={{ minWidth: { xs: 230, md: 0 } }}><Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" justifyContent="flex-end"><Button size="small" variant="outlined" startIcon={<EditOutlinedIcon />} onClick={() => startEdit(item)}>Sửa</Button><Button size="small" variant="outlined" color={item.isActive ? "warning" : "success"} disabled={togglingId === item.id} onClick={() => void toggle(item)}>{togglingId === item.id ? "Đang cập nhật..." : item.isActive ? "Ngưng dùng" : "Kích hoạt"}</Button></Stack></TableCell></TableRow>)}
             {!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center" color="text.secondary">Chưa có tài khoản ngân hàng</Typography></TableCell></TableRow>}
-            {loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4 }} textAlign="center">Đang tải...</Typography></TableCell></TableRow>}
+            {loading && <LoadingTableRow colSpan={7} label="Đang tải tài khoản ngân hàng..." />}
           </TableBody>
         </Table>
       </Box>

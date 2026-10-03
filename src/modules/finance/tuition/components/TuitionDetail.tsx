@@ -13,7 +13,6 @@ import {
   DialogTitle,
   LinearProgress,
   Paper,
-  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -31,6 +30,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Fee = {
   id: string;
@@ -227,14 +227,7 @@ export function TuitionDetail({ id }: { id: string }) {
       setRestoreSaving(false);
     }
   }
-  if (loading)
-    return (
-      <Stack spacing={1.5}>
-        <Skeleton variant="text" width={260} height={42} />
-        <Skeleton variant="rounded" height={140} />
-        <Skeleton variant="rounded" height={220} />
-      </Stack>
-    );
+  if (loading) return <LoadingState label="Đang tải chi tiết học phí..." minHeight={360} />;
   if (error || !fee)
     return (
       <Alert

@@ -41,6 +41,7 @@ import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import ClearOutlinedIcon from "@mui/icons-material/ClearOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import { useSnackbar } from "@/hooks/useSnackbar";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Account = {
   id: string;
@@ -586,7 +587,7 @@ export function BankReconciliationPanel() {
               />
             </Button>
           </Stack>
-          {accountsLoading && <Alert severity="info">Đang tải tài khoản ngân hàng...</Alert>}
+          {accountsLoading && <LoadingState label="Đang tải tài khoản ngân hàng..." inline size={18} />}
           {accountError && (
             <Alert
               severity="error"

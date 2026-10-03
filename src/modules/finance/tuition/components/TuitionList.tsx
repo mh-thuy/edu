@@ -34,6 +34,7 @@ import { MasterSelectField, type MasterSelectValue } from "@/components/shared/f
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 
 type Status = "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
 type BillingType = "MONTHLY" | "LEGACY_ONE_TIME" | "OTHER_FEE";
@@ -288,7 +289,7 @@ export function TuitionList() {
               <TableCell align="right" sx={{ minWidth: 250 }}><Stack direction="row" justifyContent="flex-end" spacing={0.5} flexWrap="wrap" useFlexGap><Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small">Chi tiết</Button>{item.paymentAllocations?.[0]?.paymentBatch && <Button component="a" href={`/api/payment-batches/${item.paymentAllocations[0].paymentBatch.id}/notice/pdf`} size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Xuất thông báo tổng</Button>}{(item.status === "UNPAID" || item.status === "PARTIAL" || item.status === "OVERDUE") && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${item.id}`} size="small" variant="contained">{item.status === "PARTIAL" ? "Thu phần còn lại" : "Thu tiền"}</Button>}</Stack></TableCell>
             </TableRow>)}
             {!loading && !items.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">Không có học phí phù hợp</Typography></TableCell></TableRow>}
-            {loading && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }}>Đang tải dữ liệu...</Typography></TableCell></TableRow>}
+            {loading && <LoadingTableRow colSpan={7} label="Đang tải danh sách học phí..." />}
           </TableBody>
         </Table>
         </Box>

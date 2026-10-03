@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   InputAdornment,
   LinearProgress,
   Paper,
@@ -37,6 +36,7 @@ import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { getVietnamMonth } from "@/lib/vietnam-time";
 import { clampMonth } from "@/utils/date";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type ClassData = {
   id: string;
@@ -197,12 +197,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   }
 
   if (!classData && loading) {
-    return (
-      <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 360 }}>
-        <CircularProgress size={30} />
-        <Typography color="text.secondary">Đang tải thông tin học phí lớp...</Typography>
-      </Stack>
-    );
+    return <LoadingState label="Đang tải thông tin học phí lớp..." minHeight={360} size={30} />;
   }
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
 

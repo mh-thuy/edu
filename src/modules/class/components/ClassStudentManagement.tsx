@@ -42,6 +42,7 @@ import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type ClassSubject = {
   id: string;
@@ -399,7 +400,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     }
   }
 
-  if (!classData && loading) return <Typography>Đang tải quản lý học viên...</Typography>;
+  if (!classData && loading) return <LoadingState label="Đang tải quản lý học viên..." minHeight={320} />;
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
   const classNotActive = classData.status !== "ACTIVE";
   const canRegisterStudents = classData.status === "ACTIVE" || classData.status === "DRAFT";

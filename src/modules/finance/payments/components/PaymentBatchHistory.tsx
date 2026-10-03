@@ -7,7 +7,6 @@ import {
   Button,
   Chip,
   Collapse,
-  LinearProgress,
   MenuItem,
   Paper,
   Stack,
@@ -43,6 +42,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { getVietnamDate } from "@/lib/vietnam-time";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 
 type Batch = {
   id: string;
@@ -345,7 +345,6 @@ export function PaymentBatchHistory() {
           </Box>
           <Chip size="small" label={status ? statusLabels[status] : "Tất cả trạng thái"} variant="outlined" />
         </Stack>
-        {loading && <LinearProgress />}
         <Typography
           variant="caption"
           color="text.secondary"
@@ -553,15 +552,7 @@ export function PaymentBatchHistory() {
                 </TableCell>
               </TableRow>
             )}
-            {loading && (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography sx={{ p: 3 }} textAlign="center">
-                    Đang tải...
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            )}
+            {loading && <LoadingTableRow colSpan={6} label="Đang tải danh sách đợt thu..." />}
           </TableBody>
         </Table>
         </Box>

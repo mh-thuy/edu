@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   CardContent,
-  CircularProgress,
   Stack,
   Typography,
 } from "@mui/material";
@@ -20,6 +19,7 @@ import {
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import TableRowsOutlinedIcon from "@mui/icons-material/TableRowsOutlined";
 import type { ReactElement } from "react";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 export interface BaseTableProps<T extends GridValidRowModel> {
   columns: GridColDef<T>[];
@@ -62,9 +62,7 @@ export function BaseTable<T extends GridValidRowModel>({
   if (isLoading && rows.length === 0) {
     return (
       <Card sx={{ minHeight: 320, display: "grid", placeItems: "center" }}>
-        <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-        <CircularProgress />
-        </Box>
+        <LoadingState label="Đang tải danh sách..." minHeight={260} />
       </Card>
     );
   }
@@ -96,7 +94,7 @@ export function BaseTable<T extends GridValidRowModel>({
           disableRowSelectionOnClick
           rowHeight={56}
           columnHeaderHeight={48}
-          slots={{ noRowsOverlay: EmptyRowsOverlay }}
+          slots={{ noRowsOverlay: EmptyRowsOverlay, loadingOverlay: LoadingRowsOverlay }}
           localeText={{
             noRowsLabel: "Không có dữ liệu",
             noResultsOverlayLabel: "Không tìm thấy kết quả",
@@ -123,6 +121,10 @@ export function BaseTable<T extends GridValidRowModel>({
       </Box>
     </Card>
   );
+}
+
+function LoadingRowsOverlay(): ReactElement {
+  return <LoadingState label="Đang tải danh sách..." inline size={24} />;
 }
 
 function EmptyRowsOverlay(): ReactElement {

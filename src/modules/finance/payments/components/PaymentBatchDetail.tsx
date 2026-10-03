@@ -9,7 +9,6 @@ import {
   Chip,
   Divider,
   Paper,
-  Skeleton,
   Stack,
   Table,
   TableBody,
@@ -28,6 +27,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { getVietnamDate } from "@/lib/vietnam-time";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Batch = {
   id: string;
@@ -245,14 +245,7 @@ export function PaymentBatchDetail({ id }: { id: string }) {
     }
   }
 
-  if (loading)
-    return (
-      <Stack spacing={2}>
-        <Skeleton variant="rounded" height={48} width="45%" />
-        <Skeleton variant="rounded" height={120} />
-        <Skeleton variant="rounded" height={280} />
-      </Stack>
-    );
+  if (loading) return <LoadingState label="Đang tải chi tiết đợt thu..." minHeight={360} />;
   if (error || !batch)
     return (
       <Alert

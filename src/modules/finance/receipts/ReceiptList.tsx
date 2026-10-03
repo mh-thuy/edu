@@ -7,7 +7,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Collapse,
   Divider,
   MenuItem,
@@ -39,6 +38,7 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { ReceiptDetailDialog } from "./ReceiptDetailDialog";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 type Receipt = {
   id: string;
@@ -231,7 +231,7 @@ export function ReceiptList() {
           </Stack>}
         </Stack>
 
-        {loading ? <LoadingState /> : !items.length ? <EmptyState hasFilters={hasFilters} onReset={resetFilters} /> : <>
+        {loading ? <LoadingState label="Đang tải danh sách biên lai..." minHeight={300} size={30} /> : !items.length ? <EmptyState hasFilters={hasFilters} onReset={resetFilters} /> : <>
           <TableContainer sx={{ display: { xs: "none", md: "block" } }}>
             <Table sx={{ minWidth: 1080 }}>
               <TableHead>
@@ -322,10 +322,6 @@ function displayPayerName(receiverName: string | null | undefined, student: { id
 
 function StatusChip({ status }: { status: Receipt["status"] }) {
   return <Chip size="small" icon={status === "ACTIVE" ? <CheckCircleOutlineIcon /> : <CancelOutlinedIcon />} color={status === "ACTIVE" ? "success" : "default"} label={statusLabels[status]} sx={{ fontWeight: 700 }} />;
-}
-
-function LoadingState() {
-  return <Stack alignItems="center" justifyContent="center" spacing={1.25} sx={{ minHeight: 300, p: 3 }}><CircularProgress size={30} /><Typography variant="body2" color="text.secondary">Đang tải danh sách biên lai...</Typography></Stack>;
 }
 
 function EmptyState({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {

@@ -29,6 +29,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
+import { LoadingTableRow } from "@/components/shared/feedback/LoadingState";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
@@ -287,13 +288,7 @@ export function UserManagement() {
             </TableRow>
           </TableHead>
           <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <Stack alignItems="center" spacing={1} sx={{ py: 5, color: "text.secondary" }}><PeopleAltOutlinedIcon sx={{ fontSize: 36, color: "text.disabled" }} /><Typography>Đang tải người dùng...</Typography></Stack>
-                </TableCell>
-              </TableRow>
-            ) : !items.length ? (
+            {loading ? <LoadingTableRow colSpan={4} label="Đang tải danh sách người dùng..." /> : !items.length ? (
               <TableRow>
                 <TableCell colSpan={4}>
                   <Stack alignItems="center" spacing={1} sx={{ py: 5, color: "text.secondary" }}><PeopleAltOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>Không có người dùng phù hợp</Typography><Typography variant="body2">Thử thay đổi từ khóa hoặc trạng thái lọc.</Typography></Stack>

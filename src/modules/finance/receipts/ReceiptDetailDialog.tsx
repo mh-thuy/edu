@@ -7,7 +7,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,6 +28,7 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SchoolOutlinedIcon from "@mui/icons-material/SchoolOutlined";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { LoadingState } from "@/components/shared/feedback/LoadingState";
 
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} ₫`;
 
@@ -227,7 +227,7 @@ export function ReceiptDetailDialog({ id, onClose, onCancelled }: { id: string; 
         </DialogTitle>
         <DialogContent dividers sx={{ p: 0 }}>
           {error && <Box sx={{ p: { xs: 2, sm: 3 } }}><Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert></Box>}
-          {!data && !error && <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ minHeight: 360, p: 3 }}><CircularProgress /><Typography color="text.secondary">Đang tải chi tiết biên lai...</Typography></Stack>}
+          {!data && !error && <LoadingState label="Đang tải chi tiết biên lai..." minHeight={360} />}
           {data && (
             <Stack spacing={2.25} sx={{ p: { xs: 2, sm: 3 } }}>
               <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1.5}>
