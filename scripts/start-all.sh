@@ -49,8 +49,14 @@ if [ -f "$PID_FILE" ]; then
   fi
 fi
 
-echo "Installing dependencies..."
-npm install
+echo "Pulling latest changes..."
+git pull
+
+echo "Generating Prisma client..."
+npx prisma generate
+
+echo "Applying database migrations..."
+npx prisma migrate deploy
 
 echo "Building Edu..."
 npm run build

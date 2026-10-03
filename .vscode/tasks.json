@@ -70,6 +70,50 @@
 				"run",
 				"lint"
 			]
+		},
+		{
+			"label": "Deploy production (backup DB → push → Vercel)",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/scripts/deploy-production.sh",
+				"${input:confirmProductionDeploy}"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true,
+				"showReuseMessage": false
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Build frontend → push",
+			"type": "process",
+			"command": "bash",
+			"args": [
+				"${workspaceFolder}/scripts/build-frontend-push.sh"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true,
+				"showReuseMessage": false
+			},
+			"problemMatcher": []
+		}
+	],
+	"inputs": [
+		{
+			"id": "confirmProductionDeploy",
+			"type": "promptString",
+			"description": "Nhập DEPLOY để xác nhận backup DB, git push và deploy production lên Vercel"
 		}
 	]
 }
