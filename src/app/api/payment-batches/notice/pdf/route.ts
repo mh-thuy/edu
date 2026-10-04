@@ -6,7 +6,7 @@ import { requireApiUser } from "@/lib/api-auth";
 import { generatePaymentBatchNoticesPdf } from "@/modules/finance/payments/services/payment-batch-notice-pdf.service";
 
 const schema = z.object({
-  batchIds: z.array(z.string().uuid()).min(1).max(500).superRefine((ids, ctx) => {
+  batchIds: z.array(z.string().uuid()).min(1).max(5000).superRefine((ids, ctx) => {
     if (new Set(ids).size !== ids.length) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Danh sách đợt thu bị trùng" });
     }

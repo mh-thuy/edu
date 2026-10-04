@@ -77,7 +77,9 @@ function buildListQuery(filters: NoticeListFilters) {
 async function fetchPage<T>(endpoint: string): Promise<NoticePage<T>> {
   const response = await fetch(endpoint);
   if (!response.ok) {
-    throw new Error(await extractApiErrorMessage(response, "Không thể tải dữ liệu"));
+    throw new Error(
+      await extractApiErrorMessage(response, "Không thể tải dữ liệu"),
+    );
   }
   return unwrapApiResponse<NoticePage<T>>(response);
 }
@@ -89,7 +91,10 @@ export async function fetchOutstandingFees(filters: NoticeListFilters) {
   return fetchPage<NoticeFee>(`/api/tuition-fees?${query}`);
 }
 
-export async function fetchPaymentBatches(status: "PENDING" | "SUCCESS", filters: NoticeListFilters) {
+export async function fetchPaymentBatches(
+  status: "PENDING" | "SUCCESS",
+  filters: NoticeListFilters,
+) {
   const query = buildListQuery(filters);
   query.set("status", status);
   return fetchPage<PendingBatch>(`/api/payment-batches?${query}`);
@@ -106,7 +111,12 @@ export async function fetchSuccessfulBatches(filters: NoticeListFilters) {
 export async function fetchNoticeBankAccounts() {
   const response = await fetch("/api/bank-accounts");
   if (!response.ok) {
-    throw new Error(await extractApiErrorMessage(response, "Không thể tải tài khoản ngân hàng"));
+    throw new Error(
+      await extractApiErrorMessage(
+        response,
+        "Không thể tải tài khoản ngân hàng",
+      ),
+    );
   }
   return unwrapApiResponse<NoticeBankAccount[]>(response);
 }
@@ -123,9 +133,41 @@ export async function issueNoticeBatches(input: {
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    throw new Error(await extractApiErrorMessage(response, "Không thể phát hành thông báo học phí"));
+    throw new Error(
+      await extractApiErrorMessage(
+        response,
+        "Không thể phát hành thông báo học phí",
+      ),
+    );
   }
-  return unwrapApiResponse<{ batches: Array<{ id: string; batchNo: string; totalAmount: number }> }>(response);
+  return unwrapApiResponse<{
+    batches: Array<{ id: string; batchNo: string; totalAmount: number }>;
+  }>(response);
+}
+
+export async function issueClassNoticeBatches(input: {
+  classId: string;
+  month: string;
+  bankAccountId: string;
+  idempotencyKey: string;
+}) {
+  const response = await fetch("/api/payment-batches/notice/class", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    throw new Error(
+      await extractApiErrorMessage(
+        response,
+        "Không thể phát hành thông báo theo lớp",
+      ),
+    );
+  }
+  return unwrapApiResponse<{
+    batches: Array<{ id: string; batchNo: string; totalAmount: number }>;
+    replacedBatchCount: number;
+  }>(response);
 }
 
 export async function downloadNoticeBatchesPdf(batchIds: string[]) {
@@ -135,14 +177,27 @@ export async function downloadNoticeBatchesPdf(batchIds: string[]) {
     body: JSON.stringify({ batchIds }),
   });
   if (!response.ok) {
-    throw new Error(await extractApiErrorMessage(response, "Không thể tải PDF thông báo"));
+    throw new Error(
+      await extractApiErrorMessage(response, "Không thể tải PDF thông báo"),
+    );
   }
   return response.blob();
 }
 
-export async function restructurePendingBatches(input:
-  | { operation: "SPLIT"; sourceBatchId: string; reason: string; idempotencyKey: string }
-  | { operation: "MERGE"; batchIds: string[]; reason: string; idempotencyKey: string },
+export async function restructurePendingBatches(
+  input:
+    | {
+        operation: "SPLIT";
+        sourceBatchId: string;
+        reason: string;
+        idempotencyKey: string;
+      }
+    | {
+        operation: "MERGE";
+        batchIds: string[];
+        reason: string;
+        idempotencyKey: string;
+      },
 ) {
   const response = await fetch("/api/payment-batches/restructure", {
     method: "POST",
@@ -150,7 +205,14 @@ export async function restructurePendingBatches(input:
     body: JSON.stringify(input),
   });
   if (!response.ok) {
-    throw new Error(await extractApiErrorMessage(response, "Không thể tách hoặc gộp đợt thanh toán"));
+    throw new Error(
+      await extractApiErrorMessage(
+        response,
+        "Không thể tách hoặc gộp đợt thanh toán",
+      ),
+    );
   }
-  return unwrapApiResponse<{ batches: Array<{ id: string; batchNo: string; totalAmount: number }> }>(response);
+  return unwrapApiResponse<{
+    batches: Array<{ id: string; batchNo: string; totalAmount: number }>;
+  }>(response);
 }

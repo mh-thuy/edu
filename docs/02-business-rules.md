@@ -558,6 +558,15 @@ khoản học phí còn nợ đã tồn tại; thao tác này không tự tạo 
 được chọn phải được gom thành tối đa một batch cho mỗi học viên. Nếu học viên
 nộp tiền mặt, nhân viên phải thu từ màn hình thanh toán với phương thức `CASH`.
 
+Khi phát hành theo lớp và kỳ, hệ thống lấy toàn bộ khoản học phí tháng còn nợ
+trong lớp/kỳ, bao gồm khoản chưa phát hành và khoản đang thuộc batch
+`BANK_TRANSFER` `PENDING`. Batch đang chờ nào chứa khoản thuộc lớp/kỳ sẽ bị hủy
+trong cùng transaction; mọi khoản còn nợ đang nằm trong batch bị hủy cũng phải
+được đưa vào batch thay thế để không làm mất yêu cầu thu ở lớp/kỳ khác. Sau đó
+hệ thống tạo tối đa một batch mới cho mỗi học viên và xuất PDF gộp. Khoản đã
+thanh toán không được đưa vào batch mới. Thao tác phải ghi audit log cho batch
+bị hủy và batch được tạo.
+
 ---
 
 ## 10.3 Bill History

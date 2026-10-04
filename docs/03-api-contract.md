@@ -817,13 +817,28 @@ batch đang chờ, tài khoản nhận tiền đang hoạt động; sau đó gom
 học viên và tạo một batch `BANK_TRANSFER` `PENDING` cho mỗi học viên. API không
 tạo học phí.
 
+## 19.1.6.1 Phát hành toàn bộ công nợ theo lớp và kỳ
+
+```http
+POST /api/payment-batches/notice/class
+```
+
+Body gồm `classId`, `month` (`YYYY-MM`), `bankAccountId` và `idempotencyKey`.
+Backend lấy toàn bộ học phí MONTHLY còn nợ của lớp/kỳ đã chọn, gồm khoản chưa
+phát hành và khoản thuộc batch `PENDING`; không đưa khoản đã thanh toán vào
+batch mới. Batch `PENDING` nào có chứa một khoản mục tiêu sẽ bị hủy trong cùng
+transaction. Các khoản còn nợ khác nằm trong những batch bị hủy cũng được đưa
+vào batch thay thế để bảo toàn yêu cầu thu. Hệ thống tạo tối đa một batch
+`BANK_TRANSFER` `PENDING` cho mỗi học viên và trả danh sách batch để xuất PDF
+gộp qua endpoint PDF hiện có. Phản hồi kèm `replacedBatchCount`.
+
 ## 19.1.7 Xuất PDF gộp thông báo
 
 ```http
 POST /api/payment-batches/notice/pdf
 ```
 
-Body gồm `batchIds` (1–500 UUID). Tất cả batch phải đang `PENDING`, dùng phương
+Body gồm `batchIds` (1–5000 UUID). Tất cả batch phải đang `PENDING`, dùng phương
 thức `BANK_TRANSFER` và cùng một tài khoản nhận tiền. Response thành công là
 file PDF gộp các thông báo.
 

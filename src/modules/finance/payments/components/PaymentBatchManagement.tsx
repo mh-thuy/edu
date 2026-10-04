@@ -1,6 +1,14 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   Box,
@@ -39,10 +47,19 @@ import SendOutlinedIcon from "@mui/icons-material/SendOutlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import Link from "next/link";
-import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
-import { StudentSelectDialog, type StudentItem } from "@/components/shared/dialogs/StudentSelectDialog";
+import {
+  ClassSelectDialog,
+  type ClassItem,
+} from "@/components/shared/dialogs/ClassSelectDialog";
+import {
+  StudentSelectDialog,
+  type StudentItem,
+} from "@/components/shared/dialogs/StudentSelectDialog";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
-import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
+import {
+  MasterSelectField,
+  type MasterSelectValue,
+} from "@/components/shared/forms/MasterSelectField";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
@@ -57,6 +74,7 @@ import {
   fetchPendingBatches,
   fetchSuccessfulBatches,
   downloadNoticeBatchesPdf,
+  issueClassNoticeBatches,
   issueNoticeBatches,
   restructurePendingBatches,
   type NoticeBankAccount,
@@ -90,7 +108,9 @@ function sameStudent<T extends { student: { id: string } }>(items: T[]) {
   return new Set(items.map((item) => item.student.id)).size <= 1;
 }
 
-function groupByStudent<T extends { student: { id: string; code: string; fullName: string } }>(items: T[]) {
+function groupByStudent<
+  T extends { student: { id: string; code: string; fullName: string } },
+>(items: T[]) {
   const groups = new Map<string, { student: T["student"]; items: T[] }>();
   for (const item of items) {
     const existing = groups.get(item.student.id);
@@ -111,22 +131,30 @@ export function PaymentBatchManagement() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
-  const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(null);
-  const [appliedStudentId, setAppliedStudentId] = useState<string | undefined>();
+  const [selectedClass, setSelectedClass] = useState<MasterSelectValue | null>(
+    null,
+  );
+  const [appliedStudentId, setAppliedStudentId] = useState<
+    string | undefined
+  >();
   const [appliedClassId, setAppliedClassId] = useState<string | undefined>();
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [fees, setFees] = useState<NoticeFee[]>([]);
   const [unissuedTotal, setUnissuedTotal] = useState(0);
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
-  const [successfulBatches, setSuccessfulBatches] = useState<PendingBatch[]>([]);
+  const [successfulBatches, setSuccessfulBatches] = useState<PendingBatch[]>(
+    [],
+  );
   const [successfulTotal, setSuccessfulTotal] = useState(0);
   const [bankAccounts, setBankAccounts] = useState<NoticeBankAccount[]>([]);
   const [selectedFeeIds, setSelectedFeeIds] = useState<string[]>([]);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
+  const [classNoticeMode, setClassNoticeMode] = useState(false);
   const [bankAccountId, setBankAccountId] = useState("");
-  const [restructureMode, setRestructureMode] = useState<RestructureMode | null>(null);
+  const [restructureMode, setRestructureMode] =
+    useState<RestructureMode | null>(null);
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -162,37 +190,60 @@ export function PaymentBatchManagement() {
       classId: appliedClassId,
     };
     try {
-      const [feeItems, batchItems, paidBatchItems, accounts] = await Promise.all([
-        fetchOutstandingFees({ ...filters, page: view === "UNISSUED" ? filters.page : 1 }),
-        fetchPendingBatches({ ...filters, page: view === "PENDING" ? filters.page : 1 }),
-        fetchSuccessfulBatches({ ...filters, page: view === "SUCCESS" ? filters.page : 1 }),
-        fetchNoticeBankAccounts(),
-      ]);
+      const [feeItems, batchItems, paidBatchItems, accounts] =
+        await Promise.all([
+          fetchOutstandingFees({
+            ...filters,
+            page: view === "UNISSUED" ? filters.page : 1,
+          }),
+          fetchPendingBatches({
+            ...filters,
+            page: view === "PENDING" ? filters.page : 1,
+          }),
+          fetchSuccessfulBatches({
+            ...filters,
+            page: view === "SUCCESS" ? filters.page : 1,
+          }),
+          fetchNoticeBankAccounts(),
+        ]);
       setFees(feeItems.items);
       setUnissuedTotal(feeItems.total);
       setPendingBatches(batchItems.items);
       setPendingTotal(batchItems.total);
       setSuccessfulBatches(paidBatchItems.items);
       setSuccessfulTotal(paidBatchItems.total);
-      const activeTotal = view === "UNISSUED"
-        ? feeItems.total
-        : view === "PENDING"
-          ? batchItems.total
-          : paidBatchItems.total;
+      const activeTotal =
+        view === "UNISSUED"
+          ? feeItems.total
+          : view === "PENDING"
+            ? batchItems.total
+            : paidBatchItems.total;
       const lastPage = Math.max(0, Math.ceil(activeTotal / pageSize) - 1);
       if (page > lastPage) setPage(lastPage);
       setBankAccounts(accounts);
       setBankAccountId((current) =>
         accounts.some((account) => account.id === current)
           ? current
-          : accounts[0]?.id ?? "",
+          : (accounts[0]?.id ?? ""),
       );
     } catch (reasonValue) {
-      setError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải dữ liệu");
+      setError(
+        reasonValue instanceof Error
+          ? reasonValue.message
+          : "Không thể tải dữ liệu",
+      );
     } finally {
       setLoading(false);
     }
-  }, [appliedClassId, appliedSearch, appliedStudentId, month, page, pageSize, view]);
+  }, [
+    appliedClassId,
+    appliedSearch,
+    appliedStudentId,
+    month,
+    page,
+    pageSize,
+    view,
+  ]);
 
   useEffect(() => {
     void load();
@@ -219,33 +270,61 @@ export function PaymentBatchManagement() {
   const visiblePendingBatches = pendingBatches;
   const visibleSuccessfulBatches = successfulBatches;
 
-  const unissuedGroups = useMemo(() => groupByStudent(unissuedFees), [unissuedFees]);
-  const pendingGroups = useMemo(() => groupByStudent(visiblePendingBatches), [visiblePendingBatches]);
-  const successfulGroups = useMemo(() => groupByStudent(visibleSuccessfulBatches), [visibleSuccessfulBatches]);
-  const renderPagination = (count: number, label: string) => count > 0 ? <TablePagination
-    component="div"
-    count={count}
-    page={page}
-    rowsPerPage={pageSize}
-    onPageChange={(_, nextPage) => setPage(nextPage)}
-    onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))}
-    rowsPerPageOptions={[10, 20, 50]}
-    labelRowsPerPage={`${label}/trang`}
-    labelDisplayedRows={({ from, to, count: total }) => `${from}–${to} trên ${total} ${label.toLocaleLowerCase("vi-VN")}`}
-  /> : null;
+  const unissuedGroups = useMemo(
+    () => groupByStudent(unissuedFees),
+    [unissuedFees],
+  );
+  const pendingGroups = useMemo(
+    () => groupByStudent(visiblePendingBatches),
+    [visiblePendingBatches],
+  );
+  const successfulGroups = useMemo(
+    () => groupByStudent(visibleSuccessfulBatches),
+    [visibleSuccessfulBatches],
+  );
+  const renderPagination = (count: number, label: string) =>
+    count > 0 ? (
+      <TablePagination
+        component="div"
+        count={count}
+        page={page}
+        rowsPerPage={pageSize}
+        onPageChange={(_, nextPage) => setPage(nextPage)}
+        onRowsPerPageChange={(event) => setPageSize(Number(event.target.value))}
+        rowsPerPageOptions={[10, 20, 50]}
+        labelRowsPerPage={`${label}/trang`}
+        labelDisplayedRows={({ from, to, count: total }) =>
+          `${from}–${to} trên ${total} ${label.toLocaleLowerCase("vi-VN")}`
+        }
+      />
+    ) : null;
 
   const selectedFees = fees.filter((fee) => selectedFeeIds.includes(fee.id));
-  const selectedBatches = pendingBatches.filter((batch) => selectedBatchIds.includes(batch.id));
-  const selectedFeeTotal = selectedFees.reduce((sum, fee) => sum + Number(fee.remainingAmount), 0);
-  const selectedBatchTotal = selectedBatches.reduce((sum, batch) => sum + Number(batch.totalAmount), 0);
-  const selectedStudentCount = new Set(selectedFees.map((fee) => fee.student.id)).size;
-  const canMergeBatches = selectedBatches.length >= 2 &&
+  const selectedBatches = pendingBatches.filter((batch) =>
+    selectedBatchIds.includes(batch.id),
+  );
+  const selectedFeeTotal = selectedFees.reduce(
+    (sum, fee) => sum + Number(fee.remainingAmount),
+    0,
+  );
+  const selectedBatchTotal = selectedBatches.reduce(
+    (sum, batch) => sum + Number(batch.totalAmount),
+    0,
+  );
+  const selectedStudentCount = new Set(
+    selectedFees.map((fee) => fee.student.id),
+  ).size;
+  const canMergeBatches =
+    selectedBatches.length >= 2 &&
     sameStudent(selectedBatches) &&
     new Set(selectedBatches.map((batch) => batch.bankAccountId)).size <= 1;
-  const splitTarget = selectedBatches.length === 1 ? selectedBatches[0] : undefined;
+  const splitTarget =
+    selectedBatches.length === 1 ? selectedBatches[0] : undefined;
   const selectedBatchStudent = selectedBatches[0]?.student.id;
-  const selectedCount = view === "UNISSUED" ? selectedFeeIds.length : selectedBatchIds.length;
-  const selectedTotal = view === "UNISSUED" ? selectedFeeTotal : selectedBatchTotal;
+  const selectedCount =
+    view === "UNISSUED" ? selectedFeeIds.length : selectedBatchIds.length;
+  const selectedTotal =
+    view === "UNISSUED" ? selectedFeeTotal : selectedBatchTotal;
 
   useEffect(() => {
     if (appliedUrlFilters.current) return;
@@ -253,12 +332,16 @@ export function PaymentBatchManagement() {
     const params = new URLSearchParams(window.location.search);
     const queryMonth = params.get("month");
     const queryClassId = params.get("classId");
-    if (queryMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(queryMonth)) setMonth(queryMonth);
+    if (queryMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(queryMonth))
+      setMonth(queryMonth);
     if (!queryClassId) return;
     setShowAdvancedFilters(true);
     void fetch(`/api/classes/${encodeURIComponent(queryClassId)}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"));
+        if (!response.ok)
+          throw new Error(
+            await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"),
+          );
         return unwrapApiResponse<ClassItem>(response);
       })
       .then((item) => {
@@ -266,20 +349,28 @@ export function PaymentBatchManagement() {
         setAppliedClassId(item.id);
       })
       .catch((reasonValue: unknown) => {
-        showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải lớp đã chọn");
+        showError(
+          reasonValue instanceof Error
+            ? reasonValue.message
+            : "Không thể tải lớp đã chọn",
+        );
       });
   }, [showError]);
 
   function toggleFee(id: string) {
-    setSelectedFeeIds((current) => current.includes(id)
-      ? current.filter((item) => item !== id)
-      : [...current, id]);
+    setSelectedFeeIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
   }
 
   function toggleBatch(id: string) {
-    setSelectedBatchIds((current) => current.includes(id)
-      ? current.filter((item) => item !== id)
-      : [...current, id]);
+    setSelectedBatchIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
   }
 
   function handleStudentFilterSelect(item: StudentItem) {
@@ -302,6 +393,19 @@ export function PaymentBatchManagement() {
       return;
     }
     setNoticeDialogOpen(true);
+    setClassNoticeMode(false);
+    setDialogError("");
+  }
+
+  function openClassNoticeDialog() {
+    if (!appliedClassId || appliedStudentId) {
+      showError(
+        "Hãy lọc theo một lớp và bỏ bộ lọc học viên trước khi phát hành theo lớp",
+      );
+      return;
+    }
+    setClassNoticeMode(true);
+    setNoticeDialogOpen(true);
     setDialogError("");
   }
 
@@ -313,19 +417,32 @@ export function PaymentBatchManagement() {
     setBusy(true);
     setDialogError("");
     try {
-      const result = await issueNoticeBatches({
-        tuitionFeeIds: selectedFeeIds,
-        mode: "BY_STUDENT",
-        bankAccountId,
-        idempotencyKey: crypto.randomUUID(),
-      });
+      const result = classNoticeMode
+        ? await issueClassNoticeBatches({
+            classId: appliedClassId!,
+            month,
+            bankAccountId,
+            idempotencyKey: crypto.randomUUID(),
+          })
+        : await issueNoticeBatches({
+            tuitionFeeIds: selectedFeeIds,
+            mode: "BY_STUDENT",
+            bankAccountId,
+            idempotencyKey: crypto.randomUUID(),
+          });
       setNoticeDialogOpen(false);
       setIssuedBatches(result.batches);
       setView("PENDING");
       setPage(0);
-      showSuccess(`Đã phát hành ${result.batches.length} đợt thu cho ${selectedStudentCount} học viên`);
+      showSuccess(
+        classNoticeMode
+          ? `Đã phát hành ${result.batches.length} đợt thu theo lớp; đã thay ${"replacedBatchCount" in result ? result.replacedBatchCount : 0} đợt đang chờ`
+          : `Đã phát hành ${result.batches.length} đợt thu cho ${selectedStudentCount} học viên`,
+      );
       try {
-        const pdf = await downloadNoticeBatchesPdf(result.batches.map((batch) => batch.id));
+        const pdf = await downloadNoticeBatchesPdf(
+          result.batches.map((batch) => batch.id),
+        );
         const url = URL.createObjectURL(pdf);
         const anchor = document.createElement("a");
         anchor.href = url;
@@ -333,10 +450,16 @@ export function PaymentBatchManagement() {
         anchor.click();
         URL.revokeObjectURL(url);
       } catch {
-        showError("Đợt thu đã được tạo. Có thể tải lại PDF từ thông báo vừa phát hành.");
+        showError(
+          "Đợt thu đã được tạo. Có thể tải lại PDF từ thông báo vừa phát hành.",
+        );
       }
     } catch (reasonValue) {
-      setDialogError(reasonValue instanceof Error ? reasonValue.message : "Không thể phát hành thông báo");
+      setDialogError(
+        reasonValue instanceof Error
+          ? reasonValue.message
+          : "Không thể phát hành thông báo",
+      );
     } finally {
       setBusy(false);
     }
@@ -346,7 +469,9 @@ export function PaymentBatchManagement() {
     if (!issuedBatches.length) return;
     setIsDownloadingNoticePdf(true);
     try {
-      const pdf = await downloadNoticeBatchesPdf(issuedBatches.map((batch) => batch.id));
+      const pdf = await downloadNoticeBatchesPdf(
+        issuedBatches.map((batch) => batch.id),
+      );
       const url = URL.createObjectURL(pdf);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -354,19 +479,28 @@ export function PaymentBatchManagement() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (reasonValue) {
-      showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải PDF thông báo");
+      showError(
+        reasonValue instanceof Error
+          ? reasonValue.message
+          : "Không thể tải PDF thông báo",
+      );
     } finally {
       setIsDownloadingNoticePdf(false);
     }
   }
 
   function openRestructureDialog(mode: RestructureMode) {
-    if (mode === "SPLIT" && (!splitTarget || splitTarget.allocations.length < 2)) {
+    if (
+      mode === "SPLIT" &&
+      (!splitTarget || splitTarget.allocations.length < 2)
+    ) {
       showError("Hãy chọn một batch có ít nhất hai khoản học phí");
       return;
     }
     if (mode === "MERGE" && !canMergeBatches) {
-      showError("Hãy chọn ít nhất hai batch của cùng học sinh và cùng tài khoản nhận tiền");
+      showError(
+        "Hãy chọn ít nhất hai batch của cùng học sinh và cùng tài khoản nhận tiền",
+      );
       return;
     }
     setRestructureMode(mode);
@@ -382,25 +516,30 @@ export function PaymentBatchManagement() {
     setBusy(true);
     setDialogError("");
     try {
-      const input = restructureMode === "SPLIT"
-        ? {
-            operation: "SPLIT" as const,
-            sourceBatchId: splitTarget!.id,
-            reason: reason.trim(),
-            idempotencyKey: crypto.randomUUID(),
-          }
-        : {
-            operation: "MERGE" as const,
-            batchIds: selectedBatchIds,
-            reason: reason.trim(),
-            idempotencyKey: crypto.randomUUID(),
-          };
+      const input =
+        restructureMode === "SPLIT"
+          ? {
+              operation: "SPLIT" as const,
+              sourceBatchId: splitTarget!.id,
+              reason: reason.trim(),
+              idempotencyKey: crypto.randomUUID(),
+            }
+          : {
+              operation: "MERGE" as const,
+              batchIds: selectedBatchIds,
+              reason: reason.trim(),
+              idempotencyKey: crypto.randomUUID(),
+            };
       const result = await restructurePendingBatches(input);
       setRestructureMode(null);
       await load();
       showSuccess(`Đã tạo lại ${result.batches.length} đợt thanh toán`);
     } catch (reasonValue) {
-      setDialogError(reasonValue instanceof Error ? reasonValue.message : "Không thể tách hoặc gộp đợt thu");
+      setDialogError(
+        reasonValue instanceof Error
+          ? reasonValue.message
+          : "Không thể tách hoặc gộp đợt thu",
+      );
     } finally {
       setBusy(false);
     }
@@ -408,19 +547,38 @@ export function PaymentBatchManagement() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={2}>
+      <Stack
+        direction={{ xs: "column", md: "row" }}
+        justifyContent="space-between"
+        alignItems={{ md: "center" }}
+        gap={2}
+      >
         <Box>
           <Stack direction="row" spacing={1} alignItems="center">
             <CampaignOutlinedIcon color="primary" />
-            <Typography variant="h5" fontWeight={800}>Thông báo &amp; đợt thu</Typography>
+            <Typography variant="h5" fontWeight={800}>
+              Thông báo &amp; đợt thu
+            </Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             Phát hành và theo dõi yêu cầu thanh toán theo từng học viên.
           </Typography>
         </Box>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          alignItems={{ sm: "center" }}
+        >
           <Box sx={{ width: { xs: "100%", sm: 190 } }}>
-            <MonthPickerField label="Kỳ học phí" value={month} onChange={(value) => { setIssuedBatches([]); setMonth(value); }} textFieldProps={{ size: "small" }} />
+            <MonthPickerField
+              label="Kỳ học phí"
+              value={month}
+              onChange={(value) => {
+                setIssuedBatches([]);
+                setMonth(value);
+              }}
+              textFieldProps={{ size: "small" }}
+            />
           </Box>
           <Button
             variant="outlined"
@@ -428,53 +586,161 @@ export function PaymentBatchManagement() {
             startIcon={<RefreshOutlinedIcon />}
             onClick={() => void load()}
             disabled={loading}
-            sx={{ alignSelf: { xs: "stretch", sm: "auto" }, whiteSpace: "nowrap" }}
+            sx={{
+              alignSelf: { xs: "stretch", sm: "auto" },
+              whiteSpace: "nowrap",
+            }}
           >
             Làm mới
           </Button>
         </Stack>
       </Stack>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))" }, gap: { xs: 1, md: 1.5 } }}>
-        <DashboardMetric icon={<CampaignOutlinedIcon />} label="Chưa phát" value={unissuedTotal} tone="primary" />
-        <DashboardMetric icon={<HourglassTopOutlinedIcon />} label="Đang chờ" value={pendingTotal} tone="warning" />
-        <DashboardMetric icon={<TaskAltOutlinedIcon />} label="Đã thanh toán" value={successfulTotal} tone="success" />
-        <DashboardMetric icon={<CheckCircleOutlineOutlinedIcon />} label="Đang chọn" value={selectedCount} tone="info" detail={selectedCount ? money(selectedTotal) : undefined} />
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr 1fr",
+            md: "repeat(4, minmax(0, 1fr))",
+          },
+          gap: { xs: 1, md: 1.5 },
+        }}
+      >
+        <DashboardMetric
+          icon={<CampaignOutlinedIcon />}
+          label="Chưa phát"
+          value={unissuedTotal}
+          tone="primary"
+        />
+        <DashboardMetric
+          icon={<HourglassTopOutlinedIcon />}
+          label="Đang chờ"
+          value={pendingTotal}
+          tone="warning"
+        />
+        <DashboardMetric
+          icon={<TaskAltOutlinedIcon />}
+          label="Đã thanh toán"
+          value={successfulTotal}
+          tone="success"
+        />
+        <DashboardMetric
+          icon={<CheckCircleOutlineOutlinedIcon />}
+          label="Đang chọn"
+          value={selectedCount}
+          tone="info"
+          detail={selectedCount ? money(selectedTotal) : undefined}
+        />
       </Box>
 
-      <Paper variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}>
+      <Paper
+        variant="outlined"
+        sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}
+      >
         <Stack spacing={1.75}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            gap={1}
+          >
             <Stack direction="row" spacing={1} alignItems="center">
               <TuneOutlinedIcon color="primary" fontSize="small" />
               <Box>
-              <Typography variant="subtitle1" fontWeight={800}>Tìm kiếm &amp; lọc</Typography>
-              <Typography variant="caption" color="text.secondary">Tìm theo học viên, mã học phí, lớp hoặc đợt thu.</Typography>
+                <Typography variant="subtitle1" fontWeight={800}>
+                  Tìm kiếm &amp; lọc
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Tìm theo học viên, mã học phí, lớp hoặc đợt thu.
+                </Typography>
               </Box>
             </Stack>
-            <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent={{ sm: "flex-end" }}>
-              {student && <Chip size="small" label={`HV: ${student.code}`} onDelete={() => setStudent(null)} />}
-              {selectedClass && <Chip size="small" label={`Lớp: ${selectedClass.name}`} onDelete={() => setSelectedClass(null)} />}
-              {appliedSearch && <Chip size="small" label={`Từ khóa: ${appliedSearch}`} onDelete={() => { setSearch(""); setAppliedSearch(""); setPage(0); }} />}
+            <Stack
+              direction="row"
+              spacing={0.75}
+              flexWrap="wrap"
+              useFlexGap
+              justifyContent={{ sm: "flex-end" }}
+            >
+              {student && (
+                <Chip
+                  size="small"
+                  label={`HV: ${student.code}`}
+                  onDelete={() => setStudent(null)}
+                />
+              )}
+              {selectedClass && (
+                <Chip
+                  size="small"
+                  label={`Lớp: ${selectedClass.name}`}
+                  onDelete={() => setSelectedClass(null)}
+                />
+              )}
+              {appliedSearch && (
+                <Chip
+                  size="small"
+                  label={`Từ khóa: ${appliedSearch}`}
+                  onDelete={() => {
+                    setSearch("");
+                    setAppliedSearch("");
+                    setPage(0);
+                  }}
+                />
+              )}
             </Stack>
           </Stack>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-            <AppTextField label="Tìm học sinh, mã học phí hoặc batch" size="small" value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") applyFilters(); }} sx={{ flex: 1, minWidth: 0 }} />
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.25}
+            alignItems={{ md: "center" }}
+          >
+            <AppTextField
+              label="Tìm học sinh, mã học phí hoặc batch"
+              size="small"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") applyFilters();
+              }}
+              sx={{ flex: 1, minWidth: 0 }}
+            />
             <Button
               size="small"
               variant="text"
               color="inherit"
               startIcon={<TuneOutlinedIcon />}
-              endIcon={<ExpandMoreOutlinedIcon sx={{ transform: showAdvancedFilters ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }} />}
+              endIcon={
+                <ExpandMoreOutlinedIcon
+                  sx={{
+                    transform: showAdvancedFilters ? "rotate(180deg)" : "none",
+                    transition: "transform 180ms ease",
+                  }}
+                />
+              }
               onClick={() => setShowAdvancedFilters((current) => !current)}
-              sx={{ color: "text.secondary", whiteSpace: "nowrap", alignSelf: { xs: "flex-start", md: "center" } }}
+              sx={{
+                color: "text.secondary",
+                whiteSpace: "nowrap",
+                alignSelf: { xs: "flex-start", md: "center" },
+              }}
             >
               Bộ lọc nâng cao
             </Button>
-            <FilterActions onSearch={applyFilters} onClear={clearFilters} hasFilters={Boolean(search.trim() || appliedSearch || student || selectedClass)} isLoading={loading} />
+            <FilterActions
+              onSearch={applyFilters}
+              onClear={clearFilters}
+              hasFilters={Boolean(
+                search.trim() || appliedSearch || student || selectedClass,
+              )}
+              isLoading={loading}
+            />
           </Stack>
           <Collapse in={showAdvancedFilters}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.25}
+              alignItems={{ md: "center" }}
+              sx={{ pt: 0.5 }}
+            >
               <MasterSelectField
                 label="Học viên"
                 value={student}
@@ -498,142 +764,607 @@ export function PaymentBatchManagement() {
         </Stack>
       </Paper>
 
-      <Paper variant="outlined" sx={{ px: { xs: 1, md: 1.5 }, borderRadius: 2.5 }}>
-        <Tabs value={view} variant="scrollable" scrollButtons="auto" onChange={(_, value: View) => { setView(value); setPage(0); setSelectedFeeIds([]); setSelectedBatchIds([]); }}>
-          <Tab icon={<CampaignOutlinedIcon fontSize="small" />} iconPosition="start" value="UNISSUED" label={`Chưa phát · ${unissuedTotal}`} />
-          <Tab icon={<HourglassTopOutlinedIcon fontSize="small" />} iconPosition="start" value="PENDING" label={`Đang chờ · ${pendingTotal}`} />
-          <Tab icon={<TaskAltOutlinedIcon fontSize="small" />} iconPosition="start" value="SUCCESS" label={`Đã thanh toán · ${successfulTotal}`} />
+      <Paper
+        variant="outlined"
+        sx={{ px: { xs: 1, md: 1.5 }, borderRadius: 2.5 }}
+      >
+        <Tabs
+          value={view}
+          variant="scrollable"
+          scrollButtons="auto"
+          onChange={(_, value: View) => {
+            setView(value);
+            setPage(0);
+            setSelectedFeeIds([]);
+            setSelectedBatchIds([]);
+          }}
+        >
+          <Tab
+            icon={<CampaignOutlinedIcon fontSize="small" />}
+            iconPosition="start"
+            value="UNISSUED"
+            label={`Chưa phát · ${unissuedTotal}`}
+          />
+          <Tab
+            icon={<HourglassTopOutlinedIcon fontSize="small" />}
+            iconPosition="start"
+            value="PENDING"
+            label={`Đang chờ · ${pendingTotal}`}
+          />
+          <Tab
+            icon={<TaskAltOutlinedIcon fontSize="small" />}
+            iconPosition="start"
+            value="SUCCESS"
+            label={`Đã thanh toán · ${successfulTotal}`}
+          />
         </Tabs>
       </Paper>
 
-      {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
-      {loading && <LoadingState label="Đang tải danh sách thông báo và đợt thu..." inline size={18} />}
-      {issuedBatches.length > 0 && <Paper sx={{ p: { xs: 1.75, md: 2 }, border: "1px solid", borderColor: "success.light", bgcolor: "success.light" }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} justifyContent="space-between" alignItems={{ md: "center" }}>
-          <Stack direction="row" spacing={1} alignItems="flex-start">
-            <CheckCircleOutlineOutlinedIcon color="success" />
-            <Box>
-              <Typography fontWeight={800}>Thông báo vừa phát hành</Typography>
-              <Typography variant="body2" color="text.secondary">Tải PDF ngay hoặc mở chi tiết đợt thu để tiếp tục xử lý.</Typography>
-            </Box>
-          </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap>
-            <Button size="small" variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void downloadIssuedNoticePdf()} disabled={isDownloadingNoticePdf}>
-              {isDownloadingNoticePdf ? "Đang tạo PDF..." : `Tải PDF gộp (${issuedBatches.length} đợt)`}
+      {error && (
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={() => void load()}>
+              Thử lại
             </Button>
-            {issuedBatches.map((batch) => <Button key={batch.id} component={Link} href={`/admin/tuition-fees/payment-history/${batch.id}`} size="small">Chi tiết {batch.batchNo}</Button>)}
+          }
+        >
+          {error}
+        </Alert>
+      )}
+      {loading && (
+        <LoadingState
+          label="Đang tải danh sách thông báo và đợt thu..."
+          inline
+          size={18}
+        />
+      )}
+      {issuedBatches.length > 0 && (
+        <Paper
+          sx={{
+            p: { xs: 1.75, md: 2 },
+            border: "1px solid",
+            borderColor: "success.light",
+            bgcolor: "success.light",
+          }}
+        >
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            justifyContent="space-between"
+            alignItems={{ md: "center" }}
+          >
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <CheckCircleOutlineOutlinedIcon color="success" />
+              <Box>
+                <Typography fontWeight={800}>
+                  Thông báo vừa phát hành
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Tải PDF ngay hoặc mở chi tiết đợt thu để tiếp tục xử lý.
+                </Typography>
+              </Box>
+            </Stack>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              flexWrap="wrap"
+              useFlexGap
+            >
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<DownloadOutlinedIcon />}
+                onClick={() => void downloadIssuedNoticePdf()}
+                disabled={isDownloadingNoticePdf}
+              >
+                {isDownloadingNoticePdf
+                  ? "Đang tạo PDF..."
+                  : `Tải PDF gộp (${issuedBatches.length} đợt)`}
+              </Button>
+              {issuedBatches.map((batch) => (
+                <Button
+                  key={batch.id}
+                  component={Link}
+                  href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                  size="small"
+                >
+                  Chi tiết {batch.batchNo}
+                </Button>
+              ))}
+            </Stack>
           </Stack>
-        </Stack>
-      </Paper>}
+        </Paper>
+      )}
 
       {view === "UNISSUED" ? (
         <Stack spacing={1.5}>
-          <SectionHeader icon={<CampaignOutlinedIcon />} title="Khoản học phí chưa phát thông báo" subtitle="Chọn các khoản cần thu. Hệ thống tự gom thành một đợt cho mỗi học viên." />
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" }, gap: 2 }}>
-          <Paper sx={{ overflow: "hidden" }}>
-            <Box sx={{ overflowX: "auto" }}>
-              <Table sx={{ minWidth: 900 }} size="small">
-                <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={Boolean(unissuedFees.length) && selectedFeeIds.length === unissuedFees.length} onChange={(event) => setSelectedFeeIds(event.target.checked ? unissuedFees.map((fee) => fee.id) : [])} /></TableCell><TableCell>Học sinh</TableCell><TableCell>Khoản học phí</TableCell><TableCell>Lớp</TableCell><TableCell>Phải thu</TableCell><TableCell>Còn nợ</TableCell><TableCell>Trạng thái</TableCell></TableRow></TableHead>
-                <TableBody>
-                  {unissuedGroups.map((group) => {
-                    const groupIds = group.items.map((fee) => fee.id);
-                    const groupSelected = groupIds.every((id) => selectedFeeIds.includes(id));
-                    return <Fragment key={group.student.id}>
-                      <TableRow sx={{ bgcolor: "action.hover" }}>
-                        <TableCell padding="checkbox"><Checkbox checked={groupSelected} onChange={(event) => setSelectedFeeIds((current) => event.target.checked ? [...new Set([...current, ...groupIds])] : current.filter((id) => !groupIds.includes(id)))} /></TableCell>
-                        <TableCell colSpan={6}><Typography fontWeight={800}>{group.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{group.student.code} · {group.items.length} khoản chưa phát thông báo</Typography></TableCell>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            justifyContent="space-between"
+            alignItems={{ md: "center" }}
+          >
+            <SectionHeader
+              icon={<CampaignOutlinedIcon />}
+              title="Khoản học phí chưa phát thông báo"
+              subtitle="Chọn các khoản cần thu. Hệ thống tự gom thành một đợt cho mỗi học viên."
+            />
+            {appliedClassId && (
+              <Button
+                variant="outlined"
+                startIcon={<SendOutlinedIcon />}
+                onClick={openClassNoticeDialog}
+                disabled={loading || busy}
+              >
+                Phát hành & xuất toàn bộ theo lớp
+              </Button>
+            )}
+          </Stack>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" },
+              gap: 2,
+            }}
+          >
+            <Paper sx={{ overflow: "hidden" }}>
+              <Box sx={{ overflowX: "auto" }}>
+                <Table sx={{ minWidth: 900 }} size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={
+                            Boolean(unissuedFees.length) &&
+                            selectedFeeIds.length === unissuedFees.length
+                          }
+                          onChange={(event) =>
+                            setSelectedFeeIds(
+                              event.target.checked
+                                ? unissuedFees.map((fee) => fee.id)
+                                : [],
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>Học sinh</TableCell>
+                      <TableCell>Khoản học phí</TableCell>
+                      <TableCell>Lớp</TableCell>
+                      <TableCell>Phải thu</TableCell>
+                      <TableCell>Còn nợ</TableCell>
+                      <TableCell>Trạng thái</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {unissuedGroups.map((group) => {
+                      const groupIds = group.items.map((fee) => fee.id);
+                      const groupSelected = groupIds.every((id) =>
+                        selectedFeeIds.includes(id),
+                      );
+                      return (
+                        <Fragment key={group.student.id}>
+                          <TableRow sx={{ bgcolor: "action.hover" }}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={groupSelected}
+                                onChange={(event) =>
+                                  setSelectedFeeIds((current) =>
+                                    event.target.checked
+                                      ? [...new Set([...current, ...groupIds])]
+                                      : current.filter(
+                                          (id) => !groupIds.includes(id),
+                                        ),
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell colSpan={6}>
+                              <Typography fontWeight={800}>
+                                {group.student.fullName}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {group.student.code} · {group.items.length}{" "}
+                                khoản chưa phát thông báo
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                          {group.items.map((fee) => (
+                            <TableRow key={fee.id} hover>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={selectedFeeIds.includes(fee.id)}
+                                  onChange={() => toggleFee(fee.id)}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {fee.student.fullName}
+                                <Typography
+                                  variant="caption"
+                                  display="block"
+                                  color="text.secondary"
+                                >
+                                  {fee.student.code}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  component={Link}
+                                  href={`/admin/tuition-fees/${fee.id}`}
+                                  size="small"
+                                  sx={{ p: 0, justifyContent: "flex-start" }}
+                                >
+                                  {fee.feeNo}
+                                </Button>
+                                <Typography
+                                  variant="caption"
+                                  display="block"
+                                  color="text.secondary"
+                                >
+                                  {fee.items
+                                    .map((item) => item.itemName)
+                                    .join(", ") || "-"}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{fee.class.name}</TableCell>
+                              <TableCell>{money(fee.finalAmount)}</TableCell>
+                              <TableCell>
+                                <Typography fontWeight={700}>
+                                  {money(fee.remainingAmount)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  color={feeStatusColors[fee.status]}
+                                  label={feeStatusLabels[fee.status]}
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                    {!loading && !unissuedFees.length && (
+                      <TableRow>
+                        <TableCell colSpan={7}>
+                          <EmptyState message="Không có khoản học phí chưa phát thông báo trong kỳ này" />
+                        </TableCell>
                       </TableRow>
-                      {group.items.map((fee) => <TableRow key={fee.id} hover>
-                        <TableCell padding="checkbox"><Checkbox checked={selectedFeeIds.includes(fee.id)} onChange={() => toggleFee(fee.id)} /></TableCell>
-                        <TableCell>{fee.student.fullName}<Typography variant="caption" display="block" color="text.secondary">{fee.student.code}</Typography></TableCell>
-                        <TableCell><Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" sx={{ p: 0, justifyContent: "flex-start" }}>{fee.feeNo}</Button><Typography variant="caption" display="block" color="text.secondary">{fee.items.map((item) => item.itemName).join(", ") || "-"}</Typography></TableCell>
-                        <TableCell>{fee.class.name}</TableCell>
-                        <TableCell>{money(fee.finalAmount)}</TableCell>
-                        <TableCell><Typography fontWeight={700}>{money(fee.remainingAmount)}</Typography></TableCell>
-                        <TableCell><Chip size="small" color={feeStatusColors[fee.status]} label={feeStatusLabels[fee.status]} /></TableCell>
-                      </TableRow>)}
-                    </Fragment>;
-                  })}
-                  {!loading && !unissuedFees.length && <TableRow><TableCell colSpan={7}><EmptyState message="Không có khoản học phí chưa phát thông báo trong kỳ này" /></TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </Box>
-            {renderPagination(unissuedTotal, "Khoản học phí")}
-          </Paper>
-          <SelectionSummary count={selectedFeeIds.length} total={selectedFeeTotal} details={selectedFees.slice(0, 5).map((fee) => `${fee.feeNo} · ${fee.student.fullName}`)}>
-            <Button fullWidth variant="contained" startIcon={<SendOutlinedIcon />} onClick={openNoticeDialog} disabled={!selectedFeeIds.length || selectedFeeIds.length > 500}>
-              Phát hành cho {selectedStudentCount} học viên
-            </Button>
-            {selectedFeeIds.length > 500 && <Alert severity="warning">Mỗi lần phát hành tối đa 500 khoản học phí.</Alert>}
-            {selectedFeeIds.length > 0 && <Alert severity="info">Các khoản đã chọn của cùng học viên sẽ được gom vào một đợt thu.</Alert>}
-          </SelectionSummary>
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+              {renderPagination(unissuedTotal, "Khoản học phí")}
+            </Paper>
+            <SelectionSummary
+              count={selectedFeeIds.length}
+              total={selectedFeeTotal}
+              details={selectedFees
+                .slice(0, 5)
+                .map((fee) => `${fee.feeNo} · ${fee.student.fullName}`)}
+            >
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={<SendOutlinedIcon />}
+                onClick={openNoticeDialog}
+                disabled={!selectedFeeIds.length || selectedFeeIds.length > 500}
+              >
+                Phát hành cho {selectedStudentCount} học viên
+              </Button>
+              {selectedFeeIds.length > 500 && (
+                <Alert severity="warning">
+                  Mỗi lần phát hành tối đa 500 khoản học phí.
+                </Alert>
+              )}
+              {selectedFeeIds.length > 0 && (
+                <Alert severity="info">
+                  Các khoản đã chọn của cùng học viên sẽ được gom vào một đợt
+                  thu.
+                </Alert>
+              )}
+            </SelectionSummary>
           </Box>
         </Stack>
       ) : view === "PENDING" ? (
         <Stack spacing={1.5}>
-          <SectionHeader icon={<HourglassTopOutlinedIcon />} title="Đợt thu đang chờ thanh toán" subtitle="Có thể xuất lại thông báo, tách một batch thành nhiều batch hoặc gộp các batch cùng điều kiện." />
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" }, gap: 2 }}>
-          <Paper sx={{ overflow: "hidden" }}>
-            <Box sx={{ overflowX: "auto" }}>
-              <Table sx={{ minWidth: 900 }} size="small">
-                <TableHead><TableRow><TableCell padding="checkbox"><Checkbox checked={Boolean(visiblePendingBatches.length) && selectedBatchIds.length === visiblePendingBatches.length} onChange={(event) => setSelectedBatchIds(event.target.checked ? visiblePendingBatches.map((batch) => batch.id) : [])} /></TableCell><TableCell>Đợt thu</TableCell><TableCell>Học sinh</TableCell><TableCell>Các khoản</TableCell><TableCell>Tổng tiền</TableCell><TableCell>Thao tác</TableCell></TableRow></TableHead>
-                <TableBody>
-                  {pendingGroups.map((group) => {
-                    const groupIds = group.items.map((batch) => batch.id);
-                    const groupSelected = groupIds.every((id) => selectedBatchIds.includes(id));
-                    return <Fragment key={group.student.id}>
-                      <TableRow sx={{ bgcolor: "action.hover" }}>
-                        <TableCell padding="checkbox"><Checkbox checked={groupSelected} onChange={(event) => setSelectedBatchIds((current) => event.target.checked ? [...new Set([...current, ...groupIds])] : current.filter((id) => !groupIds.includes(id)))} /></TableCell>
-                        <TableCell colSpan={5}><Typography fontWeight={800}>{group.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{group.student.code} · {group.items.length} đợt đang chờ</Typography></TableCell>
+          <SectionHeader
+            icon={<HourglassTopOutlinedIcon />}
+            title="Đợt thu đang chờ thanh toán"
+            subtitle="Có thể xuất lại thông báo, tách một batch thành nhiều batch hoặc gộp các batch cùng điều kiện."
+          />
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 280px" },
+              gap: 2,
+            }}
+          >
+            <Paper sx={{ overflow: "hidden" }}>
+              <Box sx={{ overflowX: "auto" }}>
+                <Table sx={{ minWidth: 900 }} size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={
+                            Boolean(visiblePendingBatches.length) &&
+                            selectedBatchIds.length ===
+                              visiblePendingBatches.length
+                          }
+                          onChange={(event) =>
+                            setSelectedBatchIds(
+                              event.target.checked
+                                ? visiblePendingBatches.map((batch) => batch.id)
+                                : [],
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>Đợt thu</TableCell>
+                      <TableCell>Học sinh</TableCell>
+                      <TableCell>Các khoản</TableCell>
+                      <TableCell>Tổng tiền</TableCell>
+                      <TableCell>Thao tác</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {pendingGroups.map((group) => {
+                      const groupIds = group.items.map((batch) => batch.id);
+                      const groupSelected = groupIds.every((id) =>
+                        selectedBatchIds.includes(id),
+                      );
+                      return (
+                        <Fragment key={group.student.id}>
+                          <TableRow sx={{ bgcolor: "action.hover" }}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={groupSelected}
+                                onChange={(event) =>
+                                  setSelectedBatchIds((current) =>
+                                    event.target.checked
+                                      ? [...new Set([...current, ...groupIds])]
+                                      : current.filter(
+                                          (id) => !groupIds.includes(id),
+                                        ),
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell colSpan={5}>
+                              <Typography fontWeight={800}>
+                                {group.student.fullName}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {group.student.code} · {group.items.length} đợt
+                                đang chờ
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                          {group.items.map((batch) => (
+                            <TableRow key={batch.id} hover>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={selectedBatchIds.includes(batch.id)}
+                                  onChange={() => toggleBatch(batch.id)}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography fontWeight={700}>
+                                  {batch.batchNo}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  color="warning"
+                                  label="Đang chờ"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                {batch.student.fullName}
+                                <Typography
+                                  variant="caption"
+                                  display="block"
+                                  color="text.secondary"
+                                >
+                                  {batch.student.code}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                {batch.allocations
+                                  .map(
+                                    (allocation) =>
+                                      `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`,
+                                  )
+                                  .join(", ")}
+                              </TableCell>
+                              <TableCell>
+                                <Typography fontWeight={800}>
+                                  {money(batch.totalAmount)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>
+                                <Stack
+                                  direction="row"
+                                  spacing={0.5}
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                >
+                                  <Button
+                                    component="a"
+                                    href={`/api/payment-batches/${batch.id}/notice/pdf`}
+                                    size="small"
+                                    startIcon={<DownloadOutlinedIcon />}
+                                  >
+                                    Xuất PDF
+                                  </Button>
+                                  <Button
+                                    component={Link}
+                                    href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                                    size="small"
+                                  >
+                                    Chi tiết
+                                  </Button>
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })}
+                    {!loading && !visiblePendingBatches.length && (
+                      <TableRow>
+                        <TableCell colSpan={6}>
+                          <EmptyState message="Không có đợt thanh toán đang chờ trong kỳ này" />
+                        </TableCell>
                       </TableRow>
-                      {group.items.map((batch) => <TableRow key={batch.id} hover>
-                        <TableCell padding="checkbox"><Checkbox checked={selectedBatchIds.includes(batch.id)} onChange={() => toggleBatch(batch.id)} /></TableCell>
-                        <TableCell><Typography fontWeight={700}>{batch.batchNo}</Typography><Chip size="small" color="warning" label="Đang chờ" /></TableCell>
-                        <TableCell>{batch.student.fullName}<Typography variant="caption" display="block" color="text.secondary">{batch.student.code}</Typography></TableCell>
-                        <TableCell>{batch.allocations.map((allocation) => `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`).join(", ")}</TableCell>
-                        <TableCell><Typography fontWeight={800}>{money(batch.totalAmount)}</Typography></TableCell>
-                        <TableCell><Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap><Button component="a" href={`/api/payment-batches/${batch.id}/notice/pdf`} size="small" startIcon={<DownloadOutlinedIcon />}>Xuất PDF</Button><Button component={Link} href={`/admin/tuition-fees/payment-history/${batch.id}`} size="small">Chi tiết</Button></Stack></TableCell>
-                      </TableRow>)}
-                    </Fragment>;
-                  })}
-                  {!loading && !visiblePendingBatches.length && <TableRow><TableCell colSpan={6}><EmptyState message="Không có đợt thanh toán đang chờ trong kỳ này" /></TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </Box>
-            {renderPagination(pendingTotal, "Đợt thu")}
-          </Paper>
-          <SelectionSummary count={selectedBatchIds.length} total={selectedBatchTotal} details={selectedBatches.slice(0, 5).map((batch) => `${batch.batchNo} · ${batch.student.fullName}`)}>
-            <Button fullWidth variant="contained" color="warning" startIcon={<CallSplitOutlinedIcon />} onClick={() => openRestructureDialog("SPLIT")} disabled={!splitTarget || splitTarget.allocations.length < 2}>Tách đợt thu</Button>
-            <Button fullWidth variant="outlined" startIcon={<MergeTypeOutlinedIcon />} onClick={() => openRestructureDialog("MERGE")} disabled={!canMergeBatches}>Gộp đợt thu</Button>
-            {selectedBatches.length > 0 && !sameStudent(selectedBatches) && <Alert severity="info">Chỉ được gộp các đợt của cùng một học sinh.</Alert>}
-            {selectedBatches.length > 0 && selectedBatchStudent && new Set(selectedBatches.map((batch) => batch.bankAccountId)).size > 1 && <Alert severity="info">Các đợt phải dùng cùng tài khoản nhận tiền.</Alert>}
-          </SelectionSummary>
+                    )}
+                  </TableBody>
+                </Table>
+              </Box>
+              {renderPagination(pendingTotal, "Đợt thu")}
+            </Paper>
+            <SelectionSummary
+              count={selectedBatchIds.length}
+              total={selectedBatchTotal}
+              details={selectedBatches
+                .slice(0, 5)
+                .map((batch) => `${batch.batchNo} · ${batch.student.fullName}`)}
+            >
+              <Button
+                fullWidth
+                variant="contained"
+                color="warning"
+                startIcon={<CallSplitOutlinedIcon />}
+                onClick={() => openRestructureDialog("SPLIT")}
+                disabled={!splitTarget || splitTarget.allocations.length < 2}
+              >
+                Tách đợt thu
+              </Button>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<MergeTypeOutlinedIcon />}
+                onClick={() => openRestructureDialog("MERGE")}
+                disabled={!canMergeBatches}
+              >
+                Gộp đợt thu
+              </Button>
+              {selectedBatches.length > 0 && !sameStudent(selectedBatches) && (
+                <Alert severity="info">
+                  Chỉ được gộp các đợt của cùng một học sinh.
+                </Alert>
+              )}
+              {selectedBatches.length > 0 &&
+                selectedBatchStudent &&
+                new Set(selectedBatches.map((batch) => batch.bankAccountId))
+                  .size > 1 && (
+                  <Alert severity="info">
+                    Các đợt phải dùng cùng tài khoản nhận tiền.
+                  </Alert>
+                )}
+            </SelectionSummary>
           </Box>
         </Stack>
       ) : (
         <Stack spacing={1.5}>
-          <SectionHeader icon={<TaskAltOutlinedIcon />} title="Lịch sử đợt thu đã thanh toán" subtitle="Dữ liệu chỉ xem; các batch đã thanh toán không thể tách hoặc gộp lại." />
+          <SectionHeader
+            icon={<TaskAltOutlinedIcon />}
+            title="Lịch sử đợt thu đã thanh toán"
+            subtitle="Dữ liệu chỉ xem; các batch đã thanh toán không thể tách hoặc gộp lại."
+          />
           <Paper sx={{ overflow: "hidden" }}>
             <Box sx={{ overflowX: "auto" }}>
               <Table sx={{ minWidth: 850 }} size="small">
-              <TableHead><TableRow><TableCell>Đợt thu</TableCell><TableCell>Học sinh</TableCell><TableCell>Các khoản</TableCell><TableCell>Tổng tiền</TableCell><TableCell>Trạng thái</TableCell><TableCell>Thao tác</TableCell></TableRow></TableHead>
-              <TableBody>
-                {successfulGroups.map((group) => <Fragment key={group.student.id}>
-                  <TableRow sx={{ bgcolor: "action.hover" }}>
-                    <TableCell colSpan={6}><Typography fontWeight={800}>{group.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{group.student.code} · {group.items.length} đợt đã thanh toán</Typography></TableCell>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Đợt thu</TableCell>
+                    <TableCell>Học sinh</TableCell>
+                    <TableCell>Các khoản</TableCell>
+                    <TableCell>Tổng tiền</TableCell>
+                    <TableCell>Trạng thái</TableCell>
+                    <TableCell>Thao tác</TableCell>
                   </TableRow>
-                  {group.items.map((batch) => <TableRow key={batch.id} hover>
-                    <TableCell><Typography fontWeight={700}>{batch.batchNo}</Typography></TableCell>
-                    <TableCell>{batch.student.fullName}<Typography variant="caption" display="block" color="text.secondary">{batch.student.code}</Typography></TableCell>
-                    <TableCell>{batch.allocations.map((allocation) => `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`).join(", ")}</TableCell>
-                    <TableCell><Typography fontWeight={800}>{money(batch.totalAmount)}</Typography></TableCell>
-                    <TableCell><Chip size="small" color="success" label="Đã thanh toán" /></TableCell>
-                    <TableCell><Button component={Link} href={`/admin/tuition-fees/payment-history/${batch.id}`} size="small">Xem chi tiết</Button></TableCell>
-                  </TableRow>)}
-                </Fragment>)}
-                {!loading && !visibleSuccessfulBatches.length && <TableRow><TableCell colSpan={6}><EmptyState message="Không có đợt đã thanh toán trong kỳ này" /></TableCell></TableRow>}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {successfulGroups.map((group) => (
+                    <Fragment key={group.student.id}>
+                      <TableRow sx={{ bgcolor: "action.hover" }}>
+                        <TableCell colSpan={6}>
+                          <Typography fontWeight={800}>
+                            {group.student.fullName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {group.student.code} · {group.items.length} đợt đã
+                            thanh toán
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                      {group.items.map((batch) => (
+                        <TableRow key={batch.id} hover>
+                          <TableCell>
+                            <Typography fontWeight={700}>
+                              {batch.batchNo}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {batch.student.fullName}
+                            <Typography
+                              variant="caption"
+                              display="block"
+                              color="text.secondary"
+                            >
+                              {batch.student.code}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {batch.allocations
+                              .map(
+                                (allocation) =>
+                                  `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`,
+                              )
+                              .join(", ")}
+                          </TableCell>
+                          <TableCell>
+                            <Typography fontWeight={800}>
+                              {money(batch.totalAmount)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              color="success"
+                              label="Đã thanh toán"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              component={Link}
+                              href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                              size="small"
+                            >
+                              Xem chi tiết
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </Fragment>
+                  ))}
+                  {!loading && !visibleSuccessfulBatches.length && (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <EmptyState message="Không có đợt đã thanh toán trong kỳ này" />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </Box>
             {renderPagination(successfulTotal, "Đợt thu")}
           </Paper>
@@ -644,35 +1375,127 @@ export function PaymentBatchManagement() {
         <Stack direction="row" spacing={1} alignItems="flex-start">
           <AccountBalanceWalletOutlinedIcon color="primary" />
           <Typography variant="body2" color="text.secondary">
-            Tách/gộp chỉ thay đổi thông báo và đợt thanh toán. Hệ thống không xóa học phí, không sửa payment đã thành công và không tạo biên lai khi phát hành thông báo.
+            Tách/gộp chỉ thay đổi thông báo và đợt thanh toán. Hệ thống không
+            xóa học phí, không sửa payment đã thành công và không tạo biên lai
+            khi phát hành thông báo.
           </Typography>
         </Stack>
       </Paper>
 
       <ConfirmDialog
         open={noticeDialogOpen}
-        title="Phát hành thông báo chuyển khoản"
-        message={`Hệ thống sẽ phát hành ${selectedFeeIds.length} khoản cho ${selectedStudentCount} học viên, tự gom theo từng học viên. Tổng số tiền còn nợ: ${money(selectedFeeTotal)}.`}
-        content={<Stack spacing={1.5} sx={{ mt: 2 }}><FormControl fullWidth required error={Boolean(dialogError)}><InputLabel id="notice-bank-account-label">Tài khoản nhận tiền</InputLabel><Select labelId="notice-bank-account-label" label="Tài khoản nhận tiền" value={bankAccountId} onChange={(event) => { setBankAccountId(event.target.value); setDialogError(""); }}><MenuItem value="">Chọn tài khoản nhận tiền</MenuItem>{bankAccounts.map((account) => <MenuItem key={account.id} value={account.id}>{account.bankName} — {account.accountNo} — {account.accountName}</MenuItem>)}</Select><FormHelperText>{dialogError || (bankAccounts.length ? "Tài khoản này sẽ được gắn vào batch mới." : "Chưa cấu hình tài khoản nhận tiền")}</FormHelperText></FormControl></Stack>}
+        title={
+          classNoticeMode
+            ? "Phát hành toàn bộ thông báo theo lớp"
+            : "Phát hành thông báo chuyển khoản"
+        }
+        message={
+          classNoticeMode
+            ? `Hệ thống sẽ lấy toàn bộ khoản còn nợ của lớp ${selectedClass?.name ?? "đã chọn"} trong kỳ ${month}, gồm các khoản chưa phát hành và khoản đang thuộc đợt chờ. Đợt chờ cũ sẽ bị hủy; nếu batch cũ có thêm khoản còn nợ ở lớp/kỳ khác, các khoản đó cũng được chuyển sang batch mới. Hệ thống gom theo học viên và xuất PDF gộp.`
+            : `Hệ thống sẽ phát hành ${selectedFeeIds.length} khoản cho ${selectedStudentCount} học viên, tự gom theo từng học viên. Tổng số tiền còn nợ: ${money(selectedFeeTotal)}.`
+        }
+        content={
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <FormControl fullWidth required error={Boolean(dialogError)}>
+              <InputLabel id="notice-bank-account-label">
+                Tài khoản nhận tiền
+              </InputLabel>
+              <Select
+                labelId="notice-bank-account-label"
+                label="Tài khoản nhận tiền"
+                value={bankAccountId}
+                onChange={(event) => {
+                  setBankAccountId(event.target.value);
+                  setDialogError("");
+                }}
+              >
+                <MenuItem value="">Chọn tài khoản nhận tiền</MenuItem>
+                {bankAccounts.map((account) => (
+                  <MenuItem key={account.id} value={account.id}>
+                    {account.bankName} — {account.accountNo} —{" "}
+                    {account.accountName}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                {dialogError ||
+                  (bankAccounts.length
+                    ? "Tài khoản này sẽ được gắn vào batch mới."
+                    : "Chưa cấu hình tài khoản nhận tiền")}
+              </FormHelperText>
+            </FormControl>
+          </Stack>
+        }
         confirmLabel="Phát hành"
         cancelLabel="Hủy"
         confirmColor="primary"
         onConfirm={() => void submitNotice()}
-        onCancel={() => { if (!busy) setNoticeDialogOpen(false); }}
+        onCancel={() => {
+          if (!busy) setNoticeDialogOpen(false);
+        }}
         isLoading={busy}
         confirmDisabled={!bankAccountId || !bankAccounts.length}
       />
 
       <ConfirmDialog
         open={Boolean(restructureMode)}
-        title={restructureMode === "SPLIT" ? "Tách đợt thanh toán" : "Gộp đợt thanh toán"}
-        message={restructureMode === "SPLIT" ? "Batch hiện tại sẽ được hủy và tạo lại thành các batch riêng theo từng khoản học phí." : `Các batch đã chọn sẽ được hủy và tạo lại thành một batch tổng ${money(selectedBatchTotal)}.`}
-        content={<Stack spacing={1.5} sx={{ mt: 2 }}>{restructureMode === "SPLIT" && splitTarget && <Alert severity="warning"><Typography variant="body2" fontWeight={700}>Sau khi tách {splitTarget.batchNo}, hệ thống sẽ tạo:</Typography>{splitTarget.allocations.map((allocation) => <Typography key={allocation.tuitionFee.id} variant="body2">{allocation.tuitionFee.feeNo}: {money(allocation.amount)}</Typography>)}</Alert>}{restructureMode === "MERGE" && <Alert severity="info"><Typography variant="body2" fontWeight={700}>Sau khi gộp sẽ tạo 1 batch tổng:</Typography><Typography variant="body2">{selectedBatches.map((batch) => batch.batchNo).join(" + ")} → {money(selectedBatchTotal)}</Typography></Alert>}<AppTextField label="Lý do thao tác" value={reason} onChange={(event) => { setReason(event.target.value); setDialogError(""); }} multiline minRows={3} required error={Boolean(dialogError)} helperText={dialogError || "Bắt buộc nhập để lưu audit log."} /></Stack>}
+        title={
+          restructureMode === "SPLIT"
+            ? "Tách đợt thanh toán"
+            : "Gộp đợt thanh toán"
+        }
+        message={
+          restructureMode === "SPLIT"
+            ? "Batch hiện tại sẽ được hủy và tạo lại thành các batch riêng theo từng khoản học phí."
+            : `Các batch đã chọn sẽ được hủy và tạo lại thành một batch tổng ${money(selectedBatchTotal)}.`
+        }
+        content={
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            {restructureMode === "SPLIT" && splitTarget && (
+              <Alert severity="warning">
+                <Typography variant="body2" fontWeight={700}>
+                  Sau khi tách {splitTarget.batchNo}, hệ thống sẽ tạo:
+                </Typography>
+                {splitTarget.allocations.map((allocation) => (
+                  <Typography key={allocation.tuitionFee.id} variant="body2">
+                    {allocation.tuitionFee.feeNo}: {money(allocation.amount)}
+                  </Typography>
+                ))}
+              </Alert>
+            )}
+            {restructureMode === "MERGE" && (
+              <Alert severity="info">
+                <Typography variant="body2" fontWeight={700}>
+                  Sau khi gộp sẽ tạo 1 batch tổng:
+                </Typography>
+                <Typography variant="body2">
+                  {selectedBatches.map((batch) => batch.batchNo).join(" + ")} →{" "}
+                  {money(selectedBatchTotal)}
+                </Typography>
+              </Alert>
+            )}
+            <AppTextField
+              label="Lý do thao tác"
+              value={reason}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setDialogError("");
+              }}
+              multiline
+              minRows={3}
+              required
+              error={Boolean(dialogError)}
+              helperText={dialogError || "Bắt buộc nhập để lưu audit log."}
+            />
+          </Stack>
+        }
         confirmLabel="Xác nhận"
         cancelLabel="Hủy"
         confirmColor="warning"
         onConfirm={() => void submitRestructure()}
-        onCancel={() => { if (!busy) setRestructureMode(null); }}
+        onCancel={() => {
+          if (!busy) setRestructureMode(null);
+        }}
         isLoading={busy}
         confirmDisabled={!reason.trim()}
       />
@@ -699,58 +1522,207 @@ const metricTones = {
   info: { color: "info.main", background: "info.light" },
 } as const;
 
-function DashboardMetric({ icon, label, value, tone, detail }: { icon: ReactNode; label: string; value: number; tone: keyof typeof metricTones; detail?: string }) {
+function DashboardMetric({
+  icon,
+  label,
+  value,
+  tone,
+  detail,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: number;
+  tone: keyof typeof metricTones;
+  detail?: string;
+}) {
   const colors = metricTones[tone];
-  return <Paper variant="outlined" sx={{ p: { xs: 1.25, md: 1.75 }, borderRadius: 2.5, borderTop: "2px solid", borderTopColor: colors.color, transition: "box-shadow 160ms ease, transform 160ms ease", "&:hover": { boxShadow: 2, transform: "translateY(-1px)" } }}>
-    <Stack direction="row" spacing={1.25} alignItems="center">
-      <Box sx={{ display: "grid", placeItems: "center", flexShrink: 0, width: 38, height: 38, borderRadius: 1.75, color: colors.color, bgcolor: colors.background }}>{icon}</Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" color="text.secondary" noWrap>{label}</Typography>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={{ sm: 0.75 }} alignItems={{ sm: "baseline" }}>
-          <Typography variant="h6" fontWeight={800} lineHeight={1.2}>{value}</Typography>
-          {detail && <Typography variant="caption" color="text.secondary" noWrap>{detail}</Typography>}
-        </Stack>
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: { xs: 1.25, md: 1.75 },
+        borderRadius: 2.5,
+        borderTop: "2px solid",
+        borderTopColor: colors.color,
+        transition: "box-shadow 160ms ease, transform 160ms ease",
+        "&:hover": { boxShadow: 2, transform: "translateY(-1px)" },
+      }}
+    >
+      <Stack direction="row" spacing={1.25} alignItems="center">
+        <Box
+          sx={{
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+            width: 38,
+            height: 38,
+            borderRadius: 1.75,
+            color: colors.color,
+            bgcolor: colors.background,
+          }}
+        >
+          {icon}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {label}
+          </Typography>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={{ sm: 0.75 }}
+            alignItems={{ sm: "baseline" }}
+          >
+            <Typography variant="h6" fontWeight={800} lineHeight={1.2}>
+              {value}
+            </Typography>
+            {detail && (
+              <Typography variant="caption" color="text.secondary" noWrap>
+                {detail}
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="flex-start">
+      <Box
+        sx={{
+          display: "grid",
+          placeItems: "center",
+          width: 34,
+          height: 34,
+          mt: 0.25,
+          borderRadius: 1.5,
+          color: "primary.main",
+          bgcolor: "primary.light",
+        }}
+      >
+        {icon}
+      </Box>
+      <Box>
+        <Typography variant="subtitle1" fontWeight={800}>
+          {title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {subtitle}
+        </Typography>
       </Box>
     </Stack>
-  </Paper>;
+  );
 }
 
-function SectionHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
-  return <Stack direction="row" spacing={1} alignItems="flex-start">
-    <Box sx={{ display: "grid", placeItems: "center", width: 34, height: 34, mt: 0.25, borderRadius: 1.5, color: "primary.main", bgcolor: "primary.light" }}>{icon}</Box>
-    <Box>
-      <Typography variant="subtitle1" fontWeight={800}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary">{subtitle}</Typography>
-    </Box>
-  </Stack>;
-}
-
-function SelectionSummary({ count, total, details, children }: { count: number; total: number; details: string[]; children: ReactNode }) {
-  return <Paper sx={{ p: { xs: 1.75, md: 2 }, alignSelf: "start", position: { lg: "sticky" }, top: { lg: 24 }, border: "1px solid", borderColor: "primary.light", bgcolor: "background.paper" }}>
-    <Stack spacing={1.5}>
-      <Stack direction="row" spacing={1} alignItems="center">
-        <InfoOutlinedIcon color="primary" fontSize="small" />
-        <Box>
-          <Typography variant="subtitle1" fontWeight={800}>Tóm tắt lựa chọn</Typography>
-          <Typography variant="caption" color="text.secondary">Kiểm tra trước khi thực hiện thao tác</Typography>
+function SelectionSummary({
+  count,
+  total,
+  details,
+  children,
+}: {
+  count: number;
+  total: number;
+  details: string[];
+  children: ReactNode;
+}) {
+  return (
+    <Paper
+      sx={{
+        p: { xs: 1.75, md: 2 },
+        alignSelf: "start",
+        position: { lg: "sticky" },
+        top: { lg: 24 },
+        border: "1px solid",
+        borderColor: "primary.light",
+        bgcolor: "background.paper",
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <InfoOutlinedIcon color="primary" fontSize="small" />
+          <Box>
+            <Typography variant="subtitle1" fontWeight={800}>
+              Tóm tắt lựa chọn
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Kiểm tra trước khi thực hiện thao tác
+            </Typography>
+          </Box>
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <Box
+            sx={{
+              flex: 1,
+              p: 1.25,
+              borderRadius: 1.5,
+              bgcolor: "background.default",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Số khoản/đợt
+            </Typography>
+            <Typography variant="h6" fontWeight={800}>
+              {count}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              flex: 1,
+              p: 1.25,
+              borderRadius: 1.5,
+              bgcolor: "background.default",
+            }}
+          >
+            <Typography variant="caption" color="text.secondary">
+              Tổng tiền
+            </Typography>
+            <Typography variant="body1" fontWeight={800} sx={{ mt: 0.5 }}>
+              {money(total)}
+            </Typography>
+          </Box>
+        </Stack>
+        {details.length > 0 && (
+          <Stack spacing={0.25} sx={{ maxHeight: 130, overflowY: "auto" }}>
+            {details.map((detail) => (
+              <Typography
+                key={detail}
+                variant="caption"
+                color="text.secondary"
+                noWrap
+              >
+                {detail}
+              </Typography>
+            ))}
+            {count > details.length && (
+              <Typography variant="caption" color="text.secondary">
+                + {count - details.length} khoản/đợt khác
+              </Typography>
+            )}
+          </Stack>
+        )}
+        <Box sx={{ pt: 0.5 }}>
+          <Stack spacing={1}>{children}</Stack>
         </Box>
       </Stack>
-      <Stack direction="row" spacing={1}>
-        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "background.default" }}>
-          <Typography variant="caption" color="text.secondary">Số khoản/đợt</Typography>
-          <Typography variant="h6" fontWeight={800}>{count}</Typography>
-        </Box>
-        <Box sx={{ flex: 1, p: 1.25, borderRadius: 1.5, bgcolor: "background.default" }}>
-          <Typography variant="caption" color="text.secondary">Tổng tiền</Typography>
-          <Typography variant="body1" fontWeight={800} sx={{ mt: 0.5 }}>{money(total)}</Typography>
-        </Box>
-      </Stack>
-      {details.length > 0 && <Stack spacing={0.25} sx={{ maxHeight: 130, overflowY: "auto" }}>{details.map((detail) => <Typography key={detail} variant="caption" color="text.secondary" noWrap>{detail}</Typography>)}{count > details.length && <Typography variant="caption" color="text.secondary">+ {count - details.length} khoản/đợt khác</Typography>}</Stack>}
-      <Box sx={{ pt: 0.5 }}><Stack spacing={1}>{children}</Stack></Box>
-    </Stack>
-  </Paper>;
+    </Paper>
+  );
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <Stack alignItems="center" spacing={1} sx={{ py: 5 }}><CheckCircleOutlineOutlinedIcon color="disabled" /><Typography color="text.secondary">{message}</Typography></Stack>;
+  return (
+    <Stack alignItems="center" spacing={1} sx={{ py: 5 }}>
+      <CheckCircleOutlineOutlinedIcon color="disabled" />
+      <Typography color="text.secondary">{message}</Typography>
+    </Stack>
+  );
 }

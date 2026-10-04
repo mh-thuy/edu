@@ -404,6 +404,7 @@ model TuitionFee {
   @@index([classId], map: "idx_tuition_fees_class_id")
   @@index([billingYear, billingMonth], map: "idx_tuition_fees_billing_month")
   @@index([studentId, classId, billingYear, billingMonth], map: "idx_tuition_fees_student_class_month")
+  @@index([classId, billingYear, billingMonth, billingType, status], map: "idx_tuition_fees_class_month_type_status")
   @@index([status], map: "idx_tuition_fees_status")
   @@index([dueDate], map: "idx_tuition_fees_due_date")
   @@map("tuition_fees")
