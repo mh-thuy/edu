@@ -16,6 +16,10 @@ import {
   Checkbox,
   Chip,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormHelperText,
   InputLabel,
@@ -161,6 +165,9 @@ export function PaymentBatchManagement() {
   const [error, setError] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [issuedBatches, setIssuedBatches] = useState<IssuedBatch[]>([]);
+  const [issuedClassId, setIssuedClassId] = useState<string | null>(null);
+  const [issuedMonth, setIssuedMonth] = useState<string | null>(null);
+  const [issuedDialogOpen, setIssuedDialogOpen] = useState(false);
   const [isDownloadingNoticePdf, setIsDownloadingNoticePdf] = useState(false);
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const appliedUrlFilters = useRef(false);
@@ -432,6 +439,9 @@ export function PaymentBatchManagement() {
           });
       setNoticeDialogOpen(false);
       setIssuedBatches(result.batches);
+      setIssuedClassId(classNoticeMode ? (appliedClassId ?? null) : null);
+      setIssuedMonth(classNoticeMode ? month : null);
+      setIssuedDialogOpen(true);
       setView("PENDING");
       setPage(0);
       showSuccess(
@@ -575,6 +585,9 @@ export function PaymentBatchManagement() {
               value={month}
               onChange={(value) => {
                 setIssuedBatches([]);
+                setIssuedClassId(null);
+                setIssuedMonth(null);
+                setIssuedDialogOpen(false);
                 setMonth(value);
               }}
               textFieldProps={{ size: "small" }}
@@ -593,6 +606,38 @@ export function PaymentBatchManagement() {
           >
             Làm mới
           </Button>
+          {appliedClassId && (
+            <Button
+              variant="contained"
+              startIcon={
+                issuedClassId === appliedClassId && issuedMonth === month ? (
+                  <DownloadOutlinedIcon />
+                ) : (
+                  <SendOutlinedIcon />
+                )
+              }
+              onClick={() =>
+                issuedClassId === appliedClassId && issuedMonth === month
+                  ? void downloadIssuedNoticePdf()
+                  : openClassNoticeDialog()
+              }
+              disabled={
+                loading ||
+                busy ||
+                isDownloadingNoticePdf ||
+                (issuedClassId === appliedClassId &&
+                  issuedMonth === month &&
+                  !issuedBatches.length)
+              }
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              {issuedClassId === appliedClassId && issuedMonth === month
+                ? isDownloadingNoticePdf
+                  ? "Đang tạo PDF..."
+                  : "Xuất lại PDF toàn bộ lớp"
+                : "Phát hành & xuất toàn bộ theo lớp"}
+            </Button>
+          )}
         </Stack>
       </Stack>
 
@@ -819,63 +864,52 @@ export function PaymentBatchManagement() {
           size={18}
         />
       )}
-      {issuedBatches.length > 0 && (
-        <Paper
-          sx={{
-            p: { xs: 1.75, md: 2 },
-            border: "1px solid",
-            borderColor: "success.light",
-            bgcolor: "success.light",
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1.5}
-            justifyContent="space-between"
-            alignItems={{ md: "center" }}
-          >
-            <Stack direction="row" spacing={1} alignItems="flex-start">
-              <CheckCircleOutlineOutlinedIcon color="success" />
-              <Box>
-                <Typography fontWeight={800}>
-                  Thông báo vừa phát hành
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Tải PDF ngay hoặc mở chi tiết đợt thu để tiếp tục xử lý.
-                </Typography>
-              </Box>
-            </Stack>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              flexWrap="wrap"
-              useFlexGap
-            >
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<DownloadOutlinedIcon />}
-                onClick={() => void downloadIssuedNoticePdf()}
-                disabled={isDownloadingNoticePdf}
-              >
-                {isDownloadingNoticePdf
-                  ? "Đang tạo PDF..."
-                  : `Tải PDF gộp (${issuedBatches.length} đợt)`}
-              </Button>
-              {issuedBatches.map((batch) => (
-                <Button
-                  key={batch.id}
-                  component={Link}
-                  href={`/admin/tuition-fees/payment-history/${batch.id}`}
-                  size="small"
-                >
-                  Chi tiết {batch.batchNo}
-                </Button>
-              ))}
-            </Stack>
+      <Dialog
+        open={issuedDialogOpen && issuedBatches.length > 0}
+        onClose={() => setIssuedDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        scroll="paper"
+      >
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <CheckCircleOutlineOutlinedIcon color="success" />
+            <span>Thông báo vừa phát hành</span>
           </Stack>
-        </Paper>
-      )}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            <Typography variant="body2" color="text.secondary">
+              Đã tạo {issuedBatches.length} đợt thu. Tải PDF gộp hoặc mở chi tiết
+              từng đợt để tiếp tục xử lý.
+            </Typography>
+            {issuedBatches.map((batch) => (
+              <Button
+                key={batch.id}
+                component={Link}
+                href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                variant="outlined"
+                sx={{ justifyContent: "flex-start" }}
+              >
+                Chi tiết {batch.batchNo}
+              </Button>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setIssuedDialogOpen(false)}>Đóng</Button>
+          <Button
+            variant="contained"
+            startIcon={<DownloadOutlinedIcon />}
+            onClick={() => void downloadIssuedNoticePdf()}
+            disabled={isDownloadingNoticePdf}
+          >
+            {isDownloadingNoticePdf
+              ? "Đang tạo PDF..."
+              : `Tải PDF gộp (${issuedBatches.length} đợt)`}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {view === "UNISSUED" ? (
         <Stack spacing={1.5}>
@@ -890,16 +924,6 @@ export function PaymentBatchManagement() {
               title="Khoản học phí chưa phát thông báo"
               subtitle="Chọn các khoản cần thu. Hệ thống tự gom thành một đợt cho mỗi học viên."
             />
-            {appliedClassId && (
-              <Button
-                variant="outlined"
-                startIcon={<SendOutlinedIcon />}
-                onClick={openClassNoticeDialog}
-                disabled={loading || busy}
-              >
-                Phát hành & xuất toàn bộ theo lớp
-              </Button>
-            )}
           </Stack>
           <Box
             sx={{
