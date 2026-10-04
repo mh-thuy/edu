@@ -12,6 +12,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
   Typography,
 } from "@mui/material";
@@ -37,6 +38,7 @@ type Session = {
 };
 
 type SessionList = { sessions: Session[]; total: number; page: number; pageSize: number };
+const DEFAULT_PAGE_SIZE = 20;
 
 function formatDate(value: string | null) {
   if (!value) return "—";
@@ -52,19 +54,21 @@ export function BankReconciliationSessionHistory() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadSessions = useCallback(async (targetPage: number, append = false) => {
+  const loadSessions = useCallback(async (targetPage: number, targetPageSize: number) => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/bank-statement-imports?page=${targetPage}&pageSize=20`);
+      const response = await fetch(`/api/bank-statement-imports?page=${targetPage}&pageSize=${targetPageSize}`);
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải phiên đối soát"));
       const data = await unwrapApiResponse<SessionList>(response);
-      setSessions((current) => append ? [...current, ...data.sessions] : data.sessions);
+      setSessions(data.sessions);
       setTotal(data.total);
       setPage(data.page);
+      setPageSize(data.pageSize);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể tải phiên đối soát");
     } finally {
@@ -72,12 +76,12 @@ export function BankReconciliationSessionHistory() {
     }
   }, []);
 
-  useEffect(() => { void loadSessions(1); }, [loadSessions]);
+  useEffect(() => { void loadSessions(1, DEFAULT_PAGE_SIZE); }, [loadSessions]);
   useEffect(() => {
-    const refresh = () => { void loadSessions(1); };
+    const refresh = () => { void loadSessions(1, pageSize); };
     window.addEventListener("bank-reconciliation-sessions-updated", refresh);
     return () => window.removeEventListener("bank-reconciliation-sessions-updated", refresh);
-  }, [loadSessions]);
+  }, [loadSessions, pageSize]);
 
   return (
     <Paper sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: { xs: 1.5, md: 2 } }}>
@@ -87,7 +91,7 @@ export function BankReconciliationSessionHistory() {
             <Typography variant="h6" fontWeight={700}>Lịch sử phiên đối soát</Typography>
             <Typography variant="body2" color="text.secondary">{total} phiên đã lưu</Typography>
           </Box>
-          <Button startIcon={<RefreshOutlinedIcon />} onClick={() => void loadSessions(1)} disabled={loading}>
+          <Button startIcon={<RefreshOutlinedIcon />} onClick={() => void loadSessions(page, pageSize)} disabled={loading}>
             Làm mới
           </Button>
         </Stack>
@@ -129,12 +133,23 @@ export function BankReconciliationSessionHistory() {
             </Table>
           </TableContainer>
         )}
-        {sessions.length < total && (
-          <Button onClick={() => void loadSessions(page + 1, true)} disabled={loading}>
-            {loading ? "Đang tải…" : "Tải thêm phiên"}
-          </Button>
+        {loading && sessions.length > 0 && <LoadingState label="Đang tải phiên đối soát..." inline size={18} />}
+        {total > 0 && (
+          <TablePagination
+            component="div"
+            count={total}
+            page={page - 1}
+            rowsPerPage={pageSize}
+            onPageChange={(_, nextPage) => void loadSessions(nextPage + 1, pageSize)}
+            onRowsPerPageChange={(event) => {
+              const nextPageSize = Number(event.target.value);
+              void loadSessions(1, nextPageSize);
+            }}
+            rowsPerPageOptions={[10, 20, 50, 100]}
+            labelRowsPerPage="Số dòng/trang"
+            labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`}
+          />
         )}
-        {loading && sessions.length > 0 && <LoadingState label="Đang tải thêm phiên đối soát..." inline size={18} />}
       </Stack>
     </Paper>
   );
