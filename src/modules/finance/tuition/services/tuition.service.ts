@@ -239,7 +239,7 @@ export class TuitionService {
     data: { classId: string; studentId: string } & TuitionBillingPeriod,
     actorId: string,
     transaction?: Prisma.TransactionClient,
-    options: { allowExistingComplete?: boolean } = {},
+    options: { allowExistingComplete?: boolean; classPeriodLockHeld?: boolean } = {},
     auditContext?: AuditContext,
   ) {
     const execute = async (tx: Prisma.TransactionClient) => {
@@ -249,12 +249,14 @@ export class TuitionService {
       const periodEnd = new Date(
         Date.UTC(data.billingYear, data.billingMonth, 0),
       );
-      await tx.$executeRaw(
-        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
-      );
-      await tx.$executeRaw(
-        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${data.classId}:${data.billingYear}:${data.billingMonth}`}))`,
-      );
+      if (!options.classPeriodLockHeld) {
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class:${data.classId}`}))`,
+        );
+        await tx.$executeRaw(
+          Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`${data.classId}:${data.billingYear}:${data.billingMonth}`}))`,
+        );
+      }
       const enrollmentRef = await tx.classStudent.findUnique({
         where: {
           classId_studentId: {
@@ -573,6 +575,24 @@ export class TuitionService {
       const pausedEnrollmentIds = new Set(
         pausedEnrollments.map((pause) => pause.enrollmentId),
       );
+      const existingFees = enrollments.length
+        ? await tx.tuitionFee.findMany({
+            where: {
+              classId,
+              studentId: { in: enrollments.map((enrollment) => enrollment.studentId) },
+              billingYear: period.billingYear,
+              billingMonth: period.billingMonth,
+              billingType: TuitionFeeBillingType.MONTHLY,
+            },
+            select: {
+              studentId: true,
+              items: { select: { id: true } },
+            },
+          })
+        : [];
+      const existingFeeByStudent = new Map(
+        existingFees.map((fee) => [fee.studentId, fee]),
+      );
       let created = 0;
       let skipped = 0;
       for (const enrollment of enrollments) {
@@ -583,24 +603,12 @@ export class TuitionService {
           skipped += 1;
           continue;
         }
-        const existingFee = await tx.tuitionFee.findFirst({
-          where: {
-            classId,
-            studentId: enrollment.studentId,
-            billingYear: period.billingYear,
-            billingMonth: period.billingMonth,
-            billingType: TuitionFeeBillingType.MONTHLY,
-          },
-          select: {
-            id: true,
-            items: { select: { id: true } },
-          },
-        });
+        const existingFee = existingFeeByStudent.get(enrollment.studentId);
         const result = await TuitionService.createFromEnrollment(
           { classId, studentId: enrollment.studentId, ...period },
           actorId,
           tx,
-          { allowExistingComplete: true },
+          { allowExistingComplete: true, classPeriodLockHeld: true },
           auditContext,
         );
         if (existingFee && result.items.length === existingFee.items.length) {

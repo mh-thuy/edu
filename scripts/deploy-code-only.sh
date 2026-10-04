@@ -29,7 +29,16 @@ fi
 section "Build kiểm tra"
 npm run build
 
+section "Áp dụng migration lên Neon Production"
+npx vercel env run -e production -- bash -c '
+	if [[ -z "${DATABASE_URL_UNPOOLED:-}" ]]; then
+		printf "Thiếu DATABASE_URL_UNPOOLED trong môi trường Production của Vercel. Cần cấu hình direct connection string của Neon.\n" >&2
+		exit 1
+	fi
+	DATABASE_URL="$DATABASE_URL_UNPOOLED" npx prisma migrate deploy
+'
+
 section "Deploy code hiện tại lên Vercel Production"
 npx vercel --prod
 
-printf "\n✓ Build và deploy hoàn tất. Không backup DB, không commit/push.\n"
+printf "\n✓ Migration đã áp dụng và deploy hoàn tất. Không backup DB, không commit/push.\n"

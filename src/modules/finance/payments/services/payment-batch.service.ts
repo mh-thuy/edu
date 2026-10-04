@@ -24,8 +24,6 @@ import {
 } from "@/modules/finance/tuition/utils/tuition-status";
 import {
   savePaymentBatchNoticeSnapshot,
-  savePaymentBatchReceiptSnapshot,
-  saveTuitionReceiptSnapshot,
   toFeeSnapshot,
   type DocumentSnapshot,
 } from "./payment-document-snapshot";
@@ -58,6 +56,19 @@ async function lockPaymentBatchRows(
   await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
     SELECT id FROM payment_batches
     WHERE id IN (${Prisma.join(batchIds.map((id) => Prisma.sql`${id}::uuid`))})
+    ORDER BY id
+    FOR UPDATE
+  `);
+}
+
+async function lockTeacherRows(
+  tx: Prisma.TransactionClient,
+  teacherIds: string[],
+) {
+  if (!teacherIds.length) return;
+  await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM teachers
+    WHERE id IN (${Prisma.join(teacherIds.map((id) => Prisma.sql`${id}::uuid`))})
     ORDER BY id
     FOR UPDATE
   `);
@@ -293,29 +304,28 @@ export async function completePaymentBatch(
       ),
     ),
   ].sort();
-  for (const teacherId of teacherIds) {
-    // Keep teacher identity/commission updates serialized with payment
-    // completion so report data cannot change mid-transaction.
-    await tx.$executeRaw(
-      Prisma.sql`SELECT id FROM teachers WHERE id = ${teacherId}::uuid FOR UPDATE`,
-    );
-  }
-
-  for (const allocation of batch.allocations) {
-    await tx.$executeRaw(
-      Prisma.sql`SELECT id FROM tuition_fees WHERE id = ${allocation.tuitionFeeId}::uuid FOR UPDATE`,
-    );
-    const fee = await tx.tuitionFee.findUnique({
-      where: { id: allocation.tuitionFeeId },
-      include: {
-        payments: {
-          where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
-          select: { id: true, amount: true },
-        },
+  await lockTeacherRows(tx, teacherIds);
+  const feeIds = batch.allocations.map((allocation) => allocation.tuitionFeeId);
+  await lockTuitionFeeRows(tx, feeIds);
+  const lockedFees = await tx.tuitionFee.findMany({
+    where: { id: { in: feeIds } },
+    include: {
+      payments: {
+        where: { paymentStatus: TuitionPaymentStatus.SUCCESS },
+        select: { id: true, amount: true },
       },
-    });
+    },
+  });
+  if (lockedFees.length !== feeIds.length) {
+    throw new NotFoundError("Không tìm thấy đầy đủ các khoản học phí");
+  }
+  const lockedFeeById = new Map(lockedFees.map((fee) => [fee.id, fee]));
+  const paidAmounts = new Map<string, Prisma.Decimal>();
+  for (const allocation of batch.allocations) {
+    const fee = lockedFeeById.get(allocation.tuitionFeeId);
     if (!fee) throw new NotFoundError("Không tìm thấy khoản học phí");
     const paidAmount = sumSuccessfulPayments(fee.payments);
+    paidAmounts.set(fee.id, paidAmount);
     const remainingAmount = fee.finalAmount.sub(paidAmount);
     if (!remainingAmount.greaterThan(0))
       throw new ConflictError(
@@ -391,9 +401,23 @@ export async function completePaymentBatch(
       "Thanh toán tiền mặt không được chứa thông tin giao dịch ngân hàng",
     );
   }
+  const feeStatusUpdates: Array<{ id: string; status: TuitionFeeStatus }> = [];
+  const auditEntries: Prisma.TuitionAuditLogCreateManyInput[] = [];
   for (const [index, allocation] of batch.allocations.entries()) {
     const sequence = String(index + 1).padStart(3, "0");
     const batchToken = batch.batchNo.slice(-20);
+    const receiptNo = `REC-${batchToken}-${sequence}`;
+    const receiverName = batch.payerName?.trim() || batch.student.fullName;
+    const receiptSnapshot = {
+      version: 1 as const,
+      receiptNo,
+      issuedAt: paymentReceiptIssuedAt.toISOString(),
+      student: { code: batch.student.code, fullName: batch.student.fullName },
+      receiverName,
+      tuitionFee: toFeeSnapshot(allocation.tuitionFee, allocation.amount),
+      amount: allocation.amount.toString(),
+      paymentMethod: batch.paymentMethod,
+    };
     const payment = await tx.tuitionPayment.create({
       data: {
         paymentNo: `PAY-${batchToken}-${sequence}`,
@@ -416,30 +440,25 @@ export async function completePaymentBatch(
         confirmedAt: new Date(),
         createdBy: actorId,
         updatedBy: actorId,
+        receipt: {
+          create: {
+            receiptNo,
+            issuedBy: actorId,
+            receiverName,
+            amount: allocation.amount,
+            amountInWords: vietnameseAmountInWords(allocation.amount.toString()),
+            snapshot: receiptSnapshot as unknown as Prisma.InputJsonValue,
+          },
+        },
       },
+      include: { receipt: true },
     });
-    const receipt = await tx.tuitionReceipt.create({
-      data: {
-        receiptNo: `REC-${batchToken}-${sequence}`,
-        paymentId: payment.id,
-        issuedBy: actorId,
-        receiverName: batch.payerName?.trim() || batch.student.fullName,
-        amount: allocation.amount,
-        amountInWords: vietnameseAmountInWords(allocation.amount.toString()),
-      },
-    });
-    await saveTuitionReceiptSnapshot(tx, receipt.id, {
-      version: 1,
-      receiptNo: receipt.receiptNo,
-      issuedAt: paymentReceiptIssuedAt.toISOString(),
-      student: { code: batch.student.code, fullName: batch.student.fullName },
-      receiverName: batch.payerName?.trim() || batch.student.fullName,
-      tuitionFee: toFeeSnapshot(allocation.tuitionFee, allocation.amount),
-      amount: allocation.amount.toString(),
-      paymentMethod: batch.paymentMethod,
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
+    const receipt = payment.receipt;
+    if (!receipt) {
+      throw new ConflictError("Không thể tạo biên lai cho khoản thanh toán");
+    }
+    auditEntries.push(
+      {
         entityType: "TUITION_RECEIPT",
         entityId: receipt.id,
         action: "CREATED",
@@ -452,29 +471,7 @@ export async function completePaymentBatch(
         performedBy: actorId,
         ...auditFields(auditContext),
       },
-    });
-    const successfulPayments = await tx.tuitionPayment.findMany({
-      where: {
-        tuitionFeeId: allocation.tuitionFeeId,
-        paymentStatus: TuitionPaymentStatus.SUCCESS,
-      },
-      select: { amount: true },
-    });
-    const paidAmount = sumSuccessfulPayments(successfulPayments);
-    const nextStatus = getStoredTuitionFeeStatus(
-      allocation.tuitionFee.finalAmount,
-      paidAmount,
-    );
-    await tx.tuitionFee.update({
-      where: { id: allocation.tuitionFeeId },
-      data: {
-        status: nextStatus,
-        version: { increment: 1 },
-        updatedBy: actorId,
-      },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
+      {
         entityType: "TUITION_PAYMENT",
         entityId: payment.id,
         action: "SUCCESS",
@@ -488,34 +485,43 @@ export async function completePaymentBatch(
         performedBy: actorId,
         ...auditFields(auditContext),
       },
-    });
-    await tx.tuitionAuditLog.create({
-      data: {
-        entityType: "TUITION_FEE",
-        entityId: allocation.tuitionFeeId,
-        action: nextStatus === TuitionFeeStatus.PAID ? "PAID" : "PARTIAL",
-        dataAfter: {
-          paymentId: payment.id,
-          paymentBatchId: batch.id,
-          status: nextStatus,
-        },
-        performedBy: actorId,
-        ...auditFields(auditContext),
+    );
+    const paidAmount = (
+      paidAmounts.get(allocation.tuitionFeeId) ?? new Prisma.Decimal(0)
+    ).add(allocation.amount);
+    const lockedFee = lockedFeeById.get(allocation.tuitionFeeId)!;
+    const nextStatus = getStoredTuitionFeeStatus(
+      lockedFee.finalAmount,
+      paidAmount,
+    );
+    feeStatusUpdates.push({ id: allocation.tuitionFeeId, status: nextStatus });
+    auditEntries.push({
+      entityType: "TUITION_FEE",
+      entityId: allocation.tuitionFeeId,
+      action: nextStatus === TuitionFeeStatus.PAID ? "PAID" : "PARTIAL",
+      dataAfter: {
+        paymentId: payment.id,
+        paymentBatchId: batch.id,
+        status: nextStatus,
       },
+      performedBy: actorId,
+      ...auditFields(auditContext),
     });
   }
-  const batchReceipt = await tx.paymentBatchReceipt.create({
-    data: {
-      receiptNo: `BRC-${batch.batchNo}`.slice(0, 40),
-      paymentBatchId: batch.id,
-      issuedBy: actorId,
-      receiverName: batch.payerName?.trim() || batch.student.fullName,
-      amount: batch.totalAmount,
-    },
-  });
-  await savePaymentBatchReceiptSnapshot(tx, batchReceipt.id, {
-    version: 1,
-    receiptNo: batchReceipt.receiptNo,
+  await tx.$executeRaw(Prisma.sql`
+    UPDATE tuition_fees AS fee
+    SET status = payload.status::tuition_fee_status,
+        version = fee.version + 1,
+        updated_by = ${actorId}::uuid,
+        updated_at = CURRENT_TIMESTAMP
+    FROM (VALUES ${Prisma.join(feeStatusUpdates.map(({ id, status }) =>
+      Prisma.sql`(${id}::uuid, ${status}::text)`,
+    ))}) AS payload(id, status)
+    WHERE fee.id = payload.id
+  `);
+  const batchReceiptSnapshot = {
+    version: 1 as const,
+    receiptNo: `BRC-${batch.batchNo}`.slice(0, 40),
     issuedAt: paymentReceiptIssuedAt.toISOString(),
     student: { code: batch.student.code, fullName: batch.student.fullName },
     receiverName: batch.payerName?.trim() || batch.student.fullName,
@@ -524,20 +530,28 @@ export async function completePaymentBatch(
     ),
     amount: batch.totalAmount.toString(),
     paymentMethod: batch.paymentMethod,
-  });
-  await tx.tuitionAuditLog.create({
+  };
+  const batchReceipt = await tx.paymentBatchReceipt.create({
     data: {
-      entityType: "PAYMENT_BATCH_RECEIPT",
-      entityId: batchReceipt.id,
-      action: "CREATED",
-      dataAfter: {
-        receiptNo: batchReceipt.receiptNo,
-        paymentBatchId: batch.id,
-        amount: batchReceipt.amount.toString(),
-      },
-      performedBy: actorId,
-      ...auditFields(auditContext),
+      receiptNo: batchReceiptSnapshot.receiptNo,
+      paymentBatchId: batch.id,
+      issuedBy: actorId,
+      receiverName: batch.payerName?.trim() || batch.student.fullName,
+      amount: batch.totalAmount,
+      snapshot: batchReceiptSnapshot as unknown as Prisma.InputJsonValue,
     },
+  });
+  auditEntries.push({
+    entityType: "PAYMENT_BATCH_RECEIPT",
+    entityId: batchReceipt.id,
+    action: "CREATED",
+    dataAfter: {
+      receiptNo: batchReceipt.receiptNo,
+      paymentBatchId: batch.id,
+      amount: batchReceipt.amount.toString(),
+    },
+    performedBy: actorId,
+    ...auditFields(auditContext),
   });
   const completed = await tx.paymentBatch.update({
     where: { id: batch.id },
@@ -556,22 +570,21 @@ export async function completePaymentBatch(
     },
     include: { allocations: true, receipt: true },
   });
-  await tx.tuitionAuditLog.create({
-    data: {
-      entityType: "PAYMENT_BATCH",
-      entityId: batch.id,
-      action: "SUCCESS",
-      dataBefore: { status: batch.status },
-      dataAfter: {
-        status: completed.status,
-        paymentDate: completed.paymentDate.toISOString(),
-        totalAmount: completed.totalAmount.toString(),
-        allocationCount: completed.allocations.length,
-      },
-      performedBy: actorId,
-      ...auditFields(auditContext),
+  auditEntries.push({
+    entityType: "PAYMENT_BATCH",
+    entityId: batch.id,
+    action: "SUCCESS",
+    dataBefore: { status: batch.status },
+    dataAfter: {
+      status: completed.status,
+      paymentDate: completed.paymentDate.toISOString(),
+      totalAmount: completed.totalAmount.toString(),
+      allocationCount: completed.allocations.length,
     },
+    performedBy: actorId,
+    ...auditFields(auditContext),
   });
+  await tx.tuitionAuditLog.createMany({ data: auditEntries });
   return completed;
 }
 

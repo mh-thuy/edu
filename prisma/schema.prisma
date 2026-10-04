@@ -468,6 +468,7 @@ model TuitionPayment {
 
   @@index([tuitionFeeId], map: "idx_tuition_payments_fee_id")
   @@index([studentId], map: "idx_tuition_payments_student_id")
+  @@index([paymentBatchId], map: "idx_tuition_payments_batch_id")
   @@index([paymentStatus], map: "idx_tuition_payments_status")
   @@map("tuition_payments")
 }

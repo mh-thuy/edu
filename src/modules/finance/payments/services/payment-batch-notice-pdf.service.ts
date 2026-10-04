@@ -11,6 +11,7 @@ import {
   parseDocumentSnapshot,
   savePaymentBatchNoticeSnapshot,
   toFeeSnapshot,
+  type DocumentSnapshot,
 } from "./payment-document-snapshot";
 
 const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
@@ -89,32 +90,181 @@ export async function generatePaymentBatchNoticesPdf(
     throw new ConflictError("Danh sách đợt thu bị trùng");
   }
 
-  const batches = await prisma.paymentBatch.findMany({
-    where: { id: { in: uniqueIds } },
-    select: { id: true, status: true, paymentMethod: true, bankAccountId: true },
-  });
-  if (batches.length !== uniqueIds.length) {
-    throw new NotFoundError("Không tìm thấy đầy đủ các đợt thu đã chọn");
-  }
-  if (batches.some((batch) => batch.status !== PaymentBatchStatus.PENDING || batch.paymentMethod !== "BANK_TRANSFER" || !batch.bankAccountId)) {
-    throw new ConflictError("Chỉ có thể gộp PDF của các đợt chuyển khoản đang chờ");
-  }
-  if (new Set(batches.map((batch) => batch.bankAccountId)).size !== 1) {
-    throw new ConflictError("Các đợt thu phải dùng cùng một tài khoản nhận tiền để gộp PDF");
-  }
+  const notices = await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw(Prisma.sql`
+      SELECT id FROM payment_batches
+      WHERE id IN (${Prisma.join(uniqueIds.map((id) => Prisma.sql`${id}::uuid`))})
+      ORDER BY id
+      FOR UPDATE
+    `);
+      const batches = await tx.paymentBatch.findMany({
+        where: { id: { in: uniqueIds } },
+        include: {
+          student: true,
+          bankAccount: true,
+          allocations: {
+            include: {
+              tuitionFee: {
+                include: {
+                  class: true,
+                  items: {
+                    include: { classSubject: { include: { subject: true } } },
+                    orderBy: { displayOrder: "asc" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (batches.length !== uniqueIds.length) {
+        throw new NotFoundError("Không tìm thấy đầy đủ các đợt thu đã chọn");
+      }
+      if (
+        batches.some(
+          (batch) =>
+            batch.status !== PaymentBatchStatus.PENDING ||
+            batch.paymentMethod !== "BANK_TRANSFER" ||
+            !batch.bankAccountId ||
+            !batch.bankAccount,
+        )
+      ) {
+        throw new ConflictError(
+          "Chỉ có thể gộp PDF của các đợt chuyển khoản đang chờ",
+        );
+      }
+      if (new Set(batches.map((batch) => batch.bankAccountId)).size !== 1) {
+        throw new ConflictError(
+          "Các đợt thu phải dùng cùng một tài khoản nhận tiền để gộp PDF",
+        );
+      }
+
+      const batchesById = new Map(batches.map((batch) => [batch.id, batch]));
+      const prepared = uniqueIds.map((id) => {
+        const batch = batchesById.get(id)!;
+        const accountRecord = batch.bankAccount!;
+        const parsedSnapshot = parseDocumentSnapshot(batch.noticeSnapshot);
+        const student = parsedSnapshot?.student ?? batch.student;
+        const snapshot: DocumentSnapshot = parsedSnapshot ?? {
+          version: 1,
+          student: { code: student.code, fullName: student.fullName },
+          fees: batch.allocations.map((allocation) =>
+            toFeeSnapshot(allocation.tuitionFee, allocation.amount),
+          ),
+          bankAccount: {
+            bankCode: accountRecord.bankCode,
+            bankName: accountRecord.bankName,
+            accountNo: accountRecord.accountNo,
+            accountName: accountRecord.accountName,
+          },
+        };
+        return {
+          data: {
+            batch,
+            accountRecord,
+            account: snapshot.bankAccount ?? accountRecord,
+            student,
+            fees: snapshot.fees,
+            snapshot,
+          },
+          snapshotWasMissing: !parsedSnapshot,
+        };
+      });
+      const snapshotsToSave = prepared.filter(
+        (item) => item.snapshotWasMissing,
+      );
+      if (snapshotsToSave.length) {
+        await tx.$executeRaw(Prisma.sql`
+        UPDATE payment_batches AS batch
+        SET notice_snapshot = payload.snapshot
+        FROM (VALUES ${Prisma.join(
+          snapshotsToSave.map(
+            ({ data }) =>
+              Prisma.sql`(${data.batch.id}::uuid, ${JSON.stringify(data.snapshot)}::jsonb)`,
+          ),
+        )}) AS payload(id, snapshot)
+        WHERE batch.id = payload.id
+      `);
+      }
+      return prepared.map((item) => item.data);
+    },
+    { timeout: 60_000 },
+  );
 
   const combinedPdf = await PDFDocument.create();
-  for (const batchId of uniqueIds) {
-    const notice = await generatePaymentBatchNoticePdf(
-      batchId,
-      exportedByName,
-      exportedById,
-      auditContext,
-    );
-    const sourcePdf = await PDFDocument.load(notice.pdf);
-    const pages = await combinedPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
-    for (const page of pages) combinedPdf.addPage(page);
+  const noticeMetadata: Array<{
+    batchId: string;
+    batchNo: string;
+    snapshotUsed: boolean;
+    bankAccountSnapshotUsed: boolean;
+  }> = [];
+  const qrImages = new Map<string, Buffer | null>();
+  for (let offset = 0; offset < notices.length; offset += 8) {
+    const group = notices.slice(offset, offset + 8);
+    await Promise.all(group.map(async (noticeData) => {
+      qrImages.set(
+        noticeData.batch.id,
+        await fetchNoticeQrPng(noticeData),
+      );
+    }));
   }
+  for (const noticeData of notices) {
+    const notice = await renderPaymentBatchNoticePdf(
+      noticeData,
+      exportedByName,
+      qrImages.get(noticeData.batch.id) ?? null,
+    );
+    const sourcePdf = await PDFDocument.load(notice);
+    const pages = await combinedPdf.copyPages(
+      sourcePdf,
+      sourcePdf.getPageIndices(),
+    );
+    for (const page of pages) combinedPdf.addPage(page);
+    noticeMetadata.push({
+      batchId: noticeData.batch.id,
+      batchNo: noticeData.batch.batchNo,
+      snapshotUsed: Boolean(noticeData.snapshot),
+      bankAccountSnapshotUsed: Boolean(noticeData.snapshot.bankAccount),
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw(Prisma.sql`
+      SELECT id FROM payment_batches
+      WHERE id IN (${Prisma.join(uniqueIds.map((id) => Prisma.sql`${id}::uuid`))})
+      ORDER BY id
+      FOR UPDATE
+    `);
+    const currentBatches = await tx.paymentBatch.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, status: true },
+    });
+    if (currentBatches.length !== uniqueIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các đợt thu đã chọn");
+    }
+    if (
+      currentBatches.some(
+        (batch) => batch.status !== PaymentBatchStatus.PENDING,
+      )
+    ) {
+      throw new ConflictError("Chỉ có thể xuất PDF của các đợt đang chờ");
+    }
+    await tx.tuitionAuditLog.createMany({
+      data: noticeMetadata.map((notice) => ({
+        entityType: "PAYMENT_BATCH",
+        entityId: notice.batchId,
+        action: "NOTICE_PRINTED",
+        dataAfter: {
+          batchNo: notice.batchNo,
+          snapshotUsed: notice.snapshotUsed,
+          bankAccountSnapshotUsed: notice.bankAccountSnapshotUsed,
+        },
+        performedBy: exportedById,
+        ...auditFields(auditContext),
+      })),
+    });
+  });
 
   return Buffer.from(await combinedPdf.save());
 }
@@ -163,7 +313,9 @@ async function loadPaymentBatchNoticeData(
       "Tài khoản ngân hàng của đợt thanh toán không còn tồn tại",
     );
   }
-  const parsedSnapshot = parseDocumentSnapshot(await getPaymentBatchNoticeSnapshot(batch.id, client));
+  const parsedSnapshot = parseDocumentSnapshot(
+    await getPaymentBatchNoticeSnapshot(batch.id, client),
+  );
   const student = parsedSnapshot?.student ?? batch.student;
   const snapshot = parsedSnapshot ?? {
     version: 1 as const,
@@ -190,17 +342,9 @@ async function loadPaymentBatchNoticeData(
 async function renderPaymentBatchNoticePdf(
   data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
   exportedByName: string,
+  prefetchedQr?: Buffer | null,
 ) {
   const { batch, accountRecord, account, student, fees } = data;
-  const qrUrl = accountRecord.isActive
-    ? buildVietQrUrl({
-        bankCode: account.bankCode,
-        accountNo: account.accountNo,
-        accountName: account.accountName,
-        amount: Number(batch.totalAmount),
-        addInfo: `PB ${batch.batchNo}`,
-      })
-    : "";
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -224,11 +368,7 @@ async function renderPaymentBatchNoticePdf(
   draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 133, 770, 17);
   draw("Chưa xác nhận thanh toán", 220, 747, 10, muted);
   draw(`Mã đợt thanh toán: ${batch.batchNo}`, 55, 708);
-  draw(
-    `Ngày tạo: ${formatVietnamDateTime(batch.createdAt)}`,
-    55,
-    686,
-  );
+  draw(`Ngày tạo: ${formatVietnamDateTime(batch.createdAt)}`, 55, 686);
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
   draw(`Mã học sinh: ${student.code}`, 75, 615);
   draw(`Họ tên: ${student.fullName}`, 75, 593);
@@ -266,12 +406,24 @@ async function renderPaymentBatchNoticePdf(
     }
     if (Number(allocation.discountAmount) > 0) {
       draw("- Giảm giá", 90, itemY, 9, muted);
-      draw(`-${money(Number(allocation.discountAmount))} VND`, 390, itemY, 9, muted);
+      draw(
+        `-${money(Number(allocation.discountAmount))} VND`,
+        390,
+        itemY,
+        9,
+        muted,
+      );
       itemY -= 17;
     }
     if (Number(allocation.additionalAmount) > 0) {
       draw("- Phụ thu", 90, itemY, 9, muted);
-      draw(`${money(Number(allocation.additionalAmount))} VND`, 390, itemY, 9, muted);
+      draw(
+        `${money(Number(allocation.additionalAmount))} VND`,
+        390,
+        itemY,
+        9,
+        muted,
+      );
       itemY -= 17;
     }
     y = itemY - 10;
@@ -297,16 +449,20 @@ async function renderPaymentBatchNoticePdf(
   draw(`Số tài khoản: ${account?.accountNo || "-"}`, 75, bankY - 50);
   draw(`Chủ tài khoản: ${account?.accountName || "-"}`, 75, bankY - 72);
   if (!accountRecord.isActive) {
-    draw("Tài khoản đã ngừng hoạt động; vui lòng liên hệ trung tâm trước khi chuyển khoản.", 75, bankY - 94, 9, muted);
+    draw(
+      "Tài khoản đã ngừng hoạt động; vui lòng liên hệ trung tâm trước khi chuyển khoản.",
+      75,
+      bankY - 94,
+      9,
+      muted,
+    );
   }
-  if (qrUrl) {
-    const qrResponse = await fetch(qrUrl);
-    if (qrResponse.ok) {
-      const qr = await pdf.embedPng(
-        Buffer.from(await qrResponse.arrayBuffer()),
-      );
-      page.drawImage(qr, { x: 395, y: bankY - 155, width: 125, height: 125 });
-    }
+  const qrPng = prefetchedQr === undefined
+    ? await fetchNoticeQrPng(data)
+    : prefetchedQr;
+  if (qrPng) {
+    const qr = await pdf.embedPng(qrPng);
+    page.drawImage(qr, { x: 395, y: bankY - 155, width: 125, height: 125 });
   }
   drawFooter();
   draw(
@@ -318,4 +474,20 @@ async function renderPaymentBatchNoticePdf(
   );
   const pdfBuffer = Buffer.from(await pdf.save());
   return pdfBuffer;
+}
+
+async function fetchNoticeQrPng(
+  data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
+) {
+  const { batch, accountRecord, account } = data;
+  if (!accountRecord.isActive) return null;
+  const qrUrl = buildVietQrUrl({
+    bankCode: account.bankCode,
+    accountNo: account.accountNo,
+    accountName: account.accountName,
+    amount: Number(batch.totalAmount),
+    addInfo: `PB ${batch.batchNo}`,
+  });
+  const response = await fetch(qrUrl, { signal: AbortSignal.timeout(10_000) });
+  return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
 }

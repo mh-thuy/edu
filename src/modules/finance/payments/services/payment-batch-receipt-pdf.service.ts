@@ -52,16 +52,9 @@ export async function generatePaymentBatchReceiptPdf(
   if (!receiptRef) throw new NotFoundError("Không tìm thấy biên lai tổng");
 
   return prisma.$transaction(async (tx) => {
-    const paymentRows = await tx.tuitionPayment.findMany({
-      where: { paymentBatchId: receiptRef.paymentBatchId },
-      select: { id: true },
-      orderBy: { id: "asc" },
-    });
-    for (const payment of paymentRows) {
-      await tx.$executeRaw(
-        Prisma.sql`SELECT id FROM tuition_payments WHERE id = ${payment.id}::uuid FOR UPDATE`,
-      );
-    }
+    await tx.$executeRaw(
+      Prisma.sql`SELECT id FROM tuition_payments WHERE payment_batch_id = ${receiptRef.paymentBatchId}::uuid ORDER BY id FOR UPDATE`,
+    );
     await tx.$executeRaw(
       Prisma.sql`SELECT id FROM payment_batches WHERE id = ${receiptRef.paymentBatchId}::uuid FOR UPDATE`,
     );
