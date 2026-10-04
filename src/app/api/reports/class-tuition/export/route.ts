@@ -20,6 +20,8 @@ export async function GET(request: NextRequest) {
       classId: request.nextUrl.searchParams.get("classId"),
       classSubjectId: request.nextUrl.searchParams.get("classSubjectId"),
       month: request.nextUrl.searchParams.get("month"),
+      fromDate: request.nextUrl.searchParams.get("fromDate"),
+      toDate: request.nextUrl.searchParams.get("toDate"),
     });
     const report = await getClassTuitionReport(input);
     const file = await buildClassTuitionReportExcel(report);

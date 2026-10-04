@@ -22,11 +22,12 @@ import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutli
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
+import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
-import { getVietnamMonth } from "@/lib/vietnam-time";
+import { getVietnamDate, getVietnamMonth } from "@/lib/vietnam-time";
 import { DailyPaymentReportCard } from "@/modules/finance/reports/components/DailyPaymentReportCard";
 import { BankReconciliationReportCard } from "@/modules/finance/reports/components/BankReconciliationReportCard";
 
@@ -79,6 +80,8 @@ export function ClassTuitionReportPage() {
   const [subjects, setSubjects] = useState<ClassSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
   const [month, setMonth] = useState(currentMonth);
+  const [fromDate, setFromDate] = useState(() => `${currentMonth()}-01`);
+  const [toDate, setToDate] = useState(getVietnamDate);
   const [loadingClass, setLoadingClass] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
@@ -112,7 +115,7 @@ export function ClassTuitionReportPage() {
   }
 
   async function handleExport() {
-    if (!selectedClass || !selectedSubjectId || !month) return;
+    if (!selectedClass || !selectedSubjectId || !month || !fromDate || !toDate || fromDate > toDate) return;
     setExporting(true);
     setError("");
     try {
@@ -120,6 +123,8 @@ export function ClassTuitionReportPage() {
         classId: selectedClass.id,
         classSubjectId: selectedSubjectId,
         month,
+        fromDate,
+        toDate,
       });
       const response = await fetch(`/api/reports/class-tuition/export?${params.toString()}`);
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể xuất báo cáo Excel"));
@@ -205,7 +210,7 @@ export function ClassTuitionReportPage() {
             </Box>
             <Box>
               <Typography variant="h6" fontWeight={800}>Điều kiện báo cáo</Typography>
-              <Typography variant="body2" color="text.secondary">Chọn lớp, môn học và kỳ thu để tạo file Excel.</Typography>
+              <Typography variant="body2" color="text.secondary">Chọn kỳ học phí và khoảng ngày nhận tiền để đối chiếu phải thu, đã thu và còn nợ.</Typography>
             </Box>
           </Stack>
 
@@ -235,15 +240,25 @@ export function ClassTuitionReportPage() {
             </FormControl>
             <MasterSelectField label="Giáo viên phụ trách" value={teacher} onOpen={() => undefined} size="small" disabled />
             <MonthPickerField
-              label="Kỳ báo cáo"
+              label="Kỳ học phí"
               value={month}
-              onChange={setMonth}
+              onChange={(value) => {
+                setMonth(value);
+                if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+                  const [year, monthNumber] = value.split("-").map(Number);
+                  const lastDay = new Date(Date.UTC(year!, monthNumber!, 0)).getUTCDate();
+                  setFromDate(`${value}-01`);
+                  setToDate(`${value}-${String(lastDay).padStart(2, "0")}`);
+                }
+              }}
               textFieldProps={{ required: true, size: "small" }}
             />
+            <DatePickerField label="Ngày thu từ" value={fromDate} onChange={setFromDate} textFieldProps={{ required: true, size: "small" }} />
+            <DatePickerField label="Đến ngày" value={toDate} onChange={setToDate} textFieldProps={{ required: true, size: "small" }} />
           </Box>
 
           <Alert severity="info" icon={<CalendarMonthOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
-            Báo cáo chỉ ghi nhận các khoản thanh toán thành công trong kỳ đã chọn và được phân bổ cho môn học tương ứng.
+            Báo cáo phân biệt tiền thu trong khoảng ngày chọn với dư nợ học phí của kỳ. Dư nợ được tính đến ngày xuất báo cáo; học viên chưa thanh toán vẫn được liệt kê nếu đã có khoản học phí trong kỳ.
           </Alert>
 
           <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}>
@@ -252,17 +267,17 @@ export function ClassTuitionReportPage() {
               <ReportScopeItem icon={<MenuBookOutlinedIcon fontSize="small" />} label="Lớp học" value={selectedClass?.name || "Chưa chọn lớp"} />
               <ReportScopeItem icon={<AssessmentOutlinedIcon fontSize="small" />} label="Môn học" value={selectedSubject?.subject.name || "Chưa chọn môn"} />
               <ReportScopeItem icon={<PersonOutlineOutlinedIcon fontSize="small" />} label="Giáo viên" value={teacher?.name || "Chưa phân công"} />
-              <ReportScopeItem icon={<CalendarMonthOutlinedIcon fontSize="small" />} label="Kỳ báo cáo" value={month || "Chưa chọn kỳ"} />
+              <ReportScopeItem icon={<CalendarMonthOutlinedIcon fontSize="small" />} label="Kỳ học phí" value={month || "Chưa chọn kỳ"} />
             </Box>
           </Box>
 
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5}>
             <Typography variant="body2" color="text.secondary">File Excel gồm danh sách học viên và số tiền đã thu theo môn.</Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { setSelectedClass(null); setSubjects([]); setSelectedSubjectId(""); setMonth(currentMonth()); setError(""); }} disabled={exporting || (!selectedClass && !selectedSubjectId && month === currentMonth())} sx={{ whiteSpace: "nowrap" }}>
+              <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { const defaultMonth = currentMonth(); const today = getVietnamDate(); setSelectedClass(null); setSubjects([]); setSelectedSubjectId(""); setMonth(defaultMonth); setFromDate(`${defaultMonth}-01`); setToDate(today); setError(""); }} disabled={exporting || (!selectedClass && !selectedSubjectId && month === currentMonth() && fromDate === `${currentMonth()}-01` && toDate === getVietnamDate())} sx={{ whiteSpace: "nowrap" }}>
                 Đặt lại
               </Button>
-              <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month}>
+              <Button variant="contained" startIcon={<DownloadOutlinedIcon />} onClick={() => void handleExport()} disabled={exporting || !selectedClass || !selectedSubjectId || !selectedSubject?.teacher || !month || !fromDate || !toDate || fromDate > toDate}>
                 {exporting ? "Đang xuất..." : "Xuất báo cáo Excel"}
               </Button>
             </Stack>

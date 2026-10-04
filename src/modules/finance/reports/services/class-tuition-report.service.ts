@@ -2,13 +2,16 @@ import { PaymentBatchStatus, Prisma, TuitionPaymentStatus } from "@prisma/client
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import type { ClassTuitionReportInput } from "@/modules/finance/reports/schemas/class-tuition-report.schema";
-import { getVietnamMonthRange } from "@/lib/vietnam-time";
+import { getVietnamDayEndExclusive, getVietnamDate, parseVietnamDateStart } from "@/lib/vietnam-time";
 
 export type ClassTuitionReportRow = {
   studentCode: string;
   givenName: string;
   familyName: string;
-  paidAmount: number;
+  assessedAmount: number;
+  paidInPeriodAmount: number;
+  paidCumulativeAmount: number;
+  outstandingAmount: number;
 };
 
 export type ClassTuitionReport = {
@@ -19,6 +22,9 @@ export type ClassTuitionReport = {
   teacherName: string;
   commissionPercent: number;
   month: string;
+  fromDate: string;
+  toDate: string;
+  asOfDate: string;
   rows: ClassTuitionReportRow[];
 };
 
@@ -32,27 +38,20 @@ function splitStudentName(fullName: string) {
   };
 }
 
-function getMonthRange(month: string) {
-  const range = getVietnamMonthRange(month);
-  if (!range) throw new ConflictError("Kỳ báo cáo không hợp lệ");
-  return range;
-}
-
-function getSubjectPaidAmount(
+function getSubjectFinalAmount(
   fee: {
     originalAmount: Prisma.Decimal;
     discountAmount: Prisma.Decimal;
     additionalAmount: Prisma.Decimal;
     finalAmount: Prisma.Decimal;
     items: Array<{ classSubjectId: string | null; amount: Prisma.Decimal }>;
-    payments: Array<{ amount: Prisma.Decimal }>;
   },
   classSubjectId: string,
-) {
+) : Prisma.Decimal {
   const subjectGross = fee.items
     .filter((item) => item.classSubjectId === classSubjectId)
     .reduce((total, item) => total.add(item.amount), new Prisma.Decimal(0));
-  if (!subjectGross.greaterThan(0)) return 0;
+  if (!subjectGross.greaterThan(0)) return new Prisma.Decimal(0);
 
   const originalAmount = fee.originalAmount;
   const adjustmentRatio = originalAmount.greaterThan(0)
@@ -64,9 +63,18 @@ function getSubjectPaidAmount(
       .plus(fee.additionalAmount.mul(adjustmentRatio)),
     0,
   );
-  const finalAmount = fee.finalAmount;
-  const paymentRatio = finalAmount.greaterThan(0)
-    ? subjectFinal.div(finalAmount)
+  return subjectFinal;
+}
+
+function getSubjectPaidAmount(
+  fee: {
+    finalAmount: Prisma.Decimal;
+    payments: Array<{ amount: Prisma.Decimal }>;
+  },
+  subjectFinal: Prisma.Decimal,
+) {
+  const paymentRatio = fee.finalAmount.greaterThan(0)
+    ? subjectFinal.div(fee.finalAmount)
     : new Prisma.Decimal(0);
 
   return fee.payments
@@ -74,14 +82,19 @@ function getSubjectPaidAmount(
       (total, payment) => total.plus(payment.amount.mul(paymentRatio)),
       new Prisma.Decimal(0),
     )
-    .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP)
-    .toNumber();
+    .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
 }
 
 export async function getClassTuitionReport(
   input: ClassTuitionReportInput,
 ): Promise<ClassTuitionReport> {
-  const { start, end } = getMonthRange(input.month);
+  const collectionStart = parseVietnamDateStart(input.fromDate);
+  const collectionEndExclusive = getVietnamDayEndExclusive(input.toDate);
+  const asOfDate = getVietnamDate();
+  const asOfEndExclusive = getVietnamDayEndExclusive(asOfDate);
+  if (!collectionStart || !collectionEndExclusive || !asOfEndExclusive) {
+    throw new ConflictError("Khoảng ngày báo cáo không hợp lệ");
+  }
   const classSubject = await prisma.classSubject.findFirst({
     where: {
       id: input.classSubjectId,
@@ -132,19 +145,22 @@ export async function getClassTuitionReport(
           discountAmount: true,
           additionalAmount: true,
           finalAmount: true,
+          billingYear: true,
+          billingMonth: true,
+          status: true,
           items: {
             select: { classSubjectId: true, amount: true },
           },
           payments: {
             where: {
               paymentStatus: TuitionPaymentStatus.SUCCESS,
-              paymentDate: { gte: start, lt: end },
+              paymentDate: { lt: asOfEndExclusive },
               OR: [
                 { paymentBatch: { is: null } },
                 { paymentBatch: { status: PaymentBatchStatus.SUCCESS } },
               ],
             },
-            select: { amount: true },
+            select: { amount: true, paymentDate: true },
           },
         },
       },
@@ -160,23 +176,58 @@ export async function getClassTuitionReport(
     teacherName: classSubject.teacher.fullName,
     commissionPercent: Number(classSubject.teacher.commissionPercent),
     month: input.month,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    asOfDate,
     rows: enrollments
       .map((enrollment) => {
         const { givenName, familyName } = splitStudentName(
           enrollment.student.fullName,
         );
-        const paidAmount = enrollment.tuitionFees.reduce(
-          (total, fee) => total + getSubjectPaidAmount(fee, input.classSubjectId),
-          0,
-        );
+        const feeBreakdown = enrollment.tuitionFees.map((fee) => {
+          const subjectFinalAmount = getSubjectFinalAmount(fee, input.classSubjectId);
+          const allPaid = getSubjectPaidAmount(fee, subjectFinalAmount);
+          const paidInPeriod = getSubjectPaidAmount({
+            ...fee,
+            payments: fee.payments.filter((payment) =>
+              payment.paymentDate >= collectionStart && payment.paymentDate < collectionEndExclusive,
+            ),
+          }, subjectFinalAmount);
+          const isSelectedBillingMonth = fee.billingYear === Number(input.month.slice(0, 4)) &&
+            fee.billingMonth === Number(input.month.slice(5, 7));
+          const isCollectible = fee.status !== "CANCELLED" && fee.status !== "EXEMPTED";
+          return {
+            isSelectedBillingMonth,
+            isCollectible,
+            subjectFinalAmount,
+            allPaid,
+            paidInPeriod,
+          };
+        });
+        const assessed = feeBreakdown.reduce((total, fee) =>
+          fee.isSelectedBillingMonth && fee.isCollectible
+            ? total.add(fee.subjectFinalAmount)
+            : total,
+        new Prisma.Decimal(0)).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+        const cumulative = feeBreakdown.reduce((total, fee) =>
+          fee.isSelectedBillingMonth && fee.isCollectible
+            ? total.add(fee.allPaid)
+            : total,
+        new Prisma.Decimal(0)).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+        const paidInPeriod = feeBreakdown.reduce((total, fee) => total.add(fee.paidInPeriod), new Prisma.Decimal(0))
+          .toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+        const outstanding = Prisma.Decimal.max(assessed.sub(cumulative), 0);
 
         return {
           studentCode: enrollment.student.code,
           givenName,
           familyName,
-          paidAmount,
+          assessedAmount: assessed.toNumber(),
+          paidInPeriodAmount: paidInPeriod.toNumber(),
+          paidCumulativeAmount: Prisma.Decimal.min(cumulative, assessed).toNumber(),
+          outstandingAmount: outstanding.toNumber(),
         };
       })
-      .filter((row) => row.paidAmount > 0),
+      .filter((row) => row.assessedAmount > 0 || row.paidInPeriodAmount > 0),
   };
 }
