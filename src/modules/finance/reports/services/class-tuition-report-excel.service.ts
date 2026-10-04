@@ -2,22 +2,24 @@ import ExcelJS from "exceljs";
 import type { ClassTuitionReport } from "@/modules/finance/reports/services/class-tuition-report.service";
 
 const border = {
-  top: { style: "thin" as const, color: { argb: "FF000000" } },
-  left: { style: "thin" as const, color: { argb: "FF000000" } },
-  bottom: { style: "thin" as const, color: { argb: "FF000000" } },
-  right: { style: "thin" as const, color: { argb: "FF000000" } },
+  top: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  left: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  bottom: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  right: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
 };
 
-const moneyFormat = '#,##0 "₫"';
+const moneyFormat = '#,##0 "₫";[Red]-#,##0 "₫";-';
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const colors = {
-  navy: "FF1F4E78",
-  blue: "FFD9EAF7",
-  lightBlue: "FFEAF3F8",
-  green: "FFE2F0D9",
-  yellow: "FFFFF2CC",
-  orange: "FFFCE4D6",
-  gray: "FFF2F2F2",
+  navy: "FF17324D",
+  accent: "FF168C8C",
+  blue: "FFE8F0F6",
+  lightBlue: "FFF5F8FA",
+  green: "FFE4F3EA",
+  yellow: "FFFFF4DB",
+  orange: "FFFFE9E3",
+  gray: "FFF1F4F7",
+  white: "FFFFFFFF",
 };
 
 function styleRange(
@@ -106,6 +108,9 @@ export async function buildClassTuitionReportExcel(
       alignment: { horizontal: "center", vertical: "middle", wrapText: true },
     });
   });
+  worksheet.getCell("A1").font = { name: "Arial", size: 10, bold: true, color: { argb: colors.accent } };
+  worksheet.getCell("A2").font = { name: "Arial", size: 16, bold: true, color: { argb: colors.white } };
+  worksheet.getCell("A2").fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.navy } };
   worksheet.getRow(1).height = 22;
   worksheet.getRow(2).height = 26;
   worksheet.getRow(3).height = 24;
@@ -117,8 +122,8 @@ export async function buildClassTuitionReportExcel(
   });
   ["A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6"].forEach((cell) => {
     styleRange(worksheet, cell, {
-      font: { name: "Arial", size: 11, bold: true },
-      fill: { type: "pattern", pattern: "solid", fgColor: { argb: colors.blue } },
+      font: { name: "Arial", size: 10, bold: true, color: { argb: colors.white } },
+      fill: { type: "pattern", pattern: "solid", fgColor: { argb: colors.navy } },
       border,
       alignment: { horizontal: "center", vertical: "middle", wrapText: true },
     });
@@ -141,7 +146,7 @@ export async function buildClassTuitionReportExcel(
     ];
     excelRow.height = 24;
     excelRow.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      cell.font = { name: "Arial", size: 11 };
+      cell.font = { name: "Arial", size: 10, color: { argb: colors.navy } };
       cell.border = border;
       cell.alignment = {
         horizontal: columnNumber >= 4 && columnNumber <= 7 ? "right" : columnNumber === 1 ? "center" : "left",
@@ -187,7 +192,7 @@ export async function buildClassTuitionReportExcel(
       result: total,
     };
   }
-  worksheet.getCell(`A${remainingRow}`).value = "CÒN LẠI SAU KHI TRÍCH % TRÊN TIỀN THU TRONG KHOẢNG";
+  worksheet.getCell(`A${remainingRow}`).value = "DOANH THU SAU TRÍCH % TRÊN TIỀN THU TRONG KHOẢNG";
   worksheet.getCell(`E${remainingRow}`).value = {
     formula: `E${totalRow}*(100-${report.commissionPercent})/100`,
     result: totalPeriodPaid * (100 - report.commissionPercent) / 100,
@@ -205,6 +210,8 @@ export async function buildClassTuitionReportExcel(
   worksheet.getCell(`E${remainingRow}`).numFmt = moneyFormat;
   worksheet.getCell(`E${remainingRow}`).alignment = { horizontal: "right", vertical: "middle" };
   worksheet.getCell(`H${closedDateRow}`).alignment = { horizontal: "right", vertical: "middle" };
+  worksheet.getCell(`A${remainingRow}`).fill = { type: "pattern", pattern: "solid", fgColor: { argb: colors.blue } };
+  worksheet.getCell(`E${remainingRow}`).font = { name: "Arial", size: 10, bold: true, color: { argb: colors.navy } };
   [totalRow, remainingRow, closedDateRow].forEach((rowNumber, index) => {
     worksheet.getCell(`A${rowNumber}`).fill = {
       type: "pattern",
@@ -220,6 +227,7 @@ export async function buildClassTuitionReportExcel(
       };
     });
   });
+  worksheet.autoFilter = { from: "A6", to: `H${lastDataRow}` };
   worksheet.pageSetup.printArea = `A1:H${closedDateRow}`;
 
   return Buffer.from(await workbook.xlsx.writeBuffer());

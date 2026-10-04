@@ -13,13 +13,14 @@ const border = {
 };
 const moneyFormat = '#,##0 "₫";[Red]-#,##0 "₫";-';
 const colors = {
-  navy: "FF1F4E78",
-  blue: "FFD9EAF7",
-  lightBlue: "FFF4F8FB",
-  green: "FFE2F0D9",
-  yellow: "FFFFF2CC",
-  orange: "FFFCE4D6",
-  gray: "FFF2F2F2",
+  navy: "FF17324D",
+  accent: "FF168C8C",
+  blue: "FFE8F0F6",
+  lightBlue: "FFF5F8FA",
+  green: "FFE4F3EA",
+  yellow: "FFFFF4DB",
+  orange: "FFFFE9E3",
+  gray: "FFF1F4F7",
   white: "FFFFFFFF",
 };
 
@@ -47,6 +48,7 @@ function bold(cell: ExcelJS.Cell, color = colors.navy) {
 
 function formatDate(value: string | null) {
   if (!value) return "-";
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("vi-VN", {
@@ -77,8 +79,8 @@ function applyHeader(row: ExcelJS.Row, headers: string[]) {
     const cell = row.getCell(index + 1);
     cell.value = value;
     styleCell(cell, { horizontal: "center" });
-    bold(cell);
-    fill(cell, colors.blue);
+    bold(cell, colors.white);
+    fill(cell, colors.navy);
   });
   row.height = 30;
 }
@@ -122,12 +124,14 @@ export async function buildBankReconciliationReportExcel(
   overview.mergeCells("A1:D1");
   overview.getCell("A1").value = "BÁO CÁO ĐỐI SOÁT SAO KÊ NGÂN HÀNG";
   styleCell(overview.getCell("A1"), { horizontal: "center" });
-  overview.getCell("A1").font = { name: "Arial", size: 15, bold: true, color: { argb: colors.navy } };
-  overview.getRow(1).height = 28;
+  overview.getCell("A1").font = { name: "Arial", size: 18, bold: true, color: { argb: colors.white } };
+  fill(overview.getCell("A1"), colors.navy);
+  overview.getRow(1).height = 36;
   overview.mergeCells("A2:D2");
   overview.getCell("A2").value = `File nguồn: ${report.fileName}`;
   styleCell(overview.getCell("A2"), { horizontal: "center" });
-  overview.getRow(2).height = 22;
+  overview.getCell("A2").font = { name: "Arial", size: 10, italic: true, color: { argb: colors.navy } };
+  overview.getRow(2).height = 24;
 
   const metadata = [
     ["Ngân hàng", report.bankName],
@@ -212,6 +216,7 @@ export async function buildBankReconciliationReportExcel(
     });
   }
   overview.views = [{ state: "frozen", ySplit: 3 }];
+  overview.pageSetup = { orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printArea: `A1:D${rowNumber + report.invalidRowErrors.length + 1}` };
 
   const detail = workbook.addWorksheet("Chi tiết đối soát");
   detail.columns = [
@@ -225,9 +230,20 @@ export async function buildBankReconciliationReportExcel(
     "Nội dung đối soát", "Ghi có", "Ghi nợ", "Số dư", "Trạng thái", "Mã đợt thu", "Mã học viên",
     "Học viên", "Lớp / môn học", "Tổng đợt thu", "Số biên lai", "Số ứng viên", "Ghi chú",
   ];
-  applyHeader(detail.getRow(1), detailHeaders);
+  detail.mergeCells("A1:R1");
+  detail.mergeCells("A2:R2");
+  detail.getCell("A1").value = "CHI TIẾT GIAO DỊCH ĐỐI SOÁT";
+  detail.getCell("A2").value = `${report.fileName} · ${formatDate(report.statement.fromDate)} – ${formatDate(report.statement.toDate)}`;
+  styleCell(detail.getCell("A1"), { horizontal: "center" });
+  detail.getCell("A1").font = { name: "Arial", size: 16, bold: true, color: { argb: colors.white } };
+  fill(detail.getCell("A1"), colors.navy);
+  styleCell(detail.getCell("A2"), { horizontal: "center" });
+  detail.getCell("A2").font = { name: "Arial", size: 10, italic: true, color: { argb: colors.navy } };
+  detail.getRow(1).height = 32;
+  detail.getRow(2).height = 23;
+  applyHeader(detail.getRow(4), detailHeaders);
   reportItems.forEach((item, index) => {
-    const row = detail.getRow(index + 2);
+    const row = detail.getRow(index + 5);
     const batch = batchSummary(item.paymentBatches);
     const candidateCount = item.paymentBatchCandidateCount + item.paymentBatchGroupCandidateCount;
     const note = item.reconciliationStatus === "AUTO_MATCHED"
@@ -264,17 +280,35 @@ export async function buildBankReconciliationReportExcel(
       if ([7, 8, 9, 15].includes(columnNumber)) cell.numFmt = moneyFormat;
     });
     if (index % 2 === 1) row.eachCell({ includeEmpty: true }, (cell) => fill(cell, colors.lightBlue));
+    const statusCell = row.getCell(10);
+    fill(statusCell, item.reconciliationStatus === "CONFIRMED" || item.reconciliationStatus === "AUTO_MATCHED"
+      ? colors.green
+      : item.reconciliationStatus === "UNMATCHED" || item.reconciliationStatus === "DUPLICATED"
+        ? colors.orange
+        : colors.gray);
   });
-  detail.views = [{ state: "frozen", ySplit: 1 }];
-  detail.autoFilter = { from: "A1", to: `R${Math.max(1, reportItems.length + 1)}` };
+  detail.views = [{ state: "frozen", ySplit: 4 }];
+  detail.autoFilter = { from: "A4", to: `R${Math.max(4, reportItems.length + 4)}` };
+  detail.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printArea: `A1:R${Math.max(4, reportItems.length + 4)}` };
 
   const unmatched = workbook.addWorksheet("Chưa khớp");
   unmatched.columns = [{ width: 8 }, { width: 20 }, { width: 25 }, { width: 54 }, { width: 44 }, { width: 18 }, { width: 18 }, { width: 28 }, { width: 18 }, { width: 32 }];
-  applyHeader(unmatched.getRow(1), ["STT", "Ngày giao dịch", "Mã giao dịch", "Diễn giải / chi tiết", "Nội dung đối soát", "Ghi có", "Số dư", "Trạng thái", "Số ứng viên", "Hướng xử lý"]);
+  unmatched.mergeCells("A1:J1");
+  unmatched.mergeCells("A2:J2");
+  unmatched.getCell("A1").value = "GIAO DỊCH CHƯA KHỚP";
+  unmatched.getCell("A2").value = `${report.fileName} · ${formatDate(report.statement.fromDate)} – ${formatDate(report.statement.toDate)}`;
+  styleCell(unmatched.getCell("A1"), { horizontal: "center" });
+  unmatched.getCell("A1").font = { name: "Arial", size: 16, bold: true, color: { argb: colors.white } };
+  fill(unmatched.getCell("A1"), colors.navy);
+  styleCell(unmatched.getCell("A2"), { horizontal: "center" });
+  unmatched.getCell("A2").font = { name: "Arial", size: 10, italic: true, color: { argb: colors.navy } };
+  unmatched.getRow(1).height = 32;
+  unmatched.getRow(2).height = 23;
+  applyHeader(unmatched.getRow(4), ["STT", "Ngày giao dịch", "Mã giao dịch", "Diễn giải / chi tiết", "Nội dung đối soát", "Ghi có", "Số dư", "Trạng thái", "Số ứng viên", "Hướng xử lý"]);
   reportItems
     .filter((item) => item.reconciliationStatus === "UNMATCHED")
     .forEach((item, index) => {
-      const row = unmatched.getRow(index + 2);
+      const row = unmatched.getRow(index + 5);
       const candidates = item.paymentBatchCandidateCount + item.paymentBatchGroupCandidateCount;
       row.values = [
         index + 1,
@@ -293,9 +327,11 @@ export async function buildBankReconciliationReportExcel(
         if ([6, 7].includes(columnNumber)) cell.numFmt = moneyFormat;
       });
       if (index % 2 === 1) row.eachCell({ includeEmpty: true }, (cell) => fill(cell, colors.lightBlue));
+      fill(row.getCell(8), colors.orange);
     });
-  unmatched.views = [{ state: "frozen", ySplit: 1 }];
-  unmatched.autoFilter = { from: "A1", to: `J${Math.max(1, unmatched.rowCount)}` };
+  unmatched.views = [{ state: "frozen", ySplit: 4 }];
+  unmatched.autoFilter = { from: "A4", to: `J${Math.max(4, unmatched.rowCount)}` };
+  unmatched.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printArea: `A1:J${Math.max(4, unmatched.rowCount)}` };
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }

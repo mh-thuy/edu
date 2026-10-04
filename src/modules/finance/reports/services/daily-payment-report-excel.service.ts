@@ -2,22 +2,22 @@ import ExcelJS from "exceljs";
 import type { DailyPaymentReport } from "@/modules/finance/reports/services/daily-payment-report.service";
 
 const border = {
-  top: { style: "thin" as const, color: { argb: "FF000000" } },
-  left: { style: "thin" as const, color: { argb: "FF000000" } },
-  bottom: { style: "thin" as const, color: { argb: "FF000000" } },
-  right: { style: "thin" as const, color: { argb: "FF000000" } },
+  top: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  left: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  bottom: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
+  right: { style: "thin" as const, color: { argb: "FFD7E0E8" } },
 };
 const moneyFormat = '#,##0 "₫"';
 const zeroAsDashMoneyFormat = '#,##0 "₫";[Red]-#,##0 "₫";-';
 const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const colors = {
-  navy: "FF1F4E78",
-  blue: "FFD9EAF7",
-  lightBlue: "FFEAF3F8",
-  green: "FFE2F0D9",
-  yellow: "FFFFF2CC",
-  orange: "FFFCE4D6",
-  gray: "FFF2F2F2",
+  navy: "FF17324D",
+  blue: "FFE8F0F6",
+  lightBlue: "FFF5F8FA",
+  green: "FFE4F3EA",
+  yellow: "FFFFF4DB",
+  orange: "FFFFE9E3",
+  gray: "FFF1F4F7",
   white: "FFFFFFFF",
   red: "FFC00000",
 };
@@ -60,8 +60,8 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     { width: 16 },
     { width: 14 },
     { width: 12 },
-    { width: 18 },
-    { width: 28 },
+    { width: 42 },
+    { width: 4 },
   ];
   sheet.mergeCells("A1:H1");
   sheet.mergeCells("A2:H2");
@@ -76,26 +76,28 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     styleCell(sheet.getCell(address), { horizontal: "center" });
     sheet.getCell(address).font = {
       name: "Arial",
-      size: address === "A2" ? 14 : 12,
+      size: address === "A2" ? 16 : 10,
       bold: true,
-      color: { argb: colors.navy },
+      color: { argb: address === "A2" ? colors.white : colors.navy },
     };
   });
+  setFill(sheet.getCell("A2"), colors.navy);
+  sheet.getCell("A3").font = { name: "Arial", size: 11, color: { argb: colors.navy } };
 
-  const headers = ["STT", "GIÁO VIÊN", "LỚP", "HỌC PHÍ", "DÒNG THU", "THÀNH TIỀN", "", "GHI CHÚ"];
+  const headers = ["STT", "GIÁO VIÊN", "LỚP", "ĐƠN GIÁ", "SỐ DÒNG THU", "THÀNH TIỀN", "GHI CHÚ"];
   headers.forEach((value, index) => {
     const cell = sheet.getRow(4).getCell(index + 1);
     cell.value = value;
     styleCell(cell, { horizontal: "center" });
-    setBold(cell, colors.navy);
-    setFill(cell, colors.blue);
+    setBold(cell, colors.white);
+    setFill(cell, colors.navy);
   });
   sheet.getRow(4).height = 28;
 
   const firstDataRow = 5;
   report.rows.forEach((row, index) => {
     const excelRow = sheet.getRow(firstDataRow + index);
-    excelRow.values = [index + 1, row.teacherName, row.className, row.tuitionFee, row.count, row.total, "", row.note];
+    excelRow.values = [index + 1, row.teacherName, row.className, row.tuitionFee, row.count, row.total, row.note];
     excelRow.height = 24;
     excelRow.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
       styleCell(cell, { horizontal: columnNumber === 1 ? "center" : [4, 5, 6].includes(columnNumber) ? "right" : "left" });
@@ -106,7 +108,15 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     }
   });
 
-  const totalRow = Math.max(firstDataRow, firstDataRow + report.rows.length - 1) + 1;
+  const lastDataRow = Math.max(firstDataRow, firstDataRow + report.rows.length - 1);
+  const totalRow = lastDataRow + 2;
+  sheet.mergeCells(`A${totalRow}:H${totalRow}`);
+  sheet.getCell(`A${totalRow}`).value = "TỔNG QUAN THU TRONG NGÀY";
+  styleCell(sheet.getCell(`A${totalRow}`), { horizontal: "left" });
+  sheet.getCell(`A${totalRow}`).font = { name: "Arial", size: 11, bold: true, color: { argb: colors.white } };
+  setFill(sheet.getCell(`A${totalRow}`), colors.navy);
+  sheet.getRow(totalRow).height = 24;
+  const summaryFirstRow = totalRow + 1;
   const summary = [
     ["TỔNG THU", report.totalCollected, "Payment SUCCESS"],
     ["TIỀN MẶT", report.cashCollected, "Đã thu bằng tiền mặt"],
@@ -114,10 +124,12 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     ["SỐ GIAO DỊCH", report.paymentCount, "Số payment thành công trong ngày"],
   ];
   summary.forEach(([label, value, note], index) => {
-    const row = sheet.getRow(totalRow + index);
+    const row = sheet.getRow(summaryFirstRow + index);
     row.getCell(1).value = label;
     row.getCell(6).value = value;
-    row.getCell(8).value = note;
+    row.getCell(7).value = note;
+    sheet.mergeCells(`A${summaryFirstRow + index}:E${summaryFirstRow + index}`);
+    sheet.mergeCells(`G${summaryFirstRow + index}:H${summaryFirstRow + index}`);
     row.height = 22;
     row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
       styleCell(cell, { horizontal: columnNumber === 6 ? "right" : "left" });
@@ -126,11 +138,10 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
     });
     setFill(row.getCell(1), index === 0 ? colors.green : index === 1 ? colors.yellow : index === 2 ? colors.blue : colors.gray);
     setFill(row.getCell(6), index === 0 ? colors.green : index === 1 ? colors.yellow : index === 2 ? colors.blue : colors.gray);
-    sheet.mergeCells(`A${totalRow + index}:E${totalRow + index}`);
   });
-  const noteRow = totalRow + summary.length + 1;
+  const noteRow = summaryFirstRow + summary.length + 1;
   sheet.mergeCells(`A${noteRow}:H${noteRow}`);
-  sheet.getCell(`A${noteRow}`).value = "Ghi chú: Báo cáo lấy các payment học phí có trạng thái SUCCESS theo ngày Việt Nam. Phần đối soát mệnh giá bên dưới do người dùng nhập số tờ và tiền nộp thực tế; Excel tự tính các cột còn lại.";
+  sheet.getCell(`A${noteRow}`).value = "Ghi chú: Chỉ tính payment học phí SUCCESS theo ngày Việt Nam. Nhập số tờ và tiền nộp thực tế tại các ô màu vàng để Excel tự đối soát.";
   styleCell(sheet.getCell(`A${noteRow}`), { horizontal: "left" });
   setFill(sheet.getCell(`A${noteRow}`), colors.gray);
   sheet.getRow(noteRow).height = 32;
@@ -169,7 +180,7 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
   sheet.getRow(signerInputRow).height = 22;
   sheet.getRow(signerInputRow + 1).height = 22;
 
-  ["LOẠI TIỀN", "SỐ TỜ", "THÀNH TIỀN"].forEach((value, index) => {
+  ["MỆNH GIÁ", "SỐ TỜ", "THÀNH TIỀN"].forEach((value, index) => {
     const cell = sheet.getRow(headerRow).getCell(index + 2);
     cell.value = value;
     styleCell(cell, { horizontal: "center" });
@@ -259,30 +270,35 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
 
   workbook.calcProperties.fullCalcOnLoad = true;
   sheet.views = [{ state: "frozen", ySplit: 4 }];
+  sheet.autoFilter = { from: "A4", to: `G${lastDataRow}` };
   sheet.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printArea: `A1:H${statusRow}` };
 
   const detail = workbook.addWorksheet("Chi tiết giao dịch");
   detail.columns = [
-    { header: "STT", key: "index", width: 8 },
-    { header: "Mã thanh toán", key: "paymentNo", width: 24 },
-    { header: "Ngày thu", key: "paymentDate", width: 18 },
-    { header: "Mã học viên", key: "studentCode", width: 16 },
-    { header: "Học viên", key: "studentName", width: 28 },
-    { header: "Lớp", key: "className", width: 18 },
-    { header: "Mã học phí", key: "feeNo", width: 24 },
-    { header: "Phương thức", key: "paymentMethod", width: 18 },
-    { header: "Ngân hàng", key: "bankName", width: 24 },
-    { header: "Tài khoản nhận", key: "bankAccountNo", width: 20 },
-    { header: "Mã giao dịch NH", key: "bankTransactionNo", width: 24 },
-    { header: "Mã tham chiếu", key: "transactionReference", width: 24 },
-    { header: "Nội dung thu", key: "paymentContent", width: 32 },
-    { header: "Số tiền", key: "amount", width: 18 },
+    { key: "index", width: 8 }, { key: "paymentNo", width: 24 }, { key: "paymentDate", width: 18 },
+    { key: "studentCode", width: 16 }, { key: "studentName", width: 28 }, { key: "className", width: 18 },
+    { key: "feeNo", width: 24 }, { key: "paymentMethod", width: 18 }, { key: "bankName", width: 24 },
+    { key: "bankAccountNo", width: 20 }, { key: "bankTransactionNo", width: 24 }, { key: "transactionReference", width: 24 },
+    { key: "paymentContent", width: 32 }, { key: "amount", width: 18 },
   ];
-  detail.getRow(1).eachCell((cell) => {
+  detail.mergeCells("A1:N1");
+  detail.mergeCells("A2:N2");
+  detail.getCell("A1").value = "CHI TIẾT CÁC KHOẢN THU";
+  detail.getCell("A2").value = `Ngày thu ${formatDate(report.date)} · ${report.paymentCount} giao dịch · Tổng ${report.totalCollected.toLocaleString("vi-VN")} ₫`;
+  styleCell(detail.getCell("A1"), { horizontal: "center" });
+  detail.getCell("A1").font = { name: "Arial", size: 16, bold: true, color: { argb: colors.white } };
+  setFill(detail.getCell("A1"), colors.navy);
+  styleCell(detail.getCell("A2"), { horizontal: "center" });
+  detail.getCell("A2").font = { name: "Arial", size: 10, italic: true, color: { argb: colors.navy } };
+  detail.getRow(1).height = 32;
+  detail.getRow(2).height = 23;
+  detail.getRow(4).values = ["STT", "Mã thanh toán", "Ngày thu", "Mã học viên", "Học viên", "Lớp", "Mã học phí", "Phương thức", "Ngân hàng", "Tài khoản nhận", "Mã giao dịch NH", "Mã tham chiếu", "Nội dung thu", "Số tiền"];
+  detail.getRow(4).eachCell((cell) => {
     styleCell(cell, { horizontal: "center" });
-    setBold(cell, colors.navy);
-    setFill(cell, colors.blue);
+    setBold(cell, colors.white);
+    setFill(cell, colors.navy);
   });
+  detail.getRow(4).height = 30;
   report.details.forEach((item, index) => {
     const row = detail.addRow({
       index: index + 1,
@@ -307,7 +323,9 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
       row.eachCell({ includeEmpty: true }, (cell) => setFill(cell, colors.lightBlue));
     }
   });
-  detail.views = [{ state: "frozen", ySplit: 1 }];
+  detail.views = [{ state: "frozen", ySplit: 4 }];
+  detail.autoFilter = { from: "A4", to: `N${Math.max(4, report.details.length + 4)}` };
+  detail.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printArea: `A1:N${Math.max(4, report.details.length + 4)}` };
 
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
