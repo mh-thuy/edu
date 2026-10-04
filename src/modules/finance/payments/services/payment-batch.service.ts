@@ -4,7 +4,7 @@ import {
   TuitionPaymentStatus,
   PaymentBatchStatus,
 } from "@prisma/client";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
@@ -107,33 +107,6 @@ async function generateBatchNo(tx: Prisma.TransactionClient) {
       return candidate;
   }
   throw new ConflictError("Không thể tạo mã thanh toán tổng, vui lòng thử lại");
-}
-
-async function generateBatchNumbers(
-  tx: Prisma.TransactionClient,
-  count: number,
-) {
-  const prefix = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}`;
-  const available = new Set<string>();
-  while (available.size < count) {
-    const candidates = Array.from(
-      { length: Math.max(count - available.size, 8) },
-      () => `${prefix}-${Math.floor(100000 + Math.random() * 900000)}`,
-    );
-    const uniqueCandidates = [...new Set(candidates)].filter(
-      (value) => !available.has(value),
-    );
-    const existing = await tx.paymentBatch.findMany({
-      where: { batchNo: { in: uniqueCandidates } },
-      select: { batchNo: true },
-    });
-    const existingNumbers = new Set(existing.map((batch) => batch.batchNo));
-    for (const candidate of uniqueCandidates) {
-      if (!existingNumbers.has(candidate)) available.add(candidate);
-      if (available.size === count) break;
-    }
-  }
-  return [...available];
 }
 
 function sameNullableText(
@@ -945,34 +918,24 @@ export async function createClassNoticeBatches(
         );
       }
       const targetFeeIds = targetFees.map((fee) => fee.id);
+      const targetFeeIdSet = new Set(targetFeeIds);
       const expectedIdempotencyKeys = [...new Set(targetFees.map((fee) => fee.studentId))]
         .map((studentId) => `${keyPrefix}${studentId}`);
       const priorBatches = await tx.paymentBatch.findMany({
         where: { idempotencyKey: { in: expectedIdempotencyKeys } },
         orderBy: { createdAt: "asc" },
       });
-      if (priorBatches.length) {
-        if (
-          priorBatches.length !== expectedIdempotencyKeys.length ||
-          priorBatches.some((batch) => batch.status !== PaymentBatchStatus.PENDING)
-        ) {
-          throw new ConflictError(
-            "Lần phát hành theo lớp này đã được xử lý trước đó",
-          );
-        }
-        return {
-          batches: priorBatches.map((batch) => ({
-            id: batch.id,
-            batchNo: batch.batchNo,
-            totalAmount: batch.totalAmount,
-          })),
-          replacedBatchCount: 0,
-        };
+      if (
+        priorBatches.some((batch) => batch.status !== PaymentBatchStatus.PENDING)
+      ) {
+        throw new ConflictError(
+          "Lần phát hành theo lớp này đã được xử lý trước đó",
+        );
       }
       const initialPendingBatches = await tx.paymentBatch.findMany({
         where: {
           status: PaymentBatchStatus.PENDING,
-          allocations: { some: { tuitionFeeId: { in: targetFeeIds } } },
+          studentId: { in: [...new Set(targetFees.map((fee) => fee.studentId))] },
         },
         select: { id: true, studentId: true },
       });
@@ -1002,18 +965,51 @@ export async function createClassNoticeBatches(
         ...targetFees.map((fee) => fee.studentId),
         ...initialPendingBatches.map((batch) => batch.studentId),
       ]);
-      const pendingBatches = await tx.paymentBatch.findMany({
+      const pendingBatchCandidates = await tx.paymentBatch.findMany({
         where: {
           status: PaymentBatchStatus.PENDING,
-          allocations: { some: { tuitionFeeId: { in: targetFeeIds } } },
+          studentId: { in: [...new Set(targetFees.map((fee) => fee.studentId))] },
         },
-        include: { allocations: true },
-        orderBy: { id: "asc" },
+        select: { id: true },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
       await lockPaymentBatchRows(
         tx,
-        pendingBatches.map((batch) => batch.id),
+        pendingBatchCandidates.map((batch) => batch.id),
       );
+      let pendingBatches = await tx.paymentBatch.findMany({
+        where: {
+          status: PaymentBatchStatus.PENDING,
+          studentId: { in: [...new Set(targetFees.map((fee) => fee.studentId))] },
+        },
+        include: {
+          allocations: true,
+          student: true,
+          statementRowLinks: { select: { isConfirmed: true } },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      });
+      const pendingBatchIds = new Set(
+        pendingBatchCandidates.map((batch) => batch.id),
+      );
+      const newlyObservedBatchIds = pendingBatches
+        .map((batch) => batch.id)
+        .filter((batchId) => !pendingBatchIds.has(batchId));
+      if (newlyObservedBatchIds.length) {
+        await lockPaymentBatchRows(tx, newlyObservedBatchIds);
+        pendingBatches = await tx.paymentBatch.findMany({
+          where: {
+            status: PaymentBatchStatus.PENDING,
+            studentId: { in: [...new Set(targetFees.map((fee) => fee.studentId))] },
+          },
+          include: {
+            allocations: true,
+            student: true,
+            statementRowLinks: { select: { isConfirmed: true } },
+          },
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        });
+      }
       const affectedFeeIds = [
         ...new Set([
           ...targetFeeIds,
@@ -1023,6 +1019,40 @@ export async function createClassNoticeBatches(
         ]),
       ].sort();
       await lockTuitionFeeRows(tx, affectedFeeIds);
+
+      const currentTargetAllocations = await tx.paymentAllocation.findMany({
+        where: {
+          tuitionFeeId: { in: targetFeeIds },
+          paymentBatch: { status: PaymentBatchStatus.PENDING },
+        },
+        select: { tuitionFeeId: true, paymentBatchId: true },
+      });
+      const knownTargetAllocations = pendingBatches.flatMap((batch) =>
+        batch.allocations
+          .filter((allocation) => targetFeeIdSet.has(allocation.tuitionFeeId))
+          .map((allocation) => ({
+            tuitionFeeId: allocation.tuitionFeeId,
+            paymentBatchId: batch.id,
+          })),
+      );
+      const knownAllocationKeys = new Set(
+        knownTargetAllocations.map(
+          (allocation) => `${allocation.tuitionFeeId}:${allocation.paymentBatchId}`,
+        ),
+      );
+      if (
+        currentTargetAllocations.length !== knownTargetAllocations.length ||
+        currentTargetAllocations.some(
+          (allocation) =>
+            !knownAllocationKeys.has(
+              `${allocation.tuitionFeeId}:${allocation.paymentBatchId}`,
+            ),
+        )
+      ) {
+        throw new ConflictError(
+          "Các khoản học phí vừa được đưa vào đợt thu khác; hãy tải lại danh sách và thử lại",
+        );
+      }
 
       const eligibleFees = await tx.tuitionFee.findMany({
         where: { id: { in: affectedFeeIds } },
@@ -1050,141 +1080,357 @@ export async function createClassNoticeBatches(
         );
         return remaining.greaterThan(0) ? [fee] : [];
       });
-      if (!outstanding.length) {
+      const outstandingTargetFees = outstanding.filter((fee) =>
+        targetFeeIdSet.has(fee.id),
+      );
+      if (!outstandingTargetFees.length) {
         throw new ConflictError(
           "Các khoản học phí đã được thanh toán hoặc không còn đủ điều kiện phát hành",
         );
       }
 
-      const cancellationReason = `Thay thế khi phát hành thông báo theo lớp cho kỳ ${data.month}`;
-      if (pendingBatches.length) {
-        const cancelled = await tx.paymentBatch.updateMany({
+      const pendingBatchByFee = new Map<
+        string,
+        {
+          batch: (typeof pendingBatches)[number];
+          allocation: (typeof pendingBatches)[number]["allocations"][number];
+        }
+      >();
+      for (const batch of pendingBatches) {
+        for (const allocation of batch.allocations) {
+          if (!targetFeeIdSet.has(allocation.tuitionFeeId)) continue;
+          const existingAllocation = pendingBatchByFee.get(
+            allocation.tuitionFeeId,
+          );
+          if (existingAllocation && existingAllocation.batch.id !== batch.id) {
+            throw new ConflictError(
+              "Một khoản học phí đang nằm trong nhiều đợt chờ; hãy kiểm tra đợt thu trước",
+            );
+          }
+          if (batch.paymentMethod !== "BANK_TRANSFER") {
+            throw new ConflictError(
+              `Khoản học phí đang thuộc đợt ${batch.batchNo}; hãy xử lý đợt đó trước`,
+            );
+          }
+          pendingBatchByFee.set(allocation.tuitionFeeId, { batch, allocation });
+        }
+      }
+
+      type TargetFeeUpdate = {
+        fee: (typeof outstandingTargetFees)[number];
+        amount: Prisma.Decimal;
+        allocationId?: string;
+      };
+      const newTargetFeesByStudent = new Map<string, TargetFeeUpdate[]>();
+      const resultBatches = new Map<
+        string,
+        { id: string; batchNo: string; totalAmount: Prisma.Decimal }
+      >();
+      for (const fee of outstandingTargetFees) {
+        const remaining = fee.finalAmount.sub(sumSuccessfulPayments(fee.payments));
+        const existingAllocation = pendingBatchByFee.get(fee.id);
+        if (existingAllocation) {
+          const { batch, allocation } = existingAllocation;
+          if (allocation.amount.greaterThan(remaining)) {
+            throw new ConflictError(
+              `Phân bổ của ${fee.feeNo} vượt số tiền còn nợ; hãy xử lý đợt ${batch.batchNo} trước`,
+            );
+          }
+          resultBatches.set(batch.id, {
+            id: batch.id,
+            batchNo: batch.batchNo,
+            totalAmount: batch.totalAmount,
+          });
+          if (allocation.amount.lessThan(remaining)) {
+            if (batch.statementRowLinks.length) {
+              throw new ConflictError(
+                `Đợt ${batch.batchNo} đang được ghép với sao kê; hãy hoàn tất đối soát trước khi bổ sung phần còn nợ`,
+              );
+            }
+            const group = newTargetFeesByStudent.get(fee.studentId) ?? [];
+            group.push({
+              fee,
+              amount: remaining.sub(allocation.amount),
+              allocationId: allocation.id,
+            });
+            newTargetFeesByStudent.set(fee.studentId, group);
+          }
+        } else {
+          const group = newTargetFeesByStudent.get(fee.studentId) ?? [];
+          group.push({ fee, amount: remaining });
+          newTargetFeesByStudent.set(fee.studentId, group);
+        }
+      }
+
+      let updatedBatchCount = 0;
+      const updatedBatchIds = new Set<string>();
+      const batchUpdates = new Map<
+        string,
+        {
+          batch: (typeof pendingBatches)[number];
+          feeUpdates: TargetFeeUpdate[];
+        }
+      >();
+      for (const [studentId, feeUpdates] of newTargetFeesByStudent) {
+        const allocationUpdates = feeUpdates.filter(
+          (feeUpdate) => feeUpdate.allocationId,
+        );
+        for (const feeUpdate of allocationUpdates) {
+          const existing = pendingBatchByFee.get(feeUpdate.fee.id);
+          if (!existing) {
+            throw new ConflictError("Không tìm thấy phân bổ đang chờ cần cập nhật");
+          }
+          const plan = batchUpdates.get(existing.batch.id) ?? {
+            batch: existing.batch,
+            feeUpdates: [],
+          };
+          plan.feeUpdates.push(feeUpdate);
+          batchUpdates.set(existing.batch.id, plan);
+        }
+
+        const feesToAdd = feeUpdates.filter(
+          (feeUpdate) => !feeUpdate.allocationId,
+        );
+        if (!feesToAdd.length) continue;
+        const studentBatches = pendingBatches.filter(
+          (batch) => batch.studentId === studentId &&
+            batch.paymentMethod === "BANK_TRANSFER" &&
+            batch.statementRowLinks.length === 0,
+        );
+        const anchorBatch = studentBatches.find((batch) =>
+          batch.allocations.some((allocation) =>
+            targetFeeIdSet.has(allocation.tuitionFeeId),
+          ),
+        ) ?? studentBatches[0];
+
+        if (!anchorBatch) {
+          const batch = await createPaymentBatch(
+            {
+              tuitionFeeIds: feesToAdd.map((feeUpdate) => feeUpdate.fee.id),
+              paymentMethod: "BANK_TRANSFER",
+              bankAccountId: data.bankAccountId,
+            },
+            actorId,
+            tx,
+            auditContext,
+          );
+          resultBatches.set(batch.id, {
+            id: batch.id,
+            batchNo: batch.batchNo,
+            totalAmount: batch.totalAmount,
+          });
+          continue;
+        }
+        const plan = batchUpdates.get(anchorBatch.id) ?? {
+          batch: anchorBatch,
+          feeUpdates: [],
+        };
+        plan.feeUpdates.push(...feesToAdd);
+        batchUpdates.set(anchorBatch.id, plan);
+      }
+
+      for (const { batch, feeUpdates } of batchUpdates.values()) {
+        const currentAllocationTotal = batch.allocations.reduce(
+          (sum, allocation) => sum.add(allocation.amount),
+          new Prisma.Decimal(0),
+        );
+        if (!currentAllocationTotal.equals(batch.totalAmount)) {
+          throw new ConflictError(
+            `Tổng phân bổ của đợt ${batch.batchNo} không khớp tổng tiền; hãy kiểm tra đợt thu trước`,
+          );
+        }
+        const amountByFeeId = new Map(
+          batch.allocations.map((allocation) => [
+            allocation.tuitionFeeId,
+            allocation.amount,
+          ]),
+        );
+        const updateAmountByAllocationId = new Map<string, Prisma.Decimal>();
+        for (const feeUpdate of feeUpdates) {
+          const currentAmount = amountByFeeId.get(feeUpdate.fee.id) ??
+            new Prisma.Decimal(0);
+          amountByFeeId.set(
+            feeUpdate.fee.id,
+            currentAmount.add(feeUpdate.amount),
+          );
+          if (feeUpdate.allocationId) {
+            updateAmountByAllocationId.set(
+              feeUpdate.allocationId,
+              currentAmount.add(feeUpdate.amount),
+            );
+          }
+        }
+        const increase = feeUpdates.reduce(
+          (sum, feeUpdate) => sum.add(feeUpdate.amount),
+          new Prisma.Decimal(0),
+        );
+        const nextTotal = batch.totalAmount.add(increase);
+        const batchFeeIds = [...amountByFeeId.keys()];
+        const snapshot: DocumentSnapshot = {
+          version: 1,
+          student: {
+            code: batch.student.code,
+            fullName: batch.student.fullName,
+          },
+          fees: batchFeeIds.map((feeId) => {
+            const fee = feeById.get(feeId);
+            if (!fee) {
+              throw new ConflictError(
+                "Không tải được đầy đủ khoản phí của đợt đang chờ",
+              );
+            }
+            const amount = amountByFeeId.get(feeId);
+            if (!amount) {
+              throw new ConflictError("Không xác định được số tiền còn phải thu");
+            }
+            return toFeeSnapshot(fee, amount);
+          }),
+          bankAccount: bankAccountSnapshot,
+        };
+
+        const updated = await tx.paymentBatch.updateMany({
           where: {
-            id: { in: pendingBatches.map((batch) => batch.id) },
+            id: batch.id,
             status: PaymentBatchStatus.PENDING,
+            paymentMethod: "BANK_TRANSFER",
           },
           data: {
-            status: PaymentBatchStatus.CANCELLED,
+            totalAmount: nextTotal,
+            bankAccountId: data.bankAccountId,
             updatedBy: actorId,
           },
         });
-        if (cancelled.count !== pendingBatches.length) {
-          throw new ConflictError("Có đợt thu vừa được xử lý; hãy tải lại và thử lại");
+        if (updated.count !== 1) {
+          throw new ConflictError(
+            "Đợt thu vừa được xử lý; hãy tải lại danh sách và thử lại",
+          );
         }
-        await tx.tuitionAuditLog.createMany({
-          data: pendingBatches.map((batch) => ({
+        for (const [allocationId, amount] of updateAmountByAllocationId) {
+          await tx.paymentAllocation.update({
+            where: { id: allocationId },
+            data: { amount },
+          });
+        }
+        const newFeeUpdates = feeUpdates.filter(
+          (feeUpdate) => !feeUpdate.allocationId,
+        );
+        if (newFeeUpdates.length) {
+          await tx.paymentAllocation.createMany({
+            data: newFeeUpdates.map((feeUpdate) => ({
+              paymentBatchId: batch.id,
+              tuitionFeeId: feeUpdate.fee.id,
+              amount: feeUpdate.amount,
+            })),
+          });
+        }
+        await savePaymentBatchNoticeSnapshot(tx, batch.id, snapshot);
+        await tx.tuitionAuditLog.create({
+          data: {
             entityType: "PAYMENT_BATCH",
             entityId: batch.id,
-            action: "CANCEL",
-            reason: cancellationReason,
+            action: "UPDATE",
+            reason: `Bổ sung hoặc cập nhật khoản học phí khi phát hành theo lớp kỳ ${data.month}`,
             dataBefore: {
               status: PaymentBatchStatus.PENDING,
-              paymentMethod: batch.paymentMethod,
               totalAmount: batch.totalAmount.toString(),
-              allocations: batch.allocations.map((allocation) => ({
-                tuitionFeeId: allocation.tuitionFeeId,
-                amount: allocation.amount.toString(),
-              })),
+              bankAccountId: batch.bankAccountId,
+              allocationCount: batch.allocations.length,
             },
             dataAfter: {
-              status: PaymentBatchStatus.CANCELLED,
-              updatedBy: actorId,
-              paymentMethod: batch.paymentMethod,
+              status: PaymentBatchStatus.PENDING,
+              totalAmount: nextTotal.toString(),
+              bankAccountId: data.bankAccountId,
+              addedTuitionFeeIds: newFeeUpdates.map((feeUpdate) => feeUpdate.fee.id),
+              increasedTuitionFeeIds: feeUpdates
+                .filter((feeUpdate) => feeUpdate.allocationId)
+                .map((feeUpdate) => feeUpdate.fee.id),
+              allocationCount: batchFeeIds.length,
+            },
+            performedBy: actorId,
+            ...auditFields(auditContext),
+          },
+        });
+        updatedBatchCount += 1;
+        updatedBatchIds.add(batch.id);
+        resultBatches.set(batch.id, {
+          id: batch.id,
+          batchNo: batch.batchNo,
+          totalAmount: nextTotal,
+        });
+      }
+
+      for (const batch of pendingBatches) {
+        if (
+          updatedBatchIds.has(batch.id) ||
+          !resultBatches.has(batch.id) ||
+          batch.paymentMethod !== "BANK_TRANSFER" ||
+          batch.bankAccountId === data.bankAccountId
+        ) {
+          continue;
+        }
+        if (batch.statementRowLinks.length) {
+          throw new ConflictError(
+            `Đợt ${batch.batchNo} đang được ghép với sao kê; hãy dùng đúng tài khoản nhận tiền hoặc hoàn tất đối soát trước khi cập nhật`,
+          );
+        }
+        const snapshot: DocumentSnapshot = {
+          version: 1,
+          student: {
+            code: batch.student.code,
+            fullName: batch.student.fullName,
+          },
+          fees: batch.allocations.map((allocation) => {
+            const fee = feeById.get(allocation.tuitionFeeId);
+            if (!fee) {
+              throw new ConflictError(
+                "Không tải được đầy đủ khoản phí của đợt đang chờ",
+              );
+            }
+            return toFeeSnapshot(fee, allocation.amount);
+          }),
+          bankAccount: bankAccountSnapshot,
+        };
+        const updated = await tx.paymentBatch.updateMany({
+          where: {
+            id: batch.id,
+            status: PaymentBatchStatus.PENDING,
+            paymentMethod: "BANK_TRANSFER",
+          },
+          data: { bankAccountId: data.bankAccountId, updatedBy: actorId },
+        });
+        if (updated.count !== 1) {
+          throw new ConflictError(
+            "Đợt thu vừa được xử lý; hãy tải lại danh sách và thử lại",
+          );
+        }
+        await savePaymentBatchNoticeSnapshot(tx, batch.id, snapshot);
+        await tx.tuitionAuditLog.create({
+          data: {
+            entityType: "PAYMENT_BATCH",
+            entityId: batch.id,
+            action: "UPDATE",
+            reason: `Cập nhật tài khoản nhận tiền khi phát hành theo lớp kỳ ${data.month}`,
+            dataBefore: {
+              status: PaymentBatchStatus.PENDING,
+              bankAccountId: batch.bankAccountId,
+              totalAmount: batch.totalAmount.toString(),
+            },
+            dataAfter: {
+              status: PaymentBatchStatus.PENDING,
+              bankAccountId: data.bankAccountId,
               totalAmount: batch.totalAmount.toString(),
             },
             performedBy: actorId,
             ...auditFields(auditContext),
-          })),
+          },
         });
+        updatedBatchCount += 1;
       }
 
-      const grouped = new Map<string, typeof outstanding>();
-      for (const fee of outstanding) {
-        const group = grouped.get(fee.studentId) ?? [];
-        group.push(fee);
-        grouped.set(fee.studentId, group);
-      }
-      const groups = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
-      const batchNos = await generateBatchNumbers(tx, groups.length);
-      const now = new Date();
-      const newBatches = groups.map(([studentId, fees], index) => {
-        const payableAmounts = fees.map((fee) =>
-          fee.finalAmount.sub(sumSuccessfulPayments(fee.payments)),
-        );
-        const totalAmount = payableAmounts.reduce(
-          (sum, amount) => sum.add(amount),
-          new Prisma.Decimal(0),
-        );
-        const snapshot: DocumentSnapshot = {
-          version: 1,
-          student: {
-            code: fees[0]!.student.code,
-            fullName: fees[0]!.student.fullName,
-          },
-          fees: fees.map((fee, feeIndex) =>
-            toFeeSnapshot(fee, payableAmounts[feeIndex]),
-          ),
-          bankAccount: bankAccountSnapshot,
-        };
-        return {
-          id: randomUUID(),
-          batchNo: batchNos[index]!,
-          studentId,
-          fees,
-          payableAmounts,
-          totalAmount,
-          idempotencyKey: `${keyPrefix}${studentId}`,
-          snapshot,
-        };
-      });
-      await tx.paymentBatch.createMany({
-        data: newBatches.map((batch) => ({
-          id: batch.id,
-          batchNo: batch.batchNo,
-          studentId: batch.studentId,
-          totalAmount: batch.totalAmount,
-          paymentMethod: "BANK_TRANSFER",
-          status: PaymentBatchStatus.PENDING,
-          bankAccountId: data.bankAccountId,
-          idempotencyKey: batch.idempotencyKey,
-          noticeSnapshot: batch.snapshot as unknown as Prisma.InputJsonValue,
-          createdBy: actorId,
-          updatedBy: actorId,
-          createdAt: now,
-          updatedAt: now,
-        })),
-      });
-      await tx.paymentAllocation.createMany({
-        data: newBatches.flatMap((batch) =>
-          batch.fees.map((fee, index) => ({
-            paymentBatchId: batch.id,
-            tuitionFeeId: fee.id,
-            amount: batch.payableAmounts[index]!,
-          })),
-        ),
-      });
-      await tx.tuitionAuditLog.createMany({
-        data: newBatches.map((batch) => ({
-          entityType: "PAYMENT_BATCH",
-          entityId: batch.id,
-          action: "CREATED",
-          dataAfter: {
-            status: PaymentBatchStatus.PENDING,
-            paymentMethod: "BANK_TRANSFER",
-            totalAmount: batch.totalAmount.toString(),
-            tuitionFeeIds: batch.fees.map((fee) => fee.id),
-          },
-          performedBy: actorId,
-          ...auditFields(auditContext),
-        })),
-      });
       return {
-        batches: newBatches.map((batch) => ({
-          id: batch.id,
-          batchNo: batch.batchNo,
-          totalAmount: batch.totalAmount,
-        })),
-        replacedBatchCount: pendingBatches.length,
+        batches: [...resultBatches.values()],
+        replacedBatchCount: 0,
+        updatedBatchCount,
       };
     },
     { timeout: 60_000 },

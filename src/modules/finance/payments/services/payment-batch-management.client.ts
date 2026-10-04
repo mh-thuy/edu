@@ -167,6 +167,7 @@ export async function issueClassNoticeBatches(input: {
   return unwrapApiResponse<{
     batches: Array<{ id: string; batchNo: string; totalAmount: number }>;
     replacedBatchCount: number;
+    updatedBatchCount: number;
   }>(response);
 }
 

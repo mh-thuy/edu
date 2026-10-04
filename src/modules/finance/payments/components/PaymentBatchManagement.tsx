@@ -446,7 +446,7 @@ export function PaymentBatchManagement() {
       setPage(0);
       showSuccess(
         classNoticeMode
-          ? `Đã phát hành ${result.batches.length} đợt thu theo lớp; đã thay ${"replacedBatchCount" in result ? result.replacedBatchCount : 0} đợt đang chờ`
+          ? `Đã xuất ${result.batches.length} thông báo theo lớp; đã cập nhật ${"updatedBatchCount" in result ? result.updatedBatchCount : 0} đợt đang chờ`
           : `Đã phát hành ${result.batches.length} đợt thu cho ${selectedStudentCount} học viên`,
       );
       try {
@@ -1415,7 +1415,7 @@ export function PaymentBatchManagement() {
         }
         message={
           classNoticeMode
-            ? `Hệ thống sẽ lấy toàn bộ khoản còn nợ của lớp ${selectedClass?.name ?? "đã chọn"} trong kỳ ${month}, gồm các khoản chưa phát hành và khoản đang thuộc đợt chờ. Đợt chờ cũ sẽ bị hủy; nếu batch cũ có thêm khoản còn nợ ở lớp/kỳ khác, các khoản đó cũng được chuyển sang batch mới. Hệ thống gom theo học viên và xuất PDF gộp.`
+            ? `Hệ thống lấy toàn bộ khoản còn nợ của lớp ${selectedClass?.name ?? "đã chọn"} trong kỳ ${month}. Đợt chuyển khoản đang chờ được giữ nguyên; khoản chưa phát hành sẽ được thêm vào đợt hiện có của học viên nếu phù hợp. Đợt đang gắn với sao kê sẽ không bị thay đổi; nếu khoản cần bổ sung còn thiếu phân bổ trong đợt đó, hãy hoàn tất đối soát trước. Nếu tài khoản nhận tiền khác tài khoản của đợt đã gắn sao kê, hãy chọn đúng tài khoản hoặc hoàn tất đối soát trước. Khi batch được cập nhật, tổng tiền và tài khoản nhận tiền sẽ theo lựa chọn này nên cần gửi PDF/QR mới.`
             : `Hệ thống sẽ phát hành ${selectedFeeIds.length} khoản cho ${selectedStudentCount} học viên, tự gom theo từng học viên. Tổng số tiền còn nợ: ${money(selectedFeeTotal)}.`
         }
         content={

@@ -826,11 +826,19 @@ POST /api/payment-batches/notice/class
 Body gồm `classId`, `month` (`YYYY-MM`), `bankAccountId` và `idempotencyKey`.
 Backend lấy toàn bộ học phí MONTHLY còn nợ của lớp/kỳ đã chọn, gồm khoản chưa
 phát hành và khoản thuộc batch `PENDING`; không đưa khoản đã thanh toán vào
-batch mới. Batch `PENDING` nào có chứa một khoản mục tiêu sẽ bị hủy trong cùng
-transaction. Các khoản còn nợ khác nằm trong những batch bị hủy cũng được đưa
-vào batch thay thế để bảo toàn yêu cầu thu. Hệ thống tạo tối đa một batch
-`BANK_TRANSFER` `PENDING` cho mỗi học viên và trả danh sách batch để xuất PDF
-gộp qua endpoint PDF hiện có. Phản hồi kèm `replacedBatchCount`.
+batch. Batch chuyển khoản đang chờ được giữ nguyên. Khoản chưa phát hành được
+thêm vào batch chuyển khoản đang chờ của học viên nếu có. Phân bổ hiện tại được
+giữ nguyên nếu đã bằng số dư còn nợ; nếu thấp hơn, API tăng phân bổ đến số dư
+còn lại. Khi cập nhật, API cập nhật tổng tiền, tài khoản nhận tiền, snapshot
+notice và audit log trong cùng transaction. Các phân bổ khác của batch được giữ
+nguyên. Nếu không có batch phù hợp, API tạo batch mới. Phản hồi trả danh sách
+batch để xuất PDF gộp qua endpoint PDF hiện có, `updatedBatchCount` và
+`replacedBatchCount` (luôn bằng 0 để tương thích với client cũ). Batch đang được
+liên kết với dòng sao kê không bị sửa phân bổ hoặc đổi tài khoản; khoản mới được
+tạo thành batch khác. Nếu các batch trả về không thể gộp PDF do khác tài khoản,
+API từ chối và yêu cầu dùng đúng tài khoản nhận tiền hoặc hoàn tất đối soát trước.
+Nếu khoản mục tiêu đã phân bổ một phần trong batch đang liên kết sao kê, API từ
+chối cập nhật và yêu cầu hoàn tất đối soát trước.
 
 ## 19.1.7 Xuất PDF gộp thông báo
 

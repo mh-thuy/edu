@@ -549,8 +549,10 @@ discount
 due_date
 ```
 
-Thì batch đang chờ phải được hủy hoặc thay thế trước khi tạo batch mới. PDF notice
-được tạo lại theo batch hiện hành và không lưu lịch sử bản PDF trong database.
+Với thao tác chỉnh sửa riêng một khoản đã phát hành, batch đang chờ phải được
+hủy hoặc thay thế trước khi tạo batch mới. Khi phát hành theo lớp, áp dụng quy
+tắc cập nhật batch đang chờ được mô tả bên dưới. PDF notice được tạo lại theo
+batch hiện hành và không lưu lịch sử bản PDF trong database.
 
 Việc tạo học phí tháng không tự tạo payment batch. Chỉ thao tác phát hành tại
 màn hình `Thông báo & đợt thu` mới tạo batch `BANK_TRANSFER` `PENDING` từ các
@@ -560,12 +562,20 @@ nộp tiền mặt, nhân viên phải thu từ màn hình thanh toán với ph�
 
 Khi phát hành theo lớp và kỳ, hệ thống lấy toàn bộ khoản học phí tháng còn nợ
 trong lớp/kỳ, bao gồm khoản chưa phát hành và khoản đang thuộc batch
-`BANK_TRANSFER` `PENDING`. Batch đang chờ nào chứa khoản thuộc lớp/kỳ sẽ bị hủy
-trong cùng transaction; mọi khoản còn nợ đang nằm trong batch bị hủy cũng phải
-được đưa vào batch thay thế để không làm mất yêu cầu thu ở lớp/kỳ khác. Sau đó
-hệ thống tạo tối đa một batch mới cho mỗi học viên và xuất PDF gộp. Khoản đã
-thanh toán không được đưa vào batch mới. Thao tác phải ghi audit log cho batch
-bị hủy và batch được tạo.
+`BANK_TRANSFER` `PENDING`. Batch đang chờ không bị hủy. Khoản đã thuộc batch
+được giữ nguyên nếu phân bổ đã bằng số dư còn nợ; nếu phân bổ thấp hơn số dư,
+hệ thống tăng phân bổ đến số dư hiện tại. Khoản chưa phát hành được thêm vào một
+batch chuyển khoản đang chờ của học viên nếu có, ưu tiên batch đã chứa khoản
+thuộc lớp/kỳ đó. Nếu cập nhật batch, hệ thống cập nhật tổng tiền, tài khoản nhận
+tiền và snapshot thông báo trong cùng transaction để QR/PDF mới phản ánh số tiền
+và tài khoản hiện hành. Các khoản khác đã có trong batch vẫn được giữ nguyên.
+Nếu học viên chưa có batch chuyển khoản đang chờ phù hợp, hệ thống tạo batch
+mới. Khoản đã thanh toán không được đưa vào batch mới. Mọi batch được cập nhật
+hoặc tạo phải có audit log.
+Batch đang được liên kết với dòng sao kê không bị sửa phân bổ hoặc đổi tài khoản;
+khoản mới được phát hành thành batch khác để không làm sai lệch dữ liệu đối soát.
+Nếu khoản mục tiêu đã được phân bổ một phần trong batch có liên kết sao kê,
+không thể tăng phân bổ tại lần phát hành này; cần hoàn tất đối soát trước.
 
 ---
 
