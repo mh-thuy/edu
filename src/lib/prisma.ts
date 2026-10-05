@@ -10,7 +10,7 @@ export const prisma =
   new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
     transactionOptions: {
-      timeout: 5 * 60 * 1000,
+      timeout: 60 * 60 * 1000,
     },
   });
 
