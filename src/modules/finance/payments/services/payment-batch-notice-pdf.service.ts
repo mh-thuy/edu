@@ -495,13 +495,13 @@ async function renderPaymentBatchNoticePdf(
     drawContinuationPage();
   }
 
-  page.drawRectangle({ x: 48, y: 340, width: 499, height: 80, color: paleRed });
-  page.drawRectangle({ x: 48, y: 340, width: 5, height: 80, color: red });
-  draw("TỔNG CẦN THANH TOÁN", 65, 397, 9, muted);
+  page.drawRectangle({ x: 48, y: 410, width: 499, height: 80, color: paleRed });
+  page.drawRectangle({ x: 48, y: 410, width: 5, height: 80, color: red });
+  draw("TỔNG CẦN THANH TOÁN", 65, 467, 9, muted);
   drawRightFit(
     `${money(Number(batch.totalAmount))} VND`,
     530,
-    389,
+    459,
     250,
     18,
     red,
@@ -510,33 +510,40 @@ async function renderPaymentBatchNoticePdf(
   draw(
     `Phương thức: ${batch.paymentMethod === "BANK_TRANSFER" ? "Chuyển khoản / VietQR" : batch.paymentMethod}`,
     65,
-    368,
+    438,
     8.5,
     ink,
   );
-  drawFit(`Nội dung chuyển khoản: ${batch.batchNo}`, 65, 352, 450, 8.5, ink);
+  drawFit(`Nội dung chuyển khoản: ${batch.batchNo}`, 65, 422, 450, 8.5, ink);
 
   page.drawRectangle({
     x: 48,
     y: 80,
     width: 499,
-    height: 255,
-    color: white,
+    height: 320,
+    color: paleBlue,
     borderColor: border,
     borderWidth: 1,
   });
-  page.drawRectangle({ x: 48, y: 305, width: 250, height: 30, color: navy });
-  draw("THÔNG TIN CHUYỂN KHOẢN", 64, 315, 10, white);
-  drawFit(`Ngân hàng: ${account?.bankName || "Chưa cấu hình"}`, 64, 266, 220, 9, ink);
-  drawFit(`Số tài khoản: ${account?.accountNo || "-"}`, 64, 242, 220, 9, ink);
-  draw("CHỦ TÀI KHOẢN", 64, 213, 8, muted);
-  drawFit(account?.accountName || "-", 64, 185, 220, 17, red, 10);
+  page.drawLine({
+    start: { x: 290, y: 96 },
+    end: { x: 290, y: 384 },
+    thickness: 1,
+    color: border,
+  });
+  draw("THÔNG TIN CHUYỂN KHOẢN", 64, 380, 10, navy);
+  draw("NGÂN HÀNG", 64, 343, 7.5, muted);
+  drawFit(account?.bankName || "Chưa cấu hình", 64, 325, 210, 10, ink);
+  draw("SỐ TÀI KHOẢN", 64, 296, 7.5, muted);
+  drawFit(account?.accountNo || "-", 64, 277, 210, 12, navy);
+  draw("CHỦ TÀI KHOẢN", 64, 246, 7.5, muted);
+  drawFit(account?.accountName || "-", 64, 220, 210, 16, red, 10);
 
   if (!accountRecord.isActive) {
     drawFit(
       "Tài khoản đã ngừng hoạt động. Vui lòng liên hệ trung tâm trước khi chuyển khoản.",
       64,
-      148,
+      185,
       220,
       8.5,
       red,
@@ -549,19 +556,20 @@ async function renderPaymentBatchNoticePdf(
     : prefetchedQr;
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    draw("QUÉT MÃ QR ĐỂ CHUYỂN KHOẢN", 298, 317, 7.5, muted);
+    draw("VIETQR · QUÉT ĐỂ THANH TOÁN", 310, 392, 9, navy);
     page.drawRectangle({
       x: 298,
-      y: 82,
+      y: 147,
       width: 242,
       height: 242,
       color: white,
       borderColor: border,
       borderWidth: 1,
     });
-    page.drawImage(qr, { x: 304, y: 88, width: 230, height: 230 });
+    page.drawImage(qr, { x: 304, y: 153, width: 230, height: 230 });
   } else if (accountRecord.isActive) {
-    drawFit("Mã QR hiện chưa khả dụng.", 298, 200, 242, 8.5, muted);
+    draw("VIETQR", 310, 392, 9, navy);
+    drawFit("Mã QR hiện chưa khả dụng.", 310, 265, 220, 8.5, muted);
   }
 
   const pages = pdf.getPages();
