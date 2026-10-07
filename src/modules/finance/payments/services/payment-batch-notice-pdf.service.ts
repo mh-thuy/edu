@@ -526,29 +526,29 @@ async function renderPaymentBatchNoticePdf(
     borderWidth: 1,
   });
   page.drawLine({
-    start: { x: 290, y: 96 },
-    end: { x: 290, y: 384 },
+    start: { x: 245, y: 96 },
+    end: { x: 245, y: 384 },
     thickness: 1,
     color: border,
   });
-  draw("THÔNG TIN CHUYỂN KHOẢN", 64, 380, 10, navy);
-  draw("NGÂN HÀNG", 64, 343, 7.5, muted);
-  drawFit(account?.bankName || "Chưa cấu hình", 64, 325, 210, 10, ink);
-  draw("SỐ TÀI KHOẢN", 64, 296, 7.5, muted);
-  drawFit(account?.accountNo || "-", 64, 277, 210, 12, navy);
-  draw("CHỦ TÀI KHOẢN", 64, 246, 7.5, muted);
-  drawFit(account?.accountName || "-", 64, 220, 210, 16, red, 10);
+  draw("TÀI KHOẢN NHẬN", 64, 380, 9, navy);
+  draw("Ngân hàng", 64, 344, 7.5, muted);
+  drawFit(account?.bankName || "Chưa cấu hình", 64, 328, 165, 8.5, ink, 7.5);
+  draw("Số tài khoản", 64, 297, 7.5, muted);
+  drawFit(account?.accountNo || "-", 64, 280, 165, 10, navy, 8);
+  draw("Chủ tài khoản", 64, 249, 7.5, muted);
+  drawFit(account?.accountName || "-", 64, 231, 165, 11, red, 8);
 
   if (!accountRecord.isActive) {
     drawFit(
-      "Tài khoản đã ngừng hoạt động. Vui lòng liên hệ trung tâm trước khi chuyển khoản.",
+      "Tài khoản đã ngừng hoạt động.",
       64,
-      185,
-      220,
-      8.5,
-      red,
+      190,
+      165,
       7.5,
+      red,
     );
+    draw("Vui lòng liên hệ trung tâm.", 64, 177, 7.5, red);
   }
 
   const qrPng = prefetchedQr === undefined
@@ -556,20 +556,28 @@ async function renderPaymentBatchNoticePdf(
     : prefetchedQr;
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    draw("VIETQR · QUÉT ĐỂ THANH TOÁN", 310, 392, 9, navy);
+    draw("VIETQR · QUÉT ĐỂ THANH TOÁN", 265, 390, 9, navy);
     page.drawRectangle({
-      x: 298,
-      y: 147,
-      width: 242,
-      height: 242,
+      x: 250,
+      y: 92,
+      width: 290,
+      height: 278,
       color: white,
       borderColor: border,
       borderWidth: 1,
     });
-    page.drawImage(qr, { x: 304, y: 153, width: 230, height: 230 });
+    const qrScale = Math.min(270 / qr.width, 270 / qr.height);
+    const qrWidth = qr.width * qrScale;
+    const qrHeight = qr.height * qrScale;
+    page.drawImage(qr, {
+      x: 395 - qrWidth / 2,
+      y: 231 - qrHeight / 2,
+      width: qrWidth,
+      height: qrHeight,
+    });
   } else if (accountRecord.isActive) {
-    draw("VIETQR", 310, 392, 9, navy);
-    drawFit("Mã QR hiện chưa khả dụng.", 310, 265, 220, 8.5, muted);
+    draw("VIETQR", 265, 390, 9, navy);
+    drawFit("Mã QR hiện chưa khả dụng.", 265, 265, 250, 8.5, muted);
   }
 
   const pages = pdf.getPages();
