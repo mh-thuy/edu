@@ -1207,18 +1207,28 @@ export function TuitionPaymentWorkspace({
                 <Alert severity="info" sx={{ textAlign: "left" }}>
                   Đây là phiếu báo thanh toán, chưa phải biên lai. Chỉ chuyển đúng số tiền và nội dung bên dưới.
                 </Alert>
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 280px" }, gap: 2, alignItems: "start" }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 420px" }, gap: 2, alignItems: "start" }}>
                   <Paper variant="outlined" sx={{ p: 2, textAlign: "left", minWidth: 0 }}>
                     <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.5 }}>Thông tin chuyển khoản</Typography>
                     <Stack spacing={1}>
                       <Typography><strong>Ngân hàng:</strong> {pendingBatch.account.bankName || "-"}</Typography>
                       <Typography><strong>Số tài khoản:</strong> {pendingBatch.account.accountNo || "-"}</Typography>
-                      <Typography><strong>Chủ tài khoản:</strong> {pendingBatch.account.accountName || "-"}</Typography>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" fontWeight={700}>
+                          CHỦ TÀI KHOẢN
+                        </Typography>
+                        <Typography
+                          color="error.main"
+                          sx={{ fontSize: { xs: "1.15rem", md: "1.35rem" }, fontWeight: 900, lineHeight: 1.25, overflowWrap: "anywhere" }}
+                        >
+                          {pendingBatch.account.accountName || "-"}
+                        </Typography>
+                      </Box>
                       <Typography><strong>Số tiền:</strong> {money(pendingBatch.amount)}</Typography>
                       <Typography sx={{ overflowWrap: "anywhere" }}><strong>Nội dung:</strong> PB {pendingBatch.batchNo}</Typography>
                     </Stack>
                   </Paper>
-                  <Paper variant="outlined" sx={{ p: 1.5, display: "grid", placeItems: "center", minHeight: 280 }}>
+                  <Paper variant="outlined" sx={{ p: 1.5, display: "grid", placeItems: "center", minHeight: 444, alignContent: "center", gap: 1 }}>
                     {qrError && (
                       <Alert severity="error" sx={{ width: "100%" }} action={<Button color="inherit" size="small" onClick={() => void loadPendingQr(pendingBatch)} disabled={qrLoading}>Thử lại</Button>}>
                         {qrError}
@@ -1227,8 +1237,13 @@ export function TuitionPaymentWorkspace({
                     {qrLoading ? (
                       <LoadingState label="Đang tạo mã QR thanh toán..." minHeight={240} />
                     ) : pendingBatch.qrUrl ? (
-                      <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 250, height: 250, maxWidth: "100%", border: "1px solid", borderColor: "divider" }} />
+                      <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 400, height: 400, maxWidth: "100%", objectFit: "contain", border: "1px solid", borderColor: "divider", borderRadius: 1 }} />
                     ) : null}
+                    {pendingBatch.qrUrl && (
+                      <Typography variant="caption" color="text.secondary" textAlign="center">
+                        Quét mã QR để chuyển khoản đúng số tiền
+                      </Typography>
+                    )}
                   </Paper>
                 </Box>
                 <Typography variant="body2" color="text.secondary">

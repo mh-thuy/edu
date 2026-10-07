@@ -351,127 +351,257 @@ async function renderPaymentBatchNoticePdf(
   const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
   const exportedAt = formatVietnamDateTime(new Date());
   let page = pdf.addPage([595, 842]);
-  const color = rgb(0.12, 0.16, 0.24);
-  const muted = rgb(0.38, 0.42, 0.48);
+  const ink = rgb(0.12, 0.18, 0.27);
+  const navy = rgb(0.1, 0.19, 0.3);
+  const muted = rgb(0.39, 0.45, 0.52);
+  const red = rgb(0.76, 0.12, 0.19);
+  const paleBlue = rgb(0.95, 0.97, 0.99);
+  const paleRed = rgb(1, 0.95, 0.95);
+  const border = rgb(0.84, 0.88, 0.92);
+  const white = rgb(1, 1, 1);
   const draw = (
     text: string,
     x: number,
     y: number,
     size = 11,
-    textColor = color,
+    textColor = ink,
   ) => page.drawText(text, { x, y, size, font, color: textColor });
-  const drawFooter = () => {
-    draw(`Ngày xuất: ${exportedAt}`, 55, 45, 9, muted);
-    draw(`Nhân viên xuất: ${exportedByName}`, 350, 45, 9, muted);
+  const drawFit = (
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    size: number,
+    textColor = ink,
+    minSize = 8,
+  ) => {
+    let fittedSize = size;
+    while (
+      fittedSize > minSize &&
+      font.widthOfTextAtSize(text, fittedSize) > maxWidth
+    ) {
+      fittedSize = Math.max(minSize, fittedSize - 0.5);
+    }
+    draw(text, x, y, fittedSize, textColor);
+  };
+  const drawRightFit = (
+    text: string,
+    rightX: number,
+    y: number,
+    maxWidth: number,
+    size: number,
+    textColor = ink,
+    minSize = 8,
+  ) => {
+    let fittedSize = size;
+    while (
+      fittedSize > minSize &&
+      font.widthOfTextAtSize(text, fittedSize) > maxWidth
+    ) {
+      fittedSize = Math.max(minSize, fittedSize - 0.5);
+    }
+    const textWidth = font.widthOfTextAtSize(text, fittedSize);
+    draw(text, rightX - Math.min(textWidth, maxWidth), y, fittedSize, textColor);
+  };
+  const drawHeader = () => {
+    page.drawRectangle({ x: 0, y: 760, width: 595, height: 82, color: navy });
+    draw("TRUNG TÂM ĐÀO TẠO", 48, 816, 8, white);
+    draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 48, 785, 15, white);
+    page.drawRectangle({ x: 405, y: 783, width: 142, height: 25, color: red });
+    const status = "CHỜ THANH TOÁN";
+    const statusWidth = font.widthOfTextAtSize(status, 8);
+    draw(status, 405 + (142 - statusWidth) / 2, 791, 8, white);
+    page.drawRectangle({ x: 48, y: 756, width: 499, height: 2, color: red });
+  };
+  const drawContinuationPage = () => {
+    page = pdf.addPage([595, 842]);
+    drawHeader();
+    drawFit(`Mã đợt thanh toán: ${batch.batchNo}`, 48, 724, 499, 10, muted);
+    draw("CÁC KHOẢN THANH TOÁN (TIẾP THEO)", 48, 692, 12, navy);
+    page.drawLine({
+      start: { x: 48, y: 680 },
+      end: { x: 547, y: 680 },
+      thickness: 1,
+      color: border,
+    });
+    y = 650;
   };
 
-  draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 133, 770, 17);
-  draw("Chưa xác nhận thanh toán", 220, 747, 10, muted);
-  draw(`Mã đợt thanh toán: ${batch.batchNo}`, 55, 708);
-  draw(`Ngày tạo: ${formatVietnamDateTime(batch.createdAt)}`, 55, 686);
-  draw("THÔNG TIN HỌC SINH", 55, 640, 13);
-  draw(`Mã học sinh: ${student.code}`, 75, 615);
-  draw(`Họ tên: ${student.fullName}`, 75, 593);
-  draw("CÁC KHOẢN THANH TOÁN", 55, 545, 13);
+  drawHeader();
+  page.drawRectangle({ x: 48, y: 670, width: 499, height: 72, color: paleBlue });
+  page.drawRectangle({ x: 48, y: 670, width: 4, height: 72, color: red });
+  draw("HỌC VIÊN", 64, 722, 8, muted);
+  drawFit(student.fullName, 64, 694, 320, 17, red, 10);
+  drawFit(`Mã học viên: ${student.code}`, 64, 677, 300, 9, ink);
+  draw("MÃ ĐỢT", 407, 719, 8, muted);
+  drawRightFit(batch.batchNo, 531, 699, 124, 10, navy, 8);
+  drawFit(`Tạo lúc: ${formatVietnamDateTime(batch.createdAt)}`, 385, 680, 146, 8, muted, 7);
+  draw("CÁC KHOẢN THANH TOÁN", 48, 635, 12, navy);
+  page.drawLine({
+    start: { x: 48, y: 623 },
+    end: { x: 547, y: 623 },
+    thickness: 1,
+    color: border,
+  });
 
-  let y = 515;
+  let y = 599;
+  const minimumFeeY = 450;
+  const ensureFeeSpace = (needed: number) => {
+    if (y - needed < minimumFeeY) drawContinuationPage();
+  };
   for (const allocation of fees) {
-    if (y < 260) {
-      drawFooter();
-      page = pdf.addPage([595, 842]);
-      draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 133, 790, 15);
-      draw("CÁC KHOẢN THANH TOÁN (tiếp theo)", 55, 755, 13);
-      y = 725;
-    }
-    draw(
+    ensureFeeSpace(28);
+    page.drawRectangle({ x: 48, y: y - 7, width: 499, height: 22, color: paleBlue });
+    drawFit(
       `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`,
-      75,
+      61,
       y,
+      340,
+      9.5,
+      navy,
+      8,
     );
-    const payableAmount = allocation.payableAmount;
-    draw(`${money(Number(payableAmount))} VND`, 390, y);
-    let itemY = y - 17;
+    drawRightFit(
+      `${money(Number(allocation.payableAmount))} VND`,
+      532,
+      y,
+      125,
+      9.5,
+      navy,
+    );
+    y -= 25;
     for (const item of allocation.items) {
-      if (itemY < 220) {
-        drawFooter();
-        page = pdf.addPage([595, 842]);
-        draw("THÔNG BÁO THANH TOÁN HỌC PHÍ", 133, 790, 15);
-        draw("CÁC KHOẢN THANH TOÁN (tiếp theo)", 55, 755, 13);
-        itemY = 725;
-      }
+      ensureFeeSpace(18);
       const subjectName = item.subjectName || item.itemName;
-      draw(`- ${subjectName}`, 90, itemY, 9, muted);
-      draw(`${money(Number(item.amount))} VND`, 390, itemY, 9, muted);
-      itemY -= 17;
+      drawFit(`– ${subjectName}`, 70, y, 335, 8.5, muted, 7.5);
+      drawRightFit(`${money(Number(item.amount))} VND`, 532, y, 125, 8.5, muted);
+      y -= 17;
     }
     if (Number(allocation.discountAmount) > 0) {
-      draw("- Giảm giá", 90, itemY, 9, muted);
-      draw(
-        `-${money(Number(allocation.discountAmount))} VND`,
-        390,
-        itemY,
-        9,
-        muted,
-      );
-      itemY -= 17;
+      ensureFeeSpace(18);
+      draw("– Giảm giá", 70, y, 8.5, muted);
+      drawRightFit(`-${money(Number(allocation.discountAmount))} VND`, 532, y, 125, 8.5, muted);
+      y -= 17;
     }
     if (Number(allocation.additionalAmount) > 0) {
-      draw("- Phụ thu", 90, itemY, 9, muted);
-      draw(
-        `${money(Number(allocation.additionalAmount))} VND`,
-        390,
-        itemY,
-        9,
-        muted,
-      );
-      itemY -= 17;
+      ensureFeeSpace(18);
+      draw("– Phụ thu", 70, y, 8.5, muted);
+      drawRightFit(`${money(Number(allocation.additionalAmount))} VND`, 532, y, 125, 8.5, muted);
+      y -= 17;
     }
-    y = itemY - 10;
+    y -= 5;
   }
-  page.drawLine({
-    start: { x: 55, y: y - 5 },
-    end: { x: 540, y: y - 5 },
-    thickness: 1,
-    color: rgb(0.8, 0.8, 0.8),
-  });
-  draw("TỔNG CẦN THANH TOÁN", 75, y - 35, 13);
-  draw(`${money(Number(batch.totalAmount))} VND`, 390, y - 35, 13);
+  if (y < 450) {
+    drawContinuationPage();
+  }
+
+  page.drawRectangle({ x: 48, y: 340, width: 499, height: 80, color: paleRed });
+  page.drawRectangle({ x: 48, y: 340, width: 5, height: 80, color: red });
+  draw("TỔNG CẦN THANH TOÁN", 65, 397, 9, muted);
+  drawRightFit(
+    `${money(Number(batch.totalAmount))} VND`,
+    530,
+    389,
+    250,
+    18,
+    red,
+    13,
+  );
   draw(
     `Phương thức: ${batch.paymentMethod === "BANK_TRANSFER" ? "Chuyển khoản / VietQR" : batch.paymentMethod}`,
-    75,
-    y - 75,
+    65,
+    368,
+    8.5,
+    ink,
   );
-  draw(`Nội dung chuyển khoản: ${batch.batchNo}`, 75, y - 97);
+  drawFit(`Nội dung chuyển khoản: ${batch.batchNo}`, 65, 352, 450, 8.5, ink);
 
-  const bankY = Math.max(y - 150, 180);
-  draw("THÔNG TIN CHUYỂN KHOẢN", 55, bankY, 13);
-  draw(`Ngân hàng: ${account?.bankName || "Chưa cấu hình"}`, 75, bankY - 28);
-  draw(`Số tài khoản: ${account?.accountNo || "-"}`, 75, bankY - 50);
-  draw(`Chủ tài khoản: ${account?.accountName || "-"}`, 75, bankY - 72);
+  page.drawRectangle({
+    x: 48,
+    y: 80,
+    width: 499,
+    height: 255,
+    color: white,
+    borderColor: border,
+    borderWidth: 1,
+  });
+  page.drawRectangle({ x: 48, y: 305, width: 250, height: 30, color: navy });
+  draw("THÔNG TIN CHUYỂN KHOẢN", 64, 315, 10, white);
+  drawFit(`Ngân hàng: ${account?.bankName || "Chưa cấu hình"}`, 64, 266, 220, 9, ink);
+  drawFit(`Số tài khoản: ${account?.accountNo || "-"}`, 64, 242, 220, 9, ink);
+  draw("CHỦ TÀI KHOẢN", 64, 213, 8, muted);
+  drawFit(account?.accountName || "-", 64, 185, 220, 17, red, 10);
+
   if (!accountRecord.isActive) {
-    draw(
-      "Tài khoản đã ngừng hoạt động; vui lòng liên hệ trung tâm trước khi chuyển khoản.",
-      75,
-      bankY - 94,
-      9,
-      muted,
+    drawFit(
+      "Tài khoản đã ngừng hoạt động. Vui lòng liên hệ trung tâm trước khi chuyển khoản.",
+      64,
+      148,
+      220,
+      8.5,
+      red,
+      7.5,
     );
   }
+
   const qrPng = prefetchedQr === undefined
     ? await fetchNoticeQrPng(data)
     : prefetchedQr;
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    page.drawImage(qr, { x: 395, y: bankY - 155, width: 125, height: 125 });
+    draw("QUÉT MÃ QR ĐỂ CHUYỂN KHOẢN", 298, 317, 7.5, muted);
+    page.drawRectangle({
+      x: 298,
+      y: 82,
+      width: 242,
+      height: 242,
+      color: white,
+      borderColor: border,
+      borderWidth: 1,
+    });
+    page.drawImage(qr, { x: 304, y: 88, width: 230, height: 230 });
+  } else if (accountRecord.isActive) {
+    drawFit("Mã QR hiện chưa khả dụng.", 298, 200, 242, 8.5, muted);
   }
-  drawFooter();
-  draw(
-    "Vui lòng ghi đúng mã đợt thanh toán khi chuyển khoản.",
-    75,
-    90,
-    9,
-    muted,
-  );
+
+  const pages = pdf.getPages();
+  pages.forEach((footerPage, index) => {
+    footerPage.drawLine({
+      start: { x: 48, y: 58 },
+      end: { x: 547, y: 58 },
+      thickness: 1,
+      color: border,
+    });
+    const dateText = `Ngày xuất: ${exportedAt}`;
+    const employeeText = `Nhân viên: ${exportedByName}`;
+    footerPage.drawText(dateText, {
+      x: 48,
+      y: 40,
+      size: 7.5,
+      font,
+      color: muted,
+    });
+    const employeeSize = Math.min(
+      7.5,
+      270 / Math.max(font.widthOfTextAtSize(employeeText, 7.5), 1) * 7.5,
+    );
+    footerPage.drawText(employeeText, {
+      x: 255,
+      y: 40,
+      size: employeeSize,
+      font,
+      color: muted,
+    });
+    const pageText = `Trang ${index + 1}/${pages.length}`;
+    footerPage.drawText(pageText, {
+      x: 500,
+      y: 40,
+      size: 7.5,
+      font,
+      color: muted,
+    });
+  });
+
   const pdfBuffer = Buffer.from(await pdf.save());
   return pdfBuffer;
 }
