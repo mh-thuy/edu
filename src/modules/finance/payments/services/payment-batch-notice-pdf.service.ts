@@ -187,6 +187,17 @@ export async function generatePaymentBatchNoticesPdf(
         WHERE batch.id = payload.id
       `);
       }
+      prepared.sort(
+        (left, right) =>
+          left.data.student.fullName.localeCompare(
+            right.data.student.fullName,
+            "vi",
+          ) ||
+          left.data.batch.batchNo.localeCompare(
+            right.data.batch.batchNo,
+            "vi",
+          ),
+      );
       return prepared.map((item) => item.data);
     },
     { timeout: 60_000 },
