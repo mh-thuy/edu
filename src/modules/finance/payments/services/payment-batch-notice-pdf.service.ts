@@ -1,4 +1,4 @@
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, rgb, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { PaymentBatchStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -343,7 +343,7 @@ async function renderPaymentBatchNoticePdf(
   exportedByName: string,
   prefetchedQr?: Buffer | null,
 ) {
-  const { batch, accountRecord, account, student, fees } = data;
+  const { batch, accountRecord, student, fees } = data;
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -355,7 +355,6 @@ async function renderPaymentBatchNoticePdf(
   const muted = rgb(0.39, 0.45, 0.52);
   const red = rgb(0.76, 0.12, 0.19);
   const cream = rgb(0.99, 0.98, 0.94);
-  const paleGold = rgb(0.98, 0.95, 0.87);
   const gold = rgb(0.78, 0.58, 0.29);
   const paleBlue = rgb(0.96, 0.97, 0.98);
   const paleRed = rgb(1, 0.95, 0.94);
@@ -384,7 +383,23 @@ async function renderPaymentBatchNoticePdf(
     ) {
       fittedSize = Math.max(minSize, fittedSize - 0.5);
     }
-    draw(text, x, y, fittedSize, textColor);
+    let fittedText = text;
+    if (font.widthOfTextAtSize(fittedText, fittedSize) > maxWidth) {
+      const ellipsis = "…";
+      const characters = Array.from(text);
+      while (
+        characters.length > 0 &&
+        font.widthOfTextAtSize(`${characters.join("")}${ellipsis}`, fittedSize) >
+          maxWidth
+      ) {
+        characters.pop();
+      }
+      fittedText =
+        font.widthOfTextAtSize(ellipsis, fittedSize) <= maxWidth
+          ? `${characters.join("")}${ellipsis}`
+          : "";
+    }
+    draw(fittedText, x, y, fittedSize, textColor);
   };
   const drawRightFit = (
     text: string,
@@ -402,10 +417,14 @@ async function renderPaymentBatchNoticePdf(
     ) {
       fittedSize = Math.max(minSize, fittedSize - 0.5);
     }
-    const textWidth = font.widthOfTextAtSize(text, fittedSize);
+    let textWidth = font.widthOfTextAtSize(text, fittedSize);
+    if (textWidth > maxWidth && textWidth > 0) {
+      fittedSize *= maxWidth / textWidth;
+      textWidth = font.widthOfTextAtSize(text, fittedSize);
+    }
     draw(
       text,
-      rightX - Math.min(textWidth, maxWidth),
+      rightX - textWidth,
       y,
       fittedSize,
       textColor,
@@ -428,30 +447,10 @@ async function renderPaymentBatchNoticePdf(
   };
   const drawHeader = () => {
     page.drawRectangle({ x: 0, y: 0, width: 595, height: 420, color: cream });
-    draw("TRÍ NHÂN", 28, 394, 12, navy);
-    draw("TRUNG TÂM BDVH & LTDH", 28, 381, 6.5, muted);
-    drawCentered("THÔNG BÁO THANH TOÁN HỌC PHÍ", 297.5, 394, 14, navy);
-    drawCentered(
-      "TRUNG TÂM BỒI DƯỠNG VĂN HÓA VÀ LUYỆN THI ĐẠI HỌC TRÍ NHÂN",
-      297.5,
-      380,
-      5.8,
-      muted,
-    );
-    page.drawRectangle({
-      x: 450,
-      y: 382,
-      width: 117,
-      height: 20,
-      color: paleGold,
-      borderColor: gold,
-      borderWidth: 0.7,
-    });
-    const status = "CHỜ THANH TOÁN";
-    drawCentered(status, 508.5, 389, 6.8, navy);
+    drawCentered("THÔNG BÁO THANH TOÁN HỌC PHÍ", 297.5, 398, 14, navy);
     page.drawLine({
-      start: { x: 28, y: 367 },
-      end: { x: 567, y: 367 },
+      start: { x: 28, y: 383 },
+      end: { x: 567, y: 383 },
       thickness: 1,
       color: gold,
     });
@@ -489,7 +488,9 @@ async function renderPaymentBatchNoticePdf(
   const rightX = 307;
   const rightWidth = 260;
   const cardBottom = 32;
-  const cardTop = 350;
+  const cardTop = 366;
+  const totalBoxBottom = cardBottom + 10;
+  const totalBoxHeight = 32;
   const drawFirstPageCards = () => {
     drawCard(
       leftX,
@@ -499,29 +500,21 @@ async function renderPaymentBatchNoticePdf(
       "THÔNG TIN HỌC VIÊN & HỌC PHÍ",
     );
     drawCard(rightX, cardBottom, rightWidth, cardTop - cardBottom);
-    drawFit(student.fullName, 45, 303, 228, 16, red, 11);
-    drawFit(`Mã học viên: ${student.code}`, 45, 286, 228, 7.5, muted, 6.5);
-    drawFit(
-      `Tạo lúc: ${formatVietnamDateTime(batch.createdAt)}`,
-      45,
-      273,
-      220,
-      6.5,
-      muted,
-      6,
-    );
-    draw("CÁC KHOẢN THANH TOÁN", 45, 250, 8.5, navy);
+    drawFit(student.fullName, 45, 319, 228, 16, red, 11);
+    draw("CÁC KHOẢN THANH TOÁN", 45, 296, 8.5, navy);
     page.drawLine({
-      start: { x: 45, y: 243 },
-      end: { x: 274, y: 243 },
+      start: { x: 45, y: 289 },
+      end: { x: 274, y: 289 },
       thickness: 0.7,
       color: border,
     });
   };
 
   let onContinuationPage = false;
+  const continuationPages = new Set<PDFPage>();
   const drawContinuationPage = () => {
     page = pdf.addPage([595, 420]);
+    continuationPages.add(page);
     drawHeader();
     drawCard(
       28,
@@ -533,45 +526,29 @@ async function renderPaymentBatchNoticePdf(
     drawFit(
       `Học viên: ${student.fullName}  ·  Mã đợt: ${batch.batchNo}`,
       45,
-      303,
+      319,
       505,
       7.5,
       muted,
       6.5,
     );
     page.drawLine({
-      start: { x: 45, y: 292 },
-      end: { x: 550, y: 292 },
+      start: { x: 45, y: 304 },
+      end: { x: 550, y: 304 },
       thickness: 0.7,
       color: border,
     });
     onContinuationPage = true;
-    y = 273;
+    y = 289;
   };
-  const drawFinalOnlyPage = () => {
-    page = pdf.addPage([595, 420]);
-    drawHeader();
-    drawCard(
-      leftX,
-      cardBottom,
-      leftWidth,
-      cardTop - cardBottom,
-      "THÔNG TIN THANH TOÁN",
-    );
-    drawCard(rightX, cardBottom, rightWidth, cardTop - cardBottom);
-    drawFit(student.fullName, 45, 303, 228, 16, red, 11);
-    drawFit(`Mã học viên: ${student.code}`, 45, 286, 228, 7.5, muted, 6.5);
-    drawRightFit(`Mã đợt: ${batch.batchNo}`, 274, 303, 180, 7.5, muted, 6.5);
-  };
-
   drawHeader();
   drawFirstPageCards();
 
-  let y = 228;
+  let y = 274;
   let feeRowX = 45;
   let feeRowRight = 274;
   let feeRowWidth = 229;
-  const minimumFeeY = 132;
+  const minimumFeeY = totalBoxBottom + totalBoxHeight + 12;
   const ensureFeeSpace = (needed: number) => {
     if (y - needed < minimumFeeY) drawContinuationPage();
     if (onContinuationPage) {
@@ -580,8 +557,31 @@ async function renderPaymentBatchNoticePdf(
       feeRowWidth = feeRowRight - feeRowX;
     }
   };
+  const drawFeeContinuationHeading = (allocation: (typeof fees)[number]) => {
+    page.drawRectangle({
+      x: feeRowX - 3,
+      y: y - 6,
+      width: feeRowWidth + 6,
+      height: 18,
+      color: paleBlue,
+    });
+    drawFit(
+      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"} (tiếp)`,
+      feeRowX + 4,
+      y,
+      feeRowWidth - 8,
+      7.5,
+      navy,
+      6.5,
+    );
+    y -= 18;
+  };
   for (const allocation of fees) {
-    ensureFeeSpace(28);
+    const hasDetails =
+      allocation.items.length > 0 ||
+      Number(allocation.discountAmount) > 0 ||
+      Number(allocation.additionalAmount) > 0;
+    ensureFeeSpace(hasDetails ? 31 : 23);
     page.drawRectangle({
       x: feeRowX - 3,
       y: y - 6,
@@ -608,8 +608,17 @@ async function renderPaymentBatchNoticePdf(
       6.5,
     );
     y -= 18;
+    let hasRenderedDetail = false;
+    const ensureDetailSpace = () => {
+      const previousPage = page;
+      ensureFeeSpace(hasRenderedDetail ? 31 : 13);
+      if (page !== previousPage && hasRenderedDetail) {
+        drawFeeContinuationHeading(allocation);
+      }
+      hasRenderedDetail = true;
+    };
     for (const item of allocation.items) {
-      ensureFeeSpace(18);
+      ensureDetailSpace();
       const subjectName = item.subjectName || item.itemName;
       drawFit(
         `– ${subjectName}`,
@@ -632,7 +641,7 @@ async function renderPaymentBatchNoticePdf(
       y -= 13;
     }
     if (Number(allocation.discountAmount) > 0) {
-      ensureFeeSpace(18);
+      ensureDetailSpace();
       draw("– Giảm giá", feeRowX + 8, y, 7, muted);
       drawRightFit(
         `-${money(Number(allocation.discountAmount))} VND`,
@@ -646,7 +655,7 @@ async function renderPaymentBatchNoticePdf(
       y -= 13;
     }
     if (Number(allocation.additionalAmount) > 0) {
-      ensureFeeSpace(18);
+      ensureDetailSpace();
       draw("– Phụ thu", feeRowX + 8, y, 7, muted);
       drawRightFit(
         `${money(Number(allocation.additionalAmount))} VND`,
@@ -661,87 +670,94 @@ async function renderPaymentBatchNoticePdf(
     }
     y -= 5;
   }
-  if (y < minimumFeeY) {
-    drawFinalOnlyPage();
-  }
-
+  const totalTextY = totalBoxBottom + 11;
   page.drawRectangle({
     x: 42,
-    y: 88,
+    y: totalBoxBottom,
     width: 232,
-    height: 48,
+    height: totalBoxHeight,
     color: paleRed,
     borderColor: border,
     borderWidth: 0.6,
   });
-  page.drawRectangle({ x: 42, y: 88, width: 3, height: 48, color: red });
-  draw("TỔNG CẦN THANH TOÁN", 52, 119, 7, muted);
+  page.drawRectangle({
+    x: 42,
+    y: totalBoxBottom,
+    width: 3,
+    height: totalBoxHeight,
+    color: red,
+  });
+  const totalLabel = "TỔNG CẦN THANH TOÁN";
+  const totalLabelSize = 7;
+  const totalLabelWidth = font.widthOfTextAtSize(totalLabel, totalLabelSize);
+  draw(totalLabel, 52, totalTextY, totalLabelSize, muted);
   drawRightFit(
     `${money(Number(batch.totalAmount))} VND`,
     263,
-    99,
-    170,
+    totalTextY,
+    263 - (52 + totalLabelWidth + 8),
     12.5,
     red,
-    9,
+    8,
   );
-  draw(
-    `Phương thức: ${batch.paymentMethod === "BANK_TRANSFER" ? "Chuyển khoản / VietQR" : batch.paymentMethod}`,
-    45,
-    78,
-    6.5,
-    ink,
-  );
-  drawFit(`Nội dung: ${batch.batchNo}`, 45, 67, 228, 6.5, ink, 6);
-  drawFit(
-    `Ngân hàng: ${account?.bankName || "Chưa cấu hình"}`,
-    45,
-    53,
-    228,
-    6.2,
-    muted,
-    5.8,
-  );
-  drawFit(
-    `STK: ${account?.accountNo || "-"} · Chủ TK: ${account?.accountName || "-"}`,
-    45,
-    42,
-    228,
-    6.2,
-    muted,
-    5.8,
-  );
-
   if (!accountRecord.isActive) {
-    draw("Tài khoản đã ngừng hoạt động.", 45, 32, 6, red);
+    draw("Tài khoản đã ngừng hoạt động.", 45, 34, 6, red);
   }
 
   const qrPng =
     prefetchedQr === undefined ? await fetchNoticeQrPng(data) : prefetchedQr;
+  const pages = pdf.getPages();
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
     const qrScale = Math.min(252 / qr.width, 296 / qr.height);
     const qrWidth = qr.width * qrScale;
     const qrHeight = qr.height * qrScale;
-    page.drawImage(qr, {
-      x: rightX + rightWidth / 2 - qrWidth / 2,
-      y: 191 - qrHeight / 2,
-      width: qrWidth,
-      height: qrHeight,
+    pages.forEach((qrPage) => {
+      if (continuationPages.has(qrPage)) {
+        const compactQrSize = 33;
+        qrPage.drawImage(qr, {
+          x: 512,
+          y: 380,
+          width: compactQrSize,
+          height: compactQrSize,
+        });
+        return;
+      }
+      qrPage.drawImage(qr, {
+        x: rightX + rightWidth / 2 - qrWidth / 2,
+        y: 199 - qrHeight / 2,
+        width: qrWidth,
+        height: qrHeight,
+      });
     });
   } else if (accountRecord.isActive) {
-    drawFit(
-      "Mã QR hiện chưa khả dụng.",
-      rightX + 18,
-      187,
-      rightWidth - 36,
-      8,
-      muted,
-      6.5,
-    );
+    pages.forEach((qrPage) => {
+      if (continuationPages.has(qrPage)) {
+        const placeholder = "QR chưa khả dụng";
+        const placeholderSize = 5.5;
+        const placeholderWidth = font.widthOfTextAtSize(
+          placeholder,
+          placeholderSize,
+        );
+        qrPage.drawText(placeholder, {
+          x: 529 - placeholderWidth / 2,
+          y: 395,
+          size: placeholderSize,
+          font,
+          color: muted,
+        });
+        return;
+      }
+      qrPage.drawText("Mã QR hiện chưa khả dụng.", {
+        x: rightX + 18,
+        y: 187,
+        size: 8,
+        font,
+        color: muted,
+      });
+    });
   }
 
-  const pages = pdf.getPages();
   pages.forEach((footerPage, index) => {
     footerPage.drawLine({
       start: { x: 28, y: 25 },
