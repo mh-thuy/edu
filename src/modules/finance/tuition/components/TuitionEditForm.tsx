@@ -12,7 +12,6 @@ import {
 } from "@mui/material";
 import { CurrencyInput } from "@/components/shared/forms/CurrencyInput";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
-import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import Link from "next/link";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
@@ -32,9 +31,13 @@ type Fee = {
 export function TuitionEditForm({
   id,
   onSuccess,
+  embedded = false,
+  onCancel,
 }: {
   id: string;
   onSuccess: () => void;
+  embedded?: boolean;
+  onCancel?: () => void;
 }) {
   const [fee, setFee] = useState<Fee | null>(null);
   const [discount, setDiscount] = useState(0);
@@ -156,14 +159,6 @@ export function TuitionEditForm({
             Cập nhật thông tin trước khi ghi nhận thanh toán
           </Typography>
         </Box>
-        <Button
-          component={Link}
-          href={`/admin/tuition-fees/${id}`}
-          variant="outlined"
-          startIcon={<ArrowBackOutlinedIcon />}
-        >
-          Quay lại
-        </Button>
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       <Paper sx={{ p: 2.5 }}>
@@ -212,13 +207,19 @@ export function TuitionEditForm({
         </Stack>
       </Paper>
       <Stack direction="row" justifyContent="flex-end" spacing={1}>
-        <Button
-          component={Link}
-          href={`/admin/tuition-fees/${id}`}
-          variant="outlined"
-        >
-          Hủy
-        </Button>
+        {embedded ? (
+          <Button variant="outlined" onClick={onCancel} disabled={saving}>
+            Hủy
+          </Button>
+        ) : (
+          <Button
+            component={Link}
+            href={`/admin/tuition-fees/${id}`}
+            variant="outlined"
+          >
+            Hủy
+          </Button>
+        )}
         <Button
           variant="contained"
           onClick={() => void submit()}

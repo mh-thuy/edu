@@ -11,6 +11,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   LinearProgress,
   Paper,
   Stack,
@@ -31,6 +32,7 @@ import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { TuitionEditForm } from "./TuitionEditForm";
 
 type Fee = {
   id: string;
@@ -91,6 +93,7 @@ const paymentStatusLabels: Record<string, string> = {
 };
 const auditActionLabels: Record<string, string> = {
   CREATED: "Tạo học phí",
+  CREATED_MONTHLY_FROM_ENROLLMENT: "Tạo học phí tháng từ đăng ký học viên",
   UPDATE: "Cập nhật học phí",
   EXEMPT: "Miễn học phí",
   CANCEL: "Hủy học phí",
@@ -111,7 +114,17 @@ const dateTime = (value: string) =>
     timeZone: "Asia/Ho_Chi_Minh",
   });
 
-export function TuitionDetail({ id }: { id: string }) {
+export function TuitionDetail({
+  id,
+  mode = "page",
+  onClose,
+  onUpdated,
+}: {
+  id: string;
+  mode?: "page" | "drawer";
+  onClose?: () => void;
+  onUpdated?: () => void;
+}) {
   const [fee, setFee] = useState<Fee | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -123,6 +136,7 @@ export function TuitionDetail({ id }: { id: string }) {
   const [restoreOpen, setRestoreOpen] = useState(false);
   const [restoreReason, setRestoreReason] = useState("");
   const [restoreSaving, setRestoreSaving] = useState(false);
+  const [editing, setEditing] = useState(false);
   const { showSuccess, Snackbar } = useSnackbar();
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,6 +188,7 @@ export function TuitionDetail({ id }: { id: string }) {
       setStatusAction(null);
       setStatusReason("");
       await load();
+      onUpdated?.();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -215,6 +230,7 @@ export function TuitionDetail({ id }: { id: string }) {
           : "Đã khôi phục học phí, có thể thu tiền lại",
       );
       await load();
+      onUpdated?.();
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -227,9 +243,24 @@ export function TuitionDetail({ id }: { id: string }) {
       setRestoreSaving(false);
     }
   }
-  if (loading) return <LoadingState label="Đang tải chi tiết học phí..." minHeight={360} />;
+  const drawerShell = (children: ReactNode) => (
+    <Drawer
+      anchor="right"
+      open={mode === "drawer"}
+      onClose={onClose}
+      PaperProps={{ sx: { width: { xs: "100vw", sm: 760 }, maxWidth: "100vw" } }}
+    >
+      <Box sx={{ p: { xs: 2, sm: 3 }, overflowY: "auto", height: "100%" }}>
+        {children}
+      </Box>
+    </Drawer>
+  );
+  if (loading) {
+    const loadingState = <LoadingState label="Đang tải chi tiết học phí..." minHeight={360} />;
+    return mode === "drawer" ? drawerShell(loadingState) : loadingState;
+  }
   if (error || !fee)
-    return (
+    return mode === "drawer" ? drawerShell(
       <Alert
         severity="error"
         action={
@@ -237,6 +268,13 @@ export function TuitionDetail({ id }: { id: string }) {
             Thử lại
           </Button>
         }
+      >
+        {error || "Không tìm thấy học phí"}
+      </Alert>
+    ) : (
+      <Alert
+        severity="error"
+        action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}
       >
         {error || "Không tìm thấy học phí"}
       </Alert>
@@ -262,7 +300,31 @@ export function TuitionDetail({ id }: { id: string }) {
     fee.finalAmount > 0
       ? Math.min(100, Math.max(0, (fee.paidAmount / fee.finalAmount) * 100))
       : 0;
-  return (
+  if (editing) {
+    return (
+      <Drawer
+        anchor="right"
+        open={mode === "drawer"}
+        onClose={onClose}
+        PaperProps={{ sx: { width: { xs: "100vw", sm: 620 }, maxWidth: "100vw" } }}
+      >
+        <Box sx={{ p: { xs: 2, sm: 3 }, overflowY: "auto", height: "100%" }}>
+          <TuitionEditForm
+            id={id}
+            embedded
+            onCancel={() => setEditing(false)}
+            onSuccess={() => {
+              setEditing(false);
+              showSuccess("Đã cập nhật học phí");
+              void load();
+              onUpdated?.();
+            }}
+          />
+        </Box>
+      </Drawer>
+    );
+  }
+  const content = (
     <Stack
       spacing={{ xs: 2, md: 3 }}
       sx={{
@@ -277,14 +339,18 @@ export function TuitionDetail({ id }: { id: string }) {
         gap={2}
       >
         <Box>
-          <Button
-            component={Link}
-            href="/admin/tuition-fees"
-            startIcon={<ArrowBackOutlinedIcon />}
-            sx={{ mb: 1, px: 0 }}
-          >
-            Danh sách học phí
-          </Button>
+          {mode === "page" ? (
+            <Button
+              component={Link}
+              href="/admin/tuition-fees"
+              startIcon={<ArrowBackOutlinedIcon />}
+              sx={{ mb: 1, px: 0 }}
+            >
+              Danh sách học phí
+            </Button>
+          ) : (
+            <Button onClick={onClose} sx={{ mb: 1, px: 0 }}>Đóng</Button>
+          )}
           <Stack
             direction="row"
             spacing={1}
@@ -352,14 +418,24 @@ export function TuitionDetail({ id }: { id: string }) {
           )}
           {editableStatus && (
             <>
-              <Button
-                component={Link}
-                href={`/admin/tuition-fees/${id}/edit`}
-                variant="outlined"
-                startIcon={<EditOutlinedIcon />}
-              >
-                Chỉnh sửa
-              </Button>
+              {mode === "drawer" ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<EditOutlinedIcon />}
+                  onClick={() => setEditing(true)}
+                >
+                  Chỉnh sửa
+                </Button>
+              ) : (
+                <Button
+                  component={Link}
+                  href={`/admin/tuition-fees/${id}/edit`}
+                  variant="outlined"
+                  startIcon={<EditOutlinedIcon />}
+                >
+                  Chỉnh sửa
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 color="warning"
@@ -809,6 +885,7 @@ export function TuitionDetail({ id }: { id: string }) {
       {Snackbar}
     </Stack>
   );
+  return mode === "drawer" ? drawerShell(content) : content;
 }
 
 function Info({ title, children }: { title: string; children: ReactNode }) {

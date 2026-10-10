@@ -82,14 +82,30 @@ const feeStatusOrder: Record<Fee["status"], number> = {
   CANCELLED: 6,
 };
 
-export function ClassTuitionManagement({ id }: { id: string }) {
+export function ClassTuitionManagement({
+  id,
+  embedded = false,
+  month: sharedMonth,
+  onMonthChange,
+  onFeeSelect,
+  refreshKey,
+}: {
+  id: string;
+  embedded?: boolean;
+  month?: string;
+  onMonthChange?: (month: string) => void;
+  onFeeSelect?: (feeId: string) => void;
+  refreshKey?: number;
+}) {
   const [classData, setClassData] = useState<ClassData | null>(null);
   const [fees, setFees] = useState<Fee[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
   const [appliedStudentSearch, setAppliedStudentSearch] = useState("");
   const [sortKey, setSortKey] = useState<FeeSortKey>("student");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [month, setMonth] = useState(currentMonth);
+  const [localMonth, setLocalMonth] = useState(currentMonth);
+  const month = sharedMonth ?? localMonth;
+  const setMonth = onMonthChange ?? setLocalMonth;
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -100,8 +116,9 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   const classEndMonth = classData?.endDate?.slice(0, 7) ?? null;
 
   useEffect(() => {
-    setMonth((current) => clampMonth(current, classStartMonth, classEndMonth));
-  }, [classEndMonth, classStartMonth]);
+    const clampedMonth = clampMonth(month, classStartMonth, classEndMonth);
+    if (clampedMonth !== month) setMonth(clampedMonth);
+  }, [classEndMonth, classStartMonth, month, setMonth]);
 
   const load = useCallback(async () => {
     const currentRequest = ++requestVersion.current;
@@ -139,7 +156,7 @@ export function ClassTuitionManagement({ id }: { id: string }) {
     }
   }, [id, month]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); }, [load, refreshKey]);
 
   const filteredFees = useMemo(() => {
     const query = appliedStudentSearch.trim().toLocaleLowerCase("vi-VN");
@@ -185,12 +202,16 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   }
 
   const totals = useMemo(() => ({
-    amount: filteredFees
+    amount: fees
       .filter((fee) => fee.status !== "EXEMPTED" && fee.status !== "CANCELLED")
       .reduce((sum, fee) => sum + Number(fee.finalAmount), 0),
-    paid: filteredFees.filter((fee) => fee.status === "PAID").length,
-    unpaid: filteredFees.filter((fee) => fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE").length,
-  }), [filteredFees]);
+    paid: fees
+      .filter((fee) => fee.status !== "EXEMPTED" && fee.status !== "CANCELLED")
+      .reduce((sum, fee) => sum + Number(fee.paidAmount), 0),
+    remaining: fees
+      .filter((fee) => fee.status !== "EXEMPTED" && fee.status !== "CANCELLED")
+      .reduce((sum, fee) => sum + Number(fee.remainingAmount), 0),
+  }), [fees]);
 
   async function createFees() {
     setBusy(true);
@@ -213,14 +234,12 @@ export function ClassTuitionManagement({ id }: { id: string }) {
   if (!classData) return <Alert severity="error">{error || "Không tìm thấy lớp học"}</Alert>;
 
   const metrics = [
-    { label: `Số khoản phí kỳ ${month}`, value: fees.length },
+    { label: `Khoản phí kỳ ${month}`, value: fees.length },
     { label: "Tổng phải thu", value: money(totals.amount) },
-    { label: "Số khoản đã thu", value: totals.paid },
-    { label: "Số khoản còn phải thu", value: totals.unpaid },
   ];
 
   return <Stack spacing={{ xs: 2, md: 3 }}>
-    <Box sx={{ px: { xs: 0, md: 0.5 } }}>
+    {!embedded && <Box sx={{ px: { xs: 0, md: 0.5 } }}>
       <Button component={Link} href={`/admin/classes/${id}`} variant="text" size="small" startIcon={<ArrowBackOutlinedIcon />} sx={{ px: 0, mb: 1, color: "text.secondary" }}>
         Quay lại lớp {classData.code}
       </Button>
@@ -239,9 +258,9 @@ export function ClassTuitionManagement({ id }: { id: string }) {
         </Stack>
         <Chip icon={<CalendarMonthOutlinedIcon />} label={`Kỳ đang xem: ${month}`} color="primary" variant="outlined" sx={{ alignSelf: { xs: "flex-start", md: "center" }, fontWeight: 700 }} />
       </Stack>
-    </Box>
+    </Box>}
 
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2 }}>
+    {!embedded && <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 2 }}>
       <Paper sx={{ p: { xs: 2, md: 2.5 }, height: "100%" }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={1.25} alignItems="flex-start">
@@ -286,19 +305,19 @@ export function ClassTuitionManagement({ id }: { id: string }) {
           </Stack>
         </Stack>
       </Paper>
-    </Box>
+    </Box>}
 
-    {classNotActive && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp chưa ở trạng thái ACTIVE; học phí chỉ được xem, không thể tạo mới.</Alert>}
+    {!embedded && classNotActive && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp chưa ở trạng thái ACTIVE; học phí chỉ được xem, không thể tạo mới.</Alert>}
     {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
-    <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
+    {!embedded && <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
       Học phí tính trọn tháng theo môn đang đăng ký. Sau khi tạo phí, mở <strong>Thông báo & đợt thu</strong> để chọn khoản cần yêu cầu chuyển khoản.
-    </Alert>
+    </Alert>}
 
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4, 1fr)" }, gap: 1.5 }}>
       <MetricCard icon={<GroupsOutlinedIcon />} label={`Khoản phí kỳ ${month}`} value={metrics[0]?.value ?? 0} tone="blue" />
       <MetricCard icon={<AccountBalanceWalletOutlinedIcon />} label="Tổng phải thu" value={metrics[1]?.value ?? money(0)} tone="violet" />
-      <MetricCard icon={<CheckCircleOutlineOutlinedIcon />} label="Đã thu" value={metrics[2]?.value ?? 0} tone="green" />
-      <MetricCard icon={<PaymentsOutlinedIcon />} label="Còn phải thu" value={metrics[3]?.value ?? 0} tone="orange" />
+      <MetricCard icon={<CheckCircleOutlineOutlinedIcon />} label="Đã thu" value={money(totals.paid)} tone="green" />
+      <MetricCard icon={<PaymentsOutlinedIcon />} label="Còn nợ" value={money(totals.remaining)} tone="orange" />
     </Box>
 
     <Paper sx={{ overflow: "hidden" }}>
@@ -326,12 +345,12 @@ export function ClassTuitionManagement({ id }: { id: string }) {
               "& .MuiOutlinedInput-root": { borderRadius: 2 },
             }}
           />
-          <FilterActions onSearch={applyStudentSearch} onClear={clearStudentSearch} hasFilters={Boolean(studentSearch.trim() || appliedStudentSearch)} isLoading={loading} />
+          <FilterActions mobileDirection="row" onSearch={applyStudentSearch} onClear={clearStudentSearch} hasFilters={Boolean(studentSearch.trim() || appliedStudentSearch)} isLoading={loading} />
           <Chip size="small" variant="outlined" label={`${filteredFees.length} khoản phí`} sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
         </Stack>
       </Stack>
       {loading && <LinearProgress />}
-      <Box sx={{ overflowX: "auto" }}>
+      <Box sx={{ display: { xs: "none", md: "block" }, overflowX: "auto" }}>
         <Table sx={{ minWidth: 900 }}>
           <TableHead><TableRow>
             <SortableHeader label="Học viên" sortKey="student" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
@@ -359,7 +378,11 @@ export function ClassTuitionManagement({ id }: { id: string }) {
                   <TableCell align="right"><Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} justifyContent="flex-end">
                     {pendingBatch && <><Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700, whiteSpace: "nowrap" }}>Xử lý đợt thu</Button><Button component="a" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} size="small" variant="outlined" sx={{ whiteSpace: "nowrap" }}>Xuất thông báo tổng</Button></>}
                     {canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained" startIcon={<PaymentsOutlinedIcon />} sx={{ whiteSpace: "nowrap" }}>{fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu học phí"}</Button>}
-                    <Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} sx={{ whiteSpace: "nowrap" }}>Chi tiết</Button>
+                    {onFeeSelect ? (
+                      <Button size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} sx={{ whiteSpace: "nowrap" }} onClick={() => onFeeSelect(fee.id)}>Chi tiết</Button>
+                    ) : (
+                      <Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} sx={{ whiteSpace: "nowrap" }}>Chi tiết</Button>
+                    )}
                   </Stack></TableCell>
                 </TableRow>
               );
@@ -367,6 +390,49 @@ export function ClassTuitionManagement({ id }: { id: string }) {
             {!loading && !filteredFees.length && <TableRow><TableCell colSpan={7}><Stack alignItems="center" spacing={1} sx={{ py: 6, color: "text.secondary" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{appliedStudentSearch ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{appliedStudentSearch ? "Thử tìm bằng tên khác hoặc xóa bộ lọc." : classNotActive ? "Chỉ có thể tạo học phí khi lớp ở trạng thái Hoạt động." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack></TableCell></TableRow>}
           </TableBody>
         </Table>
+      </Box>
+      <Box sx={{ display: { xs: "grid", md: "none" }, gap: 1.25, p: 1.5 }}>
+        {filteredFees.map((fee) => {
+          const pendingBatch = fee.paymentAllocations?.[0]?.paymentBatch;
+          const feeStatus = pendingBatch ? "Đang chờ đối soát" : statusLabel[fee.status];
+          const feeColor = pendingBatch ? "warning" : statusColor[fee.status];
+          const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE");
+          return (
+            <Paper key={fee.id} variant="outlined" sx={{ p: 1.5, minWidth: 0 }}>
+              <Stack spacing={1.25}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1}>
+                  <Box minWidth={0}>
+                    <Typography fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{fee.student.fullName}</Typography>
+                    <Typography variant="caption" color="text.secondary">{fee.student.code}</Typography>
+                  </Box>
+                  <Chip size="small" color={feeColor} label={feeStatus} sx={{ maxWidth: "55%" }} />
+                </Stack>
+                {pendingBatch && <Typography variant="caption" color="text.secondary">Đợt thu: {pendingBatch.batchNo}</Typography>}
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  Môn tính phí: {fee.items.map((item) => item.itemName).join(", ") || "-"}
+                </Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                  <Box><Typography variant="caption" color="text.secondary">Tổng phải thu</Typography><Typography variant="body2" fontWeight={800}>{money(Number(fee.finalAmount))}</Typography></Box>
+                  <Box><Typography variant="caption" color="text.secondary">Đã thu</Typography><Typography variant="body2">{money(Number(fee.paidAmount))}</Typography></Box>
+                  <Box sx={{ gridColumn: "1 / -1" }}><Typography variant="caption" color="text.secondary">Còn nợ</Typography><Typography variant="body2" fontWeight={800} color={Number(fee.remainingAmount) > 0 ? "error.main" : "success.main"}>{money(Number(fee.remainingAmount))}</Typography></Box>
+                </Box>
+                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                  {pendingBatch && <>
+                    <Button component={Link} href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`} size="small" variant="contained" color="warning" sx={{ fontWeight: 700 }}>Xử lý đợt thu</Button>
+                    <Button component="a" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} size="small" variant="outlined">Xuất thông báo</Button>
+                  </>}
+                  {canPay && <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeId=${fee.id}`} size="small" variant="contained" startIcon={<PaymentsOutlinedIcon />}>{fee.status === "PARTIAL" ? "Thu phần còn lại" : "Thu học phí"}</Button>}
+                  {onFeeSelect ? (
+                    <Button size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />} onClick={() => onFeeSelect(fee.id)}>Chi tiết</Button>
+                  ) : (
+                    <Button component={Link} href={`/admin/tuition-fees/${fee.id}`} size="small" variant="outlined" startIcon={<VisibilityOutlinedIcon />}>Chi tiết</Button>
+                  )}
+                </Stack>
+              </Stack>
+            </Paper>
+          );
+        })}
+        {!loading && !filteredFees.length && <Stack alignItems="center" spacing={1} sx={{ py: 5, px: 2, color: "text.secondary", textAlign: "center" }}><PaymentsOutlinedIcon sx={{ fontSize: 38, color: "text.disabled" }} /><Typography fontWeight={700}>{appliedStudentSearch ? "Không tìm thấy học viên phù hợp" : `Chưa có học phí cho kỳ ${month}`}</Typography><Typography variant="body2">{appliedStudentSearch ? "Thử tìm bằng tên khác hoặc xóa bộ lọc." : classNotActive ? "Chỉ có thể tạo học phí khi lớp ở trạng thái Hoạt động." : "Chọn “Tạo học phí tháng” để phát sinh các khoản phí còn thiếu."}</Typography></Stack>}
       </Box>
     </Paper>
     {Snackbar}

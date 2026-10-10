@@ -9,11 +9,12 @@ type FilterActionsProps = {
   onClear: () => void;
   hasFilters: boolean;
   isLoading?: boolean;
+  mobileDirection?: "column" | "row";
 };
 
-export function FilterActions({ onSearch, onClear, hasFilters, isLoading = false }: FilterActionsProps) {
+export function FilterActions({ onSearch, onClear, hasFilters, isLoading = false, mobileDirection = "column" }: FilterActionsProps) {
   return (
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexShrink: 0 }}>
+    <Stack direction={{ xs: mobileDirection, sm: "row" }} spacing={1} sx={{ flexShrink: 0 }}>
       <Button
         variant="contained"
         startIcon={<SearchOutlinedIcon />}

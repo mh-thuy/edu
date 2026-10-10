@@ -355,8 +355,7 @@ export function ClassDetailPanel({ id }: { id: string }) {
             </Box>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button component={Link} href={`/admin/classes/${id}/students`} variant="contained" startIcon={<PeopleAltOutlinedIcon />}>Quản lý học viên</Button>
-            <Button component={Link} href={`/admin/classes/${id}/tuition`} variant="outlined" startIcon={<PaymentsOutlinedIcon />}>Học phí tháng</Button>
+            <Button component={Link} href={`/admin/classes/${id}/students`} variant="contained" startIcon={<PeopleAltOutlinedIcon />}>Quản lý học viên & học phí</Button>
           </Stack>
         </Stack>
       </Box>
@@ -389,7 +388,6 @@ export function ClassDetailPanel({ id }: { id: string }) {
           <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1} sx={{ mb: 2 }}>
               <Box><Typography variant="h6" fontWeight={800}>Tổng quan kỳ {billingMonth}</Typography><Typography variant="body2" color="text.secondary">Tình hình học viên và học phí hiện tại.</Typography></Box>
-              <Button component={Link} href={`/admin/classes/${id}/tuition`} size="small" variant="outlined" endIcon={<PaymentsOutlinedIcon />}>Xem học phí</Button>
             </Stack>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" }, gap: 1.25 }}>
               <OverviewMetric icon={<MenuBookOutlinedIcon />} label="Môn học" value={classData.classSubjects.length} loading={loadingRelated} tone="blue" />
