@@ -603,37 +603,39 @@ export function ClassStudentManagement({ id }: { id: string }) {
     <Paper sx={{ overflow: "hidden" }}>
       {loading && <LinearProgress />}
       <Box sx={{ display: { xs: "none", md: "block" }, overflowX: "auto" }}>
-      <Table sx={{ minWidth: 980 }}>
+      <Table sx={{ minWidth: 1250 }}>
         <TableHead><TableRow>
           <TableCell><TableSortLabel active={studentSort.key === "fullName"} direction={studentSort.key === "fullName" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("fullName")}>Học viên</TableSortLabel></TableCell>
-          <TableCell>Tình trạng</TableCell>
-          <TableCell><TableSortLabel active={studentSort.key === "item"} direction={studentSort.key === "item" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("item")}>Khoản phí</TableSortLabel></TableCell>
-          <TableCell align="right"><Stack spacing={0.25} alignItems="flex-end"><TableSortLabel active={studentSort.key === "finalAmount"} direction={studentSort.key === "finalAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("finalAmount")}>Phải thu</TableSortLabel><TableSortLabel sx={{ fontSize: 12 }} active={studentSort.key === "paidAmount"} direction={studentSort.key === "paidAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("paidAmount")}>Đã thu</TableSortLabel></Stack></TableCell>
+          <TableCell align="right"><TableSortLabel active={studentSort.key === "finalAmount"} direction={studentSort.key === "finalAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("finalAmount")}>Phải thu</TableSortLabel></TableCell>
           <TableCell align="right"><TableSortLabel active={studentSort.key === "remainingAmount"} direction={studentSort.key === "remainingAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("remainingAmount")}>Còn nợ</TableSortLabel></TableCell>
+          <TableCell align="right"><TableSortLabel active={studentSort.key === "paidAmount"} direction={studentSort.key === "paidAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("paidAmount")}>Đã thu</TableSortLabel></TableCell>
+          <TableCell><TableSortLabel active={studentSort.key === "item"} direction={studentSort.key === "item" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("item")}>Khoản phí / ghi chú</TableSortLabel></TableCell>
           <TableCell><TableSortLabel active={studentSort.key === "feeStatus"} direction={studentSort.key === "feeStatus" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("feeStatus")}>Trạng thái phí</TableSortLabel></TableCell>
+          <TableCell>Tình trạng</TableCell>
           <TableCell align="right">Thao tác</TableCell>
         </TableRow></TableHead>
         <TableBody>{pagedStudents.map((student) => {
           const pause = getPause(student);
           const fees = getFees(student);
           const totalAmount = feeAmount(fees, "finalAmount");
-          const paidAmount = feeAmount(fees, "paidAmount");
           const remainingAmount = feeAmount(fees, "remainingAmount");
+          const paidAmount = feeAmount(fees, "paidAmount");
           return <TableRow key={student.id} hover>
-            <TableCell sx={{ minWidth: 180 }}><Typography fontWeight={600}>{student.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{student.student.code} · {student.student.phone || "Chưa có SĐT"}</Typography></TableCell>
-            <TableCell sx={{ minWidth: 180 }}><Chip size="small" color={student.status === "LEFT" ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={student.status === "LEFT" ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
-            <TableCell sx={{ minWidth: 170, maxWidth: 230 }}>
+            <TableCell sx={{ minWidth: 200 }}><Typography fontWeight={600}>{student.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{student.student.code} · {student.student.phone || "Chưa có SĐT"}</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? money(totalAmount) : <Typography variant="body2" color="text.secondary">{pause ? "Không phát sinh" : "Chưa tạo phí"}</Typography>}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}><Typography fontWeight={700} color={remainingAmount > 0 ? "error.main" : "success.main"}>{fees.length ? money(remainingAmount) : "—"}</Typography></TableCell>
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? money(paidAmount) : "—"}</TableCell>
+            <TableCell sx={{ minWidth: 190, maxWidth: 260 }}>
               {fees.length ? <>{fees.slice(0, 2).map((fee) => <Box key={fee.id} sx={{ mb: fee.note ? 0.75 : 0 }}><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{fee.items.map((item) => item.itemName).join(", ") || "Học phí"}</Typography>{fee.note && <Typography variant="caption" color="text.secondary" sx={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }} title={fee.note}><strong>Ghi chú:</strong> {fee.note}</Typography>}</Box>)}{fees.length > 2 && <Typography variant="caption" color="text.secondary">+{fees.length - 2} khoản phí khác</Typography>}</> : <Typography variant="body2" color="text.secondary">{pause ? "Không phát sinh do tạm nghỉ" : "Chưa tạo học phí"}</Typography>}
             </TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? <><Typography variant="body2" fontWeight={600}>{money(totalAmount)}</Typography><Typography variant="caption" color="text.secondary">Đã thu {money(paidAmount)}</Typography></> : "—"}</TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}><Typography fontWeight={700} color={remainingAmount > 0 ? "error.main" : "success.main"}>{fees.length ? money(remainingAmount) : "—"}</Typography></TableCell>
             <TableCell sx={{ minWidth: 150 }}>{fees.length ? <>{fees.slice(0, 2).map((fee) => {
               const pendingBatch = fee.paymentAllocations[0]?.paymentBatch;
               return <Stack key={fee.id} spacing={0.5} alignItems="flex-start" sx={{ mb: 0.5 }}><Chip size="small" color={pendingBatch ? "warning" : feeStatusColor[fee.status] ?? "default"} label={pendingBatch ? "Đang chờ đối soát" : feeStatusLabel[fee.status] ?? fee.status} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack>;
             })}{fees.length > 2 && <Typography variant="caption" color="text.secondary">+{fees.length - 2} trạng thái</Typography>}</> : <Chip size="small" color={pause ? "info" : "warning"} label={pause ? "Tạm nghỉ · không phát sinh" : "Chưa tạo"} />}</TableCell>
+            <TableCell sx={{ minWidth: 170 }}><Chip size="small" color={student.status === "LEFT" ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={student.status === "LEFT" ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
             <TableCell align="right" sx={{ whiteSpace: "nowrap" }}><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Chi tiết</Button><Button size="small" aria-label={`Thao tác ${student.student.fullName}`} onClick={(event) => setActionMenu({ anchorEl: event.currentTarget, student })}><MoreVertOutlinedIcon /></Button></TableCell>
           </TableRow>;
-        })}{!pagedStudents.length && <TableRow><TableCell colSpan={7}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
+        })}{!pagedStudents.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
       </Table>
       </Box>
       <Box sx={{ display: { xs: "grid", md: "none" }, gap: 1.25, p: 1.5 }}>
