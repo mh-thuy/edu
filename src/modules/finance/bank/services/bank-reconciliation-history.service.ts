@@ -32,6 +32,7 @@ function toStatus(value: string): BankReconciliationReportItem["reconciliationSt
 
 type HistoricalRow = {
   id: string;
+  transactionHash: string;
   rowNo: number;
   transactionDate: Date;
   bankTransactionNo: string | null;
@@ -46,6 +47,7 @@ type HistoricalRow = {
   fileName: string;
   bankFormat: string;
   invalidRowErrors: Prisma.JsonValue | null;
+  sessionCreatedAt: Date;
 };
 
 type HistoricalRowBatch = {
@@ -64,9 +66,10 @@ export async function buildHistoricalBankReconciliationReport(
   });
   if (!account) throw new NotFoundError("Không tìm thấy tài khoản ngân hàng");
 
-  const rows = await prisma.$queryRaw<HistoricalRow[]>(Prisma.sql`
+  const importedRows = await prisma.$queryRaw<HistoricalRow[]>(Prisma.sql`
     SELECT
       row."id",
+      row."transaction_hash" AS "transactionHash",
       row."row_no" AS "rowNo",
       row."transaction_date" AS "transactionDate",
       row."bank_transaction_no" AS "bankTransactionNo",
@@ -80,7 +83,8 @@ export async function buildHistoricalBankReconciliationReport(
       row."payment_batch_group_candidate_count" AS "paymentBatchGroupCandidateCount",
       session."file_name" AS "fileName",
       session."bank_format" AS "bankFormat",
-      session."invalid_row_errors" AS "invalidRowErrors"
+      session."invalid_row_errors" AS "invalidRowErrors",
+      session."created_at" AS "sessionCreatedAt"
     FROM "bank_statement_import_rows" row
     JOIN "bank_statement_import_sessions" session ON session."id" = row."session_id"
     WHERE session."bank_account_id" = ${account.id}::uuid
@@ -88,6 +92,25 @@ export async function buildHistoricalBankReconciliationReport(
       AND row."transaction_date" < ${toExclusive}
     ORDER BY row."transaction_date" ASC, row."id" ASC
   `);
+  const latestRowsByTransaction = new Map<string, HistoricalRow>();
+  for (const row of importedRows) {
+    // Re-imported copies are useful for the session audit, but should not add a
+    // second transaction to the consolidated date-range report.
+    if (row.status === "DUPLICATED") continue;
+    const current = latestRowsByTransaction.get(row.transactionHash);
+    const isConfirmed = row.status === "CONFIRMED";
+    const currentIsConfirmed = current?.status === "CONFIRMED";
+    if (
+      !current ||
+      (isConfirmed && !currentIsConfirmed) ||
+      (isConfirmed === currentIsConfirmed && row.sessionCreatedAt > current.sessionCreatedAt)
+    ) {
+      latestRowsByTransaction.set(row.transactionHash, row);
+    }
+  }
+  const rows = [...latestRowsByTransaction.values()].sort(
+    (left, right) => left.transactionDate.getTime() - right.transactionDate.getTime() || left.rowNo - right.rowNo,
+  );
   const rowBatches = rows.length
     ? await prisma.$queryRaw<HistoricalRowBatch[]>(Prisma.sql`
         SELECT "row_id" AS "rowId", "payment_batch_id" AS "paymentBatchId"

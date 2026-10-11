@@ -1045,11 +1045,14 @@ ngân hàng, lấy dữ liệu từ tất cả phiên sao kê đã lưu của t�
 Excel. API vẫn hỗ trợ request cũ dùng `statementToken` để xuất báo cáo cho phiên
 đang mở.
 
-Khi báo cáo theo ngày gộp nhiều phiên, dòng `DUPLICATED` vẫn hiển thị để tra cứu
-nhưng không cộng vào tổng tiền, tránh tính lặp một giao dịch đã import nhiều
-lần. Tổng ghi có và ghi nợ luôn cùng phạm vi với `scope`. Chỉ `ALL` mới kiểm tra
-được chênh lệch số dư của sao kê; báo cáo lọc `MATCHED`/`UNMATCHED` không đưa ra
-kết luận cân sao kê.
+Khi báo cáo theo ngày gộp nhiều phiên, các bản ghi có cùng `transaction_hash`
+được gộp thành một giao dịch; dòng `DUPLICATED` không xuất hiện trong báo cáo.
+Nếu một bản ghi đã được `CONFIRMED`, trạng thái đó được ưu tiên qua các lần
+import trùng tiếp theo. Nếu chưa xác nhận, báo cáo dùng trạng thái từ phiên
+import mới nhất. Lịch sử phiên import vẫn lưu từng lần import và số dòng trùng
+để tra cứu. Tổng ghi có và ghi nợ được tính trên các giao dịch đã gộp và luôn
+cùng phạm vi với `scope`. Chỉ `ALL` mới kiểm tra được chênh lệch số dư của sao
+kê; báo cáo lọc `MATCHED`/`UNMATCHED` không đưa ra kết luận cân sao kê.
 
 ```http
 GET /api/bank-statement-imports?page=1&pageSize=20&bankAccountId=uuid
