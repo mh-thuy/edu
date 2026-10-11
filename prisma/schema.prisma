@@ -530,6 +530,19 @@ model PaymentBatch {
   @@map("payment_batches")
 }
 
+model ClassNoticeRequest {
+  idempotencyKey String   @id @map("idempotency_key") @db.VarChar(150)
+  requestHash    String   @map("request_hash") @db.Char(64)
+  classId        String   @map("class_id") @db.Uuid
+  month          String   @db.Char(7)
+  bankAccountId  String   @map("bank_account_id") @db.Uuid
+  response       Json     @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([classId, month], map: "idx_class_notice_requests_scope")
+  @@map("class_notice_requests")
+}
+
 model PaymentAllocation {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   paymentBatchId String   @map("payment_batch_id") @db.Uuid

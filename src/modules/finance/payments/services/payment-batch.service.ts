@@ -891,10 +891,42 @@ export async function createClassNoticeBatches(
 ) {
   const year = Number(data.month.slice(0, 4));
   const month = Number(data.month.slice(5, 7));
-  const keyPrefix = `class-${createHash("sha256").update(data.idempotencyKey).digest("hex").slice(0, 32)}-`;
+  const requestHash = createHash("sha256")
+    .update(JSON.stringify({
+      classId: data.classId,
+      month: data.month,
+      bankAccountId: data.bankAccountId,
+    }))
+    .digest("hex");
 
   return prisma.$transaction(
     async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`class-notice-idempotency:${data.idempotencyKey}`}))`,
+      );
+      const previousRequests = await tx.$queryRaw<
+        Array<{ requestHash: string; response: Prisma.JsonValue }>
+      >(Prisma.sql`
+        SELECT request_hash AS "requestHash", response
+        FROM class_notice_requests
+        WHERE idempotency_key = ${data.idempotencyKey}
+        FOR UPDATE
+      `);
+      const previousRequest = previousRequests[0];
+      if (previousRequest) {
+        if (previousRequest.requestHash !== requestHash) {
+          throw new ConflictError(
+            "Idempotency-Key đã được dùng cho request phát hành khác",
+            "IDEMPOTENCY_CONFLICT",
+          );
+        }
+        return previousRequest.response as {
+          batches: Array<{ id: string; batchNo: string; totalAmount: number }>;
+          replacedBatchCount: number;
+          updatedBatchCount: number;
+        };
+      }
+
       const targetFees = await tx.tuitionFee.findMany({
         where: {
           classId: data.classId,
@@ -919,19 +951,6 @@ export async function createClassNoticeBatches(
       }
       const targetFeeIds = targetFees.map((fee) => fee.id);
       const targetFeeIdSet = new Set(targetFeeIds);
-      const expectedIdempotencyKeys = [...new Set(targetFees.map((fee) => fee.studentId))]
-        .map((studentId) => `${keyPrefix}${studentId}`);
-      const priorBatches = await tx.paymentBatch.findMany({
-        where: { idempotencyKey: { in: expectedIdempotencyKeys } },
-        orderBy: { createdAt: "asc" },
-      });
-      if (
-        priorBatches.some((batch) => batch.status !== PaymentBatchStatus.PENDING)
-      ) {
-        throw new ConflictError(
-          "Lần phát hành theo lớp này đã được xử lý trước đó",
-        );
-      }
       const initialPendingBatches = await tx.paymentBatch.findMany({
         where: {
           status: PaymentBatchStatus.PENDING,
@@ -1427,11 +1446,29 @@ export async function createClassNoticeBatches(
         updatedBatchCount += 1;
       }
 
-      return {
+      const result = {
         batches: [...resultBatches.values()],
         replacedBatchCount: 0,
         updatedBatchCount,
       };
+      const storedResponse = {
+        batches: result.batches.map((batch) => ({
+          ...batch,
+          totalAmount: Number(batch.totalAmount.toFixed(2)),
+        })),
+        replacedBatchCount: result.replacedBatchCount,
+        updatedBatchCount: result.updatedBatchCount,
+      };
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO class_notice_requests (
+          idempotency_key, request_hash, class_id, month, bank_account_id, response
+        ) VALUES (
+          ${data.idempotencyKey}, ${requestHash}, ${data.classId}::uuid,
+          ${data.month}, ${data.bankAccountId}::uuid,
+          ${JSON.stringify(storedResponse)}::jsonb
+        )
+      `);
+      return result;
     },
     { timeout: 60_000 },
   );

@@ -839,6 +839,8 @@ tạo thành batch khác. Nếu các batch trả về không thể gộp PDF do 
 API từ chối và yêu cầu dùng đúng tài khoản nhận tiền hoặc hoàn tất đối soát trước.
 Nếu khoản mục tiêu đã phân bổ một phần trong batch đang liên kết sao kê, API từ
 chối cập nhật và yêu cầu hoàn tất đối soát trước.
+Retry với cùng `idempotencyKey` và cùng nội dung trả lại kết quả ban đầu; dùng lại
+khóa với nội dung khác trả `409 CONFLICT`.
 
 ## 19.1.7 Xuất PDF gộp thông báo
 
