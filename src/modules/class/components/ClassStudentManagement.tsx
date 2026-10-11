@@ -53,6 +53,7 @@ import { TuitionDetail } from "@/modules/finance/tuition/components/TuitionDetai
 type ClassSubject = {
   id: string;
   tuitionFee: number;
+  status: "ACTIVE" | "INACTIVE" | "COMPLETED";
   subject: { id: string; name: string; status?: "ACTIVE" | "INACTIVE" };
 };
 
@@ -308,13 +309,16 @@ export function ClassStudentManagement({ id }: { id: string }) {
   }
 
   async function submitSubjects() {
-    if (!pendingStudent || !selectedSubjectIds.length) return;
+    const subjectsToAdd = selectedSubjectIds.filter(
+      (subjectId) => !registeredSubjectIds.includes(subjectId),
+    );
+    if (!pendingStudent || !subjectsToAdd.length) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/classes/${id}/students`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: pendingStudent.id, classSubjectIds: selectedSubjectIds }),
+        body: JSON.stringify({ studentId: pendingStudent.id, classSubjectIds: subjectsToAdd }),
       });
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể cập nhật môn học"));
       setSubjectDialogOpen(false);
@@ -526,6 +530,27 @@ export function ClassStudentManagement({ id }: { id: string }) {
     (total, item) => total + Number(classData.classSubjects.find((subject) => subject.id === item.classSubjectId)?.tuitionFee ?? 0),
     0,
   ) ?? 0;
+  const overviewGroups = [
+    {
+      title: "Học viên trong lớp",
+      items: [
+        ["Tổng số", summary.total],
+        ["Đang học", activeCount],
+        ["Tạm nghỉ", pausedCount],
+        ["Hoàn thành / rời lớp", summary.completed + summary.left],
+      ],
+    },
+    {
+      title: `Học phí kỳ ${month} · toàn lớp`,
+      items: [
+        ["Khoản phí", summary.tuitionFees.count],
+        ["Chưa tạo phí", Math.max(0, uncreatedCount)],
+        ["Phải thu", money(summary.tuitionFees.amount)],
+        ["Đã thu", money(summary.tuitionFees.paid)],
+        ["Còn nợ", money(summary.tuitionFees.remaining)],
+      ],
+    },
+  ];
 
   return <Stack spacing={{ xs: 2, md: 3 }}>
     <Paper elevation={0} sx={{ p: { xs: 2, md: 3 }, border: "1px solid", borderColor: "divider", borderRadius: 3 }}>
@@ -552,8 +577,16 @@ export function ClassStudentManagement({ id }: { id: string }) {
     {classData.status === "DRAFT" && <Alert severity="info">Lớp Nháp: có thể đăng ký học viên; quản lý môn và tạo học phí cần lớp Hoạt động.</Alert>}
     {classData.status !== "ACTIVE" && classData.status !== "DRAFT" && <Alert severity="info">Lớp đã kết thúc hoặc đã hủy; thông tin đăng ký chỉ được xem.</Alert>}
     {!classNotActive && !hasActiveClassSubjects && <Alert severity="warning">Lớp chưa có môn đang hoạt động; hãy mở môn học trước khi đăng ký học viên.</Alert>}
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))", xl: "repeat(8, minmax(0, 1fr))" }, gap: 1.25 }}>
-      {[["Học viên trong lớp", summary.total], ["Đang học", activeCount], ["Tạm nghỉ", pausedCount], ["Hoàn thành / rời lớp", summary.completed + summary.left], ["Chưa tạo phí", Math.max(0, uncreatedCount)], ["Tổng phải thu", money(summary.tuitionFees.amount)], ["Đã thu", money(summary.tuitionFees.paid)], ["Còn nợ", money(summary.tuitionFees.remaining)]].map(([label, value]) => <Paper key={String(label)} sx={{ p: { xs: 1.5, md: 1.75 }, minWidth: 0 }}><Typography variant="body2" color="text.secondary" noWrap>{label}</Typography><Typography variant={typeof value === "number" ? "h5" : "subtitle1"} fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{value}</Typography></Paper>)}
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" }, gap: 1.5 }}>
+      {overviewGroups.map((group) => <Paper key={group.title} variant="outlined" sx={{ p: { xs: 1.5, md: 2 }, minWidth: 0 }}>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.25 }}>{group.title}</Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1 }}>
+          {group.items.map(([label, value]) => <Box key={String(label)} sx={{ minWidth: 0, p: 1, borderRadius: 1.5, bgcolor: "action.hover" }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>{label}</Typography>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{value}</Typography>
+          </Box>)}
+        </Box>
+      </Paper>)}
     </Box>
     <Paper sx={{ p: { xs: 1.5, md: 2 } }}>
       <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={1.5}>
@@ -587,8 +620,8 @@ export function ClassStudentManagement({ id }: { id: string }) {
     </Paper>
     <Stack spacing={1.5}>
     <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "center" }} gap={1}>
-      <Box><Typography variant="h6" fontWeight={700}>Danh sách học viên & học phí kỳ {month}</Typography><Typography variant="body2" color="text.secondary">Một dòng cho mỗi học viên; các khoản phí và trạng thái được tổng hợp theo kỳ.</Typography></Box>
-      <Chip size="small" variant="outlined" label={`${totalStudents} học viên phù hợp · ${summary.tuitionFees.count} khoản phí toàn kỳ`} />
+      <Box><Typography variant="h6" fontWeight={700}>Danh sách học viên</Typography><Typography variant="body2" color="text.secondary">Một dòng cho mỗi học viên; số liệu học phí theo kỳ {month}.</Typography></Box>
+      <Chip size="small" variant="outlined" label={`${totalStudents} học viên phù hợp`} />
     </Stack>
     <Paper sx={{ p: 2 }}>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}><FilterAltOutlinedIcon color="action" fontSize="small" /><Typography fontWeight={700}>Tìm và lọc học viên, học phí</Typography></Stack>
@@ -612,7 +645,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
           <TableCell><TableSortLabel active={studentSort.key === "item"} direction={studentSort.key === "item" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("item")}>Khoản phí / ghi chú</TableSortLabel></TableCell>
           <TableCell><TableSortLabel active={studentSort.key === "feeStatus"} direction={studentSort.key === "feeStatus" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("feeStatus")}>Trạng thái phí</TableSortLabel></TableCell>
           <TableCell>Tình trạng</TableCell>
-          <TableCell align="right">Thao tác</TableCell>
+          <TableCell align="right" sx={{ position: "sticky", right: 0, zIndex: 3, bgcolor: "background.paper", boxShadow: "-6px 0 8px -8px rgba(0,0,0,0.35)" }}>Thao tác</TableCell>
         </TableRow></TableHead>
         <TableBody>{pagedStudents.map((student) => {
           const pause = getPause(student);
@@ -633,7 +666,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
               return <Stack key={fee.id} spacing={0.5} alignItems="flex-start" sx={{ mb: 0.5 }}><Chip size="small" color={pendingBatch ? "warning" : feeStatusColor[fee.status] ?? "default"} label={pendingBatch ? "Đang chờ đối soát" : feeStatusLabel[fee.status] ?? fee.status} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack>;
             })}{fees.length > 2 && <Typography variant="caption" color="text.secondary">+{fees.length - 2} trạng thái</Typography>}</> : <Chip size="small" color={pause ? "info" : "warning"} label={pause ? "Tạm nghỉ · không phát sinh" : "Chưa tạo"} />}</TableCell>
             <TableCell sx={{ minWidth: 170 }}><Chip size="small" color={student.status === "LEFT" ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={student.status === "LEFT" ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Chi tiết</Button><Button size="small" aria-label={`Thao tác ${student.student.fullName}`} onClick={(event) => setActionMenu({ anchorEl: event.currentTarget, student })}><MoreVertOutlinedIcon /></Button></TableCell>
+            <TableCell align="right" sx={{ position: "sticky", right: 0, zIndex: 1, bgcolor: "background.paper", whiteSpace: "nowrap", boxShadow: "-6px 0 8px -8px rgba(0,0,0,0.35)" }}><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Chi tiết</Button><Button size="small" aria-label={`Thao tác ${student.student.fullName}`} onClick={(event) => setActionMenu({ anchorEl: event.currentTarget, student })}><MoreVertOutlinedIcon /></Button></TableCell>
           </TableRow>;
         })}{!pagedStudents.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
       </Table>
@@ -803,7 +836,10 @@ export function ClassStudentManagement({ id }: { id: string }) {
         )}
         <Stack spacing={1}>
           {classData.classSubjects
-            .filter((subject) => subject.subject.status !== "INACTIVE" || registeredSubjectIds.includes(subject.id))
+            .filter((subject) =>
+              (subject.status === "ACTIVE" && subject.subject.status === "ACTIVE") ||
+              registeredSubjectIds.includes(subject.id),
+            )
             .map((subject) => {
               const checked = selectedSubjectIds.includes(subject.id);
               const registered = registeredSubjectIds.includes(subject.id);
@@ -825,7 +861,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
             })}
         </Stack>
       </DialogContent>
-      <DialogActions><Button variant="outlined" onClick={() => setSubjectDialogOpen(false)} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void submitSubjects()} disabled={busy || !selectedSubjectIds.length}>{busy ? "Đang lưu..." : "Lưu môn học"}</Button></DialogActions>
+      <DialogActions><Button variant="outlined" onClick={() => setSubjectDialogOpen(false)} disabled={busy}>Hủy</Button><Button variant="contained" onClick={() => void submitSubjects()} disabled={busy || !selectedSubjectIds.some((subjectId) => !registeredSubjectIds.includes(subjectId))}>{busy ? "Đang lưu..." : "Lưu môn học"}</Button></DialogActions>
     </Dialog>
     <Drawer anchor="right" open={Boolean(selectedStudent)} onClose={() => setSelectedStudent(null)}>
       {selectedStudent && <Stack spacing={2} sx={{ width: { xs: "100vw", sm: 480 }, p: 3 }}>
