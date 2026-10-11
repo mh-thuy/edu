@@ -8,6 +8,8 @@ export type ClassTuitionReportRow = {
   studentCode: string;
   givenName: string;
   familyName: string;
+  enrollmentStatus: string;
+  tuitionStatus: string;
   assessedAmount: number;
   paidInPeriodAmount: number;
   paidCumulativeAmount: number;
@@ -134,6 +136,7 @@ export async function getClassTuitionReport(
       },
     },
     select: {
+      status: true,
       student: { select: { code: true, fullName: true } },
       tuitionFees: {
         where: {
@@ -202,8 +205,11 @@ export async function getClassTuitionReport(
             subjectFinalAmount,
             allPaid,
             paidInPeriod,
+            status: fee.status,
           };
         });
+        const selectedMonthFees = feeBreakdown.filter((fee) => fee.isSelectedBillingMonth);
+        const tuitionStatus = selectedMonthFees.map((fee) => fee.status).join(", ") || "NO_FEE";
         const assessed = feeBreakdown.reduce((total, fee) =>
           fee.isSelectedBillingMonth && fee.isCollectible
             ? total.add(fee.subjectFinalAmount)
@@ -222,12 +228,14 @@ export async function getClassTuitionReport(
           studentCode: enrollment.student.code,
           givenName,
           familyName,
+          enrollmentStatus: enrollment.status,
+          tuitionStatus,
           assessedAmount: assessed.toNumber(),
           paidInPeriodAmount: paidInPeriod.toNumber(),
           paidCumulativeAmount: Prisma.Decimal.min(cumulative, assessed).toNumber(),
           outstandingAmount: outstanding.toNumber(),
         };
       })
-      .filter((row) => row.assessedAmount > 0 || row.paidInPeriodAmount > 0),
+      .filter((row) => row.assessedAmount > 0 || row.paidInPeriodAmount > 0 || row.tuitionStatus.includes("EXEMPTED") || row.tuitionStatus.includes("CANCELLED")),
   };
 }

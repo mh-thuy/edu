@@ -258,7 +258,7 @@ export function ClassTuitionReportPage() {
           </Box>
 
           <Alert severity="info" icon={<CalendarMonthOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
-            Báo cáo phân biệt tiền thu trong khoảng ngày chọn với dư nợ học phí của kỳ. Dư nợ được tính đến ngày xuất báo cáo; học viên chưa thanh toán vẫn được liệt kê nếu đã có khoản học phí trong kỳ.
+            Báo cáo phân biệt tiền thu trong khoảng ngày chọn với dư nợ học phí của kỳ, kèm trạng thái học viên và học phí. Học viên đã rời lớp vẫn được đối chiếu theo khoản phí đã phát sinh; khoản được miễn hoặc đã hủy hiển thị trạng thái nhưng không cộng vào phải thu.
           </Alert>
 
           <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}>
@@ -272,7 +272,7 @@ export function ClassTuitionReportPage() {
           </Box>
 
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.5}>
-            <Typography variant="body2" color="text.secondary">File Excel gồm danh sách học viên và số tiền đã thu theo môn.</Typography>
+            <Typography variant="body2" color="text.secondary">File Excel gồm danh sách học viên, trạng thái học viên, trạng thái học phí và số tiền theo môn.</Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
               <Button variant="outlined" color="inherit" startIcon={<RestartAltOutlinedIcon />} onClick={() => { const defaultMonth = currentMonth(); const today = getVietnamDate(); setSelectedClass(null); setSubjects([]); setSelectedSubjectId(""); setMonth(defaultMonth); setFromDate(`${defaultMonth}-01`); setToDate(today); setError(""); }} disabled={exporting || (!selectedClass && !selectedSubjectId && month === currentMonth() && fromDate === `${currentMonth()}-01` && toDate === getVietnamDate())} sx={{ whiteSpace: "nowrap" }}>
                 Đặt lại
