@@ -1,16 +1,13 @@
 "use client";
 
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
-import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  Collapse,
   FormControl,
   InputLabel,
   MenuItem,
@@ -27,9 +24,9 @@ import {
 } from "@mui/material";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterActions } from "@/components/shared/FilterActions";
+import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
 import { StudentSelectDialog, type StudentItem } from "@/components/shared/dialogs/StudentSelectDialog";
 import { MasterSelectField, type MasterSelectValue } from "@/components/shared/forms/MasterSelectField";
 import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
@@ -53,6 +50,7 @@ type Fee = {
   dueDate?: string | null;
   status: Status;
   billingType: BillingType;
+  note?: string | null;
   createdAt: string;
   student?: { code: string; fullName: string } | null;
   class?: { name: string } | null;
@@ -107,7 +105,6 @@ export function TuitionList() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,35 +201,31 @@ export function TuitionList() {
 
       <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
         <Stack spacing={1.5}>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} gap={1.25}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <SearchOutlinedIcon color="primary" fontSize="small" />
-              <Box>
-                <Typography fontWeight={800}>Tra cứu học phí</Typography>
-                <Typography variant="caption" color="text.secondary">Lọc nhanh theo kỳ và trạng thái thanh toán</Typography>
-              </Box>
-            </Stack>
-            <Button
-              size="small"
-              variant="text"
-              color="inherit"
-              startIcon={<TuneOutlinedIcon />}
-              endIcon={<ExpandMoreOutlinedIcon sx={{ transform: showAdvancedFilters ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }} />}
-              onClick={() => setShowAdvancedFilters((current) => !current)}
-              sx={{ color: "text.secondary", alignSelf: { xs: "flex-start", sm: "center" } }}
-            >
-              Bộ lọc nâng cao
-            </Button>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <SearchOutlinedIcon color="primary" fontSize="small" />
+            <Box>
+              <Typography fontWeight={800}>Tra cứu học phí</Typography>
+              <Typography variant="caption" color="text.secondary">Lọc theo học viên, lớp, kỳ và trạng thái học phí</Typography>
+            </Box>
           </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "center" }}>
-            <Box sx={{ width: { xs: "100%", sm: 220 }, flexShrink: 0 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.25, alignItems: "center" }}>
+            <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" />
+            <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" />
+            <Box>
               <MonthPickerField label="Kỳ học phí" value={billingMonth} onChange={setBillingMonth} textFieldProps={{ size: "small" }} />
             </Box>
-            <FormControl size="small" sx={{ minWidth: { sm: 210 }, maxWidth: { sm: 420 }, flex: { sm: 1 } }}>
+            <FormControl size="small" fullWidth>
               <InputLabel id="tuition-status-label">Trạng thái</InputLabel>
               <Select labelId="tuition-status-label" label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value)}>
                 <MenuItem value="">Tất cả trạng thái</MenuItem>
                 {(Object.keys(labels) as Status[]).map((key) => <MenuItem key={key} value={key}>{labels[key]}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="tuition-type-label">Loại phí</InputLabel>
+              <Select labelId="tuition-type-label" label="Loại phí" value={billingType} onChange={(event) => setBillingType(event.target.value)}>
+                <MenuItem value="">Tất cả loại phí</MenuItem>
+                {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
               </Select>
             </FormControl>
             <FilterActions
@@ -241,20 +234,7 @@ export function TuitionList() {
               hasFilters={Boolean(studentCode || classId || status || billingType || billingMonth || appliedStudentCode || appliedClassId || appliedStatus || appliedBillingType || appliedBillingMonth)}
               isLoading={loading}
             />
-          </Stack>
-          <Collapse in={showAdvancedFilters}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }} sx={{ pt: 0.5 }}>
-              <MasterSelectField label="Học viên" value={student} onOpen={studentDialog.onOpen} size="small" codeLabel="Mã học sinh" nameLabel="Họ tên" sx={{ flex: 1, minWidth: { md: 260 } }} />
-              <MasterSelectField label="Lớp học" value={selectedClass} onOpen={classDialog.onOpen} size="small" codeLabel="Mã lớp" nameLabel="Tên lớp" sx={{ flex: 1, minWidth: { md: 260 } }} />
-              <FormControl size="small" sx={{ minWidth: { md: 210 } }}>
-                <InputLabel id="tuition-type-label">Loại phí</InputLabel>
-                <Select labelId="tuition-type-label" label="Loại phí" value={billingType} onChange={(event) => setBillingType(event.target.value)}>
-                  <MenuItem value="">Tất cả loại phí</MenuItem>
-                  {(Object.keys(billingTypeLabels) as BillingType[]).map((key) => <MenuItem key={key} value={key}>{billingTypeLabels[key]}</MenuItem>)}
-                </Select>
-              </FormControl>
-            </Stack>
-          </Collapse>
+          </Box>
         </Stack>
       </Paper>
 
@@ -285,6 +265,7 @@ export function TuitionList() {
               <TableCell sx={{ minWidth: { xs: 150, md: 155 } }}>
                 <Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="text" sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}>{item.feeNo}</Button>
                 <Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} sx={{ mt: 0.75, display: "flex", width: "fit-content" }} />
+                {item.note && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75, maxWidth: 230, whiteSpace: "normal", overflowWrap: "anywhere" }}><strong>Ghi chú:</strong> {item.note}</Typography>}
               </TableCell>
               <TableCell sx={{ minWidth: { xs: 150, md: 155 } }}><Typography variant="body2" fontWeight={700}>{item.student?.fullName || "-"}</Typography><Typography variant="caption" color="text.secondary">{item.student?.code || "-"}</Typography></TableCell>
               <TableCell sx={{ minWidth: { xs: 120, md: 125 } }}><Typography variant="body2" fontWeight={600}>{`${String(item.billingMonth).padStart(2, "0")}/${item.billingYear}`}</Typography><Typography variant="caption" color="text.secondary">{item.class?.name || "-"}</Typography></TableCell>
@@ -300,7 +281,6 @@ export function TuitionList() {
         </Box>
         <TablePagination component="div" count={total} page={page} rowsPerPage={pageSize} onPageChange={(_, nextPage) => setPage(nextPage)} onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }} rowsPerPageOptions={[10, 20, 50, 100]} labelRowsPerPage="Số dòng/trang" labelDisplayedRows={({ from, to, count }) => `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`} />
       </Paper>
-
       <StudentSelectDialog open={studentDialog.open} onClose={studentDialog.onClose} onSelect={(item: StudentItem) => { setStudent({ id: item.id, code: item.code, name: item.fullName }); setStudentCode(item.code); studentDialog.onClose(); }} title="Chọn học viên xem học phí" />
       <ClassSelectDialog open={classDialog.open} onClose={classDialog.onClose} onSelect={(item: ClassItem) => { setSelectedClass({ id: item.id, code: item.code, name: item.name }); setClassId(item.id); classDialog.onClose(); }} />
     </Stack>

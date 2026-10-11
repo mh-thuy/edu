@@ -15,7 +15,6 @@ import {
   Button,
   Checkbox,
   Chip,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -42,7 +41,6 @@ import CampaignOutlinedIcon from "@mui/icons-material/CampaignOutlined";
 import CallSplitOutlinedIcon from "@mui/icons-material/CallSplitOutlined";
 import CheckCircleOutlineOutlinedIcon from "@mui/icons-material/CheckCircleOutlineOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import HourglassTopOutlinedIcon from "@mui/icons-material/HourglassTopOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MergeTypeOutlinedIcon from "@mui/icons-material/MergeTypeOutlined";
@@ -142,7 +140,6 @@ export function PaymentBatchManagement() {
     string | undefined
   >();
   const [appliedClassId, setAppliedClassId] = useState<string | undefined>();
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [fees, setFees] = useState<NoticeFee[]>([]);
   const [unissuedTotal, setUnissuedTotal] = useState(0);
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
@@ -342,7 +339,6 @@ export function PaymentBatchManagement() {
     if (queryMonth && /^\d{4}-(0[1-9]|1[0-2])$/.test(queryMonth))
       setMonth(queryMonth);
     if (!queryClassId) return;
-    setShowAdvancedFilters(true);
     void fetch(`/api/classes/${encodeURIComponent(queryClassId)}`)
       .then(async (response) => {
         if (!response.ok)
@@ -748,28 +744,6 @@ export function PaymentBatchManagement() {
               }}
               sx={{ flex: 1, minWidth: 0 }}
             />
-            <Button
-              size="small"
-              variant="text"
-              color="inherit"
-              startIcon={<TuneOutlinedIcon />}
-              endIcon={
-                <ExpandMoreOutlinedIcon
-                  sx={{
-                    transform: showAdvancedFilters ? "rotate(180deg)" : "none",
-                    transition: "transform 180ms ease",
-                  }}
-                />
-              }
-              onClick={() => setShowAdvancedFilters((current) => !current)}
-              sx={{
-                color: "text.secondary",
-                whiteSpace: "nowrap",
-                alignSelf: { xs: "flex-start", md: "center" },
-              }}
-            >
-              Bộ lọc nâng cao
-            </Button>
             <FilterActions
               onSearch={applyFilters}
               onClear={clearFilters}
@@ -779,13 +753,7 @@ export function PaymentBatchManagement() {
               isLoading={loading}
             />
           </Stack>
-          <Collapse in={showAdvancedFilters}>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={1.25}
-              alignItems={{ md: "center" }}
-              sx={{ pt: 0.5 }}
-            >
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
               <MasterSelectField
                 label="Học viên"
                 value={student}
@@ -804,8 +772,7 @@ export function PaymentBatchManagement() {
                 nameLabel="Tên lớp"
                 sx={{ flex: 1, minWidth: { md: 280 } }}
               />
-            </Stack>
-          </Collapse>
+          </Stack>
         </Stack>
       </Paper>
 

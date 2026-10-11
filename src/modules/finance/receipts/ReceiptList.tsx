@@ -7,7 +7,6 @@ import {
   Box,
   Button,
   Chip,
-  Collapse,
   Divider,
   MenuItem,
   Paper,
@@ -25,14 +24,12 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import PersonOutlineOutlinedIcon from "@mui/icons-material/PersonOutlineOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
 import SearchIcon from "@mui/icons-material/Search";
-import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
 import { DatePickerField } from "@/components/shared/forms/DatePickerField";
@@ -112,7 +109,6 @@ export function ReceiptList() {
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [detailId, setDetailId] = useState<string | null>(null);
-  const [showDateFilters, setShowDateFilters] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -204,9 +200,6 @@ export function ReceiptList() {
               <Typography variant="caption" color="text.secondary">Tìm theo mã biên lai, học viên, mã học phí hoặc payment</Typography>
             </Box>
           </Stack>
-          <Button size="small" variant="text" color="inherit" startIcon={<TuneOutlinedIcon />} endIcon={<ExpandMoreOutlinedIcon sx={{ transform: showDateFilters ? "rotate(180deg)" : "none", transition: "transform 180ms ease" }} />} onClick={() => setShowDateFilters((current) => !current)} sx={{ color: "text.secondary", alignSelf: { xs: "flex-start", sm: "center" } }}>
-            Lọc theo ngày phát hành
-          </Button>
         </Stack>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
           <AppTextField
@@ -225,12 +218,10 @@ export function ReceiptList() {
           </AppTextField>
           <FilterActions onSearch={applyFilters} onClear={resetFilters} hasFilters={hasFilters} isLoading={loading} />
         </Stack>
-        <Collapse in={showDateFilters}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ pt: 1.5 }}>
-            <DatePickerField label="Từ ngày" value={dateFrom} onChange={setDateFrom} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo) }} />
-            <DatePickerField label="Đến ngày" value={dateTo} onChange={setDateTo} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo), helperText: dateFrom && dateTo && dateFrom > dateTo ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc" : undefined }} />
-          </Stack>
-        </Collapse>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ mt: 1.5 }}>
+          <DatePickerField label="Từ ngày" value={dateFrom} onChange={setDateFrom} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo) }} />
+          <DatePickerField label="Đến ngày" value={dateTo} onChange={setDateTo} textFieldProps={{ error: Boolean(dateFrom && dateTo && dateFrom > dateTo), helperText: dateFrom && dateTo && dateFrom > dateTo ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc" : undefined }} />
+        </Stack>
       </Paper>
 
       {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => setRefreshKey((value) => value + 1)}>Thử lại</Button>}>{error}</Alert>}

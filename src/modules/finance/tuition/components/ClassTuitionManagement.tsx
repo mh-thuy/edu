@@ -57,6 +57,7 @@ type Fee = {
   remainingAmount: number;
   billingYear: number;
   billingMonth: number;
+  note?: string | null;
   student: { code: string; fullName: string };
   items: Array<{ itemName: string; amount: number }>;
   paymentAllocations?: Array<{
@@ -369,7 +370,7 @@ export function ClassTuitionManagement({
               const canPay = !pendingBatch && (fee.status === "UNPAID" || fee.status === "PARTIAL" || fee.status === "OVERDUE");
               return (
                 <TableRow key={fee.id} hover>
-                  <TableCell sx={{ minWidth: 180 }}><Typography fontWeight={700}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography></TableCell>
+                  <TableCell sx={{ minWidth: 220 }}><Typography fontWeight={700}>{fee.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{fee.student.code}</Typography>{fee.note && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, whiteSpace: "normal", overflowWrap: "anywhere" }}><strong>Ghi chú:</strong> {fee.note}</Typography>}</TableCell>
                   <TableCell sx={{ minWidth: 200 }}><Typography variant="body2" sx={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fee.items.map((item) => item.itemName).join(", ") || "-"}</Typography></TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap", minWidth: 150 }}><Typography fontWeight={800}>{money(Number(fee.finalAmount))}</Typography></TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap", minWidth: 135 }}>{money(Number(fee.paidAmount))}</TableCell>
@@ -408,6 +409,7 @@ export function ClassTuitionManagement({
                   <Chip size="small" color={feeColor} label={feeStatus} sx={{ maxWidth: "55%" }} />
                 </Stack>
                 {pendingBatch && <Typography variant="caption" color="text.secondary">Đợt thu: {pendingBatch.batchNo}</Typography>}
+                {fee.note && <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}><strong>Ghi chú:</strong> {fee.note}</Typography>}
                 <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
                   Môn tính phí: {fee.items.map((item) => item.itemName).join(", ") || "-"}
                 </Typography>
