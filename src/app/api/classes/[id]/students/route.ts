@@ -50,6 +50,9 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
       status: z.enum(["ACTIVE", "PAUSED", "COMPLETED", "LEFT"]).optional(),
       subjectId: z.string().uuid().optional(),
       month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+      sortBy: z.enum(["code", "fullName", "item", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"]).default("fullName"),
+      sortDirection: z.enum(["asc", "desc"]).default("asc"),
+      tuitionStatus: z.enum(["NONE", "UNPAID", "PARTIAL", "PAID", "OVERDUE", "EXEMPTED", "CANCELLED"]).optional(),
     }).parse({
       page: searchParams.get("page") || undefined,
       pageSize: searchParams.get("pageSize") || undefined,
@@ -57,6 +60,9 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
       status: searchParams.get("status") || undefined,
       subjectId: searchParams.get("subjectId") || undefined,
       month: searchParams.get("month"),
+      sortBy: searchParams.get("sortBy") || undefined,
+      sortDirection: searchParams.get("sortDirection") || undefined,
+      tuitionStatus: searchParams.get("tuitionStatus") || undefined,
     });
     return apiSuccess(await getClassStudentsPage(id, filters));
   } catch (error: unknown) {

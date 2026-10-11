@@ -1502,6 +1502,9 @@ export async function getClassStudentsPage(
     status?: "ACTIVE" | "PAUSED" | "COMPLETED" | "LEFT";
     subjectId?: string;
     month: string;
+    sortBy?: "code" | "fullName" | "item" | "finalAmount" | "paidAmount" | "remainingAmount" | "feeStatus";
+    sortDirection?: "asc" | "desc";
+    tuitionStatus?: "NONE" | "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
   },
 ) {
   const period = parseStudentListMonth(options.month);
@@ -1529,7 +1532,31 @@ export async function getClassStudentsPage(
           ? { ...activeInPeriod, pauses: { some: pauseWhere } }
           : options.status === "ACTIVE"
             ? { ...activeInPeriod, pauses: { none: pauseWhere } }
-            : { OR: [activeInPeriod, { status: "COMPLETED" }] };
+          : { status: { in: ["ACTIVE", "COMPLETED", "LEFT"] } };
+  const feePeriodWhere: Prisma.TuitionFeeWhereInput = {
+    billingType: "MONTHLY",
+    billingYear: period.year,
+    billingMonth: period.month,
+  };
+  const asOfDate = getVietnamCalendarDateStart(new Date());
+  const feeStatusWhere: Prisma.TuitionFeeWhereInput | undefined = options.tuitionStatus && options.tuitionStatus !== "NONE"
+    ? {
+        ...feePeriodWhere,
+        ...(options.tuitionStatus === "OVERDUE"
+          ? {
+              OR: [
+                { status: "OVERDUE" },
+                { status: { in: ["UNPAID", "PARTIAL"] }, dueDate: { lt: asOfDate } },
+              ],
+            }
+          : {
+              status: options.tuitionStatus,
+              ...(options.tuitionStatus === "UNPAID" || options.tuitionStatus === "PARTIAL"
+                ? { OR: [{ dueDate: null }, { dueDate: { gte: asOfDate } }] }
+                : {}),
+            }),
+      }
+    : undefined;
   const where: Prisma.ClassStudentWhereInput = {
     classId,
     ...statusWhere,
@@ -1552,6 +1579,8 @@ export async function getClassStudentsPage(
         },
       },
     }),
+    ...(options.tuitionStatus === "NONE" && { tuitionFees: { none: feePeriodWhere } }),
+    ...(feeStatusWhere && { tuitionFees: { some: feeStatusWhere } }),
   };
 
   const activeWhere: Prisma.ClassStudentWhereInput = {
@@ -1559,13 +1588,103 @@ export async function getClassStudentsPage(
     status: "ACTIVE",
     pauses: { none: pauseWhere },
   };
-  const [students, total, active, paused, completed, activeWithFee] =
+  const feeSort = ["item", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"].includes(options.sortBy ?? "");
+  const sortedPageIds = feeSort
+    ? await prisma.$queryRaw<Array<{ id: string }>>`
+        WITH fee_sort AS (
+          SELECT tf.enrollment_id,
+            COUNT(*)::int AS fee_count,
+            COALESCE(SUM(tf.final_amount), 0)::double precision AS final_amount,
+            COALESCE(SUM(paid.amount), 0)::double precision AS paid_amount,
+            MAX(CASE
+              WHEN (tf.status::text IN ('UNPAID', 'PARTIAL') AND tf.due_date < ${asOfDate}::date) OR tf.status::text = 'OVERDUE' THEN 3
+              WHEN tf.status::text = 'UNPAID' THEN 1
+              WHEN tf.status::text = 'PARTIAL' THEN 2
+              WHEN tf.status::text = 'PAID' THEN 4
+              WHEN tf.status::text = 'EXEMPTED' THEN 5
+              WHEN tf.status::text = 'CANCELLED' THEN 6
+              ELSE 0 END) AS fee_status_order
+          FROM tuition_fees tf
+          LEFT JOIN LATERAL (
+            SELECT SUM(tp.amount) AS amount
+            FROM tuition_payments tp
+            WHERE tp.tuition_fee_id = tf.id AND tp.payment_status = 'SUCCESS'::tuition_payment_status
+          ) paid ON true
+          WHERE tf.class_id = ${classId}::uuid
+            AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+            AND tf.billing_year = ${period.year} AND tf.billing_month = ${period.month}
+          GROUP BY tf.enrollment_id
+        ), fee_item_sort AS (
+          SELECT tf.enrollment_id, string_agg(DISTINCT tfi.item_name, ', ' ORDER BY tfi.item_name) AS item_name
+          FROM tuition_fees tf
+          JOIN tuition_fee_items tfi ON tfi.tuition_fee_id = tf.id
+          WHERE tf.class_id = ${classId}::uuid
+            AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+            AND tf.billing_year = ${period.year} AND tf.billing_month = ${period.month}
+          GROUP BY tf.enrollment_id
+        )
+        SELECT cs.id
+        FROM class_students cs
+        JOIN students s ON s.id = cs.student_id
+        LEFT JOIN fee_sort ON fee_sort.enrollment_id = cs.id
+        LEFT JOIN fee_item_sort ON fee_item_sort.enrollment_id = cs.id
+        WHERE cs.class_id = ${classId}::uuid
+          AND cs.status::text IN ('ACTIVE', 'COMPLETED', 'LEFT')
+          AND (${options.status ?? null}::text IS NULL
+            OR (${options.status ?? null}::text = 'ACTIVE' AND cs.status::text = 'ACTIVE' AND NOT EXISTS (
+              SELECT 1 FROM enrollment_pauses ep WHERE ep.enrollment_id = cs.id AND ep.status::text = 'ACTIVE'
+                AND ep.start_month <= ${period.end}::date AND ep.end_month >= ${period.start}::date))
+            OR (${options.status ?? null}::text = 'PAUSED' AND cs.status::text = 'ACTIVE' AND EXISTS (
+              SELECT 1 FROM enrollment_pauses ep WHERE ep.enrollment_id = cs.id AND ep.status::text = 'ACTIVE'
+                AND ep.start_month <= ${period.end}::date AND ep.end_month >= ${period.start}::date))
+            OR (${options.status ?? null}::text = 'COMPLETED' AND cs.status::text = 'COMPLETED')
+            OR (${options.status ?? null}::text = 'LEFT' AND cs.status::text = 'LEFT'))
+          AND (${options.search?.trim() || null}::text IS NULL OR
+            s.code ILIKE '%' || ${options.search?.trim() || ""} || '%' OR
+            s.full_name ILIKE '%' || ${options.search?.trim() || ""} || '%' OR
+            s.phone ILIKE '%' || ${options.search?.trim() || ""} || '%')
+          AND (${options.subjectId ?? null}::uuid IS NULL OR EXISTS (
+            SELECT 1 FROM enrollment_subjects es WHERE es.enrollment_id = cs.id
+              AND es.class_subject_id = ${options.subjectId ?? "00000000-0000-0000-0000-000000000000"}::uuid
+              AND (es.status::text IN ('ACTIVE', 'COMPLETED') OR (es.dropped_at >= ${period.start}::date AND es.dropped_at < ${periodEndExclusive}::date))))
+          AND (${options.tuitionStatus ?? null}::text IS NULL
+            OR (${options.tuitionStatus ?? null}::text = 'NONE' AND COALESCE(fee_sort.fee_count, 0) = 0)
+            OR (${options.tuitionStatus ?? null}::text <> 'NONE' AND EXISTS (
+              SELECT 1 FROM tuition_fees tf WHERE tf.enrollment_id = cs.id AND tf.class_id = ${classId}::uuid
+                AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+                AND tf.billing_year = ${period.year} AND tf.billing_month = ${period.month}
+                AND CASE WHEN tf.status::text IN ('UNPAID', 'PARTIAL') AND tf.due_date < ${asOfDate}::date THEN 'OVERDUE'
+                  ELSE tf.status::text END = ${options.tuitionStatus ?? ""})))
+        ORDER BY
+          CASE WHEN ${options.sortBy ?? "fullName"} IN ('item', 'code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'asc'
+            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'item' THEN fee_item_sort.item_name WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} IN ('item', 'code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'desc'
+            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'item' THEN fee_item_sort.item_name WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END DESC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'finalAmount' AND ${options.sortDirection ?? "asc"} = 'asc' THEN fee_sort.final_amount END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'finalAmount' AND ${options.sortDirection ?? "asc"} = 'desc' THEN fee_sort.final_amount END DESC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'paidAmount' AND ${options.sortDirection ?? "asc"} = 'asc' THEN fee_sort.paid_amount END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'paidAmount' AND ${options.sortDirection ?? "asc"} = 'desc' THEN fee_sort.paid_amount END DESC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'remainingAmount' AND ${options.sortDirection ?? "asc"} = 'asc' THEN GREATEST(fee_sort.final_amount - fee_sort.paid_amount, 0) END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'remainingAmount' AND ${options.sortDirection ?? "asc"} = 'desc' THEN GREATEST(fee_sort.final_amount - fee_sort.paid_amount, 0) END DESC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'feeStatus' AND ${options.sortDirection ?? "asc"} = 'asc' THEN fee_sort.fee_status_order END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} = 'feeStatus' AND ${options.sortDirection ?? "asc"} = 'desc' THEN fee_sort.fee_status_order END DESC NULLS LAST,
+          s.full_name ASC, s.code ASC
+        LIMIT ${options.pageSize} OFFSET ${(options.page - 1) * options.pageSize}
+      `
+    : null;
+  const [students, total, active, paused, completed, left, activeWithFee] =
     await Promise.all([
       prisma.classStudent.findMany({
-        where,
-        skip: (options.page - 1) * options.pageSize,
-        take: options.pageSize,
-        orderBy: { student: { fullName: "asc" } },
+        where: sortedPageIds ? { ...where, id: { in: sortedPageIds.map(({ id }) => id) } } : where,
+        ...(!sortedPageIds && { skip: (options.page - 1) * options.pageSize, take: options.pageSize }),
+        orderBy: [
+          {
+            student: {
+            [options.sortBy === "code" ? "code" : "fullName"]: options.sortDirection ?? "asc",
+            },
+          },
+          { student: { code: "asc" } },
+        ],
         include: {
           student: true,
           subjects: {
@@ -1573,18 +1692,27 @@ export async function getClassStudentsPage(
             select: { classSubjectId: true },
           },
           tuitionFees: {
+            where: feePeriodWhere,
             select: {
               id: true,
+              feeNo: true,
               status: true,
               finalAmount: true,
               dueDate: true,
               billingYear: true,
               billingMonth: true,
               billingType: true,
-              items: { select: { classSubjectId: true } },
+              note: true,
+              items: { select: { classSubjectId: true, itemName: true, amount: true } },
               payments: {
                 where: { paymentStatus: "SUCCESS" },
                 select: { amount: true },
+              },
+              paymentAllocations: {
+                where: { paymentBatch: { status: "PENDING" } },
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { paymentBatch: { select: { id: true, batchNo: true, status: true } } },
               },
             },
           },
@@ -1608,6 +1736,7 @@ export async function getClassStudentsPage(
         },
       }),
       prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
+      prisma.classStudent.count({ where: { classId, status: "LEFT" } }),
       prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count
       FROM class_students cs
@@ -1662,7 +1791,32 @@ export async function getClassStudentsPage(
   const statusById = new Map(
     pauseStatuses.map((pause) => [pause.id, pause.status]),
   );
-  const items = students.map((student) => ({
+  const [tuitionSummary] = await prisma.$queryRaw<Array<{
+    count: number;
+    amount: number;
+    paid: number;
+    remaining: number;
+  }>>`
+    SELECT
+      COUNT(*)::int AS count,
+      COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN tf.final_amount ELSE 0 END), 0)::double precision AS amount,
+      COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN paid.amount ELSE 0 END), 0)::double precision AS paid,
+      COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN GREATEST(tf.final_amount - COALESCE(paid.amount, 0), 0) ELSE 0 END), 0)::double precision AS remaining
+    FROM tuition_fees tf
+    LEFT JOIN LATERAL (
+      SELECT SUM(tp.amount) AS amount
+      FROM tuition_payments tp
+      WHERE tp.tuition_fee_id = tf.id AND tp.payment_status = 'SUCCESS'::tuition_payment_status
+    ) paid ON true
+    WHERE tf.class_id = ${classId}::uuid
+      AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
+      AND tf.billing_year = ${period.year}
+      AND tf.billing_month = ${period.month}
+  `;
+  const orderedStudents = sortedPageIds
+    ? sortedPageIds.map(({ id }) => students.find((student) => student.id === id)).filter((student) => student !== undefined)
+    : students;
+  const items = orderedStudents.map((student) => ({
     ...student,
     pauses: student.pauses.map((pause) => ({
       ...pause,
@@ -1702,7 +1856,10 @@ export async function getClassStudentsPage(
       active,
       paused,
       completed,
+      left,
+      total: active + paused + completed + left,
       uncreated: Math.max(0, active - activeWithFee),
+      tuitionFees: tuitionSummary ?? { count: 0, amount: 0, paid: 0, remaining: 0 },
     },
   };
 }
