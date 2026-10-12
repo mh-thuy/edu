@@ -12,6 +12,8 @@ export type DailyPaymentReportRow = {
   count: number;
   total: number;
   note: string;
+  studentNames: string;
+  billingPeriods: string;
 };
 
 export type DailyPaymentReportDetail = {
@@ -51,8 +53,9 @@ function formatMethod(method: string) {
   return method === "CASH" ? "Tiền mặt" : method === "BANK_TRANSFER" ? "Chuyển khoản" : method;
 }
 
-type DailyPaymentReportAccumulator = Omit<DailyPaymentReportRow, "total"> & {
+type DailyPaymentReportAccumulator = Omit<DailyPaymentReportRow, "total" | "studentNames"> & {
   total: Prisma.Decimal;
+  studentNames: Set<string>;
 };
 
 function addRow(
@@ -78,6 +81,8 @@ function addRow(
   },
   feeClassName: string,
   paymentMethod: string,
+  studentName: string,
+  billingPeriod: string,
 ): Prisma.Decimal {
   const classSubject = item.classSubject;
 
@@ -103,12 +108,16 @@ function addRow(
     ? `${classSubject.subject.name} · ${formatMethod(paymentMethod)}`
     : `${item.itemName} · ${formatMethod(paymentMethod)}`;
   const key = classSubject
-    ? `${classSubject.id}:${Number(item.unitPrice)}:${paymentMethod}`
-    : `UNALLOCATED:${item.itemType}:${item.itemName}:${Number(item.unitPrice)}:${paymentMethod}`;
+    ? `${classSubject.id}:${Number(item.unitPrice)}`
+    : `UNALLOCATED:${item.itemType}:${item.itemName}:${Number(item.unitPrice)}`;
   const current = groups.get(key);
   if (current) {
     current.count += 1;
     current.total = current.total.plus(paidAmount);
+    current.studentNames.add(studentName);
+    if (!current.billingPeriods.split(", ").includes(billingPeriod)) {
+      current.billingPeriods = [...current.billingPeriods.split(", "), billingPeriod].sort().join(", ");
+    }
     return paidAmount;
   }
   groups.set(key, {
@@ -118,6 +127,8 @@ function addRow(
     count: 1,
     total: paidAmount,
     note,
+    studentNames: new Set([studentName]),
+    billingPeriods: billingPeriod,
   });
   return paidAmount;
 }
@@ -154,6 +165,8 @@ export async function getDailyPaymentReport(
       tuitionFee: {
         select: {
           feeNo: true,
+          billingYear: true,
+          billingMonth: true,
           originalAmount: true,
           discountAmount: true,
           additionalAmount: true,
@@ -209,11 +222,13 @@ export async function getDailyPaymentReport(
         item,
         payment.tuitionFee.class.name,
         payment.paymentMethod,
+        payment.tuitionFee.student.fullName,
+        `THÁNG ${payment.tuitionFee.billingMonth}/${payment.tuitionFee.billingYear}`,
       ));
     }
     const unallocatedAmount = payment.amount.minus(allocatedAmount);
     if (payment.tuitionFee.items.length === 0 || !unallocatedAmount.isZero()) {
-      const key = `UNALLOCATED:RESIDUAL:${payment.tuitionFee.class.name}:${payment.paymentMethod}`;
+      const key = `UNALLOCATED:RESIDUAL:${payment.tuitionFee.class.name}`;
       const current = groups.get(key);
       if (current) {
         current.count += 1;
@@ -226,6 +241,8 @@ export async function getDailyPaymentReport(
           count: 1,
           total: unallocatedAmount,
           note: `Phần chưa gắn item · ${formatMethod(payment.paymentMethod)}`,
+          studentNames: new Set([payment.tuitionFee.student.fullName]),
+          billingPeriods: `THÁNG ${payment.tuitionFee.billingMonth}/${payment.tuitionFee.billingYear}`,
         });
       }
     }
@@ -262,7 +279,7 @@ export async function getDailyPaymentReport(
   return {
     date: input.date,
     rows: [...groups.values()]
-      .map((row) => ({ ...row, total: row.total.toNumber() }))
+      .map((row) => ({ ...row, studentNames: [...row.studentNames].join(", "), total: row.total.toNumber() }))
       .sort((a, b) => a.teacherName.localeCompare(b.teacherName, "vi")),
     details,
     paymentCount: payments.length,

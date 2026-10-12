@@ -56,19 +56,19 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
   sheet.columns = [
     { width: 8 },
     { width: 24 },
+    { width: 22 },
     { width: 16 },
-    { width: 16 },
-    { width: 14 },
     { width: 12 },
+    { width: 18 },
     { width: 42 },
-    { width: 4 },
+    { width: 18 },
   ];
   sheet.mergeCells("A1:H1");
   sheet.mergeCells("A2:H2");
   sheet.mergeCells("A3:H3");
   sheet.getCell("A1").value = "TRUNG TÂM ĐÀO TẠO";
-  sheet.getCell("A2").value = "BÁO CÁO THU HỌC PHÍ THEO NGÀY";
-  sheet.getCell("A3").value = `Ngày ${formatDate(report.date)}`;
+  sheet.getCell("A2").value = "BÁO CÁO THU HỌC PHÍ HẰNG NGÀY";
+  sheet.getCell("A3").value = `CẢ NGÀY · ${formatDate(report.date)}`;
   sheet.getRow(1).height = 24;
   sheet.getRow(2).height = 24;
   sheet.getRow(3).height = 22;
@@ -84,7 +84,7 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
   setFill(sheet.getCell("A2"), colors.navy);
   sheet.getCell("A3").font = { name: "Arial", size: 11, color: { argb: colors.navy } };
 
-  const headers = ["STT", "GIÁO VIÊN", "LỚP", "ĐƠN GIÁ", "SỐ DÒNG THU", "THÀNH TIỀN", "GHI CHÚ"];
+  const headers = ["STT", "GIÁO VIÊN", "LỚP", "HỌC PHÍ", "SỐ LƯỢT", "THÀNH TIỀN", "TÊN HỌC SINH ĐÓNG TIỀN", "KỲ HỌC"];
   headers.forEach((value, index) => {
     const cell = sheet.getRow(4).getCell(index + 1);
     cell.value = value;
@@ -97,7 +97,7 @@ export async function buildDailyPaymentReportExcel(report: DailyPaymentReport): 
   const firstDataRow = 5;
   report.rows.forEach((row, index) => {
     const excelRow = sheet.getRow(firstDataRow + index);
-    excelRow.values = [index + 1, row.teacherName, row.className, row.tuitionFee, row.count, row.total, row.note];
+    excelRow.values = [index + 1, row.teacherName, row.className, row.tuitionFee, row.count, row.total, row.studentNames, row.billingPeriods];
     excelRow.height = 24;
     excelRow.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
       styleCell(cell, { horizontal: columnNumber === 1 ? "center" : [4, 5, 6].includes(columnNumber) ? "right" : "left" });
