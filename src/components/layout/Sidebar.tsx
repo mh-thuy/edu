@@ -12,6 +12,8 @@ import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import AccountBalanceOutlinedIcon from "@mui/icons-material/AccountBalanceOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 
 import {
   Box,
@@ -52,6 +54,18 @@ export const adminNavigationItems: SidebarItem[] = [
     label: "Lớp học",
     href: "/admin/classes",
     icon: <ClassOutlinedIcon fontSize="small" />,
+    section: "Đào tạo",
+  },
+  {
+    label: "Điểm danh",
+    href: "/teacher/attendance",
+    icon: <FactCheckOutlinedIcon fontSize="small" />,
+    section: "Đào tạo",
+  },
+  {
+    label: "Lịch điểm danh",
+    href: "/teacher/attendance/calendar",
+    icon: <CalendarMonthOutlinedIcon fontSize="small" />,
     section: "Đào tạo",
   },
   {
@@ -122,14 +136,32 @@ export const adminNavigationItems: SidebarItem[] = [
   },
 ];
 
+const teacherAttendanceNavigationItem: SidebarItem = {
+  label: "Điểm danh",
+  href: "/teacher/attendance",
+  icon: <FactCheckOutlinedIcon fontSize="small" />,
+  section: "Đào tạo",
+};
+
+const teacherAttendanceCalendarNavigationItem: SidebarItem = {
+  label: "Lịch điểm danh",
+  href: "/teacher/attendance/calendar",
+  icon: <CalendarMonthOutlinedIcon fontSize="small" />,
+  section: "Đào tạo",
+};
+
 type SidebarProps = {
   collapsed?: boolean;
   onNavigate?: () => void;
+  teacherMode?: boolean;
 };
 
-export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactElement {
+export function Sidebar({ collapsed = false, onNavigate, teacherMode = false }: SidebarProps): ReactElement {
   const pathname = usePathname();
-  const activeHref = adminNavigationItems
+  const navigationItems = teacherMode
+    ? [teacherAttendanceNavigationItem, teacherAttendanceCalendarNavigationItem]
+    : adminNavigationItems;
+  const activeHref = navigationItems
     .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
     .sort((left, right) => right.href.length - left.href.length)[0]?.href;
 
@@ -187,9 +219,9 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps): ReactE
           scrollbarGutter: "stable",
         }}
       >
-        {adminNavigationItems.map((item, index) => {
+        {navigationItems.map((item, index) => {
           const selected = item.href === activeHref;
-          const previousSection = index > 0 ? adminNavigationItems[index - 1]?.section : null;
+          const previousSection = index > 0 ? navigationItems[index - 1]?.section : null;
 
           const button = (
             <ListItemButton

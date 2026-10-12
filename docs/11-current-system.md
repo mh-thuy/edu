@@ -5,7 +5,12 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 ## Phạm vi sản phẩm
 
 - Không quản lý phòng học và không kiểm tra trùng phòng.
-- Không quản lý điểm danh.
+- Điểm danh được lưu thành các phiên riêng theo lớp, không phụ thuộc lịch học;
+  một lớp có thể có nhiều phiên trong ngày. Thời điểm phiên được ghi theo giờ
+  máy chủ khi lưu. Giáo viên đăng nhập bằng tài khoản được quản trị viên liên
+  kết với hồ sơ giáo viên và chỉ xem/sửa lớp/môn được phân công. Học viên đang
+  theo học có trạng thái `PRESENT` hoặc `ABSENT`; ghi chú vắng tùy chọn. Giáo
+  viên có thể sửa không giới hạn thời gian và mọi thay đổi có audit log.
 - Không quản lý kỳ lương, phiếu lương hoặc bảng lương giáo viên.
 - Báo cáo thu học phí theo lớp/môn vẫn tính phần doanh thu còn lại từ
   `Teacher.commissionPercent`; đây là chỉ tiêu báo cáo thu, không phải bảng lương.
@@ -81,7 +86,8 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 
 ## Giáo viên và học viên
 
-- Giáo viên là hồ sơ độc lập, không liên kết tài khoản `User` và không sử dụng email.
+- Giáo viên là hồ sơ nghiệp vụ độc lập; có thể liên kết với tối đa một tài khoản
+  `User` để đăng nhập. Email đăng nhập thuộc tài khoản User.
 - Trạng thái giáo viên chỉ gồm `ACTIVE` và `INACTIVE`.
 - Giáo viên có tỷ lệ trích `0..100%` phục vụ báo cáo thu học phí theo lớp/môn.
 - Học viên không sử dụng email; thông tin liên hệ gồm số điện thoại và phụ huynh.

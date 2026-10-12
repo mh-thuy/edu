@@ -2,6 +2,7 @@ export type SessionUser = {
   id: string;
   email: string;
   fullName: string;
+  teacherId?: string | null;
 };
 
 export type SessionPayload = {

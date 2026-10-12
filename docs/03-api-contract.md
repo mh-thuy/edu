@@ -1023,7 +1023,35 @@ Không trả:
 
 ---
 
-# 19.3. Báo cáo đối soát ngân hàng theo ngày
+# 19.3 Điểm danh giáo viên
+
+```http
+GET /api/attendance
+GET /api/attendance?classId={uuid}
+GET /api/attendance?classId={uuid}&fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
+GET /api/attendance?classId={uuid}&newSession=true
+GET /api/attendance?sessionId={uuid}
+POST /api/attendance
+PUT /api/attendance
+```
+
+`GET` không có query trả các lớp/môn được phép điểm danh. `GET` có `classId`
+trả các phiên đã lưu gần nhất của lớp; có thể truyền đồng thời `fromDate` và
+`toDate` để lọc theo ngày Việt Nam, bao gồm cả hai đầu mút. Thêm
+`newSession=true` trả roster để tạo phiên mới. `GET` có `sessionId` trả thông
+tin phiên, roster, trạng thái đã lưu và lịch sử chỉnh sửa.
+
+`POST` nhận `classId` và danh sách enrollment với trạng thái
+`PRESENT`/`ABSENT`; ghi chú vắng tùy chọn. Backend lấy thời điểm hiện tại, xác
+minh lớp/môn được phân công, enrollment còn hợp lệ và lưu phiên, các dòng điểm
+danh cùng audit log trong transaction. Mỗi `POST` hợp lệ tạo một phiên riêng,
+kể cả khi cùng lớp đã có phiên trong ngày.
+
+`PUT` nhận `sessionId` và danh sách enrollment để cập nhật phiên đã lưu. Backend
+xác minh quyền truy cập, kiểm tra roster và lưu các dòng điểm danh cùng audit
+log trong transaction. Thời điểm tạo phiên không thay đổi khi sửa.
+
+# 19.4 Báo cáo đối soát ngân hàng theo ngày
 
 ```http
 POST /api/bank-reconciliation-reports

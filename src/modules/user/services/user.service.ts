@@ -24,6 +24,7 @@ export async function getUsers(filter: UserFilter) {
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
+      include: { teacher: { select: { id: true, code: true, fullName: true } } },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -46,6 +47,11 @@ export async function getUsers(filter: UserFilter) {
 }
 
 export async function createUser(data: UserCreate) {
+  if (data.teacherId) {
+    const teacher = await prisma.teacher.findUnique({ where: { id: data.teacherId }, select: { id: true, status: true, user: { select: { id: true } } } });
+    if (!teacher || teacher.status !== "ACTIVE") throw new NotFoundError("Không tìm thấy giáo viên đang hoạt động");
+    if (teacher.user) throw new ConflictError("Giáo viên đã được liên kết với tài khoản khác");
+  }
   const passwordHash = await bcrypt.hash(data.password, 10);
   const user = await prisma.user.create({
     data: {
@@ -53,7 +59,9 @@ export async function createUser(data: UserCreate) {
       fullName: data.fullName,
       passwordHash,
       status: data.status,
+      teacherId: data.teacherId ?? null,
     },
+    include: { teacher: { select: { id: true, code: true, fullName: true } } },
   });
   return withoutPassword(user);
 }
@@ -64,15 +72,24 @@ export async function updateUser(id: string, data: UserUpdate, actorId: string) 
   }
   const current = await prisma.user.findUnique({ where: { id } });
   if (!current) throw new NotFoundError("Không tìm thấy người dùng");
+  if (data.teacherId !== undefined && data.teacherId !== current.teacherId) {
+    if (data.teacherId) {
+      const teacher = await prisma.teacher.findUnique({ where: { id: data.teacherId }, select: { id: true, status: true, user: { select: { id: true } } } });
+      if (!teacher || teacher.status !== "ACTIVE") throw new NotFoundError("Không tìm thấy giáo viên đang hoạt động");
+      if (teacher.user && teacher.user.id !== id) throw new ConflictError("Giáo viên đã được liên kết với tài khoản khác");
+    }
+  }
   const passwordHash = data.password ? await bcrypt.hash(data.password, 10) : undefined;
   return prisma.$transaction(async (tx) => {
     const updated = await tx.user.update({
       where: { id },
+      include: { teacher: { select: { id: true, code: true, fullName: true } } },
       data: {
         email: data.email?.toLowerCase(),
         fullName: data.fullName,
         passwordHash,
         status: data.status,
+        ...(data.teacherId !== undefined && { teacherId: data.teacherId }),
         deletedAt:
           data.status === "ACTIVE"
             ? null

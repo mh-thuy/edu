@@ -7,11 +7,12 @@ export const userCreateSchema = z.object({
   fullName: z.string().trim().min(1).max(255),
   password: z.string().min(8).max(100),
   status: userStatus.default("ACTIVE"),
+  teacherId: z.string().uuid().nullable().optional(),
 });
 
 export const userUpdateSchema = userCreateSchema
   .omit({ password: true })
-  .extend({ password: z.string().min(8).max(100).optional() });
+  .extend({ password: z.string().min(8).max(100).optional(), teacherId: z.string().uuid().nullable().optional() });
 
 export const userFilterSchema = z.object({
   search: z.string().optional(),

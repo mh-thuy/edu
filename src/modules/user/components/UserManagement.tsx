@@ -38,18 +38,23 @@ import { FilterActions } from "@/components/shared/FilterActions";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
 import { userCreateSchema, userUpdateSchema } from "@/modules/user/schemas/user.schema";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import { TeacherSelectDialog } from "@/components/shared/dialogs/TeacherSelectDialog";
 
 type User = {
   id: string;
   email: string;
   fullName: string;
   status: "ACTIVE" | "INACTIVE" | "LOCKED";
+  teacherId: string | null;
+  teacher: { id: string; code: string; fullName: string } | null;
 };
 type FormState = {
   email: string;
   fullName: string;
   password: string;
   status: User["status"];
+  teacherId: string | null;
+  teacherName: string;
 };
 type FormErrors = Partial<Record<keyof FormState, string>>;
 const emptyForm: FormState = {
@@ -57,6 +62,8 @@ const emptyForm: FormState = {
   fullName: "",
   password: "",
   status: "ACTIVE",
+  teacherId: null,
+  teacherName: "",
 };
 const statusLabel = {
   ACTIVE: "Hoạt động",
@@ -88,6 +95,7 @@ export function UserManagement() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
+  const [teacherDialogOpen, setTeacherDialogOpen] = useState(false);
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -148,6 +156,8 @@ export function UserManagement() {
       fullName: user.fullName,
       password: "",
       status: user.status,
+      teacherId: user.teacherId,
+      teacherName: user.teacher ? `${user.teacher.code} - ${user.teacher.fullName}` : "",
     });
     setFieldErrors({});
     setError("");
@@ -163,6 +173,8 @@ export function UserManagement() {
         fullName: "Họ tên là bắt buộc và không quá 255 ký tự",
         password: "Mật khẩu phải từ 8 đến 100 ký tự",
         status: "Trạng thái không hợp lệ",
+        teacherId: "Giáo viên không hợp lệ",
+        teacherName: "Giáo viên không hợp lệ",
       };
       for (const issue of parsed.error.issues) {
         const field = issue.path[0];
@@ -311,7 +323,7 @@ export function UserManagement() {
             ) : (
               items.map((user) => (
                 <TableRow key={user.id} hover>
-                  <TableCell sx={{ minWidth: 220 }}><Typography fontWeight={700}>{user.fullName}</Typography><Typography variant="caption" color="text.secondary">Tài khoản hệ thống</Typography></TableCell>
+                  <TableCell sx={{ minWidth: 220 }}><Typography fontWeight={700}>{user.fullName}</Typography><Typography variant="caption" color="text.secondary">{user.teacher ? `Giáo viên: ${user.teacher.fullName}` : "Tài khoản quản trị"}</Typography></TableCell>
                   <TableCell sx={{ minWidth: 260 }}><Typography variant="body2" color="text.secondary">{user.email}</Typography></TableCell>
                   <TableCell>
                     <Chip
@@ -401,6 +413,11 @@ export function UserManagement() {
                 }}
               />
             </Stack>
+            <Stack direction="row" spacing={1} alignItems="flex-start">
+              <AppTextField label="Liên kết hồ sơ giáo viên (không bắt buộc)" value={form.teacherName} fullWidth InputProps={{ readOnly: true }} helperText="Tài khoản liên kết chỉ được điểm danh các lớp được phân công." />
+              <Button sx={{ mt: 0.5, minWidth: 110 }} variant="outlined" onClick={() => setTeacherDialogOpen(true)}>Chọn GV</Button>
+              {form.teacherId && <Button sx={{ mt: 0.5 }} onClick={() => setForm({ ...form, teacherId: null, teacherName: "" })}>Bỏ liên kết</Button>}
+            </Stack>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <AppTextField
                 label={
@@ -459,6 +476,14 @@ export function UserManagement() {
         onConfirm={() => void deactivate()}
         onCancel={() => setDeactivateTarget(null)}
         isLoading={loading}
+      />
+      <TeacherSelectDialog
+        open={teacherDialogOpen}
+        onClose={() => setTeacherDialogOpen(false)}
+        onSelect={(teacher) => {
+          setForm((current) => ({ ...current, teacherId: teacher.id, teacherName: `${teacher.code} - ${teacher.name}` }));
+          setTeacherDialogOpen(false);
+        }}
       />
     </Stack>
   );

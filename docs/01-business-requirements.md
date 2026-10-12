@@ -130,7 +130,8 @@ Rule:
 
 ```text
 teacher.code unique
-teacher không liên kết tài khoản user và không sử dụng email
+teacher có thể liên kết tối đa một tài khoản user; tài khoản do quản trị viên tạo
+email đăng nhập thuộc user
 commission_percent nằm trong khoảng 0..100
 commission_percent dùng cho báo cáo thu học phí theo lớp/môn
 ```
@@ -292,6 +293,19 @@ Không trùng giáo viên
 ```
 
 ---
+
+# 7.1 Điểm danh
+
+- Giáo viên chọn lớp/môn mình phụ trách và tạo phiên điểm danh độc lập với
+  lịch học; một lớp có thể có nhiều phiên trong cùng ngày.
+- Phiên chỉ được tạo khi lưu danh sách; hệ thống ghi thời điểm hiện tại từ máy
+  chủ, không nhận thời gian do trình duyệt gửi.
+- Tài khoản giáo viên chỉ truy cập phiên thuộc lớp/môn đang được phân công.
+- Danh sách gồm enrollment/môn có hiệu lực tại ngày Việt Nam của thời điểm tạo;
+  học viên tạm nghỉ trong tháng đó không xuất hiện. Khi sửa phiên, học viên đã
+  được lưu trong phiên vẫn được giữ lại.
+- Checkbox chọn là có mặt; bỏ chọn là vắng. Ghi chú vắng tùy chọn.
+- Giáo viên được sửa không giới hạn; hệ thống lưu lịch sử thay đổi.
 
 # 8. Quản lý học phí
 

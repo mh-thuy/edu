@@ -77,6 +77,13 @@ enum EnrollmentPauseStatus {
   @@map("enrollment_pause_status")
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+
+  @@map("attendance_status")
+}
+
 enum ReceiptStatus {
   ACTIVE
   CANCELLED
@@ -171,6 +178,10 @@ model User {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
+  teacherId String?  @unique(map: "uq_users_teacher_id") @map("teacher_id") @db.Uuid
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], map: "fk_users_teacher")
+  attendanceAuditLogs AttendanceAuditLog[] @relation("AttendanceAuditActor")
+
   @@map("users")
 }
 
@@ -191,6 +202,7 @@ model Teacher {
 
   classSubjects ClassSubject[]
   schedules     ClassSchedule[]
+  user          User?
 
   @@map("teachers")
 }
@@ -273,6 +285,7 @@ model ClassStudent {
   tuitionFees TuitionFee[]        @relation("TuitionFeeEnrollment")
   subjects    EnrollmentSubject[]
   pauses      EnrollmentPause[]
+  attendanceRecords AttendanceRecord[]
 
   @@unique([classId, studentId], map: "uq_class_students_class_student")
   @@index([classId], map: "idx_class_students_class_id")
@@ -316,6 +329,7 @@ model ClassSubject {
   teacher      Teacher?            @relation(fields: [teacherId], references: [id], map: "fk_class_subjects_teacher")
   enrollments  EnrollmentSubject[]
   schedules    ClassSchedule[]
+  attendanceSessions AttendanceSession[]
   tuitionItems TuitionFeeItem[]
 
   @@unique([classId, subjectId], map: "uq_class_subjects_class_subject")
@@ -361,11 +375,60 @@ model ClassSchedule {
   class        Class        @relation(fields: [classId], references: [id], map: "fk_class_schedules_class")
   classSubject ClassSubject @relation(fields: [classSubjectId], references: [id], map: "fk_class_schedules_class_subject")
   teacher      Teacher      @relation(fields: [teacherId], references: [id], map: "fk_class_schedules_teacher")
-
   @@index([classId], map: "idx_class_schedules_class_id")
   @@index([classSubjectId], map: "idx_class_schedules_class_subject_id")
   @@index([teacherId, dayOfWeek], map: "idx_class_schedules_teacher_day")
   @@map("class_schedules")
+}
+
+model AttendanceSession {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  classSubjectId String  @map("class_subject_id") @db.Uuid
+  sessionAt      DateTime @default(now()) @map("session_at") @db.Timestamptz(6)
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedBy      String   @map("updated_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  classSubject ClassSubject       @relation(fields: [classSubjectId], references: [id], map: "fk_attendance_sessions_class_subject")
+  records  AttendanceRecord[]
+  audits   AttendanceAuditLog[]
+
+  @@index([classSubjectId, sessionAt], map: "idx_attendance_sessions_subject_time")
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attendanceSessionId String           @map("attendance_session_id") @db.Uuid
+  enrollmentId        String           @map("enrollment_id") @db.Uuid
+  status              AttendanceStatus
+  note                String?          @db.VarChar(500)
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session    AttendanceSession @relation(fields: [attendanceSessionId], references: [id], map: "fk_attendance_records_session")
+  enrollment ClassStudent      @relation(fields: [enrollmentId], references: [id], map: "fk_attendance_records_enrollment")
+
+  @@unique([attendanceSessionId, enrollmentId], map: "uq_attendance_records_session_enrollment")
+  @@index([enrollmentId], map: "idx_attendance_records_enrollment")
+  @@map("attendance_records")
+}
+
+model AttendanceAuditLog {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  attendanceSessionId String   @map("attendance_session_id") @db.Uuid
+  performedBy         String   @map("performed_by") @db.Uuid
+  action              String   @db.VarChar(50)
+  dataBefore          Json?    @map("data_before")
+  dataAfter           Json?    @map("data_after")
+  performedAt         DateTime @default(now()) @map("performed_at") @db.Timestamptz(6)
+
+  session AttendanceSession @relation(fields: [attendanceSessionId], references: [id], map: "fk_attendance_audit_session")
+  actor   User              @relation("AttendanceAuditActor", fields: [performedBy], references: [id], map: "fk_attendance_audit_actor")
+
+  @@index([attendanceSessionId, performedAt], map: "idx_attendance_audit_session_time")
+  @@map("attendance_audit_logs")
 }
 
 // Monthly tuition/payment domain. Legacy one-time fees remain identifiable during the migration period.

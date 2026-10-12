@@ -30,6 +30,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
     <Sidebar
       collapsed={isDesktop && desktopCollapsed}
       onNavigate={() => setMobileOpen(false)}
+      teacherMode={Boolean(user.teacherId)}
     />
   );
 
@@ -68,7 +69,7 @@ export function AppLayout({ user, children }: AppLayoutProps): ReactElement {
           },
         }}
       >
-        <Sidebar onNavigate={() => setMobileOpen(false)} />
+        <Sidebar onNavigate={() => setMobileOpen(false)} teacherMode={Boolean(user.teacherId)} />
       </Drawer>
 
       {/* Main content */}

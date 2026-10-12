@@ -86,6 +86,7 @@ export function TeacherSelectDialog({
       onClose={onClose}
       onSelect={handleSelect}
       endpoint="/api/teachers"
+      query={{ status: "ACTIVE" }}
       title="Chọn giáo viên"
       columns={columns}
       searchPlaceholder="Nhập mã hoặc tên giáo viên"

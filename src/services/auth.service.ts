@@ -15,9 +15,10 @@ type AuthUserResult = {
 export async function authenticateUser(input: LoginInput): Promise<AuthUserResult | null> {
   const user = await prisma.user.findUnique({
     where: { email: input.email.toLowerCase() },
+    include: { teacher: { select: { status: true } } },
   });
 
-  if (!user || user.status !== UserStatus.ACTIVE) {
+  if (!user || user.status !== UserStatus.ACTIVE || (user.teacher?.status !== undefined && user.teacher.status !== "ACTIVE")) {
     return null;
   }
 

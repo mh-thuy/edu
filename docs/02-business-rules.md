@@ -58,8 +58,10 @@ Backend bắt buộc check.
 
 ## 2.3 Access
 
-Mọi user đã đăng nhập dùng chung một quyền truy cập. Hệ thống không tạo,
-gán hoặc kiểm tra role.
+User không liên kết hồ sơ giáo viên dùng quyền chung cho các module quản trị.
+User liên kết giáo viên chỉ được truy cập module điểm danh và chỉ với lớp/môn
+được phân công. Hệ thống không tạo hoặc gán role; backend xác định phạm vi qua
+liên kết `User.teacherId`.
 
 ---
 
@@ -91,11 +93,11 @@ GV001
 
 ## 3.2 Teacher Profile
 
-Teacher là hồ sơ nghiệp vụ độc lập:
+Teacher là hồ sơ nghiệp vụ độc lập có thể liên kết tối đa một tài khoản User:
 
 ```text
-Không liên kết user
-Không sử dụng email
+Liên kết tài khoản chỉ phục vụ đăng nhập và phân giới hạn điểm danh
+Email đăng nhập thuộc User
 ```
 
 Thông tin sử dụng:
@@ -806,6 +808,23 @@ cancel
 ---
 
 # 14. Audit Log Rules
+
+## 14.1 Attendance
+
+- Giáo viên chọn lớp/môn được phân công và tạo một phiên điểm danh độc lập với
+  lịch học. Một lớp có thể có nhiều phiên trong cùng ngày.
+- Phiên được tạo khi lưu danh sách điểm danh; `session_at` do máy chủ ghi nhận
+  theo thời điểm hiện tại. Client không được tự gửi hoặc sửa thời điểm này.
+- User liên kết Teacher chỉ xem/sửa phiên thuộc lớp/môn đang được phân công cho
+  Teacher đó; backend bắt buộc kiểm tra phân công với cả tạo và sửa phiên.
+- Roster được xác định theo enrollment/môn có hiệu lực tại ngày Việt Nam của
+  `session_at`: học viên đã bắt đầu và chưa rời/bỏ môn; học viên tạm nghỉ trong
+  tháng đó không nằm trong roster. Khi sửa phiên, các dòng đã ghi nhận trước đó
+  vẫn được giữ trong roster để không mất khả năng chỉnh sửa lịch sử.
+- Trạng thái chỉ gồm `PRESENT` và `ABSENT`. Checkbox chọn là `PRESENT`; bỏ chọn
+  là `ABSENT`. Ghi chú vắng không bắt buộc, tối đa 500 ký tự.
+- Giáo viên được sửa không giới hạn thời gian. Mỗi lần tạo/cập nhật lưu audit
+  before/after cùng người thực hiện và thời điểm.
 
 Bắt buộc lưu audit log cho:
 

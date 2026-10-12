@@ -4,10 +4,13 @@
 
 Trạng thái triển khai hiện hành được tóm tắt tại [11-current-system.md](./11-current-system.md). Khi tài liệu đặc tả cũ còn mô tả tạo học phí thủ công, áp dụng quy trình hiện hành trong tài liệu này và các business rules mới.
 
-Mô hình truy cập hiện hành là một quyền dùng chung cho mọi user đã đăng nhập; chi tiết tại [09-permissions-matrix.md](./09-permissions-matrix.md).
+User quản trị đã đăng nhập dùng quyền chung; tài khoản liên kết giáo viên chỉ
+được vào điểm danh lớp được phân công. Chi tiết tại
+[09-permissions-matrix.md](./09-permissions-matrix.md).
 
-Các nghiệp vụ phòng học, điểm danh và bảng lương giáo viên đã được loại khỏi
-phạm vi sản phẩm. Báo cáo thu học phí theo lớp/môn vẫn sử dụng tỷ lệ trích của
+Nghiệp vụ điểm danh giáo viên đã được bổ sung theo đặc tả trong
+`11-current-system.md`. Nghiệp vụ phòng học và bảng lương giáo viên vẫn nằm
+ngoài phạm vi. Báo cáo thu học phí theo lớp/môn vẫn sử dụng tỷ lệ trích của
 giáo viên để tính phần còn lại của doanh thu; đây là báo cáo thu, không phải
 bảng lương. Mọi mô tả bảng lương còn sót trong migration, báo cáo audit hoặc
 tài liệu refactor cũ chỉ là lịch sử kỹ thuật, không phải yêu cầu hiện hành.
