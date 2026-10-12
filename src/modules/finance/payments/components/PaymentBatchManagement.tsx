@@ -553,90 +553,6 @@ export function PaymentBatchManagement() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        justifyContent="space-between"
-        alignItems={{ md: "center" }}
-        gap={2}
-      >
-        <Box>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <CampaignOutlinedIcon color="primary" />
-            <Typography variant="h5" fontWeight={800}>
-              Thông báo &amp; đợt thu
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Phát hành và theo dõi yêu cầu thanh toán theo từng học viên.
-          </Typography>
-        </Box>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1}
-          alignItems={{ sm: "center" }}
-        >
-          <Box sx={{ width: { xs: "100%", sm: 190 } }}>
-            <MonthPickerField
-              label="Kỳ học phí"
-              value={month}
-              onChange={(value) => {
-                setIssuedBatches([]);
-                setIssuedClassId(null);
-                setIssuedMonth(null);
-                setIssuedDialogOpen(false);
-                setMonth(value);
-              }}
-              textFieldProps={{ size: "small" }}
-            />
-          </Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<RefreshOutlinedIcon />}
-            onClick={() => void load()}
-            disabled={loading}
-            sx={{
-              alignSelf: { xs: "stretch", sm: "auto" },
-              whiteSpace: "nowrap",
-            }}
-          >
-            Làm mới
-          </Button>
-          {appliedClassId && (
-            <Button
-              variant="contained"
-              startIcon={
-                issuedClassId === appliedClassId && issuedMonth === month ? (
-                  <DownloadOutlinedIcon />
-                ) : (
-                  <SendOutlinedIcon />
-                )
-              }
-              onClick={() =>
-                issuedClassId === appliedClassId && issuedMonth === month
-                  ? void downloadIssuedNoticePdf()
-                  : openClassNoticeDialog()
-              }
-              disabled={
-                loading ||
-                busy ||
-                isDownloadingNoticePdf ||
-                (issuedClassId === appliedClassId &&
-                  issuedMonth === month &&
-                  !issuedBatches.length)
-              }
-              sx={{ whiteSpace: "nowrap" }}
-            >
-              {issuedClassId === appliedClassId && issuedMonth === month
-                ? isDownloadingNoticePdf
-                  ? "Đang tạo PDF..."
-                  : "Xuất lại PDF toàn bộ lớp"
-                : "Phát hành & xuất toàn bộ theo lớp"}
-            </Button>
-          )}
-        </Stack>
-      </Stack>
-
       <Box
         sx={{
           display: "grid",
@@ -753,25 +669,107 @@ export function PaymentBatchManagement() {
               isLoading={loading}
             />
           </Stack>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-              <MasterSelectField
-                label="Học viên"
-                value={student}
-                onOpen={studentDialog.onOpen}
-                size="small"
-                codeLabel="Mã học viên"
-                nameLabel="Họ tên"
-                sx={{ flex: 1, minWidth: { md: 280 } }}
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.25}
+            alignItems={{ md: "center" }}
+          >
+            <MasterSelectField
+              label="Học viên"
+              value={student}
+              onOpen={studentDialog.onOpen}
+              size="small"
+              codeLabel="Mã học viên"
+              nameLabel="Họ tên"
+              sx={{ flex: 1, minWidth: { md: 280 } }}
+            />
+            <MasterSelectField
+              label="Lớp học"
+              value={selectedClass}
+              onOpen={classDialog.onOpen}
+              size="small"
+              codeLabel="Mã lớp"
+              nameLabel="Tên lớp"
+              sx={{ flex: 1, minWidth: { md: 280 } }}
+            />
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Paper
+        variant="outlined"
+        sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}
+      >
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ md: "center" }}
+          gap={2}
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            alignItems={{ sm: "center" }}
+          >
+            <Box sx={{ width: { xs: "100%", sm: 190 } }}>
+              <MonthPickerField
+                label="Kỳ học phí"
+                value={month}
+                onChange={(value) => {
+                  setIssuedBatches([]);
+                  setIssuedClassId(null);
+                  setIssuedMonth(null);
+                  setIssuedDialogOpen(false);
+                  setMonth(value);
+                }}
+                textFieldProps={{ size: "small" }}
               />
-              <MasterSelectField
-                label="Lớp học"
-                value={selectedClass}
-                onOpen={classDialog.onOpen}
-                size="small"
-                codeLabel="Mã lớp"
-                nameLabel="Tên lớp"
-                sx={{ flex: 1, minWidth: { md: 280 } }}
-              />
+            </Box>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<RefreshOutlinedIcon />}
+              onClick={() => void load()}
+              disabled={loading}
+              sx={{
+                alignSelf: { xs: "stretch", sm: "auto" },
+                whiteSpace: "nowrap",
+              }}
+            >
+              Làm mới
+            </Button>
+            {appliedClassId && (
+              <Button
+                variant="contained"
+                startIcon={
+                  issuedClassId === appliedClassId && issuedMonth === month ? (
+                    <DownloadOutlinedIcon />
+                  ) : (
+                    <SendOutlinedIcon />
+                  )
+                }
+                onClick={() =>
+                  issuedClassId === appliedClassId && issuedMonth === month
+                    ? void downloadIssuedNoticePdf()
+                    : openClassNoticeDialog()
+                }
+                disabled={
+                  loading ||
+                  busy ||
+                  isDownloadingNoticePdf ||
+                  (issuedClassId === appliedClassId &&
+                    issuedMonth === month &&
+                    !issuedBatches.length)
+                }
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                {issuedClassId === appliedClassId && issuedMonth === month
+                  ? isDownloadingNoticePdf
+                    ? "Đang tạo PDF..."
+                    : "Xuất lại PDF toàn bộ lớp"
+                  : "Phát hành & xuất toàn bộ theo lớp"}
+              </Button>
+            )}
           </Stack>
         </Stack>
       </Paper>
@@ -847,8 +845,8 @@ export function PaymentBatchManagement() {
         <DialogContent dividers>
           <Stack spacing={1.5}>
             <Typography variant="body2" color="text.secondary">
-              Đã tạo {issuedBatches.length} đợt thu. Tải PDF gộp hoặc mở chi tiết
-              từng đợt để tiếp tục xử lý.
+              Đã tạo {issuedBatches.length} đợt thu. Tải PDF gộp hoặc mở chi
+              tiết từng đợt để tiếp tục xử lý.
             </Typography>
             {issuedBatches.map((batch) => (
               <Button
