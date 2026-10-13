@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Box, Button, Drawer, FormControl, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Drawer, FormControl, IconButton, InputLabel, MenuItem, Paper, Select, Stack, Typography } from "@mui/material";
 import ArrowBackIosNewOutlinedIcon from "@mui/icons-material/ArrowBackIosNewOutlined";
 import ArrowForwardIosOutlinedIcon from "@mui/icons-material/ArrowForwardIosOutlined";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
+import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import Link from "next/link";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
@@ -110,6 +111,9 @@ export function AttendanceCalendarPage() {
     return grouped;
   }, [sessions]);
   const selectedDaySessions = sessionsByDate.get(selectedDate) ?? [];
+  const today = vietnamDateKey(new Date());
+  const presentCount = session?.records.filter((record) => record.status === "PRESENT").length ?? 0;
+  const absentCount = session ? session.records.length - presentCount : 0;
 
   const openSession = async (id: string) => {
     setSession(null); setLoadingDetail(true); setError(""); setMessage("");
@@ -139,20 +143,25 @@ export function AttendanceCalendarPage() {
 
   return <Stack spacing={2.5}>
     <PageHeader title="Lịch điểm danh" description="Chọn ngày để xem hoặc chỉnh sửa các phiên đã lưu." />
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-      <Button component={Link} href="/teacher/attendance" variant="outlined" startIcon={<ArrowBackOutlinedIcon />} fullWidth sx={{ maxWidth: { sm: 240 }, minHeight: 44 }}>Quay lại điểm danh</Button>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderColor: "divider", bgcolor: "background.paper" }}>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems={{ sm: "center" }}>
+      <Button component={Link} href="/teacher/attendance" variant="outlined" startIcon={<ArrowBackOutlinedIcon />} sx={{ minHeight: 44, alignSelf: { xs: "flex-start", sm: "auto" } }}>Quay lại điểm danh</Button>
       <FormControl fullWidth sx={{ maxWidth: { sm: 440 } }} disabled={loadingClasses}>
         <InputLabel id="attendance-calendar-class-label">Lớp</InputLabel>
         <Select id="attendance-calendar-class" name="classId" labelId="attendance-calendar-class-label" label="Lớp" value={classId} onChange={(event) => { setClassId(event.target.value); setSelectedDate(""); setSession(null); }}>{classes.map((item) => <MenuItem key={item.classId} value={item.classId}>{item.classCode} – {item.className} · {item.subjectName}</MenuItem>)}</Select>
       </FormControl>
     </Stack>
+    </Paper>
     {error && <Alert severity="error">{error}</Alert>}
     {message && !selectedDate && <Alert severity="success" onClose={() => setMessage("")}>{message}</Alert>}
     <Paper sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <IconButton aria-label="Tháng trước" onClick={() => moveMonth(-1)}><ArrowBackIosNewOutlinedIcon fontSize="small" /></IconButton>
-        <Typography variant="h6" textTransform="capitalize" fontWeight={700}>{monthLabel(shownMonth.year, shownMonth.month)}</Typography>
-        <IconButton aria-label="Tháng sau" onClick={() => moveMonth(1)}><ArrowForwardIosOutlinedIcon fontSize="small" /></IconButton>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, px: { xs: 0, sm: 0.5 } }}>
+        <IconButton aria-label="Tháng trước" onClick={() => moveMonth(-1)} sx={{ border: 1, borderColor: "divider", borderRadius: 2 }}><ArrowBackIosNewOutlinedIcon fontSize="small" /></IconButton>
+        <Stack alignItems="center" spacing={0.25}>
+          <Typography variant="h6" textTransform="capitalize" fontWeight={700}>{monthLabel(shownMonth.year, shownMonth.month)}</Typography>
+          {shownMonth.year + "-" + String(shownMonth.month + 1).padStart(2, "0") === today.slice(0, 7) && <Typography variant="caption" color="text.secondary">Tháng hiện tại</Typography>}
+        </Stack>
+        <IconButton aria-label="Tháng sau" onClick={() => moveMonth(1)} sx={{ border: 1, borderColor: "divider", borderRadius: 2 }}><ArrowForwardIosOutlinedIcon fontSize="small" /></IconButton>
       </Stack>
       {loadingSessions && <LoadingState label="Đang tải lịch điểm danh..." minHeight={120} />}
       {!loadingSessions && <Box role="grid" aria-label={"Lịch điểm danh " + monthLabel(shownMonth.year, shownMonth.month)} sx={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: { xs: 0.25, sm: 0.75 } }}>
@@ -161,22 +170,41 @@ export function AttendanceCalendarPage() {
           if (!date) return <Box key={"blank-" + index} aria-hidden="true" sx={{ minHeight: { xs: 48, sm: 72 } }} />;
           const daySessions = sessionsByDate.get(date) ?? [];
           const day = Number(date.slice(-2));
-          return <Button key={date} role="gridcell" aria-label={day + "/" + (shownMonth.month + 1) + "/" + shownMonth.year + (daySessions.length ? ", " + daySessions.length + " phiên điểm danh" : ", không có điểm danh")} aria-selected={selectedDate === date} onClick={() => { setSelectedDate(date); setSession(null); setMessage(""); }} variant={selectedDate === date ? "contained" : "text"} sx={{ minWidth: 0, minHeight: { xs: 48, sm: 72 }, p: 0.5, borderRadius: 2, display: "flex", flexDirection: "column", justifyContent: "center", gap: 0.25 }}>
-            <Typography component="span" variant="body2" fontWeight={selectedDate === date ? 700 : 500}>{day}</Typography>
-            {daySessions.length > 0 && <Stack direction="row" spacing={0.25} alignItems="center"><Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: selectedDate === date ? "common.white" : "primary.main" }} /><Typography component="span" variant="caption" sx={{ fontSize: { xs: 9, sm: 11 }, lineHeight: 1.2 }}>{daySessions.length} phiên</Typography></Stack>}
+          const isSelected = selectedDate === date;
+          const hasSessions = daySessions.length > 0;
+          const isToday = date === today;
+          return <Button key={date} role="gridcell" aria-label={day + "/" + (shownMonth.month + 1) + "/" + shownMonth.year + (hasSessions ? ", " + daySessions.length + " phiên điểm danh" : ", không có điểm danh") + (isToday ? ", hôm nay" : "")} aria-selected={isSelected} onClick={() => { setSelectedDate(date); setSession(null); setMessage(""); }} variant="text" sx={{ minWidth: 0, minHeight: { xs: 56, sm: 78 }, p: 0.5, borderRadius: 2, border: "1px solid", borderColor: isSelected ? "primary.main" : hasSessions ? "info.light" : "divider", bgcolor: isSelected ? "primary.main" : hasSessions ? "info.50" : "background.paper", color: isSelected ? "primary.contrastText" : "text.primary", display: "flex", flexDirection: "column", justifyContent: "center", gap: 0.35, transition: "background-color 120ms ease, border-color 120ms ease", "&:hover": { bgcolor: isSelected ? "primary.dark" : hasSessions ? "info.100" : "action.hover", borderColor: isSelected ? "primary.dark" : hasSessions ? "info.main" : "text.disabled" }, ...(isToday && !isSelected ? { boxShadow: "inset 0 0 0 1px", "& .MuiTypography-root:first-of-type": { color: "primary.main" } } : {}) }}>
+            <Typography component="span" variant="body2" fontWeight={isSelected || isToday ? 700 : 500}>{day}</Typography>
+            {hasSessions && <Stack direction="row" spacing={0.4} alignItems="center"><Box sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: isSelected ? "common.white" : "info.main" }} /><Typography component="span" variant="caption" sx={{ fontSize: { xs: 9, sm: 11 }, lineHeight: 1.2, fontWeight: 700 }}>{daySessions.length} phiên</Typography></Stack>}
           </Button>;
         })}
       </Box>}
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5 }}><Box sx={{ width: 7, height: 7, borderRadius: "50%", bgcolor: "primary.main" }} /><Typography variant="caption" color="text.secondary">Ngày có điểm danh · Chạm vào ngày để xem</Typography></Stack>
+      <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1.75, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+        <Stack direction="row" spacing={0.75} alignItems="center"><Box sx={{ width: 12, height: 12, borderRadius: 0.75, bgcolor: "info.50", border: 1, borderColor: "info.light" }} /><Typography variant="caption" color="text.secondary">Đã có phiên điểm danh</Typography></Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center"><Box sx={{ width: 12, height: 12, borderRadius: 0.75, bgcolor: "primary.main" }} /><Typography variant="caption" color="text.secondary">Ngày đang chọn</Typography></Stack>
+        <Typography variant="caption" color="text.secondary">Chọn ngày để xem các phiên đã lưu</Typography>
+      </Stack>
       {!loadingSessions && classId && sessions.length === 0 && <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 2 }}>Tháng này chưa có phiên điểm danh.</Typography>}
     </Paper>
-    <Drawer anchor="bottom" open={Boolean(selectedDate)} onClose={() => { setSelectedDate(""); setSession(null); }} PaperProps={{ sx: { maxHeight: "88dvh", borderRadius: "16px 16px 0 0", pb: "env(safe-area-inset-bottom)" } }}>
-      <Box sx={{ width: "100%", maxWidth: 900, maxHeight: "calc(88dvh - 24px)", mx: "auto", p: { xs: 2, sm: 3 }, overflowY: "auto" }}>
-        <Box sx={{ width: 36, height: 4, bgcolor: "action.disabled", borderRadius: 99, mx: "auto", mb: 2 }} />
+    <Drawer anchor="right" open={Boolean(selectedDate)} onClose={() => { setSelectedDate(""); setSession(null); }} PaperProps={{ sx: { width: { xs: "100%", sm: "min(900px, 92vw)" }, height: "100dvh", borderRadius: { xs: 0, sm: "16px 0 0 16px" }, pb: "env(safe-area-inset-bottom)", display: "flex", flexDirection: "column" } }}>
+      <Box sx={{ px: { xs: 2, sm: 3 }, py: 2, borderBottom: 1, borderColor: "divider", bgcolor: "background.paper", flexShrink: 0 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2} sx={{ maxWidth: 900, mx: "auto" }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="overline" color="primary.main" fontWeight={700} lineHeight={1.4}>LỊCH ĐIỂM DANH</Typography>
+            <Typography variant="h6" fontWeight={700} noWrap>{session ? `${session.class.code} · ${session.class.name}` : `Ngày ${selectedDate.split("-").reverse().join("/")}`}</Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>{session ? `${session.class.subjectName} · ${formatSessionTime(session.sessionAt)}` : `${selectedDaySessions.length} phiên điểm danh`}</Typography>
+          </Box>
+          <IconButton aria-label="Đóng lịch điểm danh" onClick={() => { setSelectedDate(""); setSession(null); setMessage(""); }} sx={{ border: 1, borderColor: "divider", flexShrink: 0 }}><CloseOutlinedIcon /></IconButton>
+        </Stack>
+      </Box>
+      <Box sx={{ width: "100%", maxWidth: 900, mx: "auto", p: { xs: 2, sm: 3 }, overflowY: "auto", flex: 1 }}>
         {session ? <>
-          <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1} sx={{ mb: 2 }}>
-            <Box><Typography variant="h6" fontWeight={700}>{session.class.code} · {session.class.name}</Typography><Typography variant="body2" color="text.secondary">{session.class.subjectName} · {formatSessionTime(session.sessionAt)}</Typography></Box>
-            <Button onClick={() => { setSession(null); setMessage(""); }} startIcon={<ArrowBackOutlinedIcon />} sx={{ flexShrink: 0 }}>Danh sách</Button>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1.5 }}>
+            <Button onClick={() => { setSession(null); setMessage(""); }} startIcon={<ArrowBackOutlinedIcon />} sx={{ flexShrink: 0, px: 0 }}>Danh sách phiên</Button>
+            <Stack direction="row" spacing={0.75}>
+              <Chip size="small" color="success" label={`${presentCount} có mặt`} />
+              <Chip size="small" color="error" label={`${absentCount} vắng`} />
+            </Stack>
           </Stack>
           {message && <Alert severity="success" onClose={() => setMessage("")} sx={{ mb: 2 }}>{message}</Alert>}
           {loadingDetail ? <LoadingState label="Đang tải phiên điểm danh..." minHeight={120} /> : <>
@@ -185,8 +213,7 @@ export function AttendanceCalendarPage() {
             {session.audits.length > 0 && <Stack spacing={0.5} sx={{ mt: 2 }}><Typography variant="subtitle2">Lịch sử chỉnh sửa</Typography>{session.audits.map((audit) => <Typography key={audit.id} variant="caption" color="text.secondary">{audit.action === "ATTENDANCE_CREATED" ? "Tạo điểm danh" : "Cập nhật điểm danh"} · {audit.actor.fullName} · {formatSessionTime(audit.performedAt)}</Typography>)}</Stack>}
           </>}
         </> : <>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>Điểm danh ngày {selectedDate.split("-").reverse().join("/")}</Typography>
-          {selectedDaySessions.length ? <Stack spacing={1}>{selectedDaySessions.map((item) => <Button key={item.id} variant="outlined" onClick={() => void openSession(item.id)} sx={{ justifyContent: "space-between", textAlign: "left", p: 1.5, minHeight: 56 }}><span>{formatSessionTime(item.sessionAt)}</span><Typography component="span" variant="body2">{item.studentCount} học viên</Typography></Button>)}</Stack> : <Typography color="text.secondary" sx={{ py: 2 }}>Ngày này chưa có phiên điểm danh.</Typography>}
+          {selectedDaySessions.length ? <Stack spacing={1}>{selectedDaySessions.map((item) => <Button key={item.id} variant="outlined" onClick={() => void openSession(item.id)} sx={{ justifyContent: "space-between", textAlign: "left", p: 1.5, minHeight: 64, borderColor: "info.light", bgcolor: "info.50", color: "text.primary", borderRadius: 2, "&:hover": { bgcolor: "info.100", borderColor: "info.main" } }}><Stack direction="row" spacing={1.25} alignItems="center"><Box sx={{ width: 36, height: 36, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "info.100", color: "info.dark" }}><ArrowForwardIosOutlinedIcon sx={{ fontSize: 14 }} /></Box><Box><Typography component="span" variant="body2" fontWeight={700}>{formatSessionTime(item.sessionAt)}</Typography><Typography display="block" component="span" variant="caption" color="text.secondary">Mở chi tiết phiên</Typography></Box></Stack><Chip size="small" color="info" variant="outlined" label={`${item.studentCount} học viên`} /></Button>)}</Stack> : <Typography color="text.secondary" sx={{ py: 2 }}>Ngày này chưa có phiên điểm danh.</Typography>}
           {loadingDetail && <LoadingState label="Đang tải phiên điểm danh..." minHeight={100} />}
         </>}
       </Box>
