@@ -43,7 +43,7 @@ backup_file="$backup_dir/classroom-rental-neon-production-$(date +%Y%m%d-%H%M%S)
 
 # Vercel injects the production secret into this short-lived process. Only
 # connection metadata and a mode-600 pgpass file are written to the temp dir.
-npx vercel env run -e production -- node -e '
+npx vercel --scope trinhan --project edu env run -e production -- node -e '
 const fs = require("node:fs");
 const path = require("node:path");
 const dir = process.argv[1];
@@ -88,7 +88,7 @@ fi
 printf "✓ Backup Neon Production đã lưu: %s\n" "$backup_file"
 
 section "Áp dụng migration lên Neon Production"
-npx vercel env run -e production -- bash -c '
+npx vercel --scope trinhan --project edu env run -e production -- bash -c '
 	if [[ -z "${DATABASE_URL_UNPOOLED:-}" ]]; then
 		printf "Thiếu DATABASE_URL_UNPOOLED trong môi trường Production của Vercel. Cần cấu hình direct connection string của Neon.\n" >&2
 		exit 1
@@ -97,6 +97,6 @@ npx vercel env run -e production -- bash -c '
 '
 
 section "Deploy code hiện tại lên Vercel Production"
-npx vercel --prod
+npx vercel --scope trinhan --project edu --prod
 
 printf "\n✓ Backup, migration và deploy hoàn tất. Không commit/push.\n"
