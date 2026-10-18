@@ -568,31 +568,8 @@ async function renderPaymentBatchNoticePdf(
       feeRowWidth = feeRowRight - feeRowX;
     }
   };
-  const drawFeeContinuationHeading = (allocation: (typeof fees)[number]) => {
-    page.drawRectangle({
-      x: feeRowX - 3,
-      y: y - 6,
-      width: feeRowWidth + 6,
-      height: 18,
-      color: paleBlue,
-    });
-    drawFit(
-      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"} (tiếp)`,
-      feeRowX + 4,
-      y,
-      feeRowWidth - 8,
-      7.5,
-      navy,
-      6.5,
-    );
-    y -= 18;
-  };
   for (const allocation of fees) {
-    const hasDetails =
-      allocation.items.length > 0 ||
-      Number(allocation.discountAmount) > 0 ||
-      Number(allocation.additionalAmount) > 0;
-    ensureFeeSpace(hasDetails ? 31 : 23);
+    ensureFeeSpace(23);
     page.drawRectangle({
       x: feeRowX - 3,
       y: y - 6,
@@ -619,66 +596,6 @@ async function renderPaymentBatchNoticePdf(
       6.5,
     );
     y -= 18;
-    let hasRenderedDetail = false;
-    const ensureDetailSpace = () => {
-      const previousPage = page;
-      ensureFeeSpace(hasRenderedDetail ? 31 : 13);
-      if (page !== previousPage && hasRenderedDetail) {
-        drawFeeContinuationHeading(allocation);
-      }
-      hasRenderedDetail = true;
-    };
-    for (const item of allocation.items) {
-      ensureDetailSpace();
-      const subjectName = item.subjectName || item.itemName;
-      drawFit(
-        `– ${subjectName}`,
-        feeRowX + 8,
-        y,
-        Math.max(90, feeRowWidth - 105),
-        7,
-        muted,
-        6,
-      );
-      drawRightFit(
-        `${money(Number(item.amount))} VND`,
-        feeRowRight,
-        y,
-        90,
-        7,
-        muted,
-        6,
-      );
-      y -= 13;
-    }
-    if (Number(allocation.discountAmount) > 0) {
-      ensureDetailSpace();
-      draw("– Giảm giá", feeRowX + 8, y, 7, muted);
-      drawRightFit(
-        `-${money(Number(allocation.discountAmount))} VND`,
-        feeRowRight,
-        y,
-        90,
-        7,
-        muted,
-        6,
-      );
-      y -= 13;
-    }
-    if (Number(allocation.additionalAmount) > 0) {
-      ensureDetailSpace();
-      draw("– Phụ thu", feeRowX + 8, y, 7, muted);
-      drawRightFit(
-        `${money(Number(allocation.additionalAmount))} VND`,
-        feeRowRight,
-        y,
-        90,
-        7,
-        muted,
-        6,
-      );
-      y -= 13;
-    }
     y -= 5;
   }
   const totalTextY = totalBoxBottom + 11;
