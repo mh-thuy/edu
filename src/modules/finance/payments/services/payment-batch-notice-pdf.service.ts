@@ -605,10 +605,10 @@ async function renderPaymentBatchNoticePdf(
       x: feeRowX - 3,
       y: y - 6,
       width: feeRowWidth + 6,
-      height: 18,
-      color: paleBlue,
+      height: 19,
+      color: navy,
     });
-    drawFit(`Kỳ ${period}`, feeRowX + 4, y, feeRowWidth - 8, 7.5, navy, 6.5);
+    drawFit(`KỲ ${period}`, feeRowX + 5, y, feeRowWidth - 10, 8, white, 7);
     y -= 23;
   };
   for (const group of groupNoticeFees(fees)) {
@@ -620,16 +620,16 @@ async function renderPaymentBatchNoticePdf(
         x: feeRowX - 3,
         y: y - 6,
         width: feeRowWidth + 6,
-        height: 18,
+        height: 17,
         color: paleBlue,
       });
-      drawFit(classLine.className, feeRowX + 4, y, feeRowWidth - 120, 7.5, navy, 6.5);
+      drawFit(classLine.className, feeRowX + 11, y, feeRowWidth - 100, 8, navy, 6.5);
       drawRightFit(
         `${money(classLine.payableAmount)} VND`,
         feeRowRight,
         y,
-        90,
-        7.5,
+        85,
+        8,
         navy,
         6.5,
       );
