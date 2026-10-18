@@ -129,35 +129,38 @@ function getFeePeriod(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-function getBatchFeeLines(
+function getBatchFeeGroups(
   batch: PendingBatch,
   monthFilter: string,
   classFilter?: string,
 ) {
-  const grouped = new Map<
-    string,
-    { period: string; className: string; amount: number }
-  >();
+  const grouped = new Map<string, Map<string, { className: string; amount: number }>>();
   for (const allocation of batch.allocations) {
     const fee = allocation.tuitionFee;
     const period = getFeePeriod(fee.billingYear, fee.billingMonth);
     if (monthFilter && period !== monthFilter) continue;
     if (classFilter && fee.class?.id !== classFilter) continue;
-    const className = fee.class?.name || "-";
-    const key = `${period}:${fee.class?.id ?? className}`;
-    const current = grouped.get(key);
+    const classLabel = fee.class?.name || "-";
+    const classKey = fee.class?.id ?? classLabel;
+    const classes = grouped.get(period) ?? new Map();
+    const current = classes.get(classKey);
     if (current) current.amount += Number(allocation.amount);
-    else
-      grouped.set(key, {
-        period,
-        className,
+    else {
+      classes.set(classKey, {
+        className: classLabel,
         amount: Number(allocation.amount),
       });
+    }
+    grouped.set(period, classes);
   }
-  return [...grouped.values()].sort((left, right) =>
-    left.period.localeCompare(right.period) ||
-    left.className.localeCompare(right.className, "vi"),
-  );
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([period, classes]) => ({
+      period,
+      classes: [...classes.values()].sort((left, right) =>
+        left.className.localeCompare(right.className, "vi"),
+      ),
+    }));
 }
 
 function groupFeesByPeriod(items: NoticeFee[]) {
@@ -962,7 +965,6 @@ export function PaymentBatchManagement() {
                         />
                       </TableCell>
                       <TableCell>Học sinh</TableCell>
-                      <TableCell>Môn học</TableCell>
                       <TableCell>Lớp</TableCell>
                       <TableCell>Phải thu</TableCell>
                       <TableCell>Còn nợ</TableCell>
@@ -992,7 +994,7 @@ export function PaymentBatchManagement() {
                                 }
                               />
                             </TableCell>
-                            <TableCell colSpan={6}>
+                            <TableCell colSpan={5}>
                               <Typography fontWeight={800}>
                                 {group.student.fullName}
                               </Typography>
@@ -1009,7 +1011,7 @@ export function PaymentBatchManagement() {
                             ([period, periodFees]) => (
                               <Fragment key={period}>
                                 <TableRow sx={{ bgcolor: "action.selected" }}>
-                                  <TableCell colSpan={7}>
+                                  <TableCell colSpan={6}>
                                     <Typography
                                       variant="body2"
                                       fontWeight={800}
@@ -1036,11 +1038,6 @@ export function PaymentBatchManagement() {
                                         {fee.student.code}
                                       </Typography>
                                     </TableCell>
-                                    <TableCell>
-                                      {fee.items
-                                        .map((item) => item.itemName)
-                                        .join(", ") || "-"}
-                                    </TableCell>
                                     <TableCell>{fee.class.name}</TableCell>
                                     <TableCell>{money(fee.finalAmount)}</TableCell>
                                     <TableCell>
@@ -1065,7 +1062,7 @@ export function PaymentBatchManagement() {
                     })}
                     {!loading && !unissuedFees.length && (
                       <TableRow>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={6}>
                           <EmptyState message="Không có khoản học phí chưa phát thông báo trong kỳ này" />
                         </TableCell>
                       </TableRow>
@@ -1212,14 +1209,16 @@ export function PaymentBatchManagement() {
                                 </Typography>
                               </TableCell>
                               <TableCell>
-                                {getBatchFeeLines(batch, month, appliedClassId).map((line) => (
-                                  <Box key={`${line.period}:${line.className}`} sx={{ mb: 0.5 }}>
+                                {getBatchFeeGroups(batch, month, appliedClassId).map((group) => (
+                                  <Box key={group.period} sx={{ mb: 0.75 }}>
                                     <Typography variant="caption" color="text.secondary" display="block">
-                                      {line.period}
+                                      {group.period}
                                     </Typography>
-                                    <Typography variant="body2">
-                                      {line.className} · {money(line.amount)}
-                                    </Typography>
+                                    {group.classes.map((line) => (
+                                      <Typography key={line.className} variant="body2">
+                                        {line.className} · {money(line.amount)}
+                                      </Typography>
+                                    ))}
                                   </Box>
                                 ))}
                               </TableCell>
@@ -1362,18 +1361,20 @@ export function PaymentBatchManagement() {
                               {batch.student.code}
                             </Typography>
                           </TableCell>
-                            <TableCell>
-                              {getBatchFeeLines(batch, month, appliedClassId).map((line) => (
-                                <Box key={`${line.period}:${line.className}`} sx={{ mb: 0.5 }}>
-                                  <Typography variant="caption" color="text.secondary" display="block">
-                                    {line.period}
-                                  </Typography>
-                                  <Typography variant="body2">
+                          <TableCell>
+                            {getBatchFeeGroups(batch, month, appliedClassId).map((group) => (
+                              <Box key={group.period} sx={{ mb: 0.75 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">
+                                  {group.period}
+                                </Typography>
+                                {group.classes.map((line) => (
+                                  <Typography key={line.className} variant="body2">
                                     {line.className} · {money(line.amount)}
                                   </Typography>
-                                </Box>
-                              ))}
-                            </TableCell>
+                                ))}
+                              </Box>
+                            ))}
+                          </TableCell>
                           <TableCell>
                             <Typography fontWeight={800}>
                               {money(batch.totalAmount)}

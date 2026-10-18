@@ -48,7 +48,7 @@ type SnapshotFeeInput = {
   discountAmount: PrismaTypes.Decimal;
   additionalAmount: PrismaTypes.Decimal;
   finalAmount: PrismaTypes.Decimal;
-  class?: { name: string } | null;
+  class?: { id: string; name: string } | null;
   items: Array<{
     itemName: string;
     quantity: PrismaTypes.Decimal;
@@ -65,6 +65,7 @@ export function toFeeSnapshot(fee: SnapshotFeeInput, payableAmount?: PrismaTypes
     feeNo: fee.feeNo,
     billingYear: fee.billingYear,
     billingMonth: fee.billingMonth,
+    classId: fee.class?.id ?? null,
     className: fee.class?.name ?? null,
     originalAmount: fee.originalAmount.toString(),
     discountAmount: fee.discountAmount.toString(),

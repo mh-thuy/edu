@@ -31,6 +31,36 @@ const formatVietnamDateTime = (value: Date) => {
   return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
 };
 
+function groupNoticeFees(fees: DocumentSnapshot["fees"]) {
+  const grouped = new Map<
+    string,
+    Map<string, { className: string; payableAmount: number }>
+  >();
+  for (const fee of fees) {
+    const period = `${fee.billingYear}-${String(fee.billingMonth).padStart(2, "0")}`;
+    const className = fee.className || "Chưa có lớp";
+    const periodClasses = grouped.get(period) ?? new Map();
+    const classKey = fee.classId ?? fee.tuitionFeeId;
+    const current = periodClasses.get(classKey);
+    if (current) current.payableAmount += Number(fee.payableAmount);
+    else {
+      periodClasses.set(classKey, {
+        className,
+        payableAmount: Number(fee.payableAmount),
+      });
+    }
+    grouped.set(period, periodClasses);
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([period, classes]) => ({
+      period,
+      classes: [...classes.values()].sort((left, right) =>
+        left.className.localeCompare(right.className, "vi"),
+      ),
+    }));
+}
+
 export async function generatePaymentBatchNoticePdf(
   batchId: string,
   exportedByName: string,
@@ -561,15 +591,16 @@ async function renderPaymentBatchNoticePdf(
   let feeRowWidth = 229;
   const minimumFeeY = totalBoxBottom + totalBoxHeight + 12;
   const ensureFeeSpace = (needed: number) => {
+    const currentPage = page;
     if (y - needed < minimumFeeY) drawContinuationPage();
     if (onContinuationPage) {
       feeRowX = 45;
       feeRowRight = 550;
       feeRowWidth = feeRowRight - feeRowX;
     }
+    return page !== currentPage;
   };
-  for (const allocation of fees) {
-    ensureFeeSpace(23);
+  const drawPeriodHeading = (period: string) => {
     page.drawRectangle({
       x: feeRowX - 3,
       y: y - 6,
@@ -577,26 +608,33 @@ async function renderPaymentBatchNoticePdf(
       height: 18,
       color: paleBlue,
     });
-    drawFit(
-      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`,
-      feeRowX + 4,
-      y,
-      Math.max(100, feeRowWidth - 120),
-      7.5,
-      navy,
-      6.5,
-    );
-    drawRightFit(
-      `${money(Number(allocation.payableAmount))} VND`,
-      feeRowRight,
-      y,
-      90,
-      7.5,
-      navy,
-      6.5,
-    );
-    y -= 18;
-    y -= 5;
+    drawFit(`Kỳ ${period}`, feeRowX + 4, y, feeRowWidth - 8, 7.5, navy, 6.5);
+    y -= 23;
+  };
+  for (const group of groupNoticeFees(fees)) {
+    ensureFeeSpace(46);
+    drawPeriodHeading(group.period);
+    for (const classLine of group.classes) {
+      if (ensureFeeSpace(23)) drawPeriodHeading(group.period);
+      page.drawRectangle({
+        x: feeRowX - 3,
+        y: y - 6,
+        width: feeRowWidth + 6,
+        height: 18,
+        color: paleBlue,
+      });
+      drawFit(classLine.className, feeRowX + 4, y, feeRowWidth - 120, 7.5, navy, 6.5);
+      drawRightFit(
+        `${money(classLine.payableAmount)} VND`,
+        feeRowRight,
+        y,
+        90,
+        7.5,
+        navy,
+        6.5,
+      );
+      y -= 23;
+    }
   }
   const totalTextY = totalBoxBottom + 11;
   page.drawRectangle({
