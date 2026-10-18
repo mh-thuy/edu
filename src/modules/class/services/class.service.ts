@@ -378,6 +378,53 @@ export async function updateClass(
       data: buildClassUpdateInput(data),
     });
 
+    if (
+      data.status === "CANCELLED" &&
+      current.status !== "CANCELLED"
+    ) {
+      const feesToCancel = await tx.tuitionFee.findMany({
+        where: {
+          classId: id,
+          status: { in: ["UNPAID", "OVERDUE"] },
+          payments: { none: {} },
+          paymentAllocations: {
+            none: { paymentBatch: { status: "PENDING" } },
+          },
+        },
+        select: {
+          id: true,
+          status: true,
+          version: true,
+          cancellationReason: true,
+        },
+      });
+
+      for (const fee of feesToCancel) {
+        const updatedFee = await tx.tuitionFee.update({
+          where: { id: fee.id },
+          data: {
+            status: "CANCELLED",
+            cancellationReason: "Lớp học đã bị hủy",
+            version: { increment: 1 },
+            updatedBy: actorId,
+          },
+          select: { id: true, status: true, version: true, cancellationReason: true },
+        });
+        await tx.tuitionAuditLog.create({
+          data: {
+            entityType: "TUITION_FEE",
+            entityId: fee.id,
+            action: "CANCEL",
+            reason: "Lớp học đã bị hủy",
+            dataBefore: fee as unknown as Prisma.InputJsonValue,
+            dataAfter: updatedFee as unknown as Prisma.InputJsonValue,
+            performedBy: actorId,
+            ...auditFields(auditContext),
+          },
+        });
+      }
+    }
+
     if (current.status === "CANCELLED" && data.status === "ACTIVE") {
       await tx.tuitionAuditLog.create({
         data: {

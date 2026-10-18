@@ -47,6 +47,8 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Khi lớp chuyển `ACTIVE -> COMPLETED`, enrollment và môn đang `ACTIVE` được chuyển sang `COMPLETED` cùng transaction, có audit log; lịch sử vẫn hiển thị nhưng chỉ đọc.
 - Lớp `CANCELLED` có thể được khôi phục về `ACTIVE`; thao tác xóa `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`. Lớp `COMPLETED` không thể khôi phục.
 - Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.
+- Khi lớp chuyển sang `CANCELLED`, khoản học phí `UNPAID`/`OVERDUE` không có lịch sử thanh toán và không thuộc đợt thu `PENDING` được hủy kèm lý do và audit log trong cùng transaction. Khoản đã có lịch sử thanh toán hoặc đang chờ thu được giữ để xử lý riêng.
+- Rà soát khoản phí của các lớp đã hủy từ trước bằng `npx tsx scripts/cancel-unpaid-fees-for-cancelled-classes.ts` để xem trước. Chỉ cập nhật sau khi kiểm tra danh sách và chỉ rõ lớp bằng `--class-id`, cùng `--apply --actor-id <user-id>`.
 - Dashboard có thể xuất Excel báo cáo thu học phí theo từng ngày, tách tiền mặt/chuyển khoản và kèm chi tiết payment `SUCCESS` theo ngày Việt Nam.
 - Dashboard hiển thị riêng tổng thu tiền mặt và tổng thu chuyển khoản; hai số liệu tuân theo bộ lọc ngày và chỉ tính payment `SUCCESS`.
 - Xóa học viên/giáo viên/lớp/lịch chỉ là soft delete hoặc chuyển trạng thái; không hard delete bản ghi.

@@ -263,6 +263,18 @@ hệ thống phải xóa cờ `deleted_at` nếu có và ghi audit log `CLASS_RE
 Lớp `COMPLETED` không thể khôi phục. Sau khi khôi phục, các nghiệp vụ học
 viên, lịch học và tạo học phí được áp dụng lại theo các rule hiện hành.
 
+Khi lớp chuyển sang `CANCELLED`, trong cùng transaction hệ thống hủy các khoản
+học phí `UNPAID` hoặc `OVERDUE` chưa có bản ghi thanh toán và không thuộc đợt
+thu `PENDING`. Mỗi khoản bị hủy lưu lý do và audit log. Khoản đã thu một phần,
+có lịch sử thanh toán hoặc đang thuộc đợt thu `PENDING` được giữ nguyên để xử
+lý riêng; không tự động xóa hay hoàn tiền.
+
+Các lớp đã ở trạng thái `CANCELLED` trước khi áp dụng quy tắc này được rà soát
+bằng công cụ hồi tố ở chế độ xem trước. Chỉ chạy cập nhật sau khi đã kiểm tra
+danh sách lớp và chỉ định rõ lớp cần áp dụng. Công cụ chỉ hủy các khoản
+`UNPAID` hoặc `OVERDUE` không có bản ghi thanh toán và không thuộc đợt thu
+`PENDING`; mọi khoản khác được giữ nguyên và có thể rà soát riêng.
+
 ---
 
 # 6. Enrollment Rules
