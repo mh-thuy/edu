@@ -125,6 +125,50 @@ function groupByStudent<
   return [...groups.values()];
 }
 
+function getFeePeriod(year: number, month: number) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function getBatchFeeLines(
+  batch: PendingBatch,
+  monthFilter: string,
+  classFilter?: string,
+) {
+  const grouped = new Map<
+    string,
+    { period: string; className: string; amount: number }
+  >();
+  for (const allocation of batch.allocations) {
+    const fee = allocation.tuitionFee;
+    const period = getFeePeriod(fee.billingYear, fee.billingMonth);
+    if (monthFilter && period !== monthFilter) continue;
+    if (classFilter && fee.class?.id !== classFilter) continue;
+    const className = fee.class?.name || "-";
+    const key = `${period}:${fee.class?.id ?? className}`;
+    const current = grouped.get(key);
+    if (current) current.amount += Number(allocation.amount);
+    else
+      grouped.set(key, {
+        period,
+        className,
+        amount: Number(allocation.amount),
+      });
+  }
+  return [...grouped.values()].sort((left, right) =>
+    left.period.localeCompare(right.period) ||
+    left.className.localeCompare(right.className, "vi"),
+  );
+}
+
+function groupFeesByPeriod(items: NoticeFee[]) {
+  const groups = new Map<string, NoticeFee[]>();
+  for (const fee of items) {
+    const period = getFeePeriod(fee.billingYear, fee.billingMonth);
+    groups.set(period, [...(groups.get(period) ?? []), fee]);
+  }
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
 export function PaymentBatchManagement() {
   const [view, setView] = useState<View>("UNISSUED");
   const [page, setPage] = useState(0);
@@ -918,7 +962,7 @@ export function PaymentBatchManagement() {
                         />
                       </TableCell>
                       <TableCell>Học sinh</TableCell>
-                      <TableCell>Khoản học phí</TableCell>
+                      <TableCell>Môn học</TableCell>
                       <TableCell>Lớp</TableCell>
                       <TableCell>Phải thu</TableCell>
                       <TableCell>Còn nợ</TableCell>
@@ -961,59 +1005,61 @@ export function PaymentBatchManagement() {
                               </Typography>
                             </TableCell>
                           </TableRow>
-                          {group.items.map((fee) => (
-                            <TableRow key={fee.id} hover>
-                              <TableCell padding="checkbox">
-                                <Checkbox
-                                  checked={selectedFeeIds.includes(fee.id)}
-                                  onChange={() => toggleFee(fee.id)}
-                                />
-                              </TableCell>
-                              <TableCell>
-                                {fee.student.fullName}
-                                <Typography
-                                  variant="caption"
-                                  display="block"
-                                  color="text.secondary"
-                                >
-                                  {fee.student.code}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Button
-                                  component={Link}
-                                  href={`/admin/tuition-fees/${fee.id}`}
-                                  size="small"
-                                  sx={{ p: 0, justifyContent: "flex-start" }}
-                                >
-                                  {fee.feeNo}
-                                </Button>
-                                <Typography
-                                  variant="caption"
-                                  display="block"
-                                  color="text.secondary"
-                                >
-                                  {fee.items
-                                    .map((item) => item.itemName)
-                                    .join(", ") || "-"}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>{fee.class.name}</TableCell>
-                              <TableCell>{money(fee.finalAmount)}</TableCell>
-                              <TableCell>
-                                <Typography fontWeight={700}>
-                                  {money(fee.remainingAmount)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  size="small"
-                                  color={feeStatusColors[fee.status]}
-                                  label={feeStatusLabels[fee.status]}
-                                />
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {groupFeesByPeriod(group.items).map(
+                            ([period, periodFees]) => (
+                              <Fragment key={period}>
+                                <TableRow sx={{ bgcolor: "action.selected" }}>
+                                  <TableCell colSpan={7}>
+                                    <Typography
+                                      variant="body2"
+                                      fontWeight={800}
+                                    >
+                                      Kỳ {period}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                                {periodFees.map((fee) => (
+                                  <TableRow key={fee.id} hover>
+                                    <TableCell padding="checkbox">
+                                      <Checkbox
+                                        checked={selectedFeeIds.includes(fee.id)}
+                                        onChange={() => toggleFee(fee.id)}
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      {fee.student.fullName}
+                                      <Typography
+                                        variant="caption"
+                                        display="block"
+                                        color="text.secondary"
+                                      >
+                                        {fee.student.code}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      {fee.items
+                                        .map((item) => item.itemName)
+                                        .join(", ") || "-"}
+                                    </TableCell>
+                                    <TableCell>{fee.class.name}</TableCell>
+                                    <TableCell>{money(fee.finalAmount)}</TableCell>
+                                    <TableCell>
+                                      <Typography fontWeight={700}>
+                                        {money(fee.remainingAmount)}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Chip
+                                        size="small"
+                                        color={feeStatusColors[fee.status]}
+                                        label={feeStatusLabels[fee.status]}
+                                      />
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </Fragment>
+                            ),
+                          )}
                         </Fragment>
                       );
                     })}
@@ -1034,7 +1080,7 @@ export function PaymentBatchManagement() {
               total={selectedFeeTotal}
               details={selectedFees
                 .slice(0, 5)
-                .map((fee) => `${fee.feeNo} · ${fee.student.fullName}`)}
+                .map((fee) => `${getFeePeriod(fee.billingYear, fee.billingMonth)} · ${fee.class.name} · ${fee.student.fullName}`)}
             >
               <Button
                 fullWidth
@@ -1097,7 +1143,7 @@ export function PaymentBatchManagement() {
                       <TableCell>Đợt thu</TableCell>
                       <TableCell>Học sinh</TableCell>
                       <TableCell>Các khoản</TableCell>
-                      <TableCell>Tổng tiền</TableCell>
+                      <TableCell>Tổng đợt thu</TableCell>
                       <TableCell>Thao tác</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1166,12 +1212,16 @@ export function PaymentBatchManagement() {
                                 </Typography>
                               </TableCell>
                               <TableCell>
-                                {batch.allocations
-                                  .map(
-                                    (allocation) =>
-                                      `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`,
-                                  )
-                                  .join(", ")}
+                                {getBatchFeeLines(batch, month, appliedClassId).map((line) => (
+                                  <Box key={`${line.period}:${line.className}`} sx={{ mb: 0.5 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                      {line.period}
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {line.className} · {money(line.amount)}
+                                    </Typography>
+                                  </Box>
+                                ))}
                               </TableCell>
                               <TableCell>
                                 <Typography fontWeight={800}>
@@ -1276,7 +1326,7 @@ export function PaymentBatchManagement() {
                     <TableCell>Đợt thu</TableCell>
                     <TableCell>Học sinh</TableCell>
                     <TableCell>Các khoản</TableCell>
-                    <TableCell>Tổng tiền</TableCell>
+                    <TableCell>Tổng đợt thu</TableCell>
                     <TableCell>Trạng thái</TableCell>
                     <TableCell>Thao tác</TableCell>
                   </TableRow>
@@ -1312,14 +1362,18 @@ export function PaymentBatchManagement() {
                               {batch.student.code}
                             </Typography>
                           </TableCell>
-                          <TableCell>
-                            {batch.allocations
-                              .map(
-                                (allocation) =>
-                                  `${allocation.tuitionFee.feeNo} — ${allocation.tuitionFee.class?.name || "-"}`,
-                              )
-                              .join(", ")}
-                          </TableCell>
+                            <TableCell>
+                              {getBatchFeeLines(batch, month, appliedClassId).map((line) => (
+                                <Box key={`${line.period}:${line.className}`} sx={{ mb: 0.5 }}>
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {line.period}
+                                  </Typography>
+                                  <Typography variant="body2">
+                                    {line.className} · {money(line.amount)}
+                                  </Typography>
+                                </Box>
+                              ))}
+                            </TableCell>
                           <TableCell>
                             <Typography fontWeight={800}>
                               {money(batch.totalAmount)}
@@ -1447,7 +1501,7 @@ export function PaymentBatchManagement() {
                 </Typography>
                 {splitTarget.allocations.map((allocation) => (
                   <Typography key={allocation.tuitionFee.id} variant="body2">
-                    {allocation.tuitionFee.feeNo}: {money(allocation.amount)}
+                    {getFeePeriod(allocation.tuitionFee.billingYear, allocation.tuitionFee.billingMonth)} · {allocation.tuitionFee.class?.name || "-"}: {money(allocation.amount)}
                   </Typography>
                 ))}
               </Alert>
