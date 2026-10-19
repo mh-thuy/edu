@@ -67,7 +67,6 @@ import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
-import { getVietnamMonth } from "@/lib/vietnam-time";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
 import { FilterActions } from "@/components/shared/FilterActions";
 import {
@@ -176,7 +175,8 @@ export function PaymentBatchManagement() {
   const [view, setView] = useState<View>("UNISSUED");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
-  const [month, setMonth] = useState(getVietnamMonth());
+  // Kỳ học phí là bộ lọc tùy chọn; để trống sẽ tải các khoản của mọi kỳ.
+  const [month, setMonth] = useState("");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
@@ -314,6 +314,11 @@ export function PaymentBatchManagement() {
     setSelectedClass(null);
     setAppliedStudentId(undefined);
     setAppliedClassId(undefined);
+    setIssuedBatches([]);
+    setIssuedClassId(null);
+    setIssuedMonth(null);
+    setIssuedDialogOpen(false);
+    setMonth("");
     setPage(0);
   }
 
@@ -454,6 +459,10 @@ export function PaymentBatchManagement() {
       );
       return;
     }
+    if (!month) {
+      showError("Hãy chọn một kỳ học phí để phát hành thông báo theo lớp");
+      return;
+    }
     setClassNoticeMode(true);
     setNoticeDialogOpen(true);
     setDialogError("");
@@ -499,7 +508,7 @@ export function PaymentBatchManagement() {
         const url = URL.createObjectURL(pdf);
         const anchor = document.createElement("a");
         anchor.href = url;
-        anchor.download = `thong-bao-hoc-phi-${month}.pdf`;
+        anchor.download = `thong-bao-hoc-phi-${month || "nhieu-ky"}.pdf`;
         anchor.click();
         URL.revokeObjectURL(url);
       } catch {
@@ -528,7 +537,7 @@ export function PaymentBatchManagement() {
       const url = URL.createObjectURL(pdf);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `thong-bao-hoc-phi-${month}.pdf`;
+      anchor.download = `thong-bao-hoc-phi-${month || "nhieu-ky"}.pdf`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (reasonValue) {
@@ -600,6 +609,70 @@ export function PaymentBatchManagement() {
 
   return (
     <Stack spacing={{ xs: 2, md: 3 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          position: "relative",
+          overflow: "hidden",
+          p: { xs: 2.25, md: 3.25 },
+          borderRadius: 3,
+          color: "common.white",
+          background:
+            "linear-gradient(120deg, #123d68 0%, #176b87 58%, #238d91 100%)",
+          "&::after": {
+            content: '""',
+            position: "absolute",
+            width: 240,
+            height: 240,
+            borderRadius: "50%",
+            right: { xs: -115, md: 65 },
+            top: -145,
+            bgcolor: "rgba(255,255,255,0.08)",
+          },
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ sm: "center" }}
+          spacing={2}
+          sx={{ position: "relative", zIndex: 1 }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                display: "grid",
+                placeItems: "center",
+                width: 48,
+                height: 48,
+                flexShrink: 0,
+                borderRadius: 2,
+                bgcolor: "rgba(255,255,255,0.16)",
+              }}
+            >
+              <CampaignOutlinedIcon />
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>
+                Thông báo &amp; đợt thu
+              </Typography>
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.82)" }}>
+                Theo dõi khoản chưa phát, xử lý thanh toán và tra cứu lịch sử.
+              </Typography>
+            </Box>
+          </Stack>
+          <Chip
+            icon={<InfoOutlinedIcon />}
+            label={month ? `Kỳ ${month}` : "Tất cả kỳ học phí"}
+            sx={{
+              alignSelf: { xs: "flex-start", sm: "center" },
+              color: "common.white",
+              bgcolor: "rgba(255,255,255,0.14)",
+              "& .MuiChip-icon": { color: "inherit" },
+            }}
+          />
+        </Stack>
+      </Paper>
       <Box
         sx={{
           display: "grid",
@@ -639,7 +712,12 @@ export function PaymentBatchManagement() {
 
       <Paper
         variant="outlined"
-        sx={{ p: { xs: 1.5, md: 2 }, borderRadius: 2.5 }}
+        sx={{
+          p: { xs: 1.5, md: 2.25 },
+          borderRadius: 3,
+          borderColor: "divider",
+          boxShadow: "0 5px 20px rgba(16, 42, 67, 0.045)",
+        }}
       >
         <Stack spacing={1.75}>
           <Stack
@@ -711,7 +789,7 @@ export function PaymentBatchManagement() {
               onSearch={applyFilters}
               onClear={clearFilters}
               hasFilters={Boolean(
-                search.trim() || appliedSearch || student || selectedClass,
+                search.trim() || appliedSearch || student || selectedClass || month,
               )}
               isLoading={loading}
             />
@@ -772,6 +850,21 @@ export function PaymentBatchManagement() {
                 textFieldProps={{ size: "small" }}
               />
             </Box>
+            {month && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setIssuedBatches([]);
+                  setIssuedClassId(null);
+                  setIssuedMonth(null);
+                  setIssuedDialogOpen(false);
+                  setMonth("");
+                }}
+                sx={{ whiteSpace: "nowrap" }}
+              >
+                Tất cả kỳ
+              </Button>
+            )}
             <Button
               variant="outlined"
               color="primary"
@@ -823,7 +916,13 @@ export function PaymentBatchManagement() {
 
       <Paper
         variant="outlined"
-        sx={{ px: { xs: 1, md: 1.5 }, borderRadius: 2.5 }}
+        sx={{
+          px: { xs: 1, md: 1.5 },
+          borderRadius: 2.5,
+          borderColor: "divider",
+          bgcolor: "background.paper",
+          boxShadow: "0 5px 20px rgba(16, 42, 67, 0.045)",
+        }}
       >
         <Tabs
           value={view}
@@ -834,6 +933,11 @@ export function PaymentBatchManagement() {
             setPage(0);
             setSelectedFeeIds([]);
             setSelectedBatchIds([]);
+          }}
+          sx={{
+            "& .MuiTab-root": { minHeight: 58, fontWeight: 700, textTransform: "none" },
+            "& .Mui-selected": { color: "primary.main" },
+            "& .MuiTabs-indicator": { height: 3, borderRadius: 3 },
           }}
         >
           <Tab
@@ -944,10 +1048,13 @@ export function PaymentBatchManagement() {
               gap: 2,
             }}
           >
-            <Paper sx={{ overflow: "hidden" }}>
+            <Paper
+              variant="outlined"
+              sx={{ overflow: "hidden", borderRadius: 3, borderColor: "divider" }}
+            >
               <Box sx={{ overflowX: "auto" }}>
                 <Table sx={{ minWidth: 900 }} size="small">
-                  <TableHead>
+                  <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -1063,7 +1170,7 @@ export function PaymentBatchManagement() {
                     {!loading && !unissuedFees.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message="Không có khoản học phí chưa phát thông báo trong kỳ này" />
+                          <EmptyState message="Không có khoản học phí chưa phát thông báo với bộ lọc hiện tại" />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1116,10 +1223,13 @@ export function PaymentBatchManagement() {
               gap: 2,
             }}
           >
-            <Paper sx={{ overflow: "hidden" }}>
+            <Paper
+              variant="outlined"
+              sx={{ overflow: "hidden", borderRadius: 3, borderColor: "divider" }}
+            >
               <Box sx={{ overflowX: "auto" }}>
                 <Table sx={{ minWidth: 900 }} size="small">
-                  <TableHead>
+                  <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -1259,7 +1369,7 @@ export function PaymentBatchManagement() {
                     {!loading && !visiblePendingBatches.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message="Không có đợt thanh toán đang chờ trong kỳ này" />
+                          <EmptyState message="Không có đợt thanh toán đang chờ với bộ lọc hiện tại" />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1317,10 +1427,13 @@ export function PaymentBatchManagement() {
             title="Lịch sử đợt thu đã thanh toán"
             subtitle="Dữ liệu chỉ xem; các batch đã thanh toán không thể tách hoặc gộp lại."
           />
-          <Paper sx={{ overflow: "hidden" }}>
+          <Paper
+            variant="outlined"
+            sx={{ overflow: "hidden", borderRadius: 3, borderColor: "divider" }}
+          >
             <Box sx={{ overflowX: "auto" }}>
               <Table sx={{ minWidth: 850 }} size="small">
-                <TableHead>
+                <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
                   <TableRow>
                     <TableCell>Đợt thu</TableCell>
                     <TableCell>Học sinh</TableCell>
@@ -1403,7 +1516,7 @@ export function PaymentBatchManagement() {
                   {!loading && !visibleSuccessfulBatches.length && (
                     <TableRow>
                       <TableCell colSpan={6}>
-                        <EmptyState message="Không có đợt đã thanh toán trong kỳ này" />
+                        <EmptyState message="Không có đợt đã thanh toán với bộ lọc hiện tại" />
                       </TableCell>
                     </TableRow>
                   )}
@@ -1582,12 +1695,14 @@ function DashboardMetric({
   const colors = metricTones[tone];
   return (
     <Paper
-      variant="outlined"
+      elevation={0}
       sx={{
         p: { xs: 1.25, md: 1.75 },
-        borderRadius: 2.5,
-        borderTop: "2px solid",
-        borderTopColor: colors.color,
+        borderRadius: 2.75,
+        border: "1px solid",
+        borderColor: "divider",
+        bgcolor: "background.paper",
+        boxShadow: "0 5px 18px rgba(16, 42, 67, 0.04)",
         transition: "box-shadow 160ms ease, transform 160ms ease",
         "&:hover": { boxShadow: 2, transform: "translateY(-1px)" },
       }}
