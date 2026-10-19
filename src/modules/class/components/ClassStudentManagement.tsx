@@ -70,9 +70,42 @@ type Fee = {
   billingMonth: number;
   billingType: string;
   note: string | null;
-  payments: Array<{ amount: number; paymentContent: string | null }>;
+  payments: Array<{
+    amount: number;
+    paymentDate: string;
+    paymentMethod: string;
+    bankTransactionNo: string | null;
+    transactionReference: string | null;
+    paymentContent: string | null;
+    paymentBatch: {
+      bankTransactionNo: string | null;
+      transactionReference: string | null;
+      paymentContent: string | null;
+      statementRowLinks: Array<{
+        isConfirmed: boolean;
+        row: {
+          bankTransactionNo: string | null;
+          description: string;
+          reconciliationContent: string;
+        };
+      }>;
+    } | null;
+  }>;
   items: Array<{ classSubjectId: string | null; itemName: string; amount: number }>;
-  paymentAllocations: Array<{ paymentBatch: { id: string; batchNo: string; status: string } }>;
+  paymentAllocations: Array<{
+    paymentBatch: {
+      id: string;
+      batchNo: string;
+      status: string;
+      paymentContent: string | null;
+      bankTransactionNo: string | null;
+      transactionReference: string | null;
+      statementRowLinks: Array<{
+        isConfirmed: boolean;
+        row: { bankTransactionNo: string | null; description: string; reconciliationContent: string };
+      }>;
+    };
+  }>;
 };
 type StudentRow = {
   id: string;
@@ -111,6 +144,11 @@ const currentMonth = () => {
 };
 const money = (value: number) => `${new Intl.NumberFormat("vi-VN").format(value)} VND`;
 const monthValue = (value: string) => value.slice(0, 7);
+const paymentDateValue = (value: string) => new Intl.DateTimeFormat("vi-VN", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  dateStyle: "short",
+  timeStyle: "short",
+}).format(new Date(value));
 const feeStatusLabel: Record<string, string> = {
   UNPAID: "Chưa thu",
   PARTIAL: "Đã thu một phần",
@@ -876,7 +914,100 @@ export function ClassStudentManagement({ id }: { id: string }) {
         {selectedStudent.pauses.length ? selectedStudent.pauses.map((pause) => <Paper key={pause.id} variant="outlined" sx={{ p: 1.5, opacity: pause.status === "CANCELLED" ? 0.65 : 1 }}><Stack direction="row" justifyContent="space-between" gap={1}><Stack><Typography fontWeight={600}>{monthValue(pause.startMonth)} → {monthValue(pause.endMonth)} {pause.status === "CANCELLED" ? "· Đã hủy" : ""}</Typography><Typography variant="caption" color="text.secondary">{pause.reason || "Không có lý do"}</Typography></Stack>{pause.status === "ACTIVE" && <Stack direction="row"><Button size="small" disabled={classNotActive} onClick={() => { setEditingPauseId(pause.id); setPauseStart(monthValue(pause.startMonth)); setPauseEnd(monthValue(pause.endMonth)); setPauseReason(pause.reason || ""); setPauseTarget(selectedStudent); }}>Sửa</Button><Button size="small" color="error" disabled={busy || classNotActive} onClick={() => setPauseCancelTarget({ student: selectedStudent, pauseId: pause.id })}>Hủy</Button></Stack>}</Stack></Paper>) : <Typography variant="body2" color="text.secondary">Chưa có thời gian tạm nghỉ.</Typography>}
         <Divider />
         <Typography variant="subtitle1" fontWeight={700}>Học phí {month}</Typography>
-        {getPause(selectedStudent) ? <Chip color="info" label="Không phát sinh trong kỳ tạm nghỉ" /> : selectedFee ? <Stack spacing={0.75}><Typography variant="h5">{money(Number(selectedFee.finalAmount))}</Typography><Typography variant="body2" color="text.secondary">Đã thu: {money(Number(selectedFee.paidAmount))} · Còn nợ: {money(Number(selectedFee.remainingAmount))}</Typography><Chip size="small" sx={{ alignSelf: "flex-start" }} color={feeStatusColor[selectedFee.status] ?? "default"} label={feeStatusLabel[selectedFee.status] ?? selectedFee.status} />{selectedFee.payments.map((payment, index) => <Typography key={`${index}-${payment.amount}`} variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>Nội dung thanh toán ({money(Number(payment.amount))}): {payment.paymentContent || "-"}</Typography>)}<Button variant="outlined" startIcon={<PaymentsOutlinedIcon />} onClick={() => { setSelectedStudent(null); openFeeDrawer(selectedFee.id); }}>Chi tiết và xử lý học phí</Button></Stack> : <Stack spacing={0.5}><Typography variant="h5">{money(selectedExpectedAmount)}</Typography><Typography variant="body2" color="text.secondary">Dự kiến theo các môn đang đăng ký; chưa tạo khoản học phí.</Typography></Stack>}
+        {getPause(selectedStudent) ? (
+          <Chip color="info" label="Không phát sinh trong kỳ tạm nghỉ" />
+        ) : selectedFee ? (
+          <Stack spacing={1}>
+            <Typography variant="h5">{money(Number(selectedFee.finalAmount))}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Đã thu: {money(Number(selectedFee.paidAmount))} · Còn nợ: {money(Number(selectedFee.remainingAmount))}
+            </Typography>
+            <Chip
+              size="small"
+              sx={{ alignSelf: "flex-start" }}
+              color={feeStatusColor[selectedFee.status] ?? "default"}
+              label={feeStatusLabel[selectedFee.status] ?? selectedFee.status}
+            />
+            {(selectedFee.payments.length > 0 || selectedFee.paymentAllocations.length > 0) && (
+              <Stack spacing={1} sx={{ pt: 0.75 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  Thông tin thanh toán và đối soát
+                </Typography>
+                {selectedFee.payments.map((payment, index) => {
+                  const rows = payment.paymentBatch?.statementRowLinks ?? [];
+                  const allConfirmed = rows.length > 0 && rows.every((link) => link.isConfirmed);
+                  const paymentContent = payment.paymentContent || payment.paymentBatch?.paymentContent;
+                  const transactionNo = payment.bankTransactionNo || payment.paymentBatch?.bankTransactionNo || payment.transactionReference || payment.paymentBatch?.transactionReference;
+                  return (
+                    <Paper key={`${index}-${payment.amount}`} variant="outlined" sx={{ p: 1.5 }}>
+                      <Stack spacing={0.5}>
+                        <Typography variant="body2" fontWeight={700}>
+                          {money(Number(payment.amount))} · {payment.paymentMethod === "CASH" ? "Tiền mặt" : payment.paymentMethod === "BANK_TRANSFER" ? "Chuyển khoản" : payment.paymentMethod}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Thời gian: {paymentDateValue(payment.paymentDate)}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                          Nội dung thanh toán: {paymentContent || "-"}
+                        </Typography>
+                        {payment.paymentMethod !== "CASH" && (
+                          <>
+                            <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                              Mã giao dịch: {transactionNo || "-"}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Đối soát: {rows.length === 0 ? "Chưa gắn sao kê" : allConfirmed ? "Đã xác nhận" : "Đang chờ xác nhận"}
+                            </Typography>
+                            {rows.map((link, rowIndex) => (
+                              <Typography key={`${rowIndex}-${link.row.bankTransactionNo}`} variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                                Sao kê: {link.row.reconciliationContent || link.row.description}
+                              </Typography>
+                            ))}
+                          </>
+                        )}
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+                {selectedFee.paymentAllocations.map(({ paymentBatch }) => {
+                  const rows = paymentBatch.statementRowLinks;
+                  const allConfirmed = rows.length > 0 && rows.every((link) => link.isConfirmed);
+                  return (
+                    <Paper key={paymentBatch.id} variant="outlined" sx={{ p: 1.5 }}>
+                      <Stack spacing={0.5}>
+                        <Typography variant="body2" fontWeight={700}>
+                          Đợt thu {paymentBatch.batchNo} · Đang chờ thanh toán
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                          Nội dung thanh toán: {paymentBatch.paymentContent || "-"}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                          Mã giao dịch: {paymentBatch.bankTransactionNo || paymentBatch.transactionReference || "-"}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Đối soát: {rows.length === 0 ? "Chưa có giao dịch ngân hàng khớp" : allConfirmed ? "Đã xác nhận" : "Đang chờ xác nhận"}
+                        </Typography>
+                        {rows.map((link, rowIndex) => (
+                          <Typography key={`${rowIndex}-${link.row.bankTransactionNo}`} variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                            Sao kê: {link.row.reconciliationContent || link.row.description}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </Paper>
+                  );
+                })}
+              </Stack>
+            )}
+            <Button variant="outlined" startIcon={<PaymentsOutlinedIcon />} onClick={() => { setSelectedStudent(null); openFeeDrawer(selectedFee.id); }}>
+              Chi tiết và xử lý học phí
+            </Button>
+          </Stack>
+        ) : (
+          <Stack spacing={0.5}>
+            <Typography variant="h5">{money(selectedExpectedAmount)}</Typography>
+            <Typography variant="body2" color="text.secondary">Dự kiến theo các môn đang đăng ký; chưa tạo khoản học phí.</Typography>
+          </Stack>
+        )}
         <Typography variant="body2" color="text.secondary">Đăng ký học viên và tạo học phí là hai thao tác độc lập.</Typography>
       </Stack>}
     </Drawer>

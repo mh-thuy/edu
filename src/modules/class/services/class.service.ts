@@ -1753,13 +1753,63 @@ export async function getClassStudentsPage(
               items: { select: { classSubjectId: true, itemName: true, amount: true } },
               payments: {
                 where: { paymentStatus: "SUCCESS" },
-                select: { amount: true, paymentContent: true },
+                orderBy: { paymentDate: "desc" },
+                select: {
+                  amount: true,
+                  paymentDate: true,
+                  paymentMethod: true,
+                  bankTransactionNo: true,
+                  transactionReference: true,
+                  paymentContent: true,
+                  paymentBatch: {
+                    select: {
+                      bankTransactionNo: true,
+                      transactionReference: true,
+                      paymentContent: true,
+                      statementRowLinks: {
+                        select: {
+                          isConfirmed: true,
+                          row: {
+                            select: {
+                              bankTransactionNo: true,
+                              description: true,
+                              reconciliationContent: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
               paymentAllocations: {
                 where: { paymentBatch: { status: "PENDING" } },
                 orderBy: { createdAt: "desc" },
                 take: 1,
-                select: { paymentBatch: { select: { id: true, batchNo: true, status: true } } },
+                select: {
+                  paymentBatch: {
+                    select: {
+                      id: true,
+                      batchNo: true,
+                      status: true,
+                      paymentContent: true,
+                      bankTransactionNo: true,
+                      transactionReference: true,
+                      statementRowLinks: {
+                        select: {
+                          isConfirmed: true,
+                          row: {
+                            select: {
+                              bankTransactionNo: true,
+                              description: true,
+                              reconciliationContent: true,
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
