@@ -1753,7 +1753,7 @@ export async function getClassStudentsPage(
               items: { select: { classSubjectId: true, itemName: true, amount: true } },
               payments: {
                 where: { paymentStatus: "SUCCESS" },
-                select: { amount: true },
+                select: { amount: true, paymentContent: true },
               },
               paymentAllocations: {
                 where: { paymentBatch: { status: "PENDING" } },
