@@ -49,6 +49,7 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamDate } from "@/lib/vietnam-time";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { VietQrCard, downloadVietQrCard, type VietQrCardData } from "./VietQrCard";
 
 type Fee = {
   id: string;
@@ -641,6 +642,27 @@ export function TuitionPaymentWorkspace({
       showSuccess("Đã sao chép nội dung chuyển khoản");
     } catch {
       showError("Không thể sao chép tự động. Vui lòng nhập: PB " + pendingBatch.batchNo);
+    }
+  }
+
+  const qrCardData: VietQrCardData | null = pendingBatch?.qrDataUrl
+    ? {
+        qrDataUrl: pendingBatch.qrDataUrl,
+        bankCode: pendingBatch.account.bankCode,
+        bankName: pendingBatch.account.bankName,
+        accountName: pendingBatch.account.accountName,
+        accountNo: pendingBatch.account.accountNo,
+        amount: pendingBatch.amount,
+        batchNo: pendingBatch.batchNo,
+      }
+    : null;
+
+  async function downloadQrCard() {
+    if (!qrCardData) return;
+    try {
+      await downloadVietQrCard(qrCardData);
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : "Không thể tải ảnh QR");
     }
   }
 
@@ -1247,8 +1269,8 @@ export function TuitionPaymentWorkspace({
                     )}
                     {qrLoading ? (
                       <LoadingState label="Đang tạo mã QR thanh toán..." minHeight={240} />
-                    ) : pendingBatch.qrDataUrl ? (
-                      <Box component="img" src={pendingBatch.qrDataUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 400, height: 400, maxWidth: "100%", objectFit: "contain", border: "1px solid", borderColor: "divider", borderRadius: 1 }} />
+                    ) : qrCardData ? (
+                      <VietQrCard data={qrCardData} />
                     ) : null}
                     {pendingBatch.qrDataUrl && (
                       <Typography variant="caption" color="text.secondary" textAlign="center">
@@ -1263,7 +1285,7 @@ export function TuitionPaymentWorkspace({
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
                   <Button variant="outlined" startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copyTransferContent()}>Sao chép nội dung</Button>
                   {pendingBatch.qrDataUrl && (
-                    <Button component="a" href={pendingBatch.qrDataUrl} download={`qr-${pendingBatch.batchNo}.png`} variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải QR</Button>
+                    <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} disabled={!qrCardData} onClick={() => void downloadQrCard()}>Tải QR</Button>
                   )}
                   <Button variant="outlined" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} startIcon={<DownloadOutlinedIcon />}>Tải thông báo PDF</Button>
                   <Button variant="contained" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer" startIcon={<PrintOutlinedIcon />}>Mở để in</Button>
