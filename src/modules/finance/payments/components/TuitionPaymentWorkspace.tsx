@@ -78,6 +78,7 @@ type PendingBatch = {
   amount: number;
   account: BankAccount;
   qrDataUrl: string;
+  transferContent?: string;
 };
 const steps = ["Tìm học viên", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
 const feeStatusLabels: Record<string, string> = {
@@ -343,12 +344,14 @@ export function TuitionPaymentWorkspace({
         qrDataUrl: string;
         amount: number;
         account: BankAccount;
+        transferContent: string;
       }>(qrResponse);
       setPendingBatch({
         ...batch,
         amount: Number(qr.amount),
         account: qr.account,
         qrDataUrl: qr.qrDataUrl,
+        transferContent: qr.transferContent,
       });
     } catch (reason) {
       setQrError(
@@ -635,13 +638,16 @@ export function TuitionPaymentWorkspace({
     setConfirmOpen(true);
   }
 
+  const pendingTransferContent =
+    pendingBatch?.transferContent || pendingBatch?.batchNo || "";
+
   async function copyTransferContent() {
     if (!pendingBatch) return;
     try {
-      await navigator.clipboard.writeText(pendingBatch.batchNo);
+      await navigator.clipboard.writeText(pendingTransferContent);
       showSuccess("Đã sao chép nội dung chuyển khoản");
     } catch {
-      showError("Không thể sao chép tự động. Vui lòng nhập: " + pendingBatch.batchNo);
+      showError("Không thể sao chép tự động. Vui lòng nhập: " + pendingTransferContent);
     }
   }
 
@@ -654,6 +660,7 @@ export function TuitionPaymentWorkspace({
         accountNo: pendingBatch.account.accountNo,
         amount: pendingBatch.amount,
         batchNo: pendingBatch.batchNo,
+        transferContent: pendingTransferContent,
       }
     : null;
 
@@ -1256,7 +1263,7 @@ export function TuitionPaymentWorkspace({
                         <Typography variant="caption" color="text.secondary" fontWeight={700}>SỐ TIỀN CẦN CHUYỂN</Typography>
                         <Typography variant="h6" color="error.main" fontWeight={900}>{money(pendingBatch.amount)}</Typography>
                         <Typography variant="caption" color="text.secondary" fontWeight={700} component="div" sx={{ mt: 1.25 }}>NỘI DUNG CHUYỂN KHOẢN</Typography>
-                        <Typography fontWeight={800} sx={{ overflowWrap: "anywhere" }}>{pendingBatch.batchNo}</Typography>
+                        <Typography fontWeight={800} sx={{ overflowWrap: "anywhere" }}>{pendingTransferContent}</Typography>
                       </Box>
                     </Stack>
                   </Paper>

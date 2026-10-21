@@ -20,6 +20,7 @@ import {
   buildVietQrDataUrl,
   unsupportedVietQrBankMessage,
 } from "@/modules/finance/tuition/services/vietqr.service";
+import { buildTransferContent } from "../utils/transfer-content";
 import {
   getEffectiveTuitionFeeStatus,
   PARTIAL_FEE_STATUS,
@@ -2004,6 +2005,12 @@ export async function getPaymentBatchQr(
     );
     const batch = await tx.paymentBatch.findUnique({
       where: { id: batchId },
+      include: {
+        student: { select: { fullName: true } },
+        allocations: {
+          select: { tuitionFee: { select: { class: { select: { name: true } } } } },
+        },
+      },
     });
     if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
     if (batch.status !== PaymentBatchStatus.PENDING)
@@ -2018,7 +2025,8 @@ export async function getPaymentBatchQr(
     if (!accountRecord)
       throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
     // Same account source as the notice PDF: the snapshot taken when the batch was issued.
-    const snapshotAccount = parseDocumentSnapshot(batch.noticeSnapshot)?.bankAccount;
+    const snapshot = parseDocumentSnapshot(batch.noticeSnapshot);
+    const snapshotAccount = snapshot?.bankAccount;
     const account = {
       id: accountRecord.id,
       bankCode: snapshotAccount?.bankCode ?? accountRecord.bankCode,
@@ -2026,11 +2034,19 @@ export async function getPaymentBatchQr(
       accountNo: snapshotAccount?.accountNo ?? accountRecord.accountNo,
       accountName: snapshotAccount?.accountName ?? accountRecord.accountName,
     };
+    // Same content as the notice PDF, taken from the batch snapshot when available.
+    const transferContent = buildTransferContent({
+      batchNo: batch.batchNo,
+      studentName: snapshot?.student.fullName ?? batch.student.fullName,
+      classNames: snapshot
+        ? snapshot.fees.map((fee) => fee.className)
+        : batch.allocations.map((allocation) => allocation.tuitionFee.class?.name),
+    });
     const qrDataUrl = await buildVietQrDataUrl({
       bankCode: account.bankCode,
       accountNo: account.accountNo,
       amount: Number(batch.totalAmount),
-      addInfo: batch.batchNo,
+      addInfo: transferContent,
     });
     if (!qrDataUrl)
       throw new ConflictError(unsupportedVietQrBankMessage(account.bankCode));
@@ -2053,6 +2069,7 @@ export async function getPaymentBatchQr(
       amount: batch.totalAmount,
       account,
       qrDataUrl,
+      transferContent,
     };
   });
 }

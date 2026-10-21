@@ -10,6 +10,7 @@ export type VietQrCardData = {
   accountNo: string;
   amount: number;
   batchNo: string;
+  transferContent: string;
 };
 
 // The card mirrors a printed VietQR slip, so it stays light in both themes.
@@ -36,7 +37,7 @@ export function VietQrCard({ data }: { data: VietQrCardData }) {
       <Typography sx={{ mt: 0.5, fontSize: 14 }}>
         Số tiền: <Box component="strong" sx={{ color: CARD_RED }}>{formatAmount(data.amount)}</Box>
       </Typography>
-      <Typography sx={{ fontSize: 13, color: CARD_MUTED, overflowWrap: "anywhere" }}>Nội dung: {data.batchNo}</Typography>
+      <Typography sx={{ fontSize: 13, color: CARD_MUTED, overflowWrap: "anywhere" }}>Nội dung: {data.transferContent}</Typography>
     </Box>
   );
 }
@@ -127,7 +128,7 @@ export async function downloadVietQrCard(data: VietQrCardData) {
   context.textAlign = "center";
   context.fillStyle = CARD_MUTED;
   context.font = font(400, 24);
-  context.fillText(fitText(context, `Nội dung: ${data.batchNo}`, width - 60), center, rowY + 186);
+  context.fillText(fitText(context, `Nội dung: ${data.transferContent}`, width - 60), center, rowY + 186);
 
   const link = document.createElement("a");
   link.href = canvas.toDataURL("image/png");

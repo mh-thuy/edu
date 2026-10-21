@@ -74,6 +74,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Mỗi phiên import sao kê và từng dòng giao dịch được lưu; có thể xuất báo cáo đối soát theo ngày giao dịch ngân hàng trên các phiên đã lưu.
 - QR được sinh động theo payment batch, không lưu lịch sử QR.
 - QR được sinh tại máy chủ theo chuẩn VietQR/NAPAS (không gọi dịch vụ ảnh bên ngoài); màn hình thanh toán và PDF thông báo dùng chung một hàm sinh QR và cùng snapshot tài khoản của batch. Mã ngân hàng phải là mã viết tắt được hỗ trợ (VCB, BIDV, TCB, MB…) hoặc mã BIN 6 số; nếu không, hệ thống báo rõ thay vì hiển thị QR.
+- Nội dung chuyển khoản (trong QR, PDF và nút sao chép) gồm mã đợt viết liền không dấu gạch, tên viết tắt học viên và tên lớp không dấu, tối đa 25 ký tự theo chuẩn VietQR, ví dụ `PB20261021600506 NVAN TOA`. Mã đợt luôn đứng đầu và đầy đủ; đối soát sao kê chỉ dựa vào mã đợt nên vẫn khớp cả nội dung cũ `PB PB-...`.
 - Hủy receipt của payment batch thành công sẽ hoàn tác toàn bộ batch, mở lại các khoản học phí và ghi audit log.
 - Hoàn tiền chỉ hỗ trợ toàn bộ payment hoặc toàn bộ batch, theo luồng
   `PENDING -> APPROVED -> COMPLETED`; khi hoàn tất, payment chuyển `REFUNDED`,

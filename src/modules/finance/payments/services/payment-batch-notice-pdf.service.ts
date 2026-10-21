@@ -9,6 +9,7 @@ import {
   buildVietQrPng,
   getVietQrBankBin,
 } from "@/modules/finance/tuition/services/vietqr.service";
+import { buildTransferContent } from "../utils/transfer-content";
 import {
   getPaymentBatchNoticeSnapshot,
   parseDocumentSnapshot,
@@ -680,7 +681,7 @@ async function renderPaymentBatchNoticePdf(
       red,
       6,
     );
-    drawFit(`Nội dung: ${batch.batchNo}`, infoX, 64, infoWidth, 8.5, navy, 6);
+    drawFit(`Nội dung: ${noticeTransferContent(data)}`, infoX, 64, infoWidth, 8.5, navy, 6);
   }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
@@ -783,14 +784,25 @@ async function buildNoticeQrPng(
 ) {
   const { batch, accountRecord, account } = data;
   if (!accountRecord.isActive) return null;
+  const addInfo = noticeTransferContent(data);
   try {
     return await buildVietQrPng({
       bankCode: account.bankCode,
       accountNo: account.accountNo,
       amount: Number(batch.totalAmount),
-      addInfo: batch.batchNo,
+      addInfo,
     });
   } catch {
     return null;
   }
+}
+
+function noticeTransferContent(
+  data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
+) {
+  return buildTransferContent({
+    batchNo: data.batch.batchNo,
+    studentName: data.student.fullName,
+    classNames: data.fees.map((fee) => fee.className),
+  });
 }
