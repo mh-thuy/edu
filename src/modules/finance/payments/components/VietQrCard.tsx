@@ -23,10 +23,7 @@ const formatAmount = (value: number) => `${new Intl.NumberFormat("vi-VN").format
 export function VietQrCard({ data }: { data: VietQrCardData }) {
   return (
     <Box sx={{ width: "100%", maxWidth: 360, bgcolor: "#fff", color: CARD_INK, border: "1px solid #d5dce6", borderRadius: 2, px: 2.5, py: 2, textAlign: "center" }}>
-      <Typography sx={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", lineHeight: 1, color: CARD_ACCENT }}>
-        <Box component="span" sx={{ color: CARD_RED }}>Viet</Box>QR
-      </Typography>
-      <Box sx={{ mt: 1.5, mx: "auto", width: "fit-content", p: 0.75, border: `2px solid ${CARD_ACCENT}`, borderRadius: 1 }}>
+      <Box sx={{ mx: "auto", width: "fit-content", p: 0.75, border: `2px solid ${CARD_ACCENT}`, borderRadius: 1 }}>
         <Box component="img" src={data.qrDataUrl} alt={`QR chuyển khoản đợt ${data.batchNo}`} sx={{ display: "block", width: 240, height: 240, maxWidth: "100%" }} />
       </Box>
       <Stack direction="row" justifyContent="center" alignItems="center" spacing={1.25} sx={{ mt: 1.5 }}>
@@ -63,7 +60,7 @@ function fitText(context: CanvasRenderingContext2D, text: string, maxWidth: numb
 // Renders the same card layout to a PNG so the downloaded file matches what is on screen.
 export async function downloadVietQrCard(data: VietQrCardData) {
   const width = 600;
-  const height = 800;
+  const height = 736;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -78,19 +75,11 @@ export async function downloadVietQrCard(data: VietQrCardData) {
   context.lineWidth = 2;
   context.strokeRect(1, 1, width - 2, height - 2);
 
-  context.textAlign = "left";
   context.textBaseline = "alphabetic";
-  context.font = font(900, 52);
-  const vietWidth = context.measureText("Viet").width;
-  const titleWidth = vietWidth + context.measureText("QR").width;
-  context.fillStyle = CARD_RED;
-  context.fillText("Viet", center - titleWidth / 2, 82);
-  context.fillStyle = CARD_ACCENT;
-  context.fillText("QR", center - titleWidth / 2 + vietWidth, 82);
 
   const qrSize = 400;
   const qrX = center - qrSize / 2;
-  const qrY = 112;
+  const qrY = 48;
   context.lineWidth = 4;
   context.strokeStyle = CARD_ACCENT;
   context.strokeRect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24);
