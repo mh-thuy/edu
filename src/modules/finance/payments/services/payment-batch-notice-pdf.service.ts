@@ -665,27 +665,52 @@ async function renderPaymentBatchNoticePdf(
 
   const qrPng = await buildNoticeQrPng(data);
   const pages = pdf.getPages();
+  // VietQR-style slip, same layout as the QR card on the payment screen.
+  const qrAccent = rgb(0.11, 0.25, 0.56);
+  const qrCenterX = rightX + rightWidth / 2;
+  const qrSize = 196;
+  const qrY = 152;
   if (accountRecord.isActive) {
     page = pdf.getPage(0);
-    const infoX = rightX + 18;
     const infoWidth = rightWidth - 36;
-    drawFit(`Ngân hàng: ${account.bankName}`, infoX, 128, infoWidth, 8.5, navy, 6);
-    drawFit(`Số tài khoản: ${account.accountNo}`, infoX, 112, infoWidth, 8.5, navy, 6);
-    drawFit(`Chủ tài khoản: ${account.accountName}`, infoX, 96, infoWidth, 8.5, navy, 6);
-    drawFit(
-      `Số tiền: ${money(Number(batch.totalAmount))} VND`,
-      infoX,
-      80,
-      infoWidth,
-      8.5,
-      red,
-      6,
-    );
-    drawFit(`Nội dung: ${noticeTransferContent(data)}`, infoX, 64, infoWidth, 8.5, navy, 6);
+    const fitSize = (text: string, size: number, minSize: number) => {
+      let fitted = size;
+      while (fitted > minSize && font.widthOfTextAtSize(text, fitted) > infoWidth)
+        fitted -= 0.25;
+      return fitted;
+    };
+    const napasText = "napas 247";
+    const bankText = account.bankCode.toUpperCase();
+    const rowSize = 9.5;
+    const rowGap = 8;
+    const napasWidth = font.widthOfTextAtSize(napasText, rowSize);
+    const bankWidth = font.widthOfTextAtSize(bankText, rowSize);
+    const rowStart = qrCenterX - (napasWidth + rowGap * 2 + bankWidth) / 2;
+    draw(napasText, rowStart, 126, rowSize, qrAccent);
+    page.drawLine({
+      start: { x: rowStart + napasWidth + rowGap, y: 123.5 },
+      end: { x: rowStart + napasWidth + rowGap, y: 134 },
+      thickness: 0.8,
+      color: qrAccent,
+    });
+    draw(bankText, rowStart + napasWidth + rowGap * 2, 126, rowSize, qrAccent);
+    const accountName = account.accountName.toUpperCase();
+    drawCentered(accountName, qrCenterX, 106, fitSize(accountName, 10.5, 6.5), ink);
+    drawCentered(account.accountNo, qrCenterX, 91, 9, muted);
+    const amountLabel = "Số tiền: ";
+    const amountText = `${money(Number(batch.totalAmount))} VND`;
+    const amountSize = 9.5;
+    const amountLabelWidth = font.widthOfTextAtSize(amountLabel, amountSize);
+    const amountStart =
+      qrCenterX -
+      (amountLabelWidth + font.widthOfTextAtSize(amountText, amountSize)) / 2;
+    draw(amountLabel, amountStart, 74, amountSize, ink);
+    draw(amountText, amountStart + amountLabelWidth, 74, amountSize, red);
+    const contentText = `Nội dung: ${noticeTransferContent(data)}`;
+    drawCentered(contentText, qrCenterX, 58, fitSize(contentText, 8, 6), muted);
   }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    const qrSize = 196;
     pages.forEach((qrPage) => {
       if (continuationPages.has(qrPage)) {
         const compactQrSize = 33;
@@ -697,9 +722,17 @@ async function renderPaymentBatchNoticePdf(
         });
         return;
       }
+      qrPage.drawRectangle({
+        x: qrCenterX - qrSize / 2 - 6,
+        y: qrY - 6,
+        width: qrSize + 12,
+        height: qrSize + 12,
+        borderColor: qrAccent,
+        borderWidth: 1.5,
+      });
       qrPage.drawImage(qr, {
-        x: rightX + rightWidth / 2 - qrSize / 2,
-        y: 146,
+        x: qrCenterX - qrSize / 2,
+        y: qrY,
         width: qrSize,
         height: qrSize,
       });
