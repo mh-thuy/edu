@@ -1525,9 +1525,25 @@ export async function restructurePendingBatches(
       data.operation === "SPLIT"
         ? [data.sourceBatchId]
         : [...new Set(data.batchIds)];
+    const batchRefs = await tx.paymentBatch.findMany({
+      where: { id: { in: batchIds } },
+      select: { studentId: true },
+    });
+    if (batchRefs.length !== batchIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
+    }
+    // Lock student then batches (sorted) before reading allocations, same order as other batch flows.
+    await lockStudentRows(
+      tx,
+      batchRefs.map((batch) => batch.studentId),
+    );
+    await lockPaymentBatchRows(tx, batchIds);
     const sourceBatches = await tx.paymentBatch.findMany({
       where: { id: { in: batchIds } },
-      include: { allocations: true },
+      include: {
+        allocations: true,
+        statementRowLinks: { select: { isConfirmed: true } },
+      },
     });
     if (sourceBatches.length !== batchIds.length) {
       throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
@@ -1549,6 +1565,14 @@ export async function restructurePendingBatches(
     }
     if (new Set(sourceBatches.map((batch) => batch.bankAccountId)).size !== 1) {
       throw new ConflictError("Các đợt phải dùng cùng một tài khoản nhận tiền");
+    }
+    const linkedBatch = sourceBatches.find(
+      (batch) => batch.statementRowLinks.length,
+    );
+    if (linkedBatch) {
+      throw new ConflictError(
+        `Đợt ${linkedBatch.batchNo} đang được ghép với sao kê; hãy hoàn tất đối soát trước khi tách hoặc gộp`,
+      );
     }
 
     const allocations = sourceBatches.flatMap((batch) => batch.allocations);
@@ -1622,7 +1646,7 @@ export async function restructurePendingBatches(
         totalAmount: batch.totalAmount,
       })),
     };
-  });
+  }, { timeout: 60_000 });
 }
 
 export async function listPaymentBatches(params: {
