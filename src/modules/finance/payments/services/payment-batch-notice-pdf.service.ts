@@ -517,17 +517,6 @@ async function renderPaymentBatchNoticePdf(
     }
   };
 
-  // Earliest due date among the batch's fees (not stored in the notice snapshot).
-  const dueDates = batch.allocations
-    .map((allocation) => allocation.tuitionFee.dueDate)
-    .filter((value): value is Date => Boolean(value));
-  const earliestDueDate = dueDates.length
-    ? new Date(Math.min(...dueDates.map((value) => value.getTime())))
-    : null;
-  const dueDateText = earliestDueDate
-    ? `${String(earliestDueDate.getUTCDate()).padStart(2, "0")}/${String(earliestDueDate.getUTCMonth() + 1).padStart(2, "0")}/${earliestDueDate.getUTCFullYear()}`
-    : null;
-
   const leftX = 28;
   const leftWidth = 260;
   const rightX = 307;
@@ -545,20 +534,11 @@ async function renderPaymentBatchNoticePdf(
       "THÔNG TIN HỌC VIÊN & HỌC PHÍ",
     );
     drawCard(rightX, cardBottom, rightWidth, cardTop - cardBottom);
-    drawFit(student.fullName, 45, 323, 228, 16, red, 11);
-    drawFit(
-      `Mã đợt: ${batch.batchNo}${dueDateText ? `  ·  Hạn thanh toán: ${dueDateText}` : ""}`,
-      45,
-      307,
-      228,
-      7.5,
-      muted,
-      6,
-    );
-    draw("CÁC KHOẢN THANH TOÁN", 45, 293, 8.5, navy);
+    drawFit(student.fullName, 45, 319, 228, 16, red, 11);
+    draw("CÁC KHOẢN THANH TOÁN", 45, 296, 8.5, navy);
     page.drawLine({
-      start: { x: 45, y: 286 },
-      end: { x: 274, y: 286 },
+      start: { x: 45, y: 289 },
+      end: { x: 274, y: 289 },
       thickness: 0.7,
       color: border,
     });
@@ -598,7 +578,7 @@ async function renderPaymentBatchNoticePdf(
   drawHeader();
   drawFirstPageCards();
 
-  let y = 271;
+  let y = 274;
   let feeRowX = 45;
   let feeRowRight = 274;
   let feeRowWidth = 229;
