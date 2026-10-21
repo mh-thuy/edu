@@ -5,7 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import { getPdfFontBytes } from "@/lib/pdf-font";
-import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import { compareVietnameseNames } from "@/lib/vietnamese-name";
+import {
+  buildVietQrPng,
+  getVietQrBankBin,
+} from "@/modules/finance/tuition/services/vietqr.service";
+import { buildTransferContent } from "../utils/transfer-content";
 import {
   getPaymentBatchNoticeSnapshot,
   parseDocumentSnapshot,
@@ -219,9 +224,9 @@ export async function generatePaymentBatchNoticesPdf(
       }
       prepared.sort(
         (left, right) =>
-          left.data.student.fullName.localeCompare(
+          compareVietnameseNames(
+            left.data.student.fullName,
             right.data.student.fullName,
-            "vi",
           ) ||
           left.data.batch.batchNo.localeCompare(
             right.data.batch.batchNo,
@@ -240,20 +245,10 @@ export async function generatePaymentBatchNoticesPdf(
     snapshotUsed: boolean;
     bankAccountSnapshotUsed: boolean;
   }> = [];
-  const qrImages = new Map<string, Buffer | null>();
-  for (let offset = 0; offset < notices.length; offset += 8) {
-    const group = notices.slice(offset, offset + 8);
-    await Promise.all(
-      group.map(async (noticeData) => {
-        qrImages.set(noticeData.batch.id, await fetchNoticeQrPng(noticeData));
-      }),
-    );
-  }
   for (const noticeData of notices) {
     const notice = await renderPaymentBatchNoticePdf(
       noticeData,
       exportedByName,
-      qrImages.get(noticeData.batch.id) ?? null,
     );
     const sourcePdf = await PDFDocument.load(notice);
     const pages = await combinedPdf.copyPages(
@@ -382,9 +377,8 @@ async function loadPaymentBatchNoticeData(
 async function renderPaymentBatchNoticePdf(
   data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
   exportedByName: string,
-  prefetchedQr?: Buffer | null,
 ) {
-  const { batch, accountRecord, student, fees } = data;
+  const { batch, accountRecord, account, student, fees } = data;
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -670,14 +664,57 @@ async function renderPaymentBatchNoticePdf(
     draw("Tài khoản đã ngừng hoạt động.", 45, 34, 6, red);
   }
 
-  const qrPng =
-    prefetchedQr === undefined ? await fetchNoticeQrPng(data) : prefetchedQr;
+  const qrPng = await buildNoticeQrPng(data);
   const pages = pdf.getPages();
+  // VietQR-style slip, same layout as the QR card on the payment screen.
+  const qrAccent = rgb(0.11, 0.25, 0.56);
+  const qrCenterX = rightX + rightWidth / 2;
+  const qrSize = 196;
+  const qrY = 146;
+  if (accountRecord.isActive) {
+    page = pdf.getPage(0);
+    const infoWidth = rightWidth - 36;
+    const fitSize = (text: string, size: number, minSize: number) => {
+      let fitted = size;
+      while (fitted > minSize && font.widthOfTextAtSize(text, fitted) > infoWidth)
+        fitted -= 0.25;
+      return fitted;
+    };
+    const napasText = "napas 247";
+    const bankText = account.bankCode.toUpperCase();
+    const rowSize = 9.5;
+    const rowGap = 8;
+    const napasWidth = font.widthOfTextAtSize(napasText, rowSize);
+    const bankWidth = font.widthOfTextAtSize(bankText, rowSize);
+    const rowStart = qrCenterX - (napasWidth + rowGap * 2 + bankWidth) / 2;
+    draw(napasText, rowStart, 121, rowSize, qrAccent);
+    page.drawLine({
+      start: { x: rowStart + napasWidth + rowGap, y: 118.5 },
+      end: { x: rowStart + napasWidth + rowGap, y: 129 },
+      thickness: 0.8,
+      color: qrAccent,
+    });
+    draw(bankText, rowStart + napasWidth + rowGap * 2, 121, rowSize, qrAccent);
+    const accountName = account.accountName.toUpperCase();
+    drawCentered(accountName, qrCenterX, 103, fitSize(accountName, 10.5, 6.5), ink);
+    drawCentered(account.accountNo, qrCenterX, 89, 9, muted);
+    const amountLabel = "Số tiền: ";
+    const amountText = `${money(Number(batch.totalAmount))} VND`;
+    const amountSize = 9.5;
+    const amountLabelWidth = font.widthOfTextAtSize(amountLabel, amountSize);
+    const amountStart =
+      qrCenterX -
+      (amountLabelWidth + font.widthOfTextAtSize(amountText, amountSize)) / 2;
+    draw(amountLabel, amountStart, 73, amountSize, ink);
+    draw(amountText, amountStart + amountLabelWidth, 73, amountSize, red);
+    // Transfer content must be typed exactly for manual transfers, so it gets ink color.
+    const contentText = `Nội dung: ${noticeTransferContent(data)}`;
+    drawCentered(contentText, qrCenterX, 58, fitSize(contentText, 9, 6.5), navy);
+    const reminderText = "Vui lòng chuyển đúng số tiền và nội dung.";
+    drawCentered(reminderText, qrCenterX, 46, 7, muted);
+  }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    const qrScale = Math.min(252 / qr.width, 296 / qr.height);
-    const qrWidth = qr.width * qrScale;
-    const qrHeight = qr.height * qrScale;
     pages.forEach((qrPage) => {
       if (continuationPages.has(qrPage)) {
         const compactQrSize = 33;
@@ -689,11 +726,19 @@ async function renderPaymentBatchNoticePdf(
         });
         return;
       }
+      qrPage.drawRectangle({
+        x: qrCenterX - qrSize / 2 - 6,
+        y: qrY - 6,
+        width: qrSize + 12,
+        height: qrSize + 12,
+        borderColor: qrAccent,
+        borderWidth: 1.5,
+      });
       qrPage.drawImage(qr, {
-        x: rightX + rightWidth / 2 - qrWidth / 2,
-        y: 199 - qrHeight / 2,
-        width: qrWidth,
-        height: qrHeight,
+        x: qrCenterX - qrSize / 2,
+        y: qrY,
+        width: qrSize,
+        height: qrSize,
       });
     });
   } else if (accountRecord.isActive) {
@@ -714,13 +759,19 @@ async function renderPaymentBatchNoticePdf(
         });
         return;
       }
-      qrPage.drawText("Mã QR hiện chưa khả dụng.", {
-        x: rightX + 18,
-        y: 187,
-        size: 8,
-        font,
-        color: muted,
-      });
+      qrPage.drawText(
+        getVietQrBankBin(account.bankCode)
+          ? "Mã QR hiện chưa khả dụng."
+          : `Mã ngân hàng ${account.bankCode} chưa hỗ trợ QR.`,
+        {
+          x: rightX + 18,
+          y: 187,
+          size: 8,
+          font,
+          color: muted,
+          maxWidth: rightWidth - 36,
+        },
+      );
     });
   }
 
@@ -765,18 +816,30 @@ async function renderPaymentBatchNoticePdf(
   return pdfBuffer;
 }
 
-async function fetchNoticeQrPng(
+async function buildNoticeQrPng(
   data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
 ) {
   const { batch, accountRecord, account } = data;
   if (!accountRecord.isActive) return null;
-  const qrUrl = buildVietQrUrl({
-    bankCode: account.bankCode,
-    accountNo: account.accountNo,
-    accountName: account.accountName,
-    amount: Number(batch.totalAmount),
-    addInfo: `PB ${batch.batchNo}`,
+  const addInfo = noticeTransferContent(data);
+  try {
+    return await buildVietQrPng({
+      bankCode: account.bankCode,
+      accountNo: account.accountNo,
+      amount: Number(batch.totalAmount),
+      addInfo,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function noticeTransferContent(
+  data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
+) {
+  return buildTransferContent({
+    batchNo: data.batch.batchNo,
+    studentName: data.student.fullName,
+    classNames: data.fees.map((fee) => fee.className),
   });
-  const response = await fetch(qrUrl, { signal: AbortSignal.timeout(10_000) });
-  return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
 }

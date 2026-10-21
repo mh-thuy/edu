@@ -16,13 +16,18 @@ import type {
 } from "../schemas/payment-batch.schema";
 import { parseVietnamDateStart } from "@/lib/vietnam-time";
 import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
-import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import {
+  buildVietQrDataUrl,
+  unsupportedVietQrBankMessage,
+} from "@/modules/finance/tuition/services/vietqr.service";
+import { buildTransferContent } from "../utils/transfer-content";
 import {
   getEffectiveTuitionFeeStatus,
   PARTIAL_FEE_STATUS,
   getStoredTuitionFeeStatus,
 } from "@/modules/finance/tuition/utils/tuition-status";
 import {
+  parseDocumentSnapshot,
   savePaymentBatchNoticeSnapshot,
   toFeeSnapshot,
   type DocumentSnapshot,
@@ -1525,9 +1530,25 @@ export async function restructurePendingBatches(
       data.operation === "SPLIT"
         ? [data.sourceBatchId]
         : [...new Set(data.batchIds)];
+    const batchRefs = await tx.paymentBatch.findMany({
+      where: { id: { in: batchIds } },
+      select: { studentId: true },
+    });
+    if (batchRefs.length !== batchIds.length) {
+      throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
+    }
+    // Lock student then batches (sorted) before reading allocations, same order as other batch flows.
+    await lockStudentRows(
+      tx,
+      batchRefs.map((batch) => batch.studentId),
+    );
+    await lockPaymentBatchRows(tx, batchIds);
     const sourceBatches = await tx.paymentBatch.findMany({
       where: { id: { in: batchIds } },
-      include: { allocations: true },
+      include: {
+        allocations: true,
+        statementRowLinks: { select: { isConfirmed: true } },
+      },
     });
     if (sourceBatches.length !== batchIds.length) {
       throw new NotFoundError("Không tìm thấy đầy đủ các đợt thanh toán");
@@ -1549,6 +1570,14 @@ export async function restructurePendingBatches(
     }
     if (new Set(sourceBatches.map((batch) => batch.bankAccountId)).size !== 1) {
       throw new ConflictError("Các đợt phải dùng cùng một tài khoản nhận tiền");
+    }
+    const linkedBatch = sourceBatches.find(
+      (batch) => batch.statementRowLinks.length,
+    );
+    if (linkedBatch) {
+      throw new ConflictError(
+        `Đợt ${linkedBatch.batchNo} đang được ghép với sao kê; hãy hoàn tất đối soát trước khi tách hoặc gộp`,
+      );
     }
 
     const allocations = sourceBatches.flatMap((batch) => batch.allocations);
@@ -1622,7 +1651,7 @@ export async function restructurePendingBatches(
         totalAmount: batch.totalAmount,
       })),
     };
-  });
+  }, { timeout: 60_000 });
 }
 
 export async function listPaymentBatches(params: {
@@ -1976,6 +2005,12 @@ export async function getPaymentBatchQr(
     );
     const batch = await tx.paymentBatch.findUnique({
       where: { id: batchId },
+      include: {
+        student: { select: { fullName: true } },
+        allocations: {
+          select: { tuitionFee: { select: { class: { select: { name: true } } } } },
+        },
+      },
     });
     if (!batch) throw new NotFoundError("Không tìm thấy đợt thanh toán");
     if (batch.status !== PaymentBatchStatus.PENDING)
@@ -1984,18 +2019,37 @@ export async function getPaymentBatchQr(
       throw new ConflictError("Chỉ payment batch chuyển khoản mới có mã QR");
     if (!batch.bankAccountId)
       throw new ConflictError("Đợt thanh toán chưa gắn tài khoản ngân hàng");
-    const account = await tx.bankAccount.findFirst({
+    const accountRecord = await tx.bankAccount.findFirst({
       where: { id: batch.bankAccountId, isActive: true },
     });
-    if (!account)
+    if (!accountRecord)
       throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
-    const qrUrl = buildVietQrUrl({
+    // Same account source as the notice PDF: the snapshot taken when the batch was issued.
+    const snapshot = parseDocumentSnapshot(batch.noticeSnapshot);
+    const snapshotAccount = snapshot?.bankAccount;
+    const account = {
+      id: accountRecord.id,
+      bankCode: snapshotAccount?.bankCode ?? accountRecord.bankCode,
+      bankName: snapshotAccount?.bankName ?? accountRecord.bankName,
+      accountNo: snapshotAccount?.accountNo ?? accountRecord.accountNo,
+      accountName: snapshotAccount?.accountName ?? accountRecord.accountName,
+    };
+    // Same content as the notice PDF, taken from the batch snapshot when available.
+    const transferContent = buildTransferContent({
+      batchNo: batch.batchNo,
+      studentName: snapshot?.student.fullName ?? batch.student.fullName,
+      classNames: snapshot
+        ? snapshot.fees.map((fee) => fee.className)
+        : batch.allocations.map((allocation) => allocation.tuitionFee.class?.name),
+    });
+    const qrDataUrl = await buildVietQrDataUrl({
       bankCode: account.bankCode,
       accountNo: account.accountNo,
-      accountName: account.accountName,
       amount: Number(batch.totalAmount),
-      addInfo: `PB ${batch.batchNo}`,
+      addInfo: transferContent,
     });
+    if (!qrDataUrl)
+      throw new ConflictError(unsupportedVietQrBankMessage(account.bankCode));
     await tx.tuitionAuditLog.create({
       data: {
         entityType: "PAYMENT_BATCH",
@@ -2014,7 +2068,8 @@ export async function getPaymentBatchQr(
       batchNo: batch.batchNo,
       amount: batch.totalAmount,
       account,
-      qrUrl,
+      qrDataUrl,
+      transferContent,
     };
   });
 }

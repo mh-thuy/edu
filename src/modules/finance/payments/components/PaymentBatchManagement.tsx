@@ -588,12 +588,13 @@ export function PaymentBatchManagement() {
             }
           : {
               operation: "MERGE" as const,
-              batchIds: selectedBatchIds,
+              batchIds: selectedBatches.map((batch) => batch.id),
               reason: reason.trim(),
               idempotencyKey: crypto.randomUUID(),
             };
       const result = await restructurePendingBatches(input);
       setRestructureMode(null);
+      setSelectedBatchIds([]);
       await load();
       showSuccess(`Đã tạo lại ${result.batches.length} đợt thanh toán`);
     } catch (reasonValue) {

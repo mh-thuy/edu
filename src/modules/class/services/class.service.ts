@@ -382,6 +382,15 @@ export async function updateClass(
       data.status === "CANCELLED" &&
       current.status !== "CANCELLED"
     ) {
+      // Lock candidate fees first so a concurrent batch issuance either finishes before
+      // the pending-batch check below or waits until the class cancellation commits.
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM tuition_fees
+        WHERE class_id = ${id}::uuid
+          AND status IN ('UNPAID'::tuition_fee_status, 'OVERDUE'::tuition_fee_status)
+        ORDER BY id
+        FOR UPDATE
+      `);
       const feesToCancel = await tx.tuitionFee.findMany({
         where: {
           classId: id,
