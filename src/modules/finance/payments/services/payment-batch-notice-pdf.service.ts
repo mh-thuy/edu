@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import { getPdfFontBytes } from "@/lib/pdf-font";
-import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import { buildVietQrPng } from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getPaymentBatchNoticeSnapshot,
   parseDocumentSnapshot,
@@ -240,20 +240,10 @@ export async function generatePaymentBatchNoticesPdf(
     snapshotUsed: boolean;
     bankAccountSnapshotUsed: boolean;
   }> = [];
-  const qrImages = new Map<string, Buffer | null>();
-  for (let offset = 0; offset < notices.length; offset += 8) {
-    const group = notices.slice(offset, offset + 8);
-    await Promise.all(
-      group.map(async (noticeData) => {
-        qrImages.set(noticeData.batch.id, await fetchNoticeQrPng(noticeData));
-      }),
-    );
-  }
   for (const noticeData of notices) {
     const notice = await renderPaymentBatchNoticePdf(
       noticeData,
       exportedByName,
-      qrImages.get(noticeData.batch.id) ?? null,
     );
     const sourcePdf = await PDFDocument.load(notice);
     const pages = await combinedPdf.copyPages(
@@ -382,9 +372,8 @@ async function loadPaymentBatchNoticeData(
 async function renderPaymentBatchNoticePdf(
   data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
   exportedByName: string,
-  prefetchedQr?: Buffer | null,
 ) {
-  const { batch, accountRecord, student, fees } = data;
+  const { batch, accountRecord, account, student, fees } = data;
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -670,14 +659,29 @@ async function renderPaymentBatchNoticePdf(
     draw("Tài khoản đã ngừng hoạt động.", 45, 34, 6, red);
   }
 
-  const qrPng =
-    prefetchedQr === undefined ? await fetchNoticeQrPng(data) : prefetchedQr;
+  const qrPng = await buildNoticeQrPng(data);
   const pages = pdf.getPages();
+  if (accountRecord.isActive) {
+    page = pdf.getPage(0);
+    const infoX = rightX + 18;
+    const infoWidth = rightWidth - 36;
+    drawFit(`Ngân hàng: ${account.bankName}`, infoX, 128, infoWidth, 8.5, navy, 6);
+    drawFit(`Số tài khoản: ${account.accountNo}`, infoX, 112, infoWidth, 8.5, navy, 6);
+    drawFit(`Chủ tài khoản: ${account.accountName}`, infoX, 96, infoWidth, 8.5, navy, 6);
+    drawFit(
+      `Số tiền: ${money(Number(batch.totalAmount))} VND`,
+      infoX,
+      80,
+      infoWidth,
+      8.5,
+      red,
+      6,
+    );
+    drawFit(`Nội dung: PB ${batch.batchNo}`, infoX, 64, infoWidth, 8.5, navy, 6);
+  }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
-    const qrScale = Math.min(252 / qr.width, 296 / qr.height);
-    const qrWidth = qr.width * qrScale;
-    const qrHeight = qr.height * qrScale;
+    const qrSize = 196;
     pages.forEach((qrPage) => {
       if (continuationPages.has(qrPage)) {
         const compactQrSize = 33;
@@ -690,10 +694,10 @@ async function renderPaymentBatchNoticePdf(
         return;
       }
       qrPage.drawImage(qr, {
-        x: rightX + rightWidth / 2 - qrWidth / 2,
-        y: 199 - qrHeight / 2,
-        width: qrWidth,
-        height: qrHeight,
+        x: rightX + rightWidth / 2 - qrSize / 2,
+        y: 146,
+        width: qrSize,
+        height: qrSize,
       });
     });
   } else if (accountRecord.isActive) {
@@ -765,18 +769,19 @@ async function renderPaymentBatchNoticePdf(
   return pdfBuffer;
 }
 
-async function fetchNoticeQrPng(
+async function buildNoticeQrPng(
   data: Awaited<ReturnType<typeof loadPaymentBatchNoticeData>>,
 ) {
   const { batch, accountRecord, account } = data;
   if (!accountRecord.isActive) return null;
-  const qrUrl = buildVietQrUrl({
-    bankCode: account.bankCode,
-    accountNo: account.accountNo,
-    accountName: account.accountName,
-    amount: Number(batch.totalAmount),
-    addInfo: `PB ${batch.batchNo}`,
-  });
-  const response = await fetch(qrUrl, { signal: AbortSignal.timeout(10_000) });
-  return response.ok ? Buffer.from(await response.arrayBuffer()) : null;
+  try {
+    return await buildVietQrPng({
+      bankCode: account.bankCode,
+      accountNo: account.accountNo,
+      amount: Number(batch.totalAmount),
+      addInfo: `PB ${batch.batchNo}`,
+    });
+  } catch {
+    return null;
+  }
 }
