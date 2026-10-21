@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import { getPdfFontBytes } from "@/lib/pdf-font";
+import { compareVietnameseNames } from "@/lib/vietnamese-name";
 import {
   buildVietQrPng,
   getVietQrBankBin,
@@ -223,9 +224,9 @@ export async function generatePaymentBatchNoticesPdf(
       }
       prepared.sort(
         (left, right) =>
-          left.data.student.fullName.localeCompare(
+          compareVietnameseNames(
+            left.data.student.fullName,
             right.data.student.fullName,
-            "vi",
           ) ||
           left.data.batch.batchNo.localeCompare(
             right.data.batch.batchNo,

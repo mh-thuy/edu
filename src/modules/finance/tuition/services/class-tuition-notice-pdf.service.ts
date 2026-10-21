@@ -1,6 +1,7 @@
 import { PDFDocument } from "pdf-lib";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
+import { compareVietnameseNames } from "@/lib/vietnamese-name";
 import type { AuditContext } from "@/lib/audit";
 import { PaymentBatchStatus } from "@prisma/client";
 import { TuitionFeeStatus } from "@prisma/client";
@@ -158,10 +159,15 @@ export async function generateClassTuitionNoticePdf(
       },
     },
     orderBy: { createdAt: "asc" },
-    select: { id: true },
+    select: { id: true, batchNo: true, student: { select: { fullName: true } } },
   });
   if (!batches.length)
     throw new ConflictError("Lớp chưa có thông báo thanh toán đang chờ");
+  batches.sort(
+    (left, right) =>
+      compareVietnameseNames(left.student.fullName, right.student.fullName) ||
+      left.batchNo.localeCompare(right.batchNo, "vi"),
+  );
 
   const combinedPdf = await PDFDocument.create();
   for (const batch of batches) {
