@@ -127,6 +127,7 @@ export function TuitionDetail({
 }) {
   const [fee, setFee] = useState<Fee | null>(null);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
   const [statusAction, setStatusAction] = useState<
     "EXEMPTED" | "CANCELLED" | null
@@ -140,6 +141,7 @@ export function TuitionDetail({
   const { showSuccess, Snackbar } = useSnackbar();
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const response = await fetch(`/api/tuition-fees/${id}`);
       if (!response.ok)
@@ -167,7 +169,7 @@ export function TuitionDetail({
   async function submitStatusAction() {
     if (!fee || !statusAction || !statusReason.trim()) return;
     setStatusSaving(true);
-    setError("");
+    setActionError("");
     try {
       const response = await fetch(`/api/tuition-fees/${id}`, {
         method: "POST",
@@ -190,7 +192,7 @@ export function TuitionDetail({
       await load();
       onUpdated?.();
     } catch (reason) {
-      setError(
+      setActionError(
         reason instanceof Error
           ? reason.message
           : "Không thể thay đổi trạng thái học phí",
@@ -203,7 +205,7 @@ export function TuitionDetail({
   async function restoreFee() {
     if (!fee || !restoreReason.trim()) return;
     setRestoreSaving(true);
-    setError("");
+    setActionError("");
     try {
       const response = await fetch(`/api/tuition-fees/${id}/restore`, {
         method: "POST",
@@ -232,7 +234,7 @@ export function TuitionDetail({
       await load();
       onUpdated?.();
     } catch (reason) {
-      setError(
+      setActionError(
         reason instanceof Error
           ? reason.message
           : fee.status === "EXEMPTED"
@@ -409,7 +411,7 @@ export function TuitionDetail({
               variant="contained"
               color="success"
               startIcon={<RestoreOutlinedIcon />}
-              onClick={() => setRestoreOpen(true)}
+              onClick={() => { setActionError(""); setRestoreOpen(true); }}
             >
               {fee.status === "EXEMPTED"
                 ? "Bỏ miễn, thu lại"
@@ -439,14 +441,14 @@ export function TuitionDetail({
               <Button
                 variant="outlined"
                 color="warning"
-                onClick={() => setStatusAction("EXEMPTED")}
+                onClick={() => { setActionError(""); setStatusAction("EXEMPTED"); }}
               >
                 Miễn học phí
               </Button>
               <Button
                 variant="outlined"
                 color="error"
-                onClick={() => setStatusAction("CANCELLED")}
+                onClick={() => { setActionError(""); setStatusAction("CANCELLED"); }}
               >
                 Hủy học phí
               </Button>
@@ -820,6 +822,11 @@ export function TuitionDetail({
           <Typography variant="body2" sx={{ mb: 1 }}>
             Học phí: <strong>{fee.feeNo}</strong>
           </Typography>
+          {actionError && (
+            <Alert severity="error" sx={{ mb: 1.5 }}>
+              {actionError}
+            </Alert>
+          )}
           <AppTextField
             fullWidth
             required
@@ -858,17 +865,24 @@ export function TuitionDetail({
             : "Khoản phí sẽ chuyển về trạng thái chưa thanh toán để có thể thu lại. Lịch sử hủy vẫn được lưu trong nhật ký nghiệp vụ."
         }
         content={
-          <AppTextField
-            fullWidth
-            required
-            multiline
-            minRows={2}
-            label={fee.status === "EXEMPTED" ? "Lý do bỏ miễn" : "Lý do khôi phục"}
-            value={restoreReason}
-            onChange={(event) => setRestoreReason(event.target.value)}
-            inputProps={{ maxLength: 500 }}
-            sx={{ mt: 2 }}
-          />
+          <>
+            {actionError && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {actionError}
+              </Alert>
+            )}
+            <AppTextField
+              fullWidth
+              required
+              multiline
+              minRows={2}
+              label={fee.status === "EXEMPTED" ? "Lý do bỏ miễn" : "Lý do khôi phục"}
+              value={restoreReason}
+              onChange={(event) => setRestoreReason(event.target.value)}
+              inputProps={{ maxLength: 500 }}
+              sx={{ mt: 2 }}
+            />
+          </>
         }
         onConfirm={() => void restoreFee()}
         onCancel={() => {

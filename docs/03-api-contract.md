@@ -604,16 +604,24 @@ Response:
   "success": true,
   "data": {
     "created": 20,
-    "skipped": 3
+    "skipped": 3,
+    "failed": [
+      {
+        "studentId": "uuid",
+        "studentCode": "HV015",
+        "studentName": "Nguyễn Văn Dũng",
+        "reason": "Không thể bổ sung môn vào học phí tháng đang chờ thanh toán"
+      }
+    ]
   }
 }
 ```
 
-Nếu fail 1 record:
-
-```text
-Rollback toàn bộ
-```
+Nếu một học viên vi phạm quy tắc nghiệp vụ (khoản tháng đang chờ thanh toán,
+đã hủy/miễn nhưng có môn mới, không có môn tính phí…), học viên đó được bỏ qua
+và trả về trong `failed` kèm lý do; các học viên khác vẫn được tạo học phí.
+Lỗi hệ thống hoặc lỗi cấp lớp (lớp không `ACTIVE`, kỳ ngoài thời gian lớp) vẫn
+rollback toàn bộ.
 
 ---
 
@@ -777,6 +785,7 @@ POST /api/classes/{classId}/tuition-fees?month=YYYY-MM
 ```
 
 API chỉ tạo học phí, chưa tạo payment batch và chưa xuất thông báo. Mỗi môn ACTIVE được tính trọn mức `ClassSubject.tuitionFee` của tháng; enrollment được tạm nghỉ trong kỳ sẽ được bỏ qua.
+Học viên vi phạm quy tắc tạo học phí được bỏ qua và trả về trong `failed` (xem mục 18).
 Kỳ yêu cầu chỉ cần nằm trong thời gian của lớp; không phụ thuộc ngày đăng ký hoặc
 ngày tái đăng ký của học viên. Lớp phải ở trạng thái `ACTIVE`; lớp `DRAFT`,
 `COMPLETED` hoặc `CANCELLED` trả `409 Conflict`.
