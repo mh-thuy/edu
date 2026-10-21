@@ -811,7 +811,8 @@ Body bắt buộc:
 ```
 
 Endpoint này được giữ để tương thích API; giao diện quản trị không còn gọi
-endpoint này. Luồng giao diện hiện hành tạo học phí riêng, sau đó phát hành từ
+endpoint này. Endpoint không tự tạo học phí: chỉ phát hành đợt thu từ các khoản
+học phí tháng còn nợ đã tồn tại của lớp/kỳ (quy tắc 10.2). Luồng giao diện hiện hành tạo học phí riêng, sau đó phát hành từ
 các khoản đã tồn tại tại `POST /api/payment-batches/notice`.
 
 ## 19.1.6 Phát hành thông báo từ các khoản học phí đã chọn

@@ -7,10 +7,7 @@ import { TuitionFeeStatus } from "@prisma/client";
 import { TuitionFeeBillingType } from "@prisma/client";
 import { generatePaymentBatchNoticePdf } from "@/modules/finance/payments/services/payment-batch-notice-pdf.service";
 import { createPaymentBatch } from "@/modules/finance/payments/services/payment-batch.service";
-import {
-  TuitionService,
-  type TuitionBillingPeriod,
-} from "@/modules/finance/tuition/services/tuition.service";
+import type { TuitionBillingPeriod } from "@/modules/finance/tuition/services/tuition.service";
 import { PARTIAL_FEE_STATUS } from "@/modules/finance/tuition/utils/tuition-status";
 
 export async function createClassPaymentBatches(
@@ -20,9 +17,8 @@ export async function createClassPaymentBatches(
   bankAccountId: string,
   auditContext?: AuditContext,
 ) {
+  // Issues batches only from existing fees; tuition creation is a separate action (business rule 10.2).
   return prisma.$transaction(async (tx) => {
-    await TuitionService.createClassTuitionFees(classId, period, actorId, tx, auditContext);
-
     const bankAccount = await tx.bankAccount.findUnique({
       where: { id: bankAccountId },
       select: { id: true, isActive: true },
@@ -122,7 +118,7 @@ export async function createClassPaymentBatches(
       );
     }
   }
-  });
+  }, { timeout: 60_000 });
 }
 
 export async function generateClassTuitionNoticePdf(

@@ -49,7 +49,7 @@ type Fee = {
   dueDate?: string | null;
   status: "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
   student: { code: string; fullName: string; phone?: string | null };
-  class: { code: string; name: string };
+  class: { code: string; name: string; status: string };
   items: Array<{ itemName: string; quantity: number; amount: number }>;
   paymentAllocations?: Array<{
     paymentBatch: { id: string; batchNo: string; status: string };
@@ -406,7 +406,9 @@ export function TuitionDetail({
               </Button>
             </>
           )}
-          {(fee.status === "CANCELLED" || fee.status === "EXEMPTED") && (
+          {(fee.status === "CANCELLED" || fee.status === "EXEMPTED") &&
+            fee.class.status !== "COMPLETED" &&
+            fee.class.status !== "CANCELLED" && (
             <Button
               variant="contained"
               color="success"
@@ -817,7 +819,7 @@ export function TuitionDetail({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             {statusAction === "EXEMPTED"
               ? "Khoản phí sẽ không còn được đưa vào công nợ hoặc thanh toán."
-              : "Khoản phí sẽ được hủy và không thể thanh toán lại."}
+              : "Khoản phí sẽ được hủy và không còn được thu. Có thể khôi phục lại khi cần; lịch sử hủy vẫn được lưu."}
           </Typography>
           <Typography variant="body2" sx={{ mb: 1 }}>
             Học phí: <strong>{fee.feeNo}</strong>
