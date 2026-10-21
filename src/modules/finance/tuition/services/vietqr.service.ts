@@ -1,13 +1,5 @@
 import QRCode from "qrcode";
 
-const VIETQR_IMAGE_BASE_URL = "https://img.vietqr.io/image";
-
-export function buildVietQrUrl({ bankCode, accountNo, accountName, amount, addInfo }: { bankCode: string; accountNo: string; accountName?: string | null; amount: number; addInfo: string }) {
-  const params = new URLSearchParams({ amount: String(Math.round(amount)), addInfo: addInfo.slice(0, 25) });
-  if (accountName) params.set("accountName", accountName);
-  return `${VIETQR_IMAGE_BASE_URL}/${encodeURIComponent(bankCode)}-${encodeURIComponent(accountNo)}-compact2.png?${params.toString()}`;
-}
-
 // NAPAS BIN theo mã/tên viết tắt ngân hàng thường dùng (danh sách của VietQR).
 const VIETQR_BANK_BINS: Record<string, string> = {
   VCB: "970436", VIETCOMBANK: "970436",
@@ -41,6 +33,24 @@ const VIETQR_BANK_BINS: Record<string, string> = {
   PVCB: "970412", PVCOMBANK: "970412",
   GPB: "970408", GPBANK: "970408",
   VIETBANK: "970433",
+  OCEANBANK: "970414",
+  COOPBANK: "970446",
+  CBB: "970444", CBBANK: "970444",
+  IVB: "970434", INDOVINABANK: "970434",
+  VRB: "970421",
+  SHBVN: "970424", SHINHAN: "970424", SHINHANBANK: "970424",
+  WVN: "970457", WOORI: "970457", WOORIBANK: "970457",
+  UOB: "970458",
+  HLBVN: "970442", HONGLEONG: "970442",
+  PBVN: "970439", PUBLICBANK: "970439",
+  SCVN: "970410", STANDARDCHARTERED: "970410",
+  CIMB: "422589",
+  HSBC: "458761",
+  DBS: "796500",
+  KBANK: "668888", KASIKORNBANK: "668888",
+  CAKE: "546034",
+  UBANK: "546035",
+  TIMO: "963388",
 };
 
 export function getVietQrBankBin(bankCode: string) {
@@ -77,8 +87,20 @@ export function buildVietQrPayload({ bankBin, accountNo, amount, addInfo }: { ba
   return body + crc16Ccitt(body);
 }
 
-export async function buildVietQrPng({ bankCode, accountNo, amount, addInfo }: { bankCode: string; accountNo: string; amount: number; addInfo: string }) {
+type VietQrInput = { bankCode: string; accountNo: string; amount: number; addInfo: string };
+
+export function unsupportedVietQrBankMessage(bankCode: string) {
+  return `Mã ngân hàng "${bankCode}" chưa hỗ trợ tạo QR. Hãy dùng mã viết tắt (VCB, BIDV, TCB, MB…) hoặc mã BIN 6 số của ngân hàng`;
+}
+
+// Single QR source for both notice PDFs and the payment screen; no external image service.
+export async function buildVietQrPng({ bankCode, accountNo, amount, addInfo }: VietQrInput) {
   const bankBin = getVietQrBankBin(bankCode);
   if (!bankBin) return null;
   return QRCode.toBuffer(buildVietQrPayload({ bankBin, accountNo, amount, addInfo }), { type: "png", errorCorrectionLevel: "M", margin: 1, width: 600 });
+}
+
+export async function buildVietQrDataUrl(input: VietQrInput) {
+  const png = await buildVietQrPng(input);
+  return png ? `data:image/png;base64,${png.toString("base64")}` : null;
 }

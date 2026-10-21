@@ -16,13 +16,17 @@ import type {
 } from "../schemas/payment-batch.schema";
 import { parseVietnamDateStart } from "@/lib/vietnam-time";
 import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
-import { buildVietQrUrl } from "@/modules/finance/tuition/services/vietqr.service";
+import {
+  buildVietQrDataUrl,
+  unsupportedVietQrBankMessage,
+} from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getEffectiveTuitionFeeStatus,
   PARTIAL_FEE_STATUS,
   getStoredTuitionFeeStatus,
 } from "@/modules/finance/tuition/utils/tuition-status";
 import {
+  parseDocumentSnapshot,
   savePaymentBatchNoticeSnapshot,
   toFeeSnapshot,
   type DocumentSnapshot,
@@ -2008,18 +2012,28 @@ export async function getPaymentBatchQr(
       throw new ConflictError("Chỉ payment batch chuyển khoản mới có mã QR");
     if (!batch.bankAccountId)
       throw new ConflictError("Đợt thanh toán chưa gắn tài khoản ngân hàng");
-    const account = await tx.bankAccount.findFirst({
+    const accountRecord = await tx.bankAccount.findFirst({
       where: { id: batch.bankAccountId, isActive: true },
     });
-    if (!account)
+    if (!accountRecord)
       throw new ConflictError("Chưa cấu hình tài khoản ngân hàng nhận học phí");
-    const qrUrl = buildVietQrUrl({
+    // Same account source as the notice PDF: the snapshot taken when the batch was issued.
+    const snapshotAccount = parseDocumentSnapshot(batch.noticeSnapshot)?.bankAccount;
+    const account = {
+      id: accountRecord.id,
+      bankCode: snapshotAccount?.bankCode ?? accountRecord.bankCode,
+      bankName: snapshotAccount?.bankName ?? accountRecord.bankName,
+      accountNo: snapshotAccount?.accountNo ?? accountRecord.accountNo,
+      accountName: snapshotAccount?.accountName ?? accountRecord.accountName,
+    };
+    const qrDataUrl = await buildVietQrDataUrl({
       bankCode: account.bankCode,
       accountNo: account.accountNo,
-      accountName: account.accountName,
       amount: Number(batch.totalAmount),
       addInfo: `PB ${batch.batchNo}`,
     });
+    if (!qrDataUrl)
+      throw new ConflictError(unsupportedVietQrBankMessage(account.bankCode));
     await tx.tuitionAuditLog.create({
       data: {
         entityType: "PAYMENT_BATCH",
@@ -2038,7 +2052,7 @@ export async function getPaymentBatchQr(
       batchNo: batch.batchNo,
       amount: batch.totalAmount,
       account,
-      qrUrl,
+      qrDataUrl,
     };
   });
 }

@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
 import { getPdfFontBytes } from "@/lib/pdf-font";
-import { buildVietQrPng } from "@/modules/finance/tuition/services/vietqr.service";
+import {
+  buildVietQrPng,
+  getVietQrBankBin,
+} from "@/modules/finance/tuition/services/vietqr.service";
 import {
   getPaymentBatchNoticeSnapshot,
   parseDocumentSnapshot,
@@ -718,13 +721,19 @@ async function renderPaymentBatchNoticePdf(
         });
         return;
       }
-      qrPage.drawText("Mã QR hiện chưa khả dụng.", {
-        x: rightX + 18,
-        y: 187,
-        size: 8,
-        font,
-        color: muted,
-      });
+      qrPage.drawText(
+        getVietQrBankBin(account.bankCode)
+          ? "Mã QR hiện chưa khả dụng."
+          : `Mã ngân hàng ${account.bankCode} chưa hỗ trợ QR.`,
+        {
+          x: rightX + 18,
+          y: 187,
+          size: 8,
+          font,
+          color: muted,
+          maxWidth: rightWidth - 36,
+        },
+      );
     });
   }
 

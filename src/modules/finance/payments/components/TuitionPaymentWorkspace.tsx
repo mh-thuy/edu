@@ -76,7 +76,7 @@ type PendingBatch = {
   batchNo: string;
   amount: number;
   account: BankAccount;
-  qrUrl: string;
+  qrDataUrl: string;
 };
 const steps = ["Tìm học viên", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
 const feeStatusLabels: Record<string, string> = {
@@ -339,7 +339,7 @@ export function TuitionPaymentWorkspace({
         );
       }
       const qr = await unwrapApiResponse<{
-        qrUrl: string;
+        qrDataUrl: string;
         amount: number;
         account: BankAccount;
       }>(qrResponse);
@@ -347,7 +347,7 @@ export function TuitionPaymentWorkspace({
         ...batch,
         amount: Number(qr.amount),
         account: qr.account,
-        qrUrl: qr.qrUrl,
+        qrDataUrl: qr.qrDataUrl,
       });
     } catch (reason) {
       setQrError(
@@ -464,7 +464,7 @@ export function TuitionPaymentWorkspace({
             accountNo: "",
             accountName: "",
           },
-        qrUrl: "",
+        qrDataUrl: "",
       });
       setStep(3);
       await loadPendingQr({
@@ -1247,10 +1247,10 @@ export function TuitionPaymentWorkspace({
                     )}
                     {qrLoading ? (
                       <LoadingState label="Đang tạo mã QR thanh toán..." minHeight={240} />
-                    ) : pendingBatch.qrUrl ? (
-                      <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 400, height: 400, maxWidth: "100%", objectFit: "contain", border: "1px solid", borderColor: "divider", borderRadius: 1 }} />
+                    ) : pendingBatch.qrDataUrl ? (
+                      <Box component="img" src={pendingBatch.qrDataUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 400, height: 400, maxWidth: "100%", objectFit: "contain", border: "1px solid", borderColor: "divider", borderRadius: 1 }} />
                     ) : null}
-                    {pendingBatch.qrUrl && (
+                    {pendingBatch.qrDataUrl && (
                       <Typography variant="caption" color="text.secondary" textAlign="center">
                         Quét mã QR để chuyển khoản đúng số tiền
                       </Typography>
@@ -1262,8 +1262,8 @@ export function TuitionPaymentWorkspace({
                 </Typography>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
                   <Button variant="outlined" startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copyTransferContent()}>Sao chép nội dung</Button>
-                  {pendingBatch.qrUrl && (
-                    <Button component="a" href={pendingBatch.qrUrl} download={`qr-${pendingBatch.batchNo}.png`} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải QR</Button>
+                  {pendingBatch.qrDataUrl && (
+                    <Button component="a" href={pendingBatch.qrDataUrl} download={`qr-${pendingBatch.batchNo}.png`} variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải QR</Button>
                   )}
                   <Button variant="outlined" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} startIcon={<DownloadOutlinedIcon />}>Tải thông báo PDF</Button>
                   <Button variant="contained" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer" startIcon={<PrintOutlinedIcon />}>Mở để in</Button>
