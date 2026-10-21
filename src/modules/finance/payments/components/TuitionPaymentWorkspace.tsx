@@ -638,10 +638,10 @@ export function TuitionPaymentWorkspace({
   async function copyTransferContent() {
     if (!pendingBatch) return;
     try {
-      await navigator.clipboard.writeText(`PB ${pendingBatch.batchNo}`);
+      await navigator.clipboard.writeText(pendingBatch.batchNo);
       showSuccess("Đã sao chép nội dung chuyển khoản");
     } catch {
-      showError("Không thể sao chép tự động. Vui lòng nhập: PB " + pendingBatch.batchNo);
+      showError("Không thể sao chép tự động. Vui lòng nhập: " + pendingBatch.batchNo);
     }
   }
 
@@ -1256,7 +1256,7 @@ export function TuitionPaymentWorkspace({
                         <Typography variant="caption" color="text.secondary" fontWeight={700}>SỐ TIỀN CẦN CHUYỂN</Typography>
                         <Typography variant="h6" color="error.main" fontWeight={900}>{money(pendingBatch.amount)}</Typography>
                         <Typography variant="caption" color="text.secondary" fontWeight={700} component="div" sx={{ mt: 1.25 }}>NỘI DUNG CHUYỂN KHOẢN</Typography>
-                        <Typography fontWeight={800} sx={{ overflowWrap: "anywhere" }}>PB {pendingBatch.batchNo}</Typography>
+                        <Typography fontWeight={800} sx={{ overflowWrap: "anywhere" }}>{pendingBatch.batchNo}</Typography>
                       </Box>
                     </Stack>
                   </Paper>

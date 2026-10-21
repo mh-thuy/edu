@@ -2030,7 +2030,7 @@ export async function getPaymentBatchQr(
       bankCode: account.bankCode,
       accountNo: account.accountNo,
       amount: Number(batch.totalAmount),
-      addInfo: `PB ${batch.batchNo}`,
+      addInfo: batch.batchNo,
     });
     if (!qrDataUrl)
       throw new ConflictError(unsupportedVietQrBankMessage(account.bankCode));

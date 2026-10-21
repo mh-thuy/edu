@@ -680,7 +680,7 @@ async function renderPaymentBatchNoticePdf(
       red,
       6,
     );
-    drawFit(`Nội dung: PB ${batch.batchNo}`, infoX, 64, infoWidth, 8.5, navy, 6);
+    drawFit(`Nội dung: ${batch.batchNo}`, infoX, 64, infoWidth, 8.5, navy, 6);
   }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
@@ -788,7 +788,7 @@ async function buildNoticeQrPng(
       bankCode: account.bankCode,
       accountNo: account.accountNo,
       amount: Number(batch.totalAmount),
-      addInfo: `PB ${batch.batchNo}`,
+      addInfo: batch.batchNo,
     });
   } catch {
     return null;
