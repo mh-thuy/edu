@@ -517,6 +517,17 @@ async function renderPaymentBatchNoticePdf(
     }
   };
 
+  // Earliest due date among the batch's fees (not stored in the notice snapshot).
+  const dueDates = batch.allocations
+    .map((allocation) => allocation.tuitionFee.dueDate)
+    .filter((value): value is Date => Boolean(value));
+  const earliestDueDate = dueDates.length
+    ? new Date(Math.min(...dueDates.map((value) => value.getTime())))
+    : null;
+  const dueDateText = earliestDueDate
+    ? `${String(earliestDueDate.getUTCDate()).padStart(2, "0")}/${String(earliestDueDate.getUTCMonth() + 1).padStart(2, "0")}/${earliestDueDate.getUTCFullYear()}`
+    : null;
+
   const leftX = 28;
   const leftWidth = 260;
   const rightX = 307;
@@ -534,11 +545,20 @@ async function renderPaymentBatchNoticePdf(
       "THÔNG TIN HỌC VIÊN & HỌC PHÍ",
     );
     drawCard(rightX, cardBottom, rightWidth, cardTop - cardBottom);
-    drawFit(student.fullName, 45, 319, 228, 16, red, 11);
-    draw("CÁC KHOẢN THANH TOÁN", 45, 296, 8.5, navy);
+    drawFit(student.fullName, 45, 323, 228, 16, red, 11);
+    drawFit(
+      `Mã đợt: ${batch.batchNo}${dueDateText ? `  ·  Hạn thanh toán: ${dueDateText}` : ""}`,
+      45,
+      307,
+      228,
+      7.5,
+      muted,
+      6,
+    );
+    draw("CÁC KHOẢN THANH TOÁN", 45, 293, 8.5, navy);
     page.drawLine({
-      start: { x: 45, y: 289 },
-      end: { x: 274, y: 289 },
+      start: { x: 45, y: 286 },
+      end: { x: 274, y: 286 },
       thickness: 0.7,
       color: border,
     });
@@ -578,7 +598,7 @@ async function renderPaymentBatchNoticePdf(
   drawHeader();
   drawFirstPageCards();
 
-  let y = 274;
+  let y = 271;
   let feeRowX = 45;
   let feeRowRight = 274;
   let feeRowWidth = 229;
@@ -669,7 +689,7 @@ async function renderPaymentBatchNoticePdf(
   const qrAccent = rgb(0.11, 0.25, 0.56);
   const qrCenterX = rightX + rightWidth / 2;
   const qrSize = 196;
-  const qrY = 152;
+  const qrY = 146;
   if (accountRecord.isActive) {
     page = pdf.getPage(0);
     const infoWidth = rightWidth - 36;
@@ -686,17 +706,17 @@ async function renderPaymentBatchNoticePdf(
     const napasWidth = font.widthOfTextAtSize(napasText, rowSize);
     const bankWidth = font.widthOfTextAtSize(bankText, rowSize);
     const rowStart = qrCenterX - (napasWidth + rowGap * 2 + bankWidth) / 2;
-    draw(napasText, rowStart, 126, rowSize, qrAccent);
+    draw(napasText, rowStart, 121, rowSize, qrAccent);
     page.drawLine({
-      start: { x: rowStart + napasWidth + rowGap, y: 123.5 },
-      end: { x: rowStart + napasWidth + rowGap, y: 134 },
+      start: { x: rowStart + napasWidth + rowGap, y: 118.5 },
+      end: { x: rowStart + napasWidth + rowGap, y: 129 },
       thickness: 0.8,
       color: qrAccent,
     });
-    draw(bankText, rowStart + napasWidth + rowGap * 2, 126, rowSize, qrAccent);
+    draw(bankText, rowStart + napasWidth + rowGap * 2, 121, rowSize, qrAccent);
     const accountName = account.accountName.toUpperCase();
-    drawCentered(accountName, qrCenterX, 106, fitSize(accountName, 10.5, 6.5), ink);
-    drawCentered(account.accountNo, qrCenterX, 91, 9, muted);
+    drawCentered(accountName, qrCenterX, 103, fitSize(accountName, 10.5, 6.5), ink);
+    drawCentered(account.accountNo, qrCenterX, 89, 9, muted);
     const amountLabel = "Số tiền: ";
     const amountText = `${money(Number(batch.totalAmount))} VND`;
     const amountSize = 9.5;
@@ -704,10 +724,13 @@ async function renderPaymentBatchNoticePdf(
     const amountStart =
       qrCenterX -
       (amountLabelWidth + font.widthOfTextAtSize(amountText, amountSize)) / 2;
-    draw(amountLabel, amountStart, 74, amountSize, ink);
-    draw(amountText, amountStart + amountLabelWidth, 74, amountSize, red);
+    draw(amountLabel, amountStart, 73, amountSize, ink);
+    draw(amountText, amountStart + amountLabelWidth, 73, amountSize, red);
+    // Transfer content must be typed exactly for manual transfers, so it gets ink color.
     const contentText = `Nội dung: ${noticeTransferContent(data)}`;
-    drawCentered(contentText, qrCenterX, 58, fitSize(contentText, 8, 6), muted);
+    drawCentered(contentText, qrCenterX, 58, fitSize(contentText, 9, 6.5), navy);
+    const reminderText = "Vui lòng chuyển đúng số tiền và nội dung.";
+    drawCentered(reminderText, qrCenterX, 46, 7, muted);
   }
   if (qrPng) {
     const qr = await pdf.embedPng(qrPng);
