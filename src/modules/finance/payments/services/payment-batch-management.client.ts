@@ -62,6 +62,51 @@ export type NoticeListFilters = {
   classId?: string;
 };
 
+export type NoticePdfScope = {
+  month?: string;
+  classId?: string;
+};
+
+export async function fetchAllNoticePages<T>(
+  fetcher: (filters: NoticeListFilters) => Promise<NoticePage<T>>,
+  filters: NoticeListFilters,
+) {
+  const pageSize = 100;
+  const firstPage = await fetcher({ ...filters, page: 1, pageSize });
+  const pages: NoticePage<T>[] = [firstPage];
+  const batchSize = 10;
+
+  for (
+    let firstPageNumber = 2;
+    firstPageNumber <= firstPage.pagination.totalPages;
+    firstPageNumber += batchSize
+  ) {
+    const pageNumbers = Array.from(
+      {
+        length: Math.min(
+          batchSize,
+          firstPage.pagination.totalPages - firstPageNumber + 1,
+        ),
+      },
+      (_, index) => firstPageNumber + index,
+    );
+    pages.push(
+      ...(await Promise.all(
+        pageNumbers.map((page) =>
+          fetcher({ ...filters, page, pageSize }),
+        ),
+      )),
+    );
+  }
+
+  return {
+    ...firstPage,
+    items: pages.flatMap((page) => page.items),
+    page: 1,
+    pageSize: Math.max(firstPage.total, pageSize),
+  };
+}
+
 function buildListQuery(filters: NoticeListFilters) {
   const params = new URLSearchParams({
     page: String(filters.page),
@@ -147,7 +192,7 @@ export async function issueNoticeBatches(input: {
 
 export async function issueClassNoticeBatches(input: {
   classId: string;
-  month: string;
+  month?: string;
   bankAccountId: string;
   idempotencyKey: string;
 }) {
@@ -171,11 +216,14 @@ export async function issueClassNoticeBatches(input: {
   }>(response);
 }
 
-export async function downloadNoticeBatchesPdf(batchIds: string[]) {
+export async function downloadNoticeBatchesPdf(
+  batchIds: string[],
+  scope?: NoticePdfScope,
+) {
   const response = await fetch("/api/payment-batches/notice/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ batchIds }),
+    body: JSON.stringify({ batchIds, ...(scope ? { scope } : {}) }),
   });
   if (!response.ok) {
     throw new Error(

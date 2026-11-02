@@ -49,6 +49,7 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { getVietnamDate } from "@/lib/vietnam-time";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { VietQrCard, downloadVietQrCard, type VietQrCardData } from "./VietQrCard";
 
 type Fee = {
   id: string;
@@ -76,7 +77,8 @@ type PendingBatch = {
   batchNo: string;
   amount: number;
   account: BankAccount;
-  qrUrl: string;
+  qrDataUrl: string;
+  transferContent?: string;
 };
 const steps = ["Tìm học viên", "Nhập số tiền", "Xác nhận", "Hoàn tất"];
 const feeStatusLabels: Record<string, string> = {
@@ -339,15 +341,17 @@ export function TuitionPaymentWorkspace({
         );
       }
       const qr = await unwrapApiResponse<{
-        qrUrl: string;
+        qrDataUrl: string;
         amount: number;
         account: BankAccount;
+        transferContent: string;
       }>(qrResponse);
       setPendingBatch({
         ...batch,
         amount: Number(qr.amount),
         account: qr.account,
-        qrUrl: qr.qrUrl,
+        qrDataUrl: qr.qrDataUrl,
+        transferContent: qr.transferContent,
       });
     } catch (reason) {
       setQrError(
@@ -464,7 +468,7 @@ export function TuitionPaymentWorkspace({
             accountNo: "",
             accountName: "",
           },
-        qrUrl: "",
+        qrDataUrl: "",
       });
       setStep(3);
       await loadPendingQr({
@@ -634,13 +638,38 @@ export function TuitionPaymentWorkspace({
     setConfirmOpen(true);
   }
 
+  const pendingTransferContent =
+    pendingBatch?.transferContent || pendingBatch?.batchNo || "";
+
   async function copyTransferContent() {
     if (!pendingBatch) return;
     try {
-      await navigator.clipboard.writeText(`PB ${pendingBatch.batchNo}`);
+      await navigator.clipboard.writeText(pendingTransferContent);
       showSuccess("Đã sao chép nội dung chuyển khoản");
     } catch {
-      showError("Không thể sao chép tự động. Vui lòng nhập: PB " + pendingBatch.batchNo);
+      showError("Không thể sao chép tự động. Vui lòng nhập: " + pendingTransferContent);
+    }
+  }
+
+  const qrCardData: VietQrCardData | null = pendingBatch?.qrDataUrl
+    ? {
+        qrDataUrl: pendingBatch.qrDataUrl,
+        bankCode: pendingBatch.account.bankCode,
+        bankName: pendingBatch.account.bankName,
+        accountName: pendingBatch.account.accountName,
+        accountNo: pendingBatch.account.accountNo,
+        amount: pendingBatch.amount,
+        batchNo: pendingBatch.batchNo,
+        transferContent: pendingTransferContent,
+      }
+    : null;
+
+  async function downloadQrCard() {
+    if (!qrCardData) return;
+    try {
+      await downloadVietQrCard(qrCardData);
+    } catch (reason) {
+      showError(reason instanceof Error ? reason.message : "Không thể tải ảnh QR");
     }
   }
 
@@ -1208,12 +1237,12 @@ export function TuitionPaymentWorkspace({
                   Đây là phiếu báo thanh toán, chưa phải biên lai. Chỉ chuyển đúng số tiền và nội dung bên dưới.
                 </Alert>
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 420px" }, gap: 2, alignItems: "start" }}>
-                  <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, textAlign: "left", minWidth: 0, borderRadius: 2, bgcolor: "grey.50" }}>
+                  <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, textAlign: "left", minWidth: 0, borderRadius: 2, bgcolor: "background.default" }}>
                     <Typography variant="overline" color="text.secondary" fontWeight={800} letterSpacing={1}>Thông tin chuyển khoản</Typography>
                     <Stack spacing={2} sx={{ mt: 1.5 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" fontWeight={700}>NGÂN HÀNG</Typography>
-                        <Typography fontWeight={700}>{pendingBatch.account.bankName || "-"}</Typography>
+                        <Typography fontWeight={700} sx={{ overflowWrap: "anywhere" }}>{pendingBatch.account.bankName || "-"}</Typography>
                       </Box>
                       <Box>
                         <Typography variant="caption" color="text.secondary" fontWeight={700}>SỐ TÀI KHOẢN</Typography>
@@ -1230,14 +1259,15 @@ export function TuitionPaymentWorkspace({
                           {pendingBatch.account.accountName || "-"}
                         </Typography>
                       </Box>
-                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "primary.50" }}>
+                      <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "background.paper", border: 1, borderColor: "divider" }}>
                         <Typography variant="caption" color="text.secondary" fontWeight={700}>SỐ TIỀN CẦN CHUYỂN</Typography>
                         <Typography variant="h6" color="error.main" fontWeight={900}>{money(pendingBatch.amount)}</Typography>
-                        <Typography variant="body2" sx={{ mt: 0.5, overflowWrap: "anywhere" }}><strong>Nội dung:</strong> PB {pendingBatch.batchNo}</Typography>
+                        <Typography variant="caption" color="text.secondary" fontWeight={700} component="div" sx={{ mt: 1.25 }}>NỘI DUNG CHUYỂN KHOẢN</Typography>
+                        <Typography fontWeight={800} sx={{ overflowWrap: "anywhere" }}>{pendingTransferContent}</Typography>
                       </Box>
                     </Stack>
                   </Paper>
-                  <Paper variant="outlined" sx={{ p: 2, display: "grid", placeItems: "center", minHeight: 444, alignContent: "center", gap: 1.5, borderRadius: 2, bgcolor: "common.white" }}>
+                  <Paper variant="outlined" sx={{ p: 2, display: "grid", placeItems: "center", minHeight: 444, alignContent: "center", gap: 1.5, borderRadius: 2 }}>
                     <Typography variant="overline" color="text.secondary" fontWeight={800} letterSpacing={1}>Quét mã thanh toán</Typography>
                     {qrError && (
                       <Alert severity="error" sx={{ width: "100%" }} action={<Button color="inherit" size="small" onClick={() => void loadPendingQr(pendingBatch)} disabled={qrLoading}>Thử lại</Button>}>
@@ -1246,10 +1276,10 @@ export function TuitionPaymentWorkspace({
                     )}
                     {qrLoading ? (
                       <LoadingState label="Đang tạo mã QR thanh toán..." minHeight={240} />
-                    ) : pendingBatch.qrUrl ? (
-                      <Box component="img" src={pendingBatch.qrUrl} alt={`QR chuyển khoản đợt ${pendingBatch.batchNo}`} sx={{ width: 400, height: 400, maxWidth: "100%", objectFit: "contain", border: "1px solid", borderColor: "divider", borderRadius: 1 }} />
+                    ) : qrCardData ? (
+                      <VietQrCard data={qrCardData} />
                     ) : null}
-                    {pendingBatch.qrUrl && (
+                    {pendingBatch.qrDataUrl && (
                       <Typography variant="caption" color="text.secondary" textAlign="center">
                         Quét mã QR để chuyển khoản đúng số tiền
                       </Typography>
@@ -1261,8 +1291,8 @@ export function TuitionPaymentWorkspace({
                 </Typography>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="center" flexWrap="wrap" useFlexGap>
                   <Button variant="outlined" startIcon={<ContentCopyOutlinedIcon />} onClick={() => void copyTransferContent()}>Sao chép nội dung</Button>
-                  {pendingBatch.qrUrl && (
-                    <Button component="a" href={pendingBatch.qrUrl} download={`qr-${pendingBatch.batchNo}.png`} target="_blank" rel="noopener noreferrer" variant="outlined" startIcon={<DownloadOutlinedIcon />}>Tải QR</Button>
+                  {pendingBatch.qrDataUrl && (
+                    <Button variant="outlined" startIcon={<DownloadOutlinedIcon />} disabled={!qrCardData} onClick={() => void downloadQrCard()}>Tải QR</Button>
                   )}
                   <Button variant="outlined" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf`} startIcon={<DownloadOutlinedIcon />}>Tải thông báo PDF</Button>
                   <Button variant="contained" href={`/api/payment-batches/${pendingBatch.id}/notice/pdf?inline=1`} target="_blank" rel="noopener noreferrer" startIcon={<PrintOutlinedIcon />}>Mở để in</Button>

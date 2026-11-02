@@ -34,7 +34,7 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Khi đăng ký môn, hệ thống chỉ tạo enrollment subject; chưa tạo học phí.
 - Chi tiết lớp chỉ hiển thị tổng quan; nghiệp vụ học viên nằm ở `/admin/classes/{classId}/students` và học phí nằm ở `/admin/classes/{classId}/tuition`.
 - Trang học phí nhận một kỳ `YYYY-MM`; `Tạo học phí tháng` chỉ tạo các khoản phí. Phương thức thanh toán được chọn ở màn hình thu học phí. Nếu cần gửi thông báo chuyển khoản hàng loạt, nhân viên phải chủ động bấm `Tạo thông báo chuyển khoản` và xác nhận; thao tác này mới tạo payment batch `PENDING`.
-- Tại `Thông báo & đợt thu`, có thể phát hành toàn bộ công nợ theo lớp/kỳ, gồm khoản chưa phát hành và khoản thuộc batch `PENDING`. Batch chuyển khoản đang chờ được giữ nguyên; khoản chưa phát hành được thêm vào batch hiện có của học viên nếu phù hợp. Batch đã liên kết với dòng sao kê không bị thay đổi. Khi cập nhật batch, tổng tiền, tài khoản nhận tiền và snapshot notice được cập nhật để PDF/QR mới phản ánh thông tin hiện hành. PDF được xuất gộp.
+- Tại `Thông báo & đợt thu`, có thể phát hành toàn bộ công nợ theo lớp/kỳ, gồm khoản chưa phát hành và khoản thuộc batch `PENDING`. Batch chuyển khoản đang chờ được giữ nguyên; khoản chưa phát hành được thêm vào batch hiện có của học viên nếu phù hợp. Batch đã liên kết với dòng sao kê không bị thay đổi. Khi cập nhật batch, tổng tiền, tài khoản nhận tiền và snapshot notice được cập nhật để PDF/QR mới phản ánh thông tin hiện hành. Có thể chọn học sinh ở danh sách batch đang chờ để xuất các thông báo phù hợp bộ lọc; PDF gộp giữ riêng QR và snapshot tài khoản của từng batch.
 - Không tạo học phí độc lập ngoài enrollment.
 - Enrollment `ACTIVE` và môn `ACTIVE` vẫn tính đủ học phí tháng, không phụ thuộc mức độ tham gia thực tế; enrollment có khoảng tạm nghỉ trong kỳ không phát sinh phí.
 - Có thể tạo học phí cho bất kỳ tháng nào trong thời gian của lớp, không phụ
@@ -73,6 +73,8 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Đối soát chỉ chọn batch `BANK_TRANSFER` đang `PENDING`, cùng tài khoản và đúng tổng tiền.
 - Mỗi phiên import sao kê và từng dòng giao dịch được lưu; có thể xuất báo cáo đối soát theo ngày giao dịch ngân hàng trên các phiên đã lưu.
 - QR được sinh động theo payment batch, không lưu lịch sử QR.
+- QR được sinh tại máy chủ theo chuẩn VietQR/NAPAS (không gọi dịch vụ ảnh bên ngoài); màn hình thanh toán và PDF thông báo dùng chung một hàm sinh QR và cùng snapshot tài khoản của batch. Mã ngân hàng phải là mã viết tắt được hỗ trợ (VCB, BIDV, TCB, MB…) hoặc mã BIN 6 số; nếu không, hệ thống báo rõ thay vì hiển thị QR.
+- Nội dung chuyển khoản (trong QR, PDF và nút sao chép) gồm mã đợt viết liền không dấu gạch, tên viết tắt học viên và tên lớp không dấu, tối đa 25 ký tự theo chuẩn VietQR, ví dụ `PB20261021600506 NVAN TOA`. Mã đợt luôn đứng đầu và đầy đủ; đối soát sao kê chỉ dựa vào mã đợt nên vẫn khớp cả nội dung cũ `PB PB-...`.
 - Hủy receipt của payment batch thành công sẽ hoàn tác toàn bộ batch, mở lại các khoản học phí và ghi audit log.
 - Hoàn tiền chỉ hỗ trợ toàn bộ payment hoặc toàn bộ batch, theo luồng
   `PENDING -> APPROVED -> COMPLETED`; khi hoàn tất, payment chuyển `REFUNDED`,

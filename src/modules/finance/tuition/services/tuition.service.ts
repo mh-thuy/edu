@@ -327,6 +327,16 @@ export class TuitionService {
         );
       }
 
+      // Lock the period fee row so pending-batch checks and amount updates stay consistent with createPaymentBatch.
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM tuition_fees
+        WHERE student_id = ${data.studentId}::uuid
+          AND class_id = ${data.classId}::uuid
+          AND billing_year = ${data.billingYear}
+          AND billing_month = ${data.billingMonth}
+          AND billing_type = 'MONTHLY'::tuition_fee_billing_type
+        FOR UPDATE
+      `);
       const existingFee = await tx.tuitionFee.findFirst({
         where: {
           studentId: data.studentId,
@@ -549,6 +559,7 @@ export class TuitionService {
         select: {
           id: true,
           studentId: true,
+          student: { select: { code: true, fullName: true } },
           subjects: {
             where: {
               status: "ACTIVE",
@@ -595,6 +606,12 @@ export class TuitionService {
       );
       let created = 0;
       let skipped = 0;
+      const failed: Array<{
+        studentId: string;
+        studentCode: string;
+        studentName: string;
+        reason: string;
+      }> = [];
       for (const enrollment of enrollments) {
         if (
           pausedEnrollmentIds.has(enrollment.id) ||
@@ -604,22 +621,39 @@ export class TuitionService {
           continue;
         }
         const existingFee = existingFeeByStudent.get(enrollment.studentId);
-        const result = await TuitionService.createFromEnrollment(
-          { classId, studentId: enrollment.studentId, ...period },
-          actorId,
-          tx,
-          { allowExistingComplete: true, classPeriodLockHeld: true },
-          auditContext,
-        );
+        let result;
+        try {
+          result = await TuitionService.createFromEnrollment(
+            { classId, studentId: enrollment.studentId, ...period },
+            actorId,
+            tx,
+            { allowExistingComplete: true, classPeriodLockHeld: true },
+            auditContext,
+          );
+        } catch (error) {
+          // Business errors are thrown before any write for this student, so the
+          // rest of the class can continue. Database errors still abort everything.
+          if (!(error instanceof ConflictError || error instanceof NotFoundError))
+            throw error;
+          failed.push({
+            studentId: enrollment.studentId,
+            studentCode: enrollment.student.code,
+            studentName: enrollment.student.fullName,
+            reason: error.message,
+          });
+          continue;
+        }
         if (existingFee && result.items.length === existingFee.items.length) {
           skipped += 1;
         } else {
           created += 1;
         }
       }
-      return { created, skipped };
+      return { created, skipped, failed };
     };
-    return transaction ? execute(transaction) : prisma.$transaction(execute);
+    return transaction
+      ? execute(transaction)
+      : prisma.$transaction(execute, { timeout: 60_000 });
   }
 
   static async updateFee(

@@ -83,6 +83,7 @@ const feeStatusOrder: Record<Fee["status"], number> = {
   CANCELLED: 6,
 };
 
+type CreateFeeFailure = { studentId: string; studentCode: string; studentName: string; reason: string };
 export function ClassTuitionManagement({
   id,
   embedded = false,
@@ -110,8 +111,9 @@ export function ClassTuitionManagement({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [createFailures, setCreateFailures] = useState<CreateFeeFailure[]>([]);
   const requestVersion = useRef(0);
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
   const classNotActive = classData?.status !== "ACTIVE";
   const classStartMonth = classData?.startDate?.slice(0, 7) ?? null;
   const classEndMonth = classData?.endDate?.slice(0, 7) ?? null;
@@ -120,6 +122,10 @@ export function ClassTuitionManagement({
     const clampedMonth = clampMonth(month, classStartMonth, classEndMonth);
     if (clampedMonth !== month) setMonth(clampedMonth);
   }, [classEndMonth, classStartMonth, month, setMonth]);
+
+  useEffect(() => {
+    setCreateFailures([]);
+  }, [id, month]);
 
   const load = useCallback(async () => {
     const currentRequest = ++requestVersion.current;
@@ -216,12 +222,16 @@ export function ClassTuitionManagement({
 
   async function createFees() {
     setBusy(true);
+    setCreateFailures([]);
     try {
       const response = await fetch(`/api/classes/${id}/tuition-fees?month=${encodeURIComponent(month)}`, { method: "POST" });
       if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo học phí tháng"));
-      const result = await unwrapApiResponse<{ created: number; skipped: number }>(response);
+      const result = await unwrapApiResponse<{ created: number; skipped: number; failed?: CreateFeeFailure[] }>(response);
       await load();
-      showSuccess(`Đã tạo học phí cho ${result.created} học viên`);
+      const failed = result.failed ?? [];
+      setCreateFailures(failed);
+      if (failed.length) showWarning(`Đã tạo học phí cho ${result.created} học viên, ${failed.length} học viên chưa tạo được`);
+      else showSuccess(`Đã tạo học phí cho ${result.created} học viên`);
     } catch (reason) {
       showError(reason instanceof Error ? reason.message : "Không thể tạo học phí tháng");
     } finally {
@@ -310,6 +320,10 @@ export function ClassTuitionManagement({
 
     {!embedded && classNotActive && <Alert severity="info" icon={<InfoOutlinedIcon />}>Lớp chưa ở trạng thái ACTIVE; học phí chỉ được xem, không thể tạo mới.</Alert>}
     {error && <Alert severity="error" action={<Button color="inherit" size="small" onClick={() => void load()}>Thử lại</Button>}>{error}</Alert>}
+    {createFailures.length > 0 && <Alert severity="warning" onClose={() => setCreateFailures([])}>
+      <Typography variant="body2" fontWeight={700}>{createFailures.length} học viên chưa được tạo học phí kỳ {month}:</Typography>
+      {createFailures.map((failure) => <Typography key={failure.studentId} variant="body2">{failure.studentName} ({failure.studentCode}): {failure.reason}</Typography>)}
+    </Alert>}
     {!embedded && <Alert severity="info" icon={<InfoOutlinedIcon />} sx={{ alignItems: "flex-start" }}>
       Học phí tính trọn tháng theo môn đang đăng ký. Sau khi tạo phí, mở <strong>Thông báo & đợt thu</strong> để chọn khoản cần yêu cầu chuyển khoản.
     </Alert>}

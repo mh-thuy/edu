@@ -129,6 +129,12 @@ export function TuitionEditForm({
     return (
       <Alert severity="warning">Học phí đã thanh toán và không thể sửa.</Alert>
     );
+  if (fee.status === "CANCELLED" || fee.status === "EXEMPTED")
+    return (
+      <Alert severity="warning">
+        Học phí {fee.status === "CANCELLED" ? "đã hủy" : "đã được miễn"} và không thể sửa. Hãy khôi phục trước khi chỉnh sửa.
+      </Alert>
+    );
   const pendingBatch = fee.paymentAllocations?.find(
     (allocation) => allocation.paymentBatch.status === "PENDING",
   )?.paymentBatch;
