@@ -50,6 +50,7 @@ export function Header({ user, onToggleSidebar }: HeaderProps): ReactElement {
   const pageRoutes: Array<[string, string]> = [
     ["/admin", "Tổng quan"],
     ["/admin/students", "Học viên"],
+    ["/admin/enrollments", "Đăng ký học"],
     ["/admin/classes", "Lớp học"],
     ["/admin/teachers", "Giáo viên"],
     ["/admin/subjects", "Môn học"],

@@ -14,6 +14,7 @@ import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlin
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
+import PersonAddAlt1OutlinedIcon from "@mui/icons-material/PersonAddAlt1Outlined";
 
 import {
   Box,
@@ -48,6 +49,12 @@ export const adminNavigationItems: SidebarItem[] = [
     label: "Học viên",
     href: "/admin/students",
     icon: <GroupOutlinedIcon fontSize="small" />,
+    section: "Đào tạo",
+  },
+  {
+    label: "Đăng ký học",
+    href: "/admin/enrollments",
+    icon: <PersonAddAlt1OutlinedIcon fontSize="small" />,
     section: "Đào tạo",
   },
   {
