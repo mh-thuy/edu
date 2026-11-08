@@ -514,6 +514,7 @@ export async function assignStudentToClass(
   classSubjectIds: string[],
   actorId?: string,
   auditContext?: AuditContext,
+  options: { activeOnly?: boolean } = {},
 ): Promise<ClassStudentWithRelations> {
   return prisma.$transaction(async (tx) => {
     await assertClassAllowsStudentRegistration(tx, classId);
@@ -558,7 +559,11 @@ export async function assignStudentToClass(
 
     const classData = await tx.class.findUnique({ where: { id: classId } });
     if (!classData) throw new NotFoundError("Không tìm thấy lớp học");
-    if (classData.status !== "ACTIVE" && classData.status !== "DRAFT") {
+    if (
+      options.activeOnly
+        ? classData.status !== "ACTIVE"
+        : classData.status !== "ACTIVE" && classData.status !== "DRAFT"
+    ) {
       throw new ConflictError("Không thể đăng ký học viên vào lớp đã kết thúc hoặc đã hủy");
     }
     const student = await tx.student.findUnique({ where: { id: studentId } });

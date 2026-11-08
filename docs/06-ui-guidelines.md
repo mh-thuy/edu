@@ -610,6 +610,13 @@ Trạng thái
 
 # 17. Module Đăng ký học viên vào lớp
 
+Trang `/admin/enrollments` hỗ trợ chọn tối đa 50 lớp đang `ACTIVE` cho một học
+viên. Nhân viên chọn môn riêng trong từng lớp; môn đã đăng ký ACTIVE hiển thị
+được chọn và khóa. Enrollment và tạo học phí vẫn là hai bước xác nhận riêng.
+Nếu enrollment có lớp lỗi, phải thử lại hoặc bỏ lớp lỗi trước khi sang bước
+học phí. Tạo phí dùng một kỳ chung và chỉ áp dụng cho lớp enrollment thành công
+mà kỳ nằm trong thời gian của lớp; kết quả và lỗi hiển thị theo lớp.
+
 Màn hình nên có:
 
 ```text

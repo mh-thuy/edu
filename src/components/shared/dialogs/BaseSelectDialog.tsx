@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
@@ -29,7 +30,7 @@ export interface SelectableItem {
 export type BaseSelectDialogProps<T extends SelectableItem> = {
   open: boolean;
   onClose: () => void;
-  onSelect: (item: T) => void;
+  onSelect?: (item: T) => void;
   /** API endpoint to fetch paginated list from */
   endpoint: string;
   /** Dialog title */
@@ -42,6 +43,11 @@ export type BaseSelectDialogProps<T extends SelectableItem> = {
   maxWidth?: "xs" | "sm" | "md" | "lg" | "xl";
   /** Additional query params */
   query?: Record<string, string | number | undefined>;
+  /** Enable checkbox-based selection across pages. */
+  multiple?: boolean;
+  /** Maximum number of rows that can be selected in multiple mode. */
+  maxSelected?: number;
+  onSelectMany?: (items: T[]) => void;
 };
 
 export function BaseSelectDialog<T extends SelectableItem>({
@@ -54,10 +60,16 @@ export function BaseSelectDialog<T extends SelectableItem>({
   searchPlaceholder = "Tìm kiếm...",
   maxWidth = "md",
   query,
+  multiple = false,
+  maxSelected,
+  onSelectMany,
 }: BaseSelectDialogProps<T>): ReactElement {
   const [searchInput, setSearchInput] = useState("");
   const [committedSearch, setCommittedSearch] = useState<string | undefined>(
     undefined,
+  );
+  const [selectedItems, setSelectedItems] = useState<Map<string, T>>(
+    () => new Map(),
   );
 
   const {
@@ -95,9 +107,10 @@ export function BaseSelectDialog<T extends SelectableItem>({
 
   const handleRowClick = useCallback(
     (id: string) => {
+      if (multiple) return;
       const item = data?.items.find((i) => i.id === id);
       if (item) {
-        onSelect(item);
+        onSelect?.(item);
         // reset state for next open
         setSearchInput("");
         setCommittedSearch(undefined);
@@ -105,18 +118,67 @@ export function BaseSelectDialog<T extends SelectableItem>({
         onClose();
       }
     },
-    [data, onSelect, onClose, setPageNumber],
+    [data, multiple, onSelect, onClose, setPageNumber],
   );
 
   const handleClose = useCallback(() => {
     setSearchInput("");
     setCommittedSearch(undefined);
+    setSelectedItems(new Map());
     setPageNumber(1);
     onClose();
   }, [onClose, setPageNumber]);
 
+  const handleMultipleSelection = useCallback((item: T) => {
+    setSelectedItems((current) => {
+      const next = new Map(current);
+      if (next.has(item.id)) {
+        next.delete(item.id);
+      } else if (maxSelected === undefined || next.size < maxSelected) {
+        next.set(item.id, item);
+      }
+      return next;
+    });
+  }, [maxSelected]);
+
+  const handleConfirmMultipleSelection = useCallback(() => {
+    if (selectedItems.size === 0 || !onSelectMany) return;
+    onSelectMany([...selectedItems.values()]);
+    setSelectedItems(new Map());
+    setSearchInput("");
+    setCommittedSearch(undefined);
+    setPageNumber(1);
+    onClose();
+  }, [onClose, onSelectMany, selectedItems, setPageNumber]);
+
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
+  const displayColumns: GridColDef<T>[] = multiple
+    ? [
+        {
+          field: "__select",
+          headerName: "Chọn",
+          width: 70,
+          sortable: false,
+          filterable: false,
+          disableColumnMenu: true,
+          renderCell: (params) => {
+            const selected = selectedItems.has(params.row.id);
+            const atLimit = maxSelected !== undefined && selectedItems.size >= maxSelected;
+            return (
+              <Checkbox
+                checked={selected}
+                disabled={!selected && atLimit}
+                inputProps={{ "aria-label": `Chọn ${String(params.row.id)}` }}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => handleMultipleSelection(params.row)}
+              />
+            );
+          },
+        },
+        ...columns,
+      ]
+    : columns;
 
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth={maxWidth}>
@@ -173,7 +235,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
             <Box sx={{ height: 400 }}>
               <DataGrid
                 rows={rows}
-                columns={columns}
+                columns={displayColumns}
                 localeText={{
                   noRowsLabel: "Không có dữ liệu",
                   noResultsOverlayLabel: "Không tìm thấy dữ liệu phù hợp",
@@ -194,7 +256,7 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 loading={isLoading}
                 slots={{ loadingOverlay: SelectDialogLoadingOverlay }}
                 disableRowSelectionOnClick
-                onRowClick={(params) => handleRowClick(params.row.id as string)}
+                onRowClick={(params) => handleRowClick(String(params.row.id))}
                 sx={{
                   border: "none",
                   cursor: "pointer",
@@ -212,6 +274,16 @@ export function BaseSelectDialog<T extends SelectableItem>({
       </DialogContent>
 
       <DialogActions>
+        {multiple && (
+          <Button
+            onClick={handleConfirmMultipleSelection}
+            variant="contained"
+            disabled={selectedItems.size === 0 || !onSelectMany}
+            sx={{ mr: "auto" }}
+          >
+            Chọn {selectedItems.size} lớp
+          </Button>
+        )}
         <Button onClick={handleClose} color="inherit" variant="outlined">
           Đóng
         </Button>

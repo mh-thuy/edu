@@ -693,6 +693,50 @@ phục lớp `COMPLETED`.
 
 ## 19.1.1 Đăng ký học viên
 
+### Enrollment nhiều lớp
+
+`GET /api/enrollments/bulk?studentId={uuid}&classIds={id1,id2}` lấy enrollment
+hiện có của học viên trong các lớp để UI khóa những môn đang đăng ký ACTIVE.
+Response dùng envelope chuẩn và có `results[]` theo từng lớp với
+`classId`, `enrollmentId`, `enrollmentStatus` và `activeClassSubjectIds`.
+
+`POST /api/enrollments/bulk` nhận một học viên và danh sách lớp/môn:
+
+```json
+{
+  "studentId": "uuid",
+  "classes": [
+    { "classId": "uuid", "classSubjectIds": ["uuid"] }
+  ]
+}
+```
+
+Mỗi lớp được xử lý độc lập bằng transaction enrollment hiện có. Response
+`data.results[]` có `classId`, `status` (`SUCCESS` hoặc `FAILED`),
+`enrollmentId` khi thành công và `message` khi lỗi. Lỗi ở một lớp không rollback
+các lớp khác. Retry chỉ gửi lớp lỗi; yêu cầu lặp lại với các môn đã ACTIVE được
+trả thành công idempotent. Endpoint chỉ nhận lớp `ACTIVE`, học viên `ACTIVE`,
+tối đa 50 lớp và không chấp nhận ID lớp/môn lặp.
+
+### Tạo học phí cho enrollment nhiều lớp
+
+`POST /api/enrollments/bulk/tuition-fees` nhận:
+
+```json
+{
+  "studentId": "uuid",
+  "month": "YYYY-MM",
+  "classIds": ["uuid"]
+}
+```
+
+API gọi nghiệp vụ tạo học phí hiện có riêng cho mỗi lớp và trả
+`data.results[]` theo lớp với `status`, `tuitionFeeId`, `feeNo`, `finalAmount`
+hoặc `message`. Mỗi lớp có transaction riêng; lớp lỗi không rollback kết quả
+các lớp khác. Endpoint giới hạn 50 lớp, từ chối class ID lặp và backend vẫn
+kiểm tra trạng thái enrollment, lớp, khoảng tháng, khoản nghỉ và trùng item.
+Gửi lại lớp đã tạo đủ phí sẽ trả khoản hiện có, không tạo khoản trùng.
+
 ```http
 POST /api/classes/{classId}/students
 ```

@@ -14,7 +14,10 @@ export interface ClassItem {
 export interface ClassSelectDialogProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (classItem: ClassItem) => void;
+  onSelect?: (classItem: ClassItem) => void;
+  onSelectMany?: (classItems: ClassItem[]) => void;
+  multiple?: boolean;
+  maxSelected?: number;
   reportableOnly?: boolean;
   activeOnly?: boolean;
 }
@@ -23,6 +26,9 @@ export function ClassSelectDialog({
   open,
   onClose,
   onSelect,
+  onSelectMany,
+  multiple = false,
+  maxSelected,
   reportableOnly = false,
   activeOnly = false,
 }: ClassSelectDialogProps): ReactElement {
@@ -50,6 +56,9 @@ export function ClassSelectDialog({
       open={open}
       onClose={onClose}
       onSelect={onSelect}
+      onSelectMany={onSelectMany}
+      multiple={multiple}
+      maxSelected={multiple ? maxSelected ?? 50 : undefined}
       endpoint="/api/classes"
       query={activeOnly ? { status: "ACTIVE" } : reportableOnly ? { statuses: "ACTIVE,COMPLETED" } : undefined}
       title={activeOnly ? "Chọn lớp đang hoạt động" : reportableOnly ? "Chọn lớp đang hoạt động hoặc đã hoàn thành" : "Chọn lớp học"}
