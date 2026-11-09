@@ -119,12 +119,14 @@ async function generateTuitionReceiptPdfWithClient(
   const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
   let page = pdf.addPage(A5_PAGE_SIZE);
   const color = rgb(0.12, 0.16, 0.24);
+  const classAmountBackground = rgb(0.91, 0.95, 0.98);
   const draw = (
     text: string,
     x: number,
     y: number,
     size = 11,
     bold = false,
+    textColor = color,
   ) => {
     void bold;
     page.drawText(text, {
@@ -132,8 +134,26 @@ async function generateTuitionReceiptPdfWithClient(
       y: y * A5_SCALE,
       size: size * A5_SCALE,
       font,
-      color,
+      color: textColor,
     });
+  };
+  const wrapText = (text: string, maxWidth: number, size: number) => {
+    const words = text.trim().split(/\s+/);
+    const lines: string[] = [];
+    let line = "";
+
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        line = candidate;
+      } else {
+        if (line) lines.push(line);
+        line = word;
+      }
+    }
+
+    if (line) lines.push(line);
+    return lines;
   };
   draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
   draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
@@ -145,11 +165,20 @@ async function generateTuitionReceiptPdfWithClient(
   draw(`Mã thanh toán: ${receipt.payment.paymentNo}`, 55, 686);
   draw("THÔNG TIN HỌC SINH", 55, 640, 13, true);
   draw(`Mã học sinh: ${student.code}`, 75, 615);
-  draw(`Họ tên: ${student.fullName}`, 75, 593);
-  draw(`Lớp: ${fee.className || "Chưa có lớp"}`, 75, 571);
-  draw(`Người nộp: ${receiverName}`, 75, 549);
-  draw("NỘI DUNG THU", 55, 515, 13, true);
-  let y = 485;
+  draw(`Họ tên: ${student.fullName}`, 75, 593, 14, false, rgb(0.78, 0.12, 0.16));
+  page.drawRectangle({
+    x: 65 * A5_SCALE,
+    y: 563 * A5_SCALE,
+    width: 485 * A5_SCALE,
+    height: 25 * A5_SCALE,
+    color: classAmountBackground,
+  });
+  draw(`Lớp: ${fee.className || "Chưa có lớp"}`, 75, 571, 12, true);
+  const receiverLines = wrapText(`Người nộp: ${receiverName}`, 480, 11);
+  receiverLines.forEach((line, index) => draw(line, 75, 543 - index * 16));
+  const contentHeadingY = 515 - (receiverLines.length - 1) * 16;
+  draw("NỘI DUNG THU", 55, contentHeadingY, 13, true);
+  let y = contentHeadingY - 30;
   for (const item of fee.items) {
     if (y < 130) {
       page = pdf.addPage(A5_PAGE_SIZE);
@@ -182,8 +211,15 @@ async function generateTuitionReceiptPdfWithClient(
     thickness: A5_SCALE,
     color: rgb(0.8, 0.8, 0.8),
   });
-  draw(isPartialReceipt ? "SỐ TIỀN THU LẦN NÀY" : "TỔNG CỘNG", 75, y - 35, 13, true);
-  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13, true);
+  page.drawRectangle({
+    x: 65 * A5_SCALE,
+    y: (y - 46) * A5_SCALE,
+    width: 485 * A5_SCALE,
+    height: 25 * A5_SCALE,
+    color: classAmountBackground,
+  });
+  draw(isPartialReceipt ? "SỐ TIỀN THU LẦN NÀY" : "TỔNG CỘNG", 75, y - 35, 14, true);
+  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 14, true);
   draw(`Bằng chữ: ${vietnameseAmountInWords(receipt.amount.toString())}`, 75, y - 55, 9);
   draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
   draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
