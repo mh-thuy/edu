@@ -61,11 +61,6 @@ export async function updateBankAccount(
       where: { bankAccountId: id, status: "SUCCESS" },
       select: { batchNo: true },
     });
-    if (pendingBatch && data.isActive === false) {
-      throw new ConflictError(
-        `Không thể ngưng tài khoản đang gắn với đợt thanh toán ${pendingBatch.batchNo}`,
-      );
-    }
     const accountDetailsChanged = [
         "bankCode",
         "bankName",
