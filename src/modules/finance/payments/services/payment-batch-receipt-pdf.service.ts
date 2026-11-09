@@ -126,14 +126,39 @@ async function generatePaymentBatchReceiptPdfWithClient(
   const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
   let page = pdf.addPage(A5_PAGE_SIZE);
   const color = rgb(0.12, 0.16, 0.24);
-  const draw = (text: string, x: number, y: number, size = 11) =>
+  const classAmountBackground = rgb(0.91, 0.95, 0.98);
+  const draw = (
+    text: string,
+    x: number,
+    y: number,
+    size = 11,
+    textColor = color,
+  ) =>
     page.drawText(text, {
       x: x * A5_SCALE,
       y: y * A5_SCALE,
       size: size * A5_SCALE,
       font,
-      color,
+      color: textColor,
     });
+  const wrapText = (text: string, maxWidth: number, size: number) => {
+    const words = text.trim().split(/\s+/);
+    const lines: string[] = [];
+    let line = "";
+
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        line = candidate;
+      } else {
+        if (line) lines.push(line);
+        line = word;
+      }
+    }
+
+    if (line) lines.push(line);
+    return lines;
+  };
 
   draw("BIÊN LAI THANH TOÁN HỌC PHÍ", 155, 770, 17);
   draw(`Số biên lai: ${receipt.receiptNo}`, 55, 730);
@@ -145,11 +170,13 @@ async function generatePaymentBatchReceiptPdfWithClient(
   );
   draw("THÔNG TIN HỌC SINH", 55, 640, 13);
   draw(`Mã học sinh: ${student.code}`, 75, 615);
-  draw(`Họ tên: ${student.fullName}`, 75, 593);
-  draw(`Người nộp: ${receiverName}`, 75, 571);
-  draw("CÁC KHOẢN ĐÃ THANH TOÁN", 55, 545, 13);
+  draw(`Họ tên: ${student.fullName}`, 75, 593, 14, rgb(0.78, 0.12, 0.16));
+  const receiverLines = wrapText(`Người nộp: ${receiverName}`, 480, 11);
+  receiverLines.forEach((line, index) => draw(line, 75, 571 - index * 16));
+  const feesHeadingY = 545 - (receiverLines.length - 1) * 16;
+  draw("CÁC KHOẢN ĐÃ THANH TOÁN", 55, feesHeadingY, 13);
 
-  let y = 515;
+  let y = feesHeadingY - 30;
   for (const allocation of fees) {
     if (y < 260) {
       page = pdf.addPage(A5_PAGE_SIZE);
@@ -157,15 +184,24 @@ async function generatePaymentBatchReceiptPdfWithClient(
       draw("CÁC KHOẢN ĐÃ THANH TOÁN (tiếp theo)", 55, 755, 13);
       y = 725;
     }
-    draw(
-      `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`,
-      75,
-      y,
+    page.drawRectangle({
+      x: 65 * A5_SCALE,
+      y: (y - 8) * A5_SCALE,
+      width: 485 * A5_SCALE,
+      height: 25 * A5_SCALE,
+      color: classAmountBackground,
+    });
+    const allocationLabel = `${allocation.feeNo} — ${allocation.className || "Chưa có lớp"}`;
+    const allocationLabelWidth = font.widthOfTextAtSize(allocationLabel, 12);
+    const allocationLabelSize = Math.min(
+      12,
+      (12 * 300) / allocationLabelWidth,
     );
+    draw(allocationLabel, 75, y, allocationLabelSize);
     const payableAmount = allocation.payableAmount ?? allocation.finalAmount;
     const isPartialReceipt = Number(payableAmount) < Number(allocation.finalAmount);
-    draw(`${money(Number(payableAmount))} VND`, 390, y);
-    let itemY = y - 17;
+    draw(`${money(Number(payableAmount))} VND`, 390, y, 12);
+    let itemY = y - 20;
     for (const item of allocation.items) {
       if (itemY < 220) {
         page = pdf.addPage(A5_PAGE_SIZE);
@@ -196,8 +232,8 @@ async function generatePaymentBatchReceiptPdfWithClient(
     thickness: A5_SCALE,
     color: rgb(0.8, 0.8, 0.8),
   });
-  draw("TỔNG CỘNG", 75, y - 35, 13);
-  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 13);
+  draw("TỔNG CỘNG", 75, y - 35, 14);
+  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 14);
   draw(`Bằng chữ: ${vietnameseAmountInWords(receipt.amount.toString())}`, 75, y - 55, 9);
   draw(`Phương thức: ${receipt.paymentBatch.paymentMethod}`, 75, y - 75);
   if (receipt.paymentBatch.bankTransactionNo)
