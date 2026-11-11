@@ -69,6 +69,23 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Backup Neon Production to local
+
+To replace the local PostgreSQL database with a copy of Neon Production, start the local database and run:
+
+```bash
+docker compose up -d
+npm run db:backup-neon-to-local
+```
+
+The command uses `DATABASE_URL_UNPOOLED` from the Vercel Production environment. It asks for the exact confirmation `REPLACE LOCAL DATABASE`, saves a Neon dump and a backup of the current local database under `~/.local/share/edu/backups`, then restores Neon into the local database configured by `DB_NAME` and `POSTGRES_USER`. Set `EDU_DB_BACKUP_DIR` to use another backup directory. This operation does not write to Neon Production.
+
+The script requires an interactive terminal, Vercel CLI access to the `edu` project, and Docker. To run its unit checks:
+
+```bash
+npm run test:db-backup-neon-to-local
+```
+
 ## Authentication + Authorization Flow
 
 - Unauthenticated users are redirected to `/login`

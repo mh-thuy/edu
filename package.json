@@ -13,7 +13,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "classes:normalize-codes": "tsx scripts/normalize-class-codes.ts",
-    "bank:import": "tsx prisma/helpers/import-bank-statement.ts"
+    "bank:import": "tsx prisma/helpers/import-bank-statement.ts",
+    "db:backup-neon-to-local": "node scripts/backup-neon-to-local.mjs",
+    "test:db-backup-neon-to-local": "node scripts/backup-neon-to-local.test.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

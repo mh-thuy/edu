@@ -138,6 +138,22 @@
         "showReuseMessage": false
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Backup Neon Production → restore local DB (OVERWRITES LOCAL)",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "db:backup-neon-to-local"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
     }
   ],
   "inputs": [
