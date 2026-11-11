@@ -116,6 +116,19 @@ export async function restoreWithRecovery({ restoreNeon, recoverLocal, onRestore
 	}
 }
 
+export function archiveListArgs() {
+	return ["run", "--rm", "-i", postgresClientImage, "pg_restore", "--list"];
+}
+
+export function localRestoreArgs(localUser, localDatabase) {
+	return [
+		"compose", "exec", "-T", "postgres", "pg_restore",
+		"-U", localUser, "-d", localDatabase,
+		"--clean", "--if-exists", "--exit-on-error", "--single-transaction",
+		"--no-owner", "--no-privileges",
+	];
+}
+
 function run(command, args, options = {}) {
 	const result = spawnSync(command, args, {
 		cwd: rootDir,
@@ -208,7 +221,7 @@ function ensureNonEmptyFile(filePath, label) {
 
 function validateArchive(filePath) {
 	try {
-		runWithFileInputQuiet("docker", ["run", "--rm", "-i", postgresClientImage, "pg_restore", "--list", "-"], filePath);
+		runWithFileInputQuiet("docker", archiveListArgs(), filePath);
 	} catch (error) {
 		rmSync(filePath, { force: true });
 		throw error;
@@ -307,12 +320,7 @@ async function main() {
 		ensureNonEmptyFile(localBackup, "Backup database local");
 		validateArchive(localBackup);
 
-		const restoreArgs = [
-			"compose", "exec", "-T", "postgres", "pg_restore",
-			"-U", localUser, "-d", localDatabase,
-			"--clean", "--if-exists", "--exit-on-error", "--single-transaction",
-			"--no-owner", "--no-privileges", "-",
-		];
+		const restoreArgs = localRestoreArgs(localUser, localDatabase);
 		console.log(`Đang khôi phục Neon vào database local ${localDatabase}...`);
 		await restoreWithRecovery({
 			restoreNeon: () => runWithFileInput("docker", restoreArgs, neonBackup),

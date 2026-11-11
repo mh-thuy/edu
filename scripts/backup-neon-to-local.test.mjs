@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	archiveListArgs,
+	localRestoreArgs,
 	parseEnvContent,
 	parseNeonConnection,
 	requireLocalContainer,
@@ -66,6 +68,11 @@ test("requires a direct Neon URL and a running local database", () => {
 test("rejects an empty backup before restore", () => {
 	assert.throws(() => requireNonEmptyBackup(0, "Backup Neon"), /Backup Neon rỗng/);
 	assert.equal(requireNonEmptyBackup(1, "Backup Neon"), true);
+});
+
+test("lets pg_restore read archive data from stdin without a dash filename", () => {
+	assert.equal(archiveListArgs().includes("-"), false);
+	assert.equal(localRestoreArgs("postgres", "classroom_rental").includes("-"), false);
 });
 
 test("tries to restore the local backup when Neon restore fails", async () => {
