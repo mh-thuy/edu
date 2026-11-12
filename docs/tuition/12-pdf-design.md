@@ -1,3 +1,3 @@
 # PDF design
 
-Notice và receipt là snapshot PDF. Notice chứa fee items, totals, due date, bank account, transfer content và VietQR. Receipt chứa payment/receiver/method/amount-in-words/issue data. Asset storage phải qua adapter, không coi `public` runtime local là storage bền vững. PDF download phải có authorization.
+Notice và receipt là snapshot PDF. Notice chứa fee items, totals, due date, bank account, transfer content và VietQR. Receipt PDF khổ A5 dọc dùng bố cục trang trọng, đơn sắc; hiển thị số biên lai, ngày thu, học sinh, mã khoản thu/lớp, số tiền, phương thức và số tiền bằng chữ. Họ tên học sinh và tổng tiền dùng chữ đậm, cỡ lớn hơn nội dung phụ. PDF không hiển thị người nộp trùng tên học sinh, mã thanh toán/đợt hoặc chi tiết môn học; snapshot vẫn giữ nguyên dữ liệu. Tải/in lại biên lai cũ dùng bố cục mới mà không đổi dữ liệu snapshot. Asset storage phải qua adapter, không coi `public` runtime local là storage bền vững. PDF download phải có authorization.

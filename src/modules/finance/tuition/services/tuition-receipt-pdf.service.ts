@@ -1,36 +1,14 @@
-import { PDFDocument, rgb } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { auditFields, type AuditContext } from "@/lib/audit";
-import { vietnameseAmountInWords } from "@/lib/vietnamese-amount";
-import { getPdfFontBytes } from "@/lib/pdf-font";
 import {
   getTuitionReceiptSnapshot,
   parseReceiptSnapshot,
   saveTuitionReceiptSnapshot,
   toFeeSnapshot,
 } from "@/modules/finance/payments/services/payment-document-snapshot";
-
-const money = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
-const A5_PAGE_SIZE: [number, number] = [419.53, 595.28];
-const A5_SCALE = A5_PAGE_SIZE[0] / 595;
-
-const formatVietnamDateTime = (value: Date) => {
-  const parts = new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(value);
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
-};
+import { renderReceiptPdf } from "@/modules/finance/payments/services/receipt-pdf-layout";
 
 const displayReceiverName = (receiverName: string | null | undefined, student: { fullName: string }) => {
   const name = receiverName?.trim();
@@ -114,116 +92,25 @@ async function generateTuitionReceiptPdfWithClient(
     ? Number(fee.payableAmount)
     : Number(receipt.amount);
   const isPartialReceipt = receiptPayableAmount < receiptFinalAmount;
-  const pdf = await PDFDocument.create();
-  pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(await getPdfFontBytes(), { subset: true });
-  let page = pdf.addPage(A5_PAGE_SIZE);
-  const color = rgb(0.12, 0.16, 0.24);
-  const classAmountBackground = rgb(0.91, 0.95, 0.98);
-  const draw = (
-    text: string,
-    x: number,
-    y: number,
-    size = 11,
-    bold = false,
-    textColor = color,
-  ) => {
-    void bold;
-    page.drawText(text, {
-      x: x * A5_SCALE,
-      y: y * A5_SCALE,
-      size: size * A5_SCALE,
-      font,
-      color: textColor,
-    });
-  };
-  const wrapText = (text: string, maxWidth: number, size: number) => {
-    const words = text.trim().split(/\s+/);
-    const lines: string[] = [];
-    let line = "";
-
-    for (const word of words) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-        line = candidate;
-      } else {
-        if (line) lines.push(line);
-        line = word;
-      }
-    }
-
-    if (line) lines.push(line);
-    return lines;
-  };
-  draw("PHIẾU THU HỌC PHÍ", 190, 770, 18, true);
-  draw(`Số phiếu: ${receipt.receiptNo}`, 55, 730);
-  draw(
-    `Ngày thu: ${formatVietnamDateTime(receipt.payment.paymentDate)}`,
-    55,
-    708,
-  );
-  draw(`Mã thanh toán: ${receipt.payment.paymentNo}`, 55, 686);
-  draw("THÔNG TIN HỌC SINH", 55, 640, 13, true);
-  draw(`Mã học sinh: ${student.code}`, 75, 615);
-  draw(`Họ tên: ${student.fullName}`, 75, 593, 14, false, rgb(0.78, 0.12, 0.16));
-  page.drawRectangle({
-    x: 65 * A5_SCALE,
-    y: 563 * A5_SCALE,
-    width: 485 * A5_SCALE,
-    height: 25 * A5_SCALE,
-    color: classAmountBackground,
+  const adjustments = isPartialReceipt
+    ? []
+    : [
+        ...(Number(fee.discountAmount) > 0
+          ? [{ label: "Giảm giá", amount: Number(fee.discountAmount), negative: true }]
+          : []),
+        ...(Number(fee.additionalAmount) > 0
+          ? [{ label: "Phụ thu", amount: Number(fee.additionalAmount) }]
+          : []),
+      ];
+  const pdfBuffer = await renderReceiptPdf({
+    receiptNo: receipt.receiptNo,
+    collectedAt: receipt.payment.paymentDate,
+    student,
+    fees: [{ label: `${fee.feeNo} — ${fee.className || "Chưa có lớp"}`, adjustments }],
+    amount: receipt.amount.toString(),
+    amountLabel: isPartialReceipt ? "SỐ TIỀN THU LẦN NÀY" : "TỔNG CỘNG",
+    paymentMethod: receipt.payment.paymentMethod,
   });
-  draw(`Lớp: ${fee.className || "Chưa có lớp"}`, 75, 571, 12, true);
-  const receiverLines = wrapText(`Người nộp: ${receiverName}`, 480, 11);
-  receiverLines.forEach((line, index) => draw(line, 75, 543 - index * 16));
-  const contentHeadingY = 515 - (receiverLines.length - 1) * 16;
-  draw("NỘI DUNG THU", 55, contentHeadingY, 13, true);
-  let y = contentHeadingY - 30;
-  for (const item of fee.items) {
-    if (y < 130) {
-      page = pdf.addPage(A5_PAGE_SIZE);
-      draw("PHIẾU THU HỌC PHÍ", 190, 790, 16, true);
-      draw("NỘI DUNG THU (tiếp theo)", 55, 755, 13, true);
-      y = 725;
-    }
-    const subjectName = item.subjectName;
-    draw(
-      `${subjectName ? `Học phí môn: ${subjectName}` : item.itemName} x ${item.quantity.toString()}`,
-      75,
-      y,
-    );
-    if (!isPartialReceipt) draw(`${money(Number(item.amount))} VND`, 400, y);
-    y -= 24;
-  }
-  if (!isPartialReceipt && Number(fee.discountAmount) > 0) {
-    draw("Giảm giá", 75, y);
-    draw(`-${money(Number(fee.discountAmount))} VND`, 400, y);
-    y -= 24;
-  }
-  if (!isPartialReceipt && Number(fee.additionalAmount) > 0) {
-    draw("Phụ thu", 75, y);
-    draw(`${money(Number(fee.additionalAmount))} VND`, 400, y);
-    y -= 24;
-  }
-  page.drawLine({
-    start: { x: 55 * A5_SCALE, y: (y - 5) * A5_SCALE },
-    end: { x: 540 * A5_SCALE, y: (y - 5) * A5_SCALE },
-    thickness: A5_SCALE,
-    color: rgb(0.8, 0.8, 0.8),
-  });
-  page.drawRectangle({
-    x: 65 * A5_SCALE,
-    y: (y - 46) * A5_SCALE,
-    width: 485 * A5_SCALE,
-    height: 25 * A5_SCALE,
-    color: classAmountBackground,
-  });
-  draw(isPartialReceipt ? "SỐ TIỀN THU LẦN NÀY" : "TỔNG CỘNG", 75, y - 35, 14, true);
-  draw(`${money(Number(receipt.amount))} VND`, 390, y - 35, 14, true);
-  draw(`Bằng chữ: ${vietnameseAmountInWords(receipt.amount.toString())}`, 75, y - 55, 9);
-  draw(`Phương thức: ${receipt.payment.paymentMethod}`, 75, y - 75);
-  draw("Phiếu thu được phát hành từ hệ thống quản lý học phí.", 75, 90, 9);
-  const pdfBuffer = Buffer.from(await pdf.save());
   const printedAt = markPrinted ? new Date() : null;
   if (printedAt) {
     await client.$executeRaw(
