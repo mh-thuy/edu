@@ -1046,19 +1046,19 @@ export function PaymentBatchManagement() {
             icon={<CampaignOutlinedIcon fontSize="small" />}
             iconPosition="start"
             value="UNISSUED"
-            label={`Chưa phát · ${unissuedTotal}`}
+            label={`Chưa phát · ${hasLoaded ? unissuedTotal : "—"}`}
           />
           <Tab
             icon={<HourglassTopOutlinedIcon fontSize="small" />}
             iconPosition="start"
             value="PENDING"
-            label={`Đang chờ · ${pendingTotal}`}
+            label={`Đang chờ · ${hasLoaded ? pendingTotal : "—"}`}
           />
           <Tab
             icon={<TaskAltOutlinedIcon fontSize="small" />}
             iconPosition="start"
             value="SUCCESS"
-            label={`Đã thanh toán · ${successfulTotal}`}
+            label={`Đã thanh toán · ${hasLoaded ? successfulTotal : "—"}`}
           />
         </Tabs>
       </Paper>
