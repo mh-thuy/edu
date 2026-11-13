@@ -86,6 +86,11 @@ import {
 
 type View = "UNISSUED" | "PENDING" | "SUCCESS";
 type RestructureMode = "SPLIT" | "MERGE";
+const viewHints: Record<View, string> = {
+  UNISSUED: "Khoản học phí còn nợ chưa có thông báo chuyển khoản. Chọn khoản rồi bấm Phát hành.",
+  PENDING: "Đợt thu đã phát hành, đang chờ học sinh chuyển khoản. Gộp: gom nhiều đợt của một học sinh về một đợt. Tách: chia đợt theo từng khoản học phí.",
+  SUCCESS: "Đợt thu đã đối soát thành công với sao kê ngân hàng hoặc đã thu tiền mặt.",
+};
 type IssuedBatch = { id: string; batchNo: string; totalAmount: number };
 
 const money = (value: number) =>
@@ -1062,6 +1067,7 @@ export function PaymentBatchManagement() {
           />
         </Tabs>
       </Paper>
+      <Typography variant="body2" color="text.secondary">{viewHints[view]}</Typography>
 
       {error && (
         <Alert
