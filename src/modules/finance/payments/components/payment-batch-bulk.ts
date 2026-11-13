@@ -1,5 +1,5 @@
 export function mergeableGroups<
-  G extends { items: { bankAccountId: string }[] },
+  G extends { items: { bankAccountId: string | null }[] },
 >(groups: G[]): G[] {
   return groups.filter(
     (group) =>

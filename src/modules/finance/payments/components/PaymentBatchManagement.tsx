@@ -63,6 +63,7 @@ import {
   type MasterSelectValue,
 } from "@/components/shared/forms/MasterSelectField";
 import { ConfirmDialog } from "@/components/shared/dialogs/ConfirmDialog";
+import { mergeableGroups, splittableBatches } from "./payment-batch-bulk";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
@@ -233,6 +234,7 @@ export function PaymentBatchManagement() {
   const [restructureMode, setRestructureMode] =
     useState<RestructureMode | null>(null);
   const [reason, setReason] = useState("");
+  const [bulkMode, setBulkMode] = useState<"MERGE" | "SPLIT" | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -405,6 +407,8 @@ export function PaymentBatchManagement() {
     selectedBatches.length >= 2 &&
     sameStudent(selectedBatches) &&
     new Set(selectedBatches.map((batch) => batch.bankAccountId)).size <= 1;
+  const bulkMergeGroups = mergeableGroups(groupByStudent(selectedBatches));
+  const bulkSplitBatches = splittableBatches(selectedBatches);
   const splitTarget =
     selectedBatches.length === 1 ? selectedBatches[0] : undefined;
   const selectedBatchStudent = selectedBatches[0]?.student.id;
@@ -772,6 +776,51 @@ export function PaymentBatchManagement() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function runBulk(mode: "MERGE" | "SPLIT") {
+    if (busy) return;
+    setBusy(true);
+    let done = 0;
+    let failed = 0;
+    let firstError = "";
+    const jobs =
+      mode === "MERGE"
+        ? bulkMergeGroups.map((group) => ({
+            operation: "MERGE" as const,
+            batchIds: group.items.map((batch) => batch.id),
+          }))
+        : bulkSplitBatches.map((batch) => ({
+            operation: "SPLIT" as const,
+            sourceBatchId: batch.id,
+          }));
+    try {
+      for (const job of jobs) {
+        try {
+          await restructurePendingBatches({
+            ...job,
+            reason: reason.trim(),
+            idempotencyKey: crypto.randomUUID(),
+          });
+          done++;
+        } catch (error) {
+          failed++;
+          if (!firstError) {
+            firstError = error instanceof Error ? error.message : "Không thể thao tác";
+          }
+        }
+      }
+    } finally {
+      setBusy(false);
+      setBulkMode(null);
+      setSelectedBatchIds([]);
+      setSelectedStudentIds([]);
+      await load();
+    }
+    const label =
+      mode === "MERGE" ? `Đã gộp ${done} học sinh` : `Đã tách ${done} đợt`;
+    if (failed) showError(`${label}, lỗi ${failed}. ${firstError}`);
+    else showSuccess(label);
   }
 
   return (
@@ -1614,6 +1663,31 @@ export function PaymentBatchManagement() {
               >
                 Gộp đợt thu
               </Button>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<MergeTypeOutlinedIcon />}
+                disabled={!bulkMergeGroups.length || busy}
+                onClick={() => {
+                  setReason("");
+                  setBulkMode("MERGE");
+                }}
+              >
+                Gộp tất cả ({bulkMergeGroups.length})
+              </Button>
+              <Button
+                fullWidth
+                variant="outlined"
+                color="warning"
+                startIcon={<CallSplitOutlinedIcon />}
+                disabled={!bulkSplitBatches.length || busy}
+                onClick={() => {
+                  setReason("");
+                  setBulkMode("SPLIT");
+                }}
+              >
+                Tách tất cả ({bulkSplitBatches.length})
+              </Button>
               {selectedBatches.length > 0 && !sameStudent(selectedBatches) && (
                 <Alert severity="info">
                   Chỉ được gộp các đợt của cùng một học sinh.
@@ -1862,6 +1936,35 @@ export function PaymentBatchManagement() {
         onConfirm={() => void submitRestructure()}
         onCancel={() => {
           if (!busy) setRestructureMode(null);
+        }}
+        isLoading={busy}
+        confirmDisabled={!reason.trim()}
+      />
+      <ConfirmDialog
+        open={Boolean(bulkMode)}
+        title={bulkMode === "MERGE" ? "Gộp tất cả đợt đã chọn" : "Tách tất cả đợt đã chọn"}
+        message={
+          bulkMode === "MERGE"
+            ? `Sẽ gộp ${bulkMergeGroups.length} học sinh (${bulkMergeGroups.reduce((sum, group) => sum + group.items.length, 0)} đợt). Các batch cũ bị hủy và tạo lại.`
+            : `Sẽ tách ${bulkSplitBatches.length} đợt. Mỗi batch bị hủy và tạo lại theo từng khoản học phí.`
+        }
+        content={
+          <AppTextField
+            label="Lý do thao tác"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            multiline
+            minRows={3}
+            required
+            helperText="Bắt buộc nhập để lưu audit log. Áp dụng cho mọi đợt trong lần này."
+          />
+        }
+        confirmLabel="Xác nhận"
+        cancelLabel="Hủy"
+        confirmColor="warning"
+        onConfirm={() => void runBulk(bulkMode!)}
+        onCancel={() => {
+          if (!busy) setBulkMode(null);
         }}
         isLoading={busy}
         confirmDisabled={!reason.trim()}
