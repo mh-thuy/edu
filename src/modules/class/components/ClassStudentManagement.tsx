@@ -123,7 +123,7 @@ type StudentSummary = {
   completed: number;
   left: number;
   uncreated: number;
-  tuitionFees: { count: number; amount: number; paid: number; remaining: number };
+  tuitionFees: { count: number; amount: number; paid: number; remaining: number; paidCount: number; unpaidCount: number; exemptedCount: number };
 };
 type StudentListResult = {
   items: StudentRow[];
@@ -183,7 +183,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [studentPageSize, setStudentPageSize] = useState(20);
   const [studentSort, setStudentSort] = useState<{ key: "code" | "fullName" | "item" | "finalAmount" | "paidAmount" | "remainingAmount" | "feeStatus"; direction: "asc" | "desc" }>({ key: "fullName", direction: "asc" });
   const [totalStudents, setTotalStudents] = useState(0);
-  const [summary, setSummary] = useState<StudentSummary>({ total: 0, active: 0, paused: 0, completed: 0, left: 0, uncreated: 0, tuitionFees: { count: 0, amount: 0, paid: 0, remaining: 0 } });
+  const [summary, setSummary] = useState<StudentSummary>({ total: 0, active: 0, paused: 0, completed: 0, left: 0, uncreated: 0, tuitionFees: { count: 0, amount: 0, paid: 0, remaining: 0, paidCount: 0, unpaidCount: 0, exemptedCount: 0 } });
   const requestVersion = useRef(0);
   const [error, setError] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<StudentRow | null>(null);
@@ -584,6 +584,9 @@ export function ClassStudentManagement({ id }: { id: string }) {
       items: [
         ["Khoản phí", summary.tuitionFees.count],
         ["Chưa tạo phí", Math.max(0, uncreatedCount)],
+        ["Đã đóng", summary.tuitionFees.paidCount],
+        ["Chưa đóng", summary.tuitionFees.unpaidCount],
+        ["Được miễn", summary.tuitionFees.exemptedCount],
         ["Phải thu", money(summary.tuitionFees.amount)],
         ["Đã thu", money(summary.tuitionFees.paid)],
         ["Còn nợ", money(summary.tuitionFees.remaining)],
