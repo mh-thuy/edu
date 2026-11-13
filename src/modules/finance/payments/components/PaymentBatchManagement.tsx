@@ -490,17 +490,27 @@ export function PaymentBatchManagement() {
     );
   }
 
-  function openStudentMergeDialog(group: (typeof pendingGroups)[number]) {
-    const batchIds = group.items.map((batch) => batch.id);
-    const bankAccountIds = new Set(
-      group.items.map((batch) => batch.bankAccountId),
-    );
-    if (batchIds.length < 2 || bankAccountIds.size > 1) return;
-
-    setStudentGroupSelection(group, true);
-    setRestructureMode("MERGE");
-    setReason("");
-    setDialogError("");
+  async function mergeStudentGroup(group: (typeof pendingGroups)[number]) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await restructurePendingBatches({
+        operation: "MERGE",
+        batchIds: group.items.map((batch) => batch.id),
+        reason: `Gộp các đợt đang chờ của học sinh ${group.student.code}`,
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setSelectedBatchIds([]);
+      setSelectedStudentIds([]);
+      await load();
+      showSuccess(`Đã tạo lại ${result.batches.length} đợt thanh toán`);
+    } catch (error) {
+      showError(
+        error instanceof Error ? error.message : "Không thể gộp đợt thu",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   function openBatchSplitDialog(batch: PendingBatch) {
@@ -1423,7 +1433,7 @@ export function PaymentBatchManagement() {
                                           color="warning"
                                           startIcon={<MergeTypeOutlinedIcon />}
                                           disabled={!canMergeStudentGroup || busy}
-                                          onClick={() => openStudentMergeDialog(group)}
+                                          onClick={() => mergeStudentGroup(group)}
                                         >
                                           Gộp {group.items.length} đợt
                                         </Button>
