@@ -144,7 +144,7 @@ const getColumns = (): GridColDef<ClassRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 370,
+    minWidth: 420,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -164,6 +164,18 @@ const getColumns = (): GridColDef<ClassRow>[] => [
         <Button
           size="small"
           component={Link}
+          href={`/admin/classes/${params.row.id}/tuition`}
+          variant="outlined"
+          sx={{
+            minWidth: 64,
+          }}
+        >
+          Quản lý học phí
+        </Button>
+
+        <Button
+          size="small"
+          component={Link}
           href={`/admin/classes/${params.row.id}`}
           variant="outlined"
           sx={{
@@ -171,18 +183,6 @@ const getColumns = (): GridColDef<ClassRow>[] => [
           }}
         >
           Chi tiết
-        </Button>
-
-        <Button
-          size="small"
-          component={Link}
-          href={`/admin/classes/${params.row.id}/tuition`}
-          variant="outlined"
-          sx={{
-            minWidth: 64,
-          }}
-        >
-          Học phí
         </Button>
 
         <Button
