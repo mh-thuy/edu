@@ -130,6 +130,10 @@ function groupByStudent<
   return [...groups.values()];
 }
 
+function mergeReason(code: string) {
+  return `Gộp các đợt đang chờ của học sinh ${code}`;
+}
+
 function getFeePeriod(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
@@ -497,7 +501,7 @@ export function PaymentBatchManagement() {
       const result = await restructurePendingBatches({
         operation: "MERGE",
         batchIds: group.items.map((batch) => batch.id),
-        reason: `Gộp các đợt đang chờ của học sinh ${group.student.code}`,
+        reason: mergeReason(group.student.code),
         idempotencyKey: crypto.randomUUID(),
       });
       setSelectedBatchIds([]);
