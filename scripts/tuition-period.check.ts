@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   getNextBillingPeriod,
   isClassCoveringPeriod,
+  parseBillingPeriod,
 } from "../src/modules/class/utils/tuition-period";
 import {
   createTuitionForClasses,
@@ -9,6 +10,17 @@ import {
 } from "../src/modules/class/utils/next-month-tuition";
 
 const dec2026 = { billingYear: 2026, billingMonth: 12, month: "2026-12" };
+
+// parseBillingPeriod: chọn tháng từ bộ chọn; chuỗi rỗng hoặc sai định dạng phải trả null
+assert.deepEqual(parseBillingPeriod("2026-12"), dec2026);
+assert.deepEqual(parseBillingPeriod("2027-01"), {
+  billingYear: 2027,
+  billingMonth: 1,
+  month: "2027-01",
+});
+assert.equal(parseBillingPeriod(""), null);
+assert.equal(parseBillingPeriod("2026-13"), null);
+assert.equal(parseBillingPeriod("2026-1"), null);
 
 assert.deepEqual(getNextBillingPeriod(new Date("2026-11-13T05:00:00Z")), dec2026);
 assert.deepEqual(getNextBillingPeriod(new Date("2026-12-15T05:00:00Z")), {

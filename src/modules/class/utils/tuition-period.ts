@@ -22,6 +22,13 @@ export function getNextBillingPeriod(now: Date): BillingPeriod {
   };
 }
 
+// Trả null khi chuỗi không phải YYYY-MM hợp lệ (ví dụ bộ chọn tháng đang trống).
+export function parseBillingPeriod(month: string): BillingPeriod | null {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (!match) return null;
+  return { billingYear: Number(match[1]), billingMonth: Number(match[2]), month };
+}
+
 // Cùng logic với createClassTuitionFees phía server: lớp không giới hạn khi ngày null.
 export function isClassCoveringPeriod(
   cls: { startDate?: string | null; endDate?: string | null },

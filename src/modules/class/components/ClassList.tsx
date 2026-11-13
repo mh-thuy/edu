@@ -13,7 +13,7 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import { GridColDef } from "@mui/x-data-grid";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { BaseTable } from "@/components/shared/tables/BaseTable";
 import { FilterActions } from "@/components/shared/FilterActions";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -31,8 +31,9 @@ import { AppTextField } from "@/components/shared/forms/AppTextField";
 import {
   getNextBillingPeriod,
   isClassCoveringPeriod,
-  type BillingPeriod,
+  parseBillingPeriod,
 } from "@/modules/class/utils/tuition-period";
+import { MonthPickerField } from "@/components/shared/forms/MonthPickerField";
 import {
   createTuitionForClasses,
   loadAllPages,
@@ -290,36 +291,40 @@ export function ClassList(): ReactElement {
   const [tuitionConfirmOpen, setTuitionConfirmOpen] = useState(false);
   const [tuitionProgress, setTuitionProgress] = useState<{ done: number; total: number } | null>(null);
   const tuitionRunning = tuitionProgress !== null;
-  const [tuitionTargets, setTuitionTargets] = useState<{ period: BillingPeriod; classes: Class[] } | null>(null);
+  const [tuitionMonth, setTuitionMonth] = useState("");
+  const [activeClasses, setActiveClasses] = useState<Class[] | null>(null);
+  const tuitionPeriod = parseBillingPeriod(tuitionMonth);
+  // Lớp có hiệu lực trong tháng đang chọn; suy ra từ danh sách lớp đã tải.
+  const tuitionTargets = useMemo(() => {
+    const period = parseBillingPeriod(tuitionMonth);
+    if (!period || !activeClasses) return [];
+    return activeClasses.filter((cls) => isClassCoveringPeriod(cls, period));
+  }, [activeClasses, tuitionMonth]);
 
   const handleCreate = useCallback(() => {
     setEditingClass(null);
     setOpenDialog(true);
   }, []);
 
-  const prepareNextMonthTuition = useCallback(async () => {
+  const openTuitionDialog = useCallback(async () => {
     try {
-      const period = getNextBillingPeriod(new Date());
-      const activeClasses = await loadAllPages<Class>(async (page) => {
+      const loaded = await loadAllPages<Class>(async (page) => {
         const response = await fetch(`/api/classes?status=ACTIVE&page=${page}&pageSize=100`);
         if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách lớp"));
         return unwrapApiResponse<{ items: Class[]; total: number }>(response);
       });
-      const classes = activeClasses.filter((cls) => isClassCoveringPeriod(cls, period));
-      if (!classes.length) {
-        showWarning(`Không có lớp đang hoạt động nào cần tạo học phí cho tháng ${period.month}`);
-        return;
-      }
-      setTuitionTargets({ period, classes });
+      setActiveClasses(loaded);
+      setTuitionMonth(getNextBillingPeriod(new Date()).month);
       setTuitionConfirmOpen(true);
     } catch (err) {
       showError(err instanceof Error ? err.message : "Không thể tải danh sách lớp");
     }
-  }, [showWarning, showError]);
+  }, [showError]);
 
-  const runNextMonthTuition = useCallback(async () => {
-    if (!tuitionTargets) return;
-    const { period, classes } = tuitionTargets;
+  const runMonthTuition = useCallback(async () => {
+    const period = parseBillingPeriod(tuitionMonth);
+    const classes = tuitionTargets;
+    if (!period || !classes.length) return;
     setTuitionProgress({ done: 0, total: classes.length });
     const summary = await createTuitionForClasses(
       classes,
@@ -333,7 +338,7 @@ export function ClassList(): ReactElement {
     await refresh();
     setTuitionProgress(null);
     setTuitionConfirmOpen(false);
-    setTuitionTargets(null);
+    setActiveClasses(null);
     if (summary.problems.length) {
       const shown = summary.problems.slice(0, 5).join("; ");
       const more = summary.problems.length > 5 ? ` và ${summary.problems.length - 5} lỗi khác` : "";
@@ -341,7 +346,7 @@ export function ClassList(): ReactElement {
     } else {
       showSuccess(`Đã tạo ${summary.created} học phí tháng ${period.month} (bỏ qua ${summary.skipped}) cho ${classes.length} lớp`);
     }
-  }, [tuitionTargets, refresh, showSuccess, showWarning]);
+  }, [tuitionMonth, tuitionTargets, refresh, showSuccess, showWarning]);
 
   const handleEdit = useCallback((cls: Class) => {
     setEditingClass(cls);
@@ -478,8 +483,8 @@ export function ClassList(): ReactElement {
         description="Tập trung thông tin lớp, giáo viên, học viên và lịch học."
         actions={
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={() => void prepareNextMonthTuition()} disabled={tuitionRunning}>
-              Tạo học phí tháng sau
+            <Button variant="outlined" onClick={() => void openTuitionDialog()} disabled={tuitionRunning}>
+              Tạo học phí theo tháng
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Thêm lớp học</Button>
           </Stack>
@@ -577,19 +582,32 @@ export function ClassList(): ReactElement {
 
       <ConfirmDialog
         open={tuitionConfirmOpen}
-        title={`Tạo học phí tháng ${tuitionTargets?.period.month ?? ""}`}
+        title="Tạo học phí theo tháng"
         message={
           tuitionRunning && tuitionProgress
             ? `Đang tạo học phí: lớp ${tuitionProgress.done}/${tuitionProgress.total}. Vui lòng không đóng trang.`
-            : `Tạo học phí tháng ${tuitionTargets?.period.month ?? ""} cho ${tuitionTargets?.classes.length ?? 0} lớp đang hoạt động? Học viên đã có học phí kỳ này sẽ được bỏ qua. Thao tác này không tạo thông báo chuyển khoản.`
+            : !tuitionPeriod
+              ? "Chọn kỳ học phí hợp lệ."
+              : tuitionTargets.length === 0
+                ? `Không có lớp đang hoạt động nào có hiệu lực trong tháng ${tuitionMonth}.`
+                : `Tạo học phí tháng ${tuitionMonth} cho ${tuitionTargets.length} lớp đang hoạt động? Học viên đã có học phí kỳ này sẽ được bỏ qua. Thao tác này không tạo thông báo chuyển khoản.`
         }
-        onConfirm={() => void runNextMonthTuition()}
+        content={
+          <MonthPickerField
+            label="Kỳ học phí"
+            value={tuitionMonth}
+            onChange={setTuitionMonth}
+            textFieldProps={{ size: "small", disabled: tuitionRunning }}
+          />
+        }
+        onConfirm={() => void runMonthTuition()}
         onCancel={() => {
           if (tuitionRunning) return;
           setTuitionConfirmOpen(false);
-          setTuitionTargets(null);
+          setActiveClasses(null);
         }}
         isLoading={tuitionRunning}
+        confirmDisabled={!tuitionPeriod || tuitionTargets.length === 0}
         confirmLabel="Tạo học phí"
       />
 
