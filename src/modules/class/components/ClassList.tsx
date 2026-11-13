@@ -144,7 +144,7 @@ const getColumns = (): GridColDef<ClassRow>[] => [
   {
     field: "actions",
     headerName: "Thao tác",
-    minWidth: 300,
+    minWidth: 370,
     sortable: false,
     filterable: false,
     disableColumnMenu: true,
@@ -171,6 +171,18 @@ const getColumns = (): GridColDef<ClassRow>[] => [
           }}
         >
           Chi tiết
+        </Button>
+
+        <Button
+          size="small"
+          component={Link}
+          href={`/admin/classes/${params.row.id}/tuition`}
+          variant="outlined"
+          sx={{
+            minWidth: 64,
+          }}
+        >
+          Học phí
         </Button>
 
         <Button

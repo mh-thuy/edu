@@ -172,8 +172,8 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [month, setMonth] = useState(currentMonth);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [appliedStatusFilter, setAppliedStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ACTIVE");
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState("ACTIVE");
   const [subjectFilter, setSubjectFilter] = useState("ALL");
   const [appliedSubjectFilter, setAppliedSubjectFilter] = useState("ALL");
   const [tuitionStatusFilter, setTuitionStatusFilter] = useState("ALL");
@@ -330,8 +330,8 @@ export function ClassStudentManagement({ id }: { id: string }) {
   function clearFilters() {
     setSearch("");
     setAppliedSearch("");
-    setStatusFilter("ALL");
-    setAppliedStatusFilter("ALL");
+    setStatusFilter("ACTIVE");
+    setAppliedStatusFilter("ACTIVE");
     setSubjectFilter("ALL");
     setAppliedSubjectFilter("ALL");
     setTuitionStatusFilter("ALL");
