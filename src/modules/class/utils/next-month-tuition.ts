@@ -10,6 +10,18 @@ export type NextMonthTuitionSummary = {
   problems: string[];
 };
 
+// Đọc hết các trang; dừng khi trang rỗng hoặc đã đủ total.
+export async function loadAllPages<T>(
+  fetchPage: (page: number) => Promise<{ items: T[]; total: number }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let page = 1; ; page += 1) {
+    const data = await fetchPage(page);
+    all.push(...data.items);
+    if (data.items.length === 0 || all.length >= data.total) return all;
+  }
+}
+
 // Một lớp lỗi không làm dừng các lớp còn lại; lỗi được ghi vào problems.
 export async function createTuitionForClasses(
   classes: Array<{ id: string; code: string }>,

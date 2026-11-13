@@ -35,6 +35,7 @@ import {
 } from "@/modules/class/utils/tuition-period";
 import {
   createTuitionForClasses,
+  loadAllPages,
   type ClassTuitionResult,
 } from "@/modules/class/utils/next-month-tuition";
 
@@ -287,8 +288,8 @@ export function ClassList(): ReactElement {
 
   const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
   const [tuitionConfirmOpen, setTuitionConfirmOpen] = useState(false);
-  const [tuitionRunning, setTuitionRunning] = useState(false);
   const [tuitionProgress, setTuitionProgress] = useState<{ done: number; total: number } | null>(null);
+  const tuitionRunning = tuitionProgress !== null;
   const [tuitionTargets, setTuitionTargets] = useState<{ period: BillingPeriod; classes: Class[] } | null>(null);
 
   const handleCreate = useCallback(() => {
@@ -299,14 +300,11 @@ export function ClassList(): ReactElement {
   const prepareNextMonthTuition = useCallback(async () => {
     try {
       const period = getNextBillingPeriod(new Date());
-      const activeClasses: Class[] = [];
-      for (let page = 1; ; page += 1) {
+      const activeClasses = await loadAllPages<Class>(async (page) => {
         const response = await fetch(`/api/classes?status=ACTIVE&page=${page}&pageSize=100`);
         if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách lớp"));
-        const data = await unwrapApiResponse<{ items: Class[]; total: number }>(response);
-        activeClasses.push(...data.items);
-        if (data.items.length === 0 || activeClasses.length >= data.total) break;
-      }
+        return unwrapApiResponse<{ items: Class[]; total: number }>(response);
+      });
       const classes = activeClasses.filter((cls) => isClassCoveringPeriod(cls, period));
       if (!classes.length) {
         showWarning(`Không có lớp đang hoạt động nào cần tạo học phí cho tháng ${period.month}`);
@@ -322,7 +320,6 @@ export function ClassList(): ReactElement {
   const runNextMonthTuition = useCallback(async () => {
     if (!tuitionTargets) return;
     const { period, classes } = tuitionTargets;
-    setTuitionRunning(true);
     setTuitionProgress({ done: 0, total: classes.length });
     const summary = await createTuitionForClasses(
       classes,
@@ -334,7 +331,6 @@ export function ClassList(): ReactElement {
       (done, total) => setTuitionProgress({ done, total }),
     );
     await refresh();
-    setTuitionRunning(false);
     setTuitionProgress(null);
     setTuitionConfirmOpen(false);
     setTuitionTargets(null);

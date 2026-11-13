@@ -3,7 +3,10 @@ import {
   getNextBillingPeriod,
   isClassCoveringPeriod,
 } from "../src/modules/class/utils/tuition-period";
-import { createTuitionForClasses } from "../src/modules/class/utils/next-month-tuition";
+import {
+  createTuitionForClasses,
+  loadAllPages,
+} from "../src/modules/class/utils/next-month-tuition";
 
 const dec2026 = { billingYear: 2026, billingMonth: 12, month: "2026-12" };
 
@@ -61,4 +64,27 @@ async function runBatchChecks() {
   ]);
 }
 
-runBatchChecks().then(() => console.log("tuition-period checks passed"));
+async function runPagingChecks() {
+  // 250 lớp, mỗi trang tối đa 100 → phải đọc đủ 3 trang
+  const all = Array.from({ length: 250 }, (_, i) => i);
+  const pagesRequested: number[] = [];
+  const loaded = await loadAllPages(async (page) => {
+    pagesRequested.push(page);
+    return { items: all.slice((page - 1) * 100, page * 100), total: 250 };
+  });
+  assert.equal(loaded.length, 250);
+  assert.deepEqual(pagesRequested, [1, 2, 3]);
+
+  // Trang rỗng phải dừng vòng lặp, không gọi tiếp mãi
+  const pagesWithEmpty: number[] = [];
+  const short = await loadAllPages(async (page) => {
+    pagesWithEmpty.push(page);
+    return page === 1 ? { items: [1, 2], total: 5 } : { items: [], total: 5 };
+  });
+  assert.deepEqual(short, [1, 2]);
+  assert.deepEqual(pagesWithEmpty, [1, 2]);
+}
+
+Promise.all([runBatchChecks(), runPagingChecks()]).then(() =>
+  console.log("tuition-period checks passed"),
+);

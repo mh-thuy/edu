@@ -5,12 +5,9 @@ export type BillingPeriod = {
 };
 
 // Tháng tính theo giờ Việt Nam, không theo múi giờ của trình duyệt hay máy chủ.
-export function getNextBillingPeriod(
-  now: Date,
-  timeZone = "Asia/Ho_Chi_Minh",
-): BillingPeriod {
+export function getNextBillingPeriod(now: Date): BillingPeriod {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+    timeZone: "Asia/Ho_Chi_Minh",
     year: "numeric",
     month: "2-digit",
   }).formatToParts(now);
