@@ -9,10 +9,7 @@ async function main() {
     where: { billingType: "MONTHLY", status: "PAID" },
     select: { classId: true, billingYear: true, billingMonth: true },
   });
-  if (!sample) {
-    console.log("class-student-fee-stats: không có học phí nào trong DB, bỏ qua");
-    return;
-  }
+  if (!sample) throw new Error("Cần DB có ít nhất một khoản PAID để test");
   const month = `${sample.billingYear}-${String(sample.billingMonth).padStart(2, "0")}`;
   const total = await prisma.classStudent.count({ where: { classId: sample.classId } });
   const page = await getClassStudentsPage(sample.classId, { page: 1, pageSize: Math.max(total, 1), month });
@@ -27,14 +24,13 @@ async function main() {
   const paid = count(["PAID"]);
   const unpaid = count(["UNPAID", "PARTIAL", "OVERDUE"]);
   const exempted = count(["EXEMPTED"]);
-  const cancelled = count(["CANCELLED"]);
 
   const summary = page.summary.tuitionFees;
   assert.equal(summary.paidCount, paid, "Đã đóng");
   assert.equal(summary.unpaidCount, unpaid, "Chưa đóng");
   assert.equal(summary.exemptedCount, exempted, "Được miễn");
-  // Mọi khoản đều thuộc đúng một nhóm (trừ đã hủy)
-  assert.equal(summary.count, paid + unpaid + exempted + cancelled, "Tổng khoản phí");
+  // Khoản phí = đã đóng + chưa đóng + được miễn (khoản đã hủy không tính)
+  assert.equal(summary.count, paid + unpaid + exempted, "Tổng khoản phí");
 
   // Bộ lọc tìm kiếm không được làm đổi hai số liệu
   const filtered = await getClassStudentsPage(sample.classId, {

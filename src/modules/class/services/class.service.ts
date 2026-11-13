@@ -1912,7 +1912,7 @@ export async function getClassStudentsPage(
     exemptedCount: number;
   }>>`
     SELECT
-      COUNT(*)::int AS count,
+      COUNT(*) FILTER (WHERE tf.status::text <> 'CANCELLED')::int AS count,
       COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN tf.final_amount ELSE 0 END), 0)::double precision AS amount,
       COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN paid.amount ELSE 0 END), 0)::double precision AS paid,
       COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN GREATEST(tf.final_amount - COALESCE(paid.amount, 0), 0) ELSE 0 END), 0)::double precision AS remaining,
