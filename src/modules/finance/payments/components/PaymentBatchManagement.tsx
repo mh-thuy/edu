@@ -246,12 +246,27 @@ export function PaymentBatchManagement() {
     setSelectedStudentIds([]);
   }, [appliedClassId, appliedSearch, appliedStudentId, months, view]);
 
+  const resetNoticeLists = useCallback(() => {
+    setFees([]);
+    setUnissuedTotal(0);
+    setPendingBatches([]);
+    setPendingTotal(0);
+    setSuccessfulBatches([]);
+    setSuccessfulTotal(0);
+    setHasLoaded(false);
+  }, []);
+
   const load = useCallback(async (filters = {
     months,
     search: search.trim(),
     studentId: student?.id,
     classId: selectedClass?.id,
   }) => {
+    // Không tải toàn bộ dữ liệu khi chưa có từ khóa hoặc bộ lọc nào.
+    if (!filters.months.length && !filters.search && !filters.studentId && !filters.classId) {
+      resetNoticeLists();
+      return;
+    }
     setLoading(true);
     setError("");
     const listFilters = {
@@ -308,7 +323,7 @@ export function PaymentBatchManagement() {
       setLoading(false);
       setHasLoaded(true);
     }
-  }, [months, search, selectedClass, student]);
+  }, [months, search, selectedClass, student, resetNoticeLists]);
 
   function applyFilters() {
     const nextFilters = {
@@ -324,6 +339,7 @@ export function PaymentBatchManagement() {
   }
 
   function clearFilters() {
+    resetNoticeLists();
     setSearch("");
     setAppliedSearch("");
     setStudent(null);
@@ -1255,7 +1271,7 @@ export function PaymentBatchManagement() {
                     {!loading && !unissuedFees.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message={hasLoaded ? "Không có khoản học phí chưa phát thông báo với bộ lọc hiện tại" : "Bấm Tìm kiếm hoặc Làm mới để tải dữ liệu"} />
+                          <EmptyState message={hasLoaded ? "Không có khoản học phí chưa phát thông báo với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1507,7 +1523,7 @@ export function PaymentBatchManagement() {
                     {!loading && !visiblePendingBatches.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message={hasLoaded ? "Không có đợt thanh toán đang chờ với bộ lọc hiện tại" : "Bấm Tìm kiếm hoặc Làm mới để tải dữ liệu"} />
+                          <EmptyState message={hasLoaded ? "Không có đợt thanh toán đang chờ với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1690,7 +1706,7 @@ export function PaymentBatchManagement() {
                   {!loading && !visibleSuccessfulBatches.length && (
                     <TableRow>
                       <TableCell colSpan={6}>
-                        <EmptyState message={hasLoaded ? "Không có đợt đã thanh toán với bộ lọc hiện tại" : "Bấm Tìm kiếm hoặc Làm mới để tải dữ liệu"} />
+                        <EmptyState message={hasLoaded ? "Không có đợt đã thanh toán với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
                       </TableCell>
                     </TableRow>
                   )}
