@@ -1832,10 +1832,22 @@ export async function listPaymentBatches(params: {
       ]),
     });
   }
+  // Mã đợt gõ không có "-" (PB20261113452013) vẫn khớp mã đúng dạng PB-yyyymmdd-nnnnnn.
+  const searchBatchNo = search?.match(/PB[\s_-]*(\d{8})[\s_-]*(\d{6})/i);
   if (search) {
     filters.push({
       OR: [
         { batchNo: { contains: search, mode: "insensitive" } },
+        ...(searchBatchNo
+          ? [
+              {
+                batchNo: {
+                  contains: `PB-${searchBatchNo[1]}-${searchBatchNo[2]}`,
+                  mode: "insensitive" as const,
+                },
+              },
+            ]
+          : []),
         { student: { code: { contains: search, mode: "insensitive" } } },
         { student: { fullName: { contains: search, mode: "insensitive" } } },
         {
