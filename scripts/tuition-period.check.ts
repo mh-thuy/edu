@@ -3,6 +3,7 @@ import {
   getNextBillingPeriod,
   isClassCoveringPeriod,
 } from "../src/modules/class/utils/tuition-period";
+import { createTuitionForClasses } from "../src/modules/class/utils/next-month-tuition";
 
 const dec2026 = { billingYear: 2026, billingMonth: 12, month: "2026-12" };
 
@@ -24,4 +25,40 @@ assert.equal(isClassCoveringPeriod({ startDate: "2027-01-05", endDate: null }, d
 assert.equal(isClassCoveringPeriod({ startDate: null, endDate: "2026-11-30" }, dec2026), false);
 assert.equal(isClassCoveringPeriod({ startDate: "2026-12-31", endDate: null }, dec2026), true);
 
-console.log("tuition-period checks passed");
+async function runBatchChecks() {
+  const classes = [
+    { id: "a", code: "LA" },
+    { id: "b", code: "LB" },
+    { id: "c", code: "LC" },
+  ];
+  const progress: Array<[number, number]> = [];
+  const summary = await createTuitionForClasses(
+    classes,
+    async (classId) => {
+      if (classId === "a") throw new Error("HTTP 500");
+      if (classId === "b") {
+        return {
+          created: 2,
+          skipped: 1,
+          failed: [{ studentCode: "HS1", studentName: "Nguyễn A", reason: "Đã miễn" }],
+        };
+      }
+      return { created: 3, skipped: 0 };
+    },
+    (done, total) => progress.push([done, total]),
+  );
+  // Lớp "a" lỗi nhưng "b" và "c" vẫn được xử lý
+  assert.equal(summary.created, 5);
+  assert.equal(summary.skipped, 1);
+  assert.deepEqual(summary.problems, [
+    "LA: HTTP 500",
+    "LB · HS1 Nguyễn A: Đã miễn",
+  ]);
+  assert.deepEqual(progress, [
+    [1, 3],
+    [2, 3],
+    [3, 3],
+  ]);
+}
+
+runBatchChecks().then(() => console.log("tuition-period checks passed"));

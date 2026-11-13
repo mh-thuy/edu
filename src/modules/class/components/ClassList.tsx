@@ -33,6 +33,10 @@ import {
   isClassCoveringPeriod,
   type BillingPeriod,
 } from "@/modules/class/utils/tuition-period";
+import {
+  createTuitionForClasses,
+  type ClassTuitionResult,
+} from "@/modules/class/utils/next-month-tuition";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -284,6 +288,7 @@ export function ClassList(): ReactElement {
   const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
   const [tuitionConfirmOpen, setTuitionConfirmOpen] = useState(false);
   const [tuitionRunning, setTuitionRunning] = useState(false);
+  const [tuitionProgress, setTuitionProgress] = useState<{ done: number; total: number } | null>(null);
   const [tuitionTargets, setTuitionTargets] = useState<{ period: BillingPeriod; classes: Class[] } | null>(null);
 
   const handleCreate = useCallback(() => {
@@ -317,36 +322,28 @@ export function ClassList(): ReactElement {
   const runNextMonthTuition = useCallback(async () => {
     if (!tuitionTargets) return;
     const { period, classes } = tuitionTargets;
-    setTuitionConfirmOpen(false);
     setTuitionRunning(true);
-    let created = 0;
-    let skipped = 0;
-    const problems: string[] = [];
-    for (const cls of classes) {
-      try {
-        const response = await fetch(`/api/classes/${cls.id}/tuition-fees?month=${period.month}`, { method: "POST" });
+    setTuitionProgress({ done: 0, total: classes.length });
+    const summary = await createTuitionForClasses(
+      classes,
+      async (classId) => {
+        const response = await fetch(`/api/classes/${classId}/tuition-fees?month=${period.month}`, { method: "POST" });
         if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo học phí"));
-        const result = await unwrapApiResponse<{
-          created: number;
-          skipped: number;
-          failed?: Array<{ studentCode: string; studentName: string; reason: string }>;
-        }>(response);
-        created += result.created;
-        skipped += result.skipped;
-        for (const item of result.failed ?? []) {
-          problems.push(`${cls.code} · ${item.studentCode} ${item.studentName}: ${item.reason}`);
-        }
-      } catch (err) {
-        problems.push(`${cls.code}: ${err instanceof Error ? err.message : "Lỗi không xác định"}`);
-      }
-    }
+        return unwrapApiResponse<ClassTuitionResult>(response);
+      },
+      (done, total) => setTuitionProgress({ done, total }),
+    );
     await refresh();
     setTuitionRunning(false);
+    setTuitionProgress(null);
+    setTuitionConfirmOpen(false);
     setTuitionTargets(null);
-    if (problems.length) {
-      showWarning(`Tạo học phí tháng ${period.month}: đã tạo ${created}, bỏ qua ${skipped}. Lỗi: ${problems.join("; ")}`);
+    if (summary.problems.length) {
+      const shown = summary.problems.slice(0, 5).join("; ");
+      const more = summary.problems.length > 5 ? ` và ${summary.problems.length - 5} lỗi khác` : "";
+      showWarning(`Tạo học phí tháng ${period.month}: đã tạo ${summary.created}, bỏ qua ${summary.skipped}. Lỗi: ${shown}${more}`);
     } else {
-      showSuccess(`Đã tạo ${created} học phí tháng ${period.month} (bỏ qua ${skipped}) cho ${classes.length} lớp`);
+      showSuccess(`Đã tạo ${summary.created} học phí tháng ${period.month} (bỏ qua ${summary.skipped}) cho ${classes.length} lớp`);
     }
   }, [tuitionTargets, refresh, showSuccess, showWarning]);
 
@@ -585,9 +582,14 @@ export function ClassList(): ReactElement {
       <ConfirmDialog
         open={tuitionConfirmOpen}
         title={`Tạo học phí tháng ${tuitionTargets?.period.month ?? ""}`}
-        message={`Tạo học phí tháng ${tuitionTargets?.period.month ?? ""} cho ${tuitionTargets?.classes.length ?? 0} lớp đang hoạt động? Học viên đã có học phí kỳ này sẽ được bỏ qua. Thao tác này không tạo thông báo chuyển khoản.`}
+        message={
+          tuitionRunning && tuitionProgress
+            ? `Đang tạo học phí: lớp ${tuitionProgress.done}/${tuitionProgress.total}. Vui lòng không đóng trang.`
+            : `Tạo học phí tháng ${tuitionTargets?.period.month ?? ""} cho ${tuitionTargets?.classes.length ?? 0} lớp đang hoạt động? Học viên đã có học phí kỳ này sẽ được bỏ qua. Thao tác này không tạo thông báo chuyển khoản.`
+        }
         onConfirm={() => void runNextMonthTuition()}
         onCancel={() => {
+          if (tuitionRunning) return;
           setTuitionConfirmOpen(false);
           setTuitionTargets(null);
         }}

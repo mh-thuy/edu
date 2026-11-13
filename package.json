@@ -15,7 +15,8 @@
     "classes:normalize-codes": "tsx scripts/normalize-class-codes.ts",
     "bank:import": "tsx prisma/helpers/import-bank-statement.ts",
     "db:backup-neon-to-local": "node scripts/backup-neon-to-local.mjs",
-    "test:db-backup-neon-to-local": "node scripts/backup-neon-to-local.test.mjs"
+    "test:db-backup-neon-to-local": "node scripts/backup-neon-to-local.test.mjs",
+    "test:tuition-period": "tsx scripts/tuition-period.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
