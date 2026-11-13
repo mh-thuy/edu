@@ -26,8 +26,13 @@ import type { ReactElement } from "react";
 import type { z } from "zod";
 import { classCreateSchema } from "@/modules/class/schemas/class.schema";
 import Link from "next/link";
-import { extractApiErrorMessage } from "@/lib/api-client";
+import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { AppTextField } from "@/components/shared/forms/AppTextField";
+import {
+  getNextBillingPeriod,
+  isClassCoveringPeriod,
+  type BillingPeriod,
+} from "@/modules/class/utils/tuition-period";
 
 type ClassFormData = z.infer<typeof classCreateSchema>;
 
@@ -276,12 +281,74 @@ export function ClassList(): ReactElement {
   const [completionData, setCompletionData] = useState<ClassFormData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
+  const [tuitionConfirmOpen, setTuitionConfirmOpen] = useState(false);
+  const [tuitionRunning, setTuitionRunning] = useState(false);
+  const [tuitionTargets, setTuitionTargets] = useState<{ period: BillingPeriod; classes: Class[] } | null>(null);
 
   const handleCreate = useCallback(() => {
     setEditingClass(null);
     setOpenDialog(true);
   }, []);
+
+  const prepareNextMonthTuition = useCallback(async () => {
+    try {
+      const period = getNextBillingPeriod(new Date());
+      const activeClasses: Class[] = [];
+      for (let page = 1; ; page += 1) {
+        const response = await fetch(`/api/classes?status=ACTIVE&page=${page}&pageSize=100`);
+        if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tải danh sách lớp"));
+        const data = await unwrapApiResponse<{ items: Class[]; total: number }>(response);
+        activeClasses.push(...data.items);
+        if (data.items.length === 0 || activeClasses.length >= data.total) break;
+      }
+      const classes = activeClasses.filter((cls) => isClassCoveringPeriod(cls, period));
+      if (!classes.length) {
+        showWarning(`Không có lớp đang hoạt động nào cần tạo học phí cho tháng ${period.month}`);
+        return;
+      }
+      setTuitionTargets({ period, classes });
+      setTuitionConfirmOpen(true);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Không thể tải danh sách lớp");
+    }
+  }, [showWarning, showError]);
+
+  const runNextMonthTuition = useCallback(async () => {
+    if (!tuitionTargets) return;
+    const { period, classes } = tuitionTargets;
+    setTuitionConfirmOpen(false);
+    setTuitionRunning(true);
+    let created = 0;
+    let skipped = 0;
+    const problems: string[] = [];
+    for (const cls of classes) {
+      try {
+        const response = await fetch(`/api/classes/${cls.id}/tuition-fees?month=${period.month}`, { method: "POST" });
+        if (!response.ok) throw new Error(await extractApiErrorMessage(response, "Không thể tạo học phí"));
+        const result = await unwrapApiResponse<{
+          created: number;
+          skipped: number;
+          failed?: Array<{ studentCode: string; studentName: string; reason: string }>;
+        }>(response);
+        created += result.created;
+        skipped += result.skipped;
+        for (const item of result.failed ?? []) {
+          problems.push(`${cls.code} · ${item.studentCode} ${item.studentName}: ${item.reason}`);
+        }
+      } catch (err) {
+        problems.push(`${cls.code}: ${err instanceof Error ? err.message : "Lỗi không xác định"}`);
+      }
+    }
+    await refresh();
+    setTuitionRunning(false);
+    setTuitionTargets(null);
+    if (problems.length) {
+      showWarning(`Tạo học phí tháng ${period.month}: đã tạo ${created}, bỏ qua ${skipped}. Lỗi: ${problems.join("; ")}`);
+    } else {
+      showSuccess(`Đã tạo ${created} học phí tháng ${period.month} (bỏ qua ${skipped}) cho ${classes.length} lớp`);
+    }
+  }, [tuitionTargets, refresh, showSuccess, showWarning]);
 
   const handleEdit = useCallback((cls: Class) => {
     setEditingClass(cls);
@@ -416,7 +483,14 @@ export function ClassList(): ReactElement {
       <PageHeader
         title="Quản lý lớp học"
         description="Tập trung thông tin lớp, giáo viên, học viên và lịch học."
-        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Thêm lớp học</Button>}
+        actions={
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={() => void prepareNextMonthTuition()} disabled={tuitionRunning}>
+              Tạo học phí tháng sau
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>Thêm lớp học</Button>
+          </Stack>
+        }
       />
 
       <Paper sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -507,6 +581,19 @@ export function ClassList(): ReactElement {
           }
         />
       </FormDialog>
+
+      <ConfirmDialog
+        open={tuitionConfirmOpen}
+        title={`Tạo học phí tháng ${tuitionTargets?.period.month ?? ""}`}
+        message={`Tạo học phí tháng ${tuitionTargets?.period.month ?? ""} cho ${tuitionTargets?.classes.length ?? 0} lớp đang hoạt động? Học viên đã có học phí kỳ này sẽ được bỏ qua. Thao tác này không tạo thông báo chuyển khoản.`}
+        onConfirm={() => void runNextMonthTuition()}
+        onCancel={() => {
+          setTuitionConfirmOpen(false);
+          setTuitionTargets(null);
+        }}
+        isLoading={tuitionRunning}
+        confirmLabel="Tạo học phí"
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
