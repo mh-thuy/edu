@@ -72,7 +72,16 @@ test("rejects an empty backup before restore", () => {
 
 test("lets pg_restore read archive data from stdin without a dash filename", () => {
 	assert.equal(archiveListArgs().includes("-"), false);
-	assert.equal(localRestoreArgs("postgres", "classroom_rental").includes("-"), false);
+	assert.equal(localRestoreArgs({ passFile: "/tmp/p", port: "5432", user: "postgres", database: "classroom_rental" }).includes("-"), false);
+});
+
+test("restores the local dump with the same pg_restore image as the dump, not the local container", () => {
+	const args = localRestoreArgs({ passFile: "/tmp/p", port: "5432", user: "postgres", database: "classroom_rental" });
+	assert.equal(args[0], "run");
+	assert.equal(args.includes("compose"), false);
+	assert.equal(args.includes("postgres:18-alpine"), true);
+	assert.equal(args.includes("pg_restore"), true);
+	assert.equal(args.includes("--single-transaction"), true);
 });
 
 test("tries to restore the local backup when Neon restore fails", async () => {

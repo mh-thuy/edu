@@ -120,10 +120,16 @@ export function archiveListArgs() {
 	return ["run", "--rm", "-i", postgresClientImage, "pg_restore", "--list"];
 }
 
-export function localRestoreArgs(localUser, localDatabase) {
+// Dùng cùng bản pg_restore với lúc tạo dump (postgresClientImage), không dùng bản 16 trong container local.
+export function localRestoreArgs({ passFile, port, user, database }) {
 	return [
-		"compose", "exec", "-T", "postgres", "pg_restore",
-		"-U", localUser, "-d", localDatabase,
+		"run", "--rm", "-i",
+		"--add-host=host.docker.internal:host-gateway",
+		"-v", `${passFile}:/run/secrets/edu-local-pgpass:ro`,
+		"-e", "PGPASSFILE=/run/secrets/edu-local-pgpass",
+		postgresClientImage,
+		"pg_restore", "-h", "host.docker.internal", "-p", port,
+		"-U", user, "-d", database,
 		"--clean", "--if-exists", "--exit-on-error", "--single-transaction",
 		"--no-owner", "--no-privileges",
 	];
@@ -320,7 +326,14 @@ async function main() {
 		ensureNonEmptyFile(localBackup, "Backup database local");
 		validateArchive(localBackup);
 
-		const restoreArgs = localRestoreArgs(localUser, localDatabase);
+		const localPassFile = path.join(temporaryDir, ".local.pgpass");
+		const localPort = process.env.PORT || localEnv.get("PORT") || "5432";
+		const localPassword = process.env.POSTGRES_PASSWORD || localEnv.get("POSTGRES_PASSWORD") || "postgres";
+		writeFileSync(localPassFile, `${[
+			"host.docker.internal", localPort, localDatabase, localUser, localPassword,
+		].map(escapePgPass).join(":")}\n`, { mode: 0o600 });
+		chmodSync(localPassFile, 0o600);
+		const restoreArgs = localRestoreArgs({ passFile: localPassFile, port: localPort, user: localUser, database: localDatabase });
 		console.log(`Đang khôi phục Neon vào database local ${localDatabase}...`);
 		await restoreWithRecovery({
 			restoreNeon: () => runWithFileInput("docker", restoreArgs, neonBackup),
