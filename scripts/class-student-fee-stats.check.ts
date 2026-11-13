@@ -2,14 +2,20 @@ import assert from "node:assert/strict";
 import { prisma } from "../src/lib/prisma";
 import { getClassStudentsPage } from "../src/modules/class/services/class.service";
 
-// Cần DB đang chạy có ít nhất một khoản học phí tháng.
+// Cần DB đang chạy có một lớp-kỳ vừa có khoản PAID vừa có khoản CANCELLED.
 async function main() {
-  // Chọn kỳ có khoản đã đóng để test đi qua nhánh "Đã đóng"
-  const sample = await prisma.tuitionFee.findFirst({
-    where: { billingType: "MONTHLY", status: "PAID" },
-    select: { classId: true, billingYear: true, billingMonth: true },
-  });
-  if (!sample) throw new Error("Cần DB có ít nhất một khoản PAID để test");
+  // Chọn lớp-kỳ có cả khoản đã đóng và khoản đã hủy, để test bắt được lỗi đếm nhầm khoản đã hủy
+  const [found] = await prisma.$queryRaw<Array<{ class_id: string; billing_year: number; billing_month: number }>>`
+    SELECT class_id, billing_year, billing_month
+    FROM tuition_fees
+    WHERE billing_type = 'MONTHLY'::tuition_fee_billing_type
+    GROUP BY class_id, billing_year, billing_month
+    HAVING COUNT(*) FILTER (WHERE status = 'PAID'::tuition_fee_status) > 0
+      AND COUNT(*) FILTER (WHERE status = 'CANCELLED'::tuition_fee_status) > 0
+    LIMIT 1
+  `;
+  if (!found) throw new Error("Cần DB có một lớp-kỳ vừa có khoản PAID vừa có khoản CANCELLED để test");
+  const sample = { classId: found.class_id, billingYear: found.billing_year, billingMonth: found.billing_month };
   const month = `${sample.billingYear}-${String(sample.billingMonth).padStart(2, "0")}`;
   const total = await prisma.classStudent.count({ where: { classId: sample.classId } });
   const page = await getClassStudentsPage(sample.classId, { page: 1, pageSize: Math.max(total, 1), month });
