@@ -235,7 +235,7 @@ export function PaymentBatchManagement() {
   const [issuedDialogOpen, setIssuedDialogOpen] = useState(false);
   const [isDownloadingNoticePdf, setIsDownloadingNoticePdf] = useState(false);
   const [isDownloadingSelectedNotices, setIsDownloadingSelectedNotices] = useState(false);
-  const { showSuccess, showError, Snackbar } = useSnackbar();
+  const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
   const appliedUrlFilters = useRef(false);
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
@@ -264,6 +264,7 @@ export function PaymentBatchManagement() {
   }) => {
     // Không tải toàn bộ dữ liệu khi chưa có từ khóa hoặc bộ lọc nào.
     if (!filters.months.length && !filters.search && !filters.studentId && !filters.classId) {
+      showWarning("Nhập từ khóa hoặc chọn học viên, lớp, kỳ trước khi tải dữ liệu.");
       resetNoticeLists();
       return;
     }
@@ -323,7 +324,7 @@ export function PaymentBatchManagement() {
       setLoading(false);
       setHasLoaded(true);
     }
-  }, [months, search, selectedClass, student, resetNoticeLists]);
+  }, [months, search, selectedClass, student, resetNoticeLists, showWarning]);
 
   function applyFilters() {
     const nextFilters = {
