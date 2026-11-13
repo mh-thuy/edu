@@ -16,7 +16,8 @@
     "bank:import": "tsx prisma/helpers/import-bank-statement.ts",
     "db:backup-neon-to-local": "node scripts/backup-neon-to-local.mjs",
     "test:db-backup-neon-to-local": "node scripts/backup-neon-to-local.test.mjs",
-    "test:tuition-period": "tsx scripts/tuition-period.check.ts"
+    "test:tuition-period": "tsx scripts/tuition-period.check.ts",
+    "test:class-student-fee-stats": "tsx scripts/class-student-fee-stats.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -1907,12 +1907,18 @@ export async function getClassStudentsPage(
     amount: number;
     paid: number;
     remaining: number;
+    paidCount: number;
+    unpaidCount: number;
+    exemptedCount: number;
   }>>`
     SELECT
       COUNT(*)::int AS count,
       COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN tf.final_amount ELSE 0 END), 0)::double precision AS amount,
       COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN paid.amount ELSE 0 END), 0)::double precision AS paid,
-      COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN GREATEST(tf.final_amount - COALESCE(paid.amount, 0), 0) ELSE 0 END), 0)::double precision AS remaining
+      COALESCE(SUM(CASE WHEN tf.status::text NOT IN ('EXEMPTED', 'CANCELLED') THEN GREATEST(tf.final_amount - COALESCE(paid.amount, 0), 0) ELSE 0 END), 0)::double precision AS remaining,
+      COUNT(*) FILTER (WHERE tf.status::text = 'PAID')::int AS "paidCount",
+      COUNT(*) FILTER (WHERE tf.status::text IN ('UNPAID', 'PARTIAL', 'OVERDUE'))::int AS "unpaidCount",
+      COUNT(*) FILTER (WHERE tf.status::text = 'EXEMPTED')::int AS "exemptedCount"
     FROM tuition_fees tf
     LEFT JOIN LATERAL (
       SELECT SUM(tp.amount) AS amount
@@ -1970,7 +1976,7 @@ export async function getClassStudentsPage(
       left,
       total: active + paused + completed + left,
       uncreated: Math.max(0, active - activeWithFee),
-      tuitionFees: tuitionSummary ?? { count: 0, amount: 0, paid: 0, remaining: 0 },
+      tuitionFees: tuitionSummary ?? { count: 0, amount: 0, paid: 0, remaining: 0, paidCount: 0, unpaidCount: 0, exemptedCount: 0 },
     },
   };
 }
