@@ -995,23 +995,11 @@ export function BankReconciliationPanel() {
               sx={{
                 minWidth: 900,
                 "& tbody tr:nth-of-type(even)": { bgcolor: "action.hover" },
-                "& th:last-of-type, & td:last-of-type": {
-                  position: "sticky",
-                  right: 0,
-                  bgcolor: "background.paper",
-                  boxShadow: "-4px 0 8px rgba(0, 0, 0, 0.04)",
-                },
-                "& th:last-of-type": { zIndex: 3 },
-                "& td:last-of-type": { zIndex: 1 },
-                "& tbody tr:nth-of-type(even) td:last-of-type": {
-                  bgcolor: "action.hover",
-                },
               }}
             >
               <TableHead>
                 <TableRow>
-                  <TableCell>Ngày / dòng</TableCell>
-                  <TableCell>Mã giao dịch</TableCell>
+                  <TableCell>Giao dịch</TableCell>
                   <TableCell>Nội dung</TableCell>
                   <TableCell>Học viên / đợt thu</TableCell>
                   <TableCell align="right">Số tiền</TableCell>
@@ -1026,16 +1014,13 @@ export function BankReconciliationPanel() {
                     selected={selectedToken === item.confirmationToken}
                     key={item.confirmationToken}
                   >
-                    <TableCell sx={{ minWidth: 150, whiteSpace: "nowrap" }}>
+                    <TableCell sx={{ minWidth: 170, whiteSpace: "nowrap" }}>
                       <Typography variant="body2" fontWeight={700}>
                         {formatTransactionDate(item.transactionDate)}
                       </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Dòng {item.rowNo}
+                      <Typography variant="caption" color="text.secondary" component="div">
+                        Dòng {item.rowNo} · {item.bankTransactionNo || "-"}
                       </Typography>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 150, whiteSpace: "nowrap" }}>
-                      {item.bankTransactionNo || "-"}
                     </TableCell>
                     <TableCell sx={{ minWidth: 220, maxWidth: 320 }}>
                       <Typography
@@ -1131,7 +1116,7 @@ export function BankReconciliationPanel() {
                         }
                       />
                     </TableCell>
-                    <TableCell sx={{ minWidth: 140 }}>
+                    <TableCell sx={{ minWidth: 140, whiteSpace: "nowrap" }}>
                       <Button
                         size="small"
                         variant={
@@ -1155,7 +1140,7 @@ export function BankReconciliationPanel() {
                 ))}
                 {items.length > 0 && !filteredItems.length && (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={6}>
                       <Typography
                         sx={{ p: 3 }}
                         color="text.secondary"
@@ -1168,7 +1153,7 @@ export function BankReconciliationPanel() {
                 )}
                 {filteredItems.length > 0 && !searchedItems.length && (
                   <TableRow>
-                    <TableCell colSpan={7}>
+                    <TableCell colSpan={6}>
                       <Typography
                         sx={{ p: 3 }}
                         color="text.secondary"
