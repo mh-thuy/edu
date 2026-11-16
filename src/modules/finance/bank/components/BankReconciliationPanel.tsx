@@ -42,6 +42,7 @@ import ClearOutlinedIcon from "@mui/icons-material/ClearOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
+import { getReconciliationRowAction } from "./reconciliation-row-action";
 
 type Account = {
   id: string;
@@ -1134,24 +1135,20 @@ export function BankReconciliationPanel() {
                       <Button
                         size="small"
                         variant={
-                          item.reconciliationStatus === "UNMATCHED" ||
-                          item.reconciliationStatus === "AUTO_MATCHED"
-                            ? "contained"
-                            : "text"
+                          getReconciliationRowAction(item.reconciliationStatus)
+                            .variant
                         }
                         color={
-                          item.reconciliationStatus === "AUTO_MATCHED"
-                            ? "success"
-                            : "primary"
+                          getReconciliationRowAction(item.reconciliationStatus)
+                            .color
                         }
                         onClick={() => setSelectedToken(item.confirmationToken)}
                         disabled={loading}
                       >
-                        {item.reconciliationStatus === "UNMATCHED"
-                          ? "Chọn đợt"
-                          : item.reconciliationStatus === "AUTO_MATCHED"
-                            ? "Xác nhận"
-                            : "Chi tiết"}
+                        {
+                          getReconciliationRowAction(item.reconciliationStatus)
+                            .label
+                        }
                       </Button>
                     </TableCell>
                   </TableRow>
