@@ -1008,136 +1008,132 @@ export function BankReconciliationPanel() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {searchedItems.map((item) => (
-                  <TableRow
-                    hover
-                    selected={selectedToken === item.confirmationToken}
-                    key={item.confirmationToken}
-                  >
-                    <TableCell sx={{ minWidth: 170, whiteSpace: "nowrap" }}>
-                      <Typography variant="body2" fontWeight={700}>
-                        {formatTransactionDate(item.transactionDate)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" component="div">
-                        Dòng {item.rowNo} · {item.bankTransactionNo || "-"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 220, maxWidth: 320 }}>
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        title={item.description}
-                      >
-                        {item.description || "-"}
-                      </Typography>
-                      {item.reconciliationContent &&
-                        item.reconciliationContent !== item.description && (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            noWrap
-                            title={item.reconciliationContent}
-                          >
-                            {item.reconciliationContent}
+                {searchedItems.map((item) => {
+                  const action = getReconciliationRowAction(
+                    item.reconciliationStatus,
+                  );
+                  return (
+                    <TableRow
+                      hover
+                      selected={selectedToken === item.confirmationToken}
+                      key={item.confirmationToken}
+                    >
+                      <TableCell sx={{ minWidth: 170, whiteSpace: "nowrap" }}>
+                        <Typography variant="body2" fontWeight={700}>
+                          {formatTransactionDate(item.transactionDate)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" component="div">
+                          Dòng {item.rowNo} · {item.bankTransactionNo || "-"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 220, maxWidth: 320 }}>
+                        <Typography
+                          variant="body2"
+                          noWrap
+                          title={item.description}
+                        >
+                          {item.description || "-"}
+                        </Typography>
+                        {item.reconciliationContent &&
+                          item.reconciliationContent !== item.description && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              noWrap
+                              title={item.reconciliationContent}
+                            >
+                              {item.reconciliationContent}
+                            </Typography>
+                          )}
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 190, maxWidth: 250 }}>
+                        {item.paymentBatch ? (
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2" fontWeight={700} noWrap>
+                              {item.paymentBatch.student.fullName}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              noWrap
+                            >
+                              {item.paymentBatch.batchNo} ·{" "}
+                              {item.paymentBatch.student.code}
+                            </Typography>
+                          </Stack>
+                        ) : item.paymentBatchCandidates.length ||
+                          item.paymentBatchGroupCandidates.length ? (
+                          <Stack spacing={0.25}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {item.paymentBatchCandidates.length +
+                                item.paymentBatchGroupCandidates.length}{" "}
+                              ứng viên
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              noWrap
+                            >
+                              {item.paymentBatchCandidates[0]?.student.fullName ||
+                                item.paymentBatchGroupCandidates[0]?.batches[0]
+                                  ?.student.fullName ||
+                                "Có thể ghép nhiều đợt"}
+                            </Typography>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            {item.reconciliationStatus === "IGNORED"
+                              ? "Giao dịch ghi nợ"
+                              : item.reconciliationStatus === "DUPLICATED"
+                                ? "Đã ghi nhận trước đó"
+                                : "Chưa có đợt phù hợp"}
                           </Typography>
                         )}
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 190, maxWidth: 250 }}>
-                      {item.paymentBatch ? (
-                        <Stack spacing={0.25}>
-                          <Typography variant="body2" fontWeight={700} noWrap>
-                            {item.paymentBatch.student.fullName}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            noWrap
-                          >
-                            {item.paymentBatch.batchNo} ·{" "}
-                            {item.paymentBatch.student.code}
-                          </Typography>
-                        </Stack>
-                      ) : item.paymentBatchCandidates.length ||
-                        item.paymentBatchGroupCandidates.length ? (
-                        <Stack spacing={0.25}>
-                          <Typography variant="body2" fontWeight={700}>
-                            {item.paymentBatchCandidates.length +
-                              item.paymentBatchGroupCandidates.length}{" "}
-                            ứng viên
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            noWrap
-                          >
-                            {item.paymentBatchCandidates[0]?.student.fullName ||
-                              item.paymentBatchGroupCandidates[0]?.batches[0]
-                                ?.student.fullName ||
-                              "Có thể ghép nhiều đợt"}
-                          </Typography>
-                        </Stack>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">
-                          {item.reconciliationStatus === "IGNORED"
-                            ? "Giao dịch ghi nợ"
-                            : item.reconciliationStatus === "DUPLICATED"
-                              ? "Đã ghi nhận trước đó"
-                              : "Chưa có đợt phù hợp"}
+                      </TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                        <Typography
+                          variant="body2"
+                          fontWeight={800}
+                          color={
+                            item.creditAmount > 0
+                              ? "success.main"
+                              : "text.secondary"
+                          }
+                        >
+                          {item.creditAmount > 0 ? "+" : "−"}
+                          {money(item.creditAmount || item.debitAmount)}
                         </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
-                      <Typography
-                        variant="body2"
-                        fontWeight={800}
-                        color={
-                          item.creditAmount > 0
-                            ? "success.main"
-                            : "text.secondary"
-                        }
-                      >
-                        {item.creditAmount > 0 ? "+" : "−"}
-                        {money(item.creditAmount || item.debitAmount)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {item.creditAmount > 0 ? "Ghi có" : "Ghi nợ"}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        color={
-                          reconciliationColors[item.reconciliationStatus] ||
-                          "default"
-                        }
-                        label={
-                          reconciliationLabels[item.reconciliationStatus] ||
-                          item.reconciliationStatus
-                        }
-                      />
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 140, whiteSpace: "nowrap" }}>
-                      <Button
-                        size="small"
-                        variant={
-                          getReconciliationRowAction(item.reconciliationStatus)
-                            .variant
-                        }
-                        color={
-                          getReconciliationRowAction(item.reconciliationStatus)
-                            .color
-                        }
-                        onClick={() => setSelectedToken(item.confirmationToken)}
-                        disabled={loading}
-                      >
-                        {
-                          getReconciliationRowAction(item.reconciliationStatus)
-                            .label
-                        }
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        <Typography variant="caption" color="text.secondary">
+                          {item.creditAmount > 0 ? "Ghi có" : "Ghi nợ"}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={
+                            reconciliationColors[item.reconciliationStatus] ||
+                            "default"
+                          }
+                          label={
+                            reconciliationLabels[item.reconciliationStatus] ||
+                            item.reconciliationStatus
+                          }
+                        />
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 140, whiteSpace: "nowrap" }}>
+                        <Button
+                          size="small"
+                          variant={action.variant}
+                          color={action.color}
+                          onClick={() => setSelectedToken(item.confirmationToken)}
+                          disabled={loading}
+                        >
+                          {action.label}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {items.length > 0 && !filteredItems.length && (
                   <TableRow>
                     <TableCell colSpan={6}>
