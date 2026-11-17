@@ -26,6 +26,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { withReturnTo } from "@/lib/return-to";
 import { PAGE_SIZES } from "@/lib/list-page-params";
+import { useUrlListState } from "@/lib/use-url-list-state";
 import { parseTuitionListQuery, serializeTuitionListQuery, type TuitionListQuery } from "../utils/tuition-list-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterActions } from "@/components/shared/FilterActions";
@@ -107,7 +108,6 @@ export function TuitionList() {
   const [appliedBillingMonth, setAppliedBillingMonth] = useState("");
   const [appliedStudent, setAppliedStudent] = useState<MasterSelectValue | null>(null);
   const [appliedClass, setAppliedClass] = useState<MasterSelectValue | null>(null);
-  const [restored, setRestored] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -135,25 +135,6 @@ export function TuitionList() {
     }
   }, [appliedStudentCode, appliedClassId, appliedStatus, appliedBillingType, appliedBillingMonth, page, pageSize]);
 
-  // Khôi phục bộ lọc từ URL trước khi tải lần đầu, để tải lại trang hoặc quay lại vẫn giữ nguyên.
-  useEffect(() => {
-    const q = parseTuitionListQuery(new URLSearchParams(window.location.search));
-    const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
-    const restoredClass = q.classId ? { id: q.classId, code: q.classCode, name: q.className } : null;
-    setStudent(restoredStudent); setAppliedStudent(restoredStudent);
-    setStudentCode(q.studentCode); setAppliedStudentCode(q.studentCode);
-    setSelectedClass(restoredClass); setAppliedClass(restoredClass);
-    setClassId(q.classId); setAppliedClassId(q.classId);
-    setStatus(q.status); setAppliedStatus(q.status);
-    setBillingType(q.billingType); setAppliedBillingType(q.billingType);
-    setBillingMonth(q.billingMonth); setAppliedBillingMonth(q.billingMonth);
-    setPage(q.page);
-    setPageSize(q.pageSize);
-    setRestored(true);
-  }, []);
-
-  useEffect(() => { if (restored) void load(); }, [load, restored]);
-
   const currentQuery: TuitionListQuery = {
     studentId: appliedStudent?.id ?? "",
     studentCode: appliedStudentCode.trim(),
@@ -167,13 +148,27 @@ export function TuitionList() {
     page,
     pageSize,
   };
-  const listQueryString = serializeTuitionListQuery(currentQuery).toString();
-  const listReturnPath = listQueryString ? `/admin/tuition-fees?${listQueryString}` : "/admin/tuition-fees";
+  const { restored, returnPath: listReturnPath } = useUrlListState({
+    basePath: "/admin/tuition-fees",
+    current: currentQuery,
+    parse: parseTuitionListQuery,
+    serialize: serializeTuitionListQuery,
+    restore: (q) => {
+      const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
+      const restoredClass = q.classId ? { id: q.classId, code: q.classCode, name: q.className } : null;
+      setStudent(restoredStudent); setAppliedStudent(restoredStudent);
+      setStudentCode(q.studentCode); setAppliedStudentCode(q.studentCode);
+      setSelectedClass(restoredClass); setAppliedClass(restoredClass);
+      setClassId(q.classId); setAppliedClassId(q.classId);
+      setStatus(q.status); setAppliedStatus(q.status);
+      setBillingType(q.billingType); setAppliedBillingType(q.billingType);
+      setBillingMonth(q.billingMonth); setAppliedBillingMonth(q.billingMonth);
+      setPage(q.page);
+      setPageSize(q.pageSize);
+    },
+  });
 
-  useEffect(() => {
-    if (!restored) return;
-    window.history.replaceState(null, "", listQueryString ? `?${listQueryString}` : window.location.pathname);
-  }, [restored, listQueryString]);
+  useEffect(() => { if (restored) void load(); }, [load, restored]);
 
   async function exportCsv() {
     setExporting(true);

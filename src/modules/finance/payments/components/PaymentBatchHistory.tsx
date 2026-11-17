@@ -30,6 +30,7 @@ import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { withReturnTo } from "@/lib/return-to";
 import { PAGE_SIZES } from "@/lib/list-page-params";
+import { useUrlListState } from "@/lib/use-url-list-state";
 import { parsePaymentHistoryQuery, serializePaymentHistoryQuery, type PaymentHistoryQuery } from "../utils/payment-history-query";
 import {
   MasterSelectField,
@@ -110,7 +111,6 @@ export function PaymentBatchHistory() {
   const [status, setStatus] = useState("");
   const [pendingStatus, setPendingStatus] = useState("");
   const [appliedStudent, setAppliedStudent] = useState<MasterSelectValue | null>(null);
-  const [restored, setRestored] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -164,23 +164,6 @@ export function PaymentBatchHistory() {
     }
   }, [transactionCode, studentCode, status, page, pageSize]);
 
-  // Khôi phục bộ lọc từ URL trước khi tải lần đầu, để tải lại trang hoặc quay lại vẫn giữ nguyên.
-  useEffect(() => {
-    const q = parsePaymentHistoryQuery(new URLSearchParams(window.location.search));
-    const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
-    setTransactionCode(q.transactionCode); setPendingTransactionCode(q.transactionCode);
-    setStudent(restoredStudent); setAppliedStudent(restoredStudent);
-    setStudentCode(q.studentCode); setPendingStudentCode(q.studentCode);
-    setStatus(q.status); setPendingStatus(q.status);
-    setPage(q.page);
-    setPageSize(q.pageSize);
-    setRestored(true);
-  }, []);
-
-  useEffect(() => {
-    if (restored) void load();
-  }, [load, restored]);
-
   const currentQuery: PaymentHistoryQuery = {
     transactionCode,
     studentId: appliedStudent?.id ?? "",
@@ -190,15 +173,25 @@ export function PaymentBatchHistory() {
     page,
     pageSize,
   };
-  const historyQueryString = serializePaymentHistoryQuery(currentQuery).toString();
-  const historyReturnPath = historyQueryString
-    ? `/admin/tuition-fees/payment-history?${historyQueryString}`
-    : "/admin/tuition-fees/payment-history";
+  const { restored, returnPath: historyReturnPath } = useUrlListState({
+    basePath: "/admin/tuition-fees/payment-history",
+    current: currentQuery,
+    parse: parsePaymentHistoryQuery,
+    serialize: serializePaymentHistoryQuery,
+    restore: (q) => {
+      const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
+      setTransactionCode(q.transactionCode); setPendingTransactionCode(q.transactionCode);
+      setStudent(restoredStudent); setAppliedStudent(restoredStudent);
+      setStudentCode(q.studentCode); setPendingStudentCode(q.studentCode);
+      setStatus(q.status); setPendingStatus(q.status);
+      setPage(q.page);
+      setPageSize(q.pageSize);
+    },
+  });
 
   useEffect(() => {
-    if (!restored) return;
-    window.history.replaceState(null, "", historyQueryString ? `?${historyQueryString}` : window.location.pathname);
-  }, [restored, historyQueryString]);
+    if (restored) void load();
+  }, [load, restored]);
 
   function clearSearch() {
     setAppliedStudent(null);
