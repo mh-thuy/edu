@@ -292,7 +292,11 @@ export function PaymentBatchDetail({
           variant="outlined"
           startIcon={<ArrowBackOutlinedIcon />}
         >
-          {backHref.startsWith("/admin/tuition-fees/payment-history") ? "Quay lại lịch sử" : "Quay lại học phí"}
+          {backHref.startsWith("/admin/tuition-fees/payment-history")
+            ? "Quay lại lịch sử"
+            : backHref.startsWith("/admin/tuition-fees/notice-management")
+              ? "Quay lại thông báo"
+              : "Quay lại học phí"}
         </Button>
       </Stack>
 

@@ -23,7 +23,8 @@
     "test:notice-outstanding-fees-query": "tsx scripts/notice-outstanding-fees-query.check.ts",
     "test:return-to": "tsx scripts/return-to.check.ts",
     "test:tuition-list-query": "tsx scripts/tuition-list-query.check.ts",
-    "test:payment-history-query": "tsx scripts/payment-history-query.check.ts"
+    "test:payment-history-query": "tsx scripts/payment-history-query.check.ts",
+    "test:notice-query": "tsx scripts/notice-query.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

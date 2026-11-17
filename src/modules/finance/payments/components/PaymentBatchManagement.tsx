@@ -67,6 +67,9 @@ import { mergeableGroups, splittableBatches } from "./payment-batch-bulk";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
+import { withReturnTo } from "@/lib/return-to";
+import { useUrlListState } from "@/lib/use-url-list-state";
+import { parseNoticeQuery, serializeNoticeQuery, type NoticeQuery } from "../utils/notice-query";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
 import { FilterActions } from "@/components/shared/FilterActions";
 import {
@@ -86,6 +89,7 @@ import {
 } from "@/modules/finance/payments/services/payment-batch-management.client";
 
 type View = "UNISSUED" | "PENDING" | "SUCCESS";
+type NoticeFilters = { months: string[]; search: string; studentId: string | undefined; studentCode: string | undefined; classId: string | undefined };
 type RestructureMode = "SPLIT" | "MERGE";
 const viewHints: Record<View, string> = {
   UNISSUED: "Khoản học phí còn nợ chưa có thông báo chuyển khoản. Chọn khoản rồi bấm Phát hành.",
@@ -216,6 +220,9 @@ export function PaymentBatchManagement() {
     string | undefined
   >();
   const [appliedClassId, setAppliedClassId] = useState<string | undefined>();
+  const [appliedMonths, setAppliedMonths] = useState<string[]>([]);
+  const [appliedStudent, setAppliedStudent] = useState<MasterSelectValue | null>(null);
+  const [appliedClass, setAppliedClass] = useState<MasterSelectValue | null>(null);
   const [fees, setFees] = useState<NoticeFee[]>([]);
   const [unissuedTotal, setUnissuedTotal] = useState(0);
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
@@ -247,7 +254,7 @@ export function PaymentBatchManagement() {
   const [isDownloadingNoticePdf, setIsDownloadingNoticePdf] = useState(false);
   const [isDownloadingSelectedNotices, setIsDownloadingSelectedNotices] = useState(false);
   const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
-  const appliedUrlFilters = useRef(false);
+  const pendingRestore = useRef<NoticeFilters | null>(null);
   const studentDialog = useDisclosure();
   const classDialog = useDisclosure();
 
@@ -339,6 +346,71 @@ export function PaymentBatchManagement() {
     }
   }, [months, search, selectedClass, student, resetNoticeLists, showWarning]);
 
+  const noticeQuery: NoticeQuery = {
+    view,
+    months: appliedMonths,
+    search: appliedSearch,
+    studentId: appliedStudent?.id ?? "",
+    studentCode: appliedStudent?.code ?? "",
+    studentName: appliedStudent?.name ?? "",
+    classId: appliedClass?.id ?? "",
+    classCode: appliedClass?.code ?? "",
+    className: appliedClass?.name ?? "",
+  };
+  const { restored, returnPath: noticeReturnPath } = useUrlListState({
+    basePath: "/admin/tuition-fees/notice-management",
+    current: noticeQuery,
+    parse: parseNoticeQuery,
+    serialize: serializeNoticeQuery,
+    restore: (q) => {
+      const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
+      const restoredClass = q.classId && q.className ? { id: q.classId, code: q.classCode, name: q.className } : null;
+      setView(q.view as View);
+      setMonths(q.months);
+      setAppliedMonths(q.months);
+      setSearch(q.search);
+      setAppliedSearch(q.search);
+      setStudent(restoredStudent);
+      setAppliedStudent(restoredStudent);
+      setAppliedStudentId(restoredStudent?.id);
+      setSelectedClass(restoredClass);
+      setAppliedClass(restoredClass);
+      setAppliedClassId(restoredClass?.id);
+      // Link cũ chỉ có classId: lấy tên lớp để hiển thị.
+      if (q.classId && !restoredClass) {
+        void fetch(`/api/classes/${encodeURIComponent(q.classId)}`)
+          .then(async (response) => {
+            if (!response.ok)
+              throw new Error(await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"));
+            return unwrapApiResponse<ClassItem>(response);
+          })
+          .then((item) => {
+            const found = { id: item.id, code: item.code, name: item.name };
+            setSelectedClass(found);
+            setAppliedClass(found);
+          })
+          .catch((reasonValue: unknown) => {
+            showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải lớp đã chọn");
+          });
+      }
+      pendingRestore.current = {
+        months: q.months,
+        search: q.search.trim(),
+        studentId: restoredStudent?.id,
+        studentCode: restoredStudent?.code,
+        classId: q.classId || undefined,
+      };
+    },
+  });
+
+  // Sau khi khôi phục từ URL, tải lại đúng danh sách đang xem (một lần).
+  useEffect(() => {
+    const filters = pendingRestore.current;
+    if (!restored || !filters) return;
+    pendingRestore.current = null;
+    if (filters.months.length || filters.search || filters.studentId || filters.classId) void load(filters);
+  }, [restored, load]);
+
   function applyFilters() {
     const nextFilters = {
       months,
@@ -350,6 +422,9 @@ export function PaymentBatchManagement() {
     setAppliedSearch(nextFilters.search);
     setAppliedStudentId(student?.id);
     setAppliedClassId(selectedClass?.id);
+    setAppliedMonths(months);
+    setAppliedStudent(student);
+    setAppliedClass(selectedClass);
     void load(nextFilters);
   }
 
@@ -361,6 +436,9 @@ export function PaymentBatchManagement() {
     setSelectedClass(null);
     setAppliedStudentId(undefined);
     setAppliedClassId(undefined);
+    setAppliedMonths([]);
+    setAppliedStudent(null);
+    setAppliedClass(null);
     setIssuedBatches([]);
     setIssuedClassId(null);
     setIssuedMonths(null);
@@ -424,38 +502,6 @@ export function PaymentBatchManagement() {
     issuedMonths !== null &&
     samePeriods(issuedMonths, months);
 
-  useEffect(() => {
-    if (appliedUrlFilters.current) return;
-    appliedUrlFilters.current = true;
-    const params = new URLSearchParams(window.location.search);
-    const queryMonths = params.get("months")?.split(",") ?? [];
-    const queryMonth = params.get("month");
-    const queryClassId = params.get("classId");
-    const urlMonths = queryMonths.length ? queryMonths : queryMonth ? [queryMonth] : [];
-    setMonths(
-      [...new Set(urlMonths.filter((value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value)))].sort(),
-    );
-    if (!queryClassId) return;
-    void fetch(`/api/classes/${encodeURIComponent(queryClassId)}`)
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"),
-          );
-        return unwrapApiResponse<ClassItem>(response);
-      })
-      .then((item) => {
-        setSelectedClass({ id: item.id, code: item.code, name: item.name });
-        setAppliedClassId(item.id);
-      })
-      .catch((reasonValue: unknown) => {
-        showError(
-          reasonValue instanceof Error
-            ? reasonValue.message
-            : "Không thể tải lớp đã chọn",
-        );
-      });
-  }, [showError]);
 
   function toggleFee(id: string) {
     setSelectedFeeIds((current) =>
@@ -1177,7 +1223,7 @@ export function PaymentBatchManagement() {
               <Button
                 key={batch.id}
                 component={Link}
-                href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
                 variant="outlined"
                 sx={{ justifyContent: "flex-start" }}
               >
@@ -1581,7 +1627,7 @@ export function PaymentBatchManagement() {
                                   </Button>
                                   <Button
                                     component={Link}
-                                    href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                                    href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
                                     size="small"
                                   >
                                     Chi tiết
@@ -1791,7 +1837,7 @@ export function PaymentBatchManagement() {
                           <TableCell>
                             <Button
                               component={Link}
-                              href={`/admin/tuition-fees/payment-history/${batch.id}`}
+                              href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
                               size="small"
                             >
                               Xem chi tiết
