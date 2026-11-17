@@ -29,6 +29,7 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import Link from "next/link";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { withReturnTo } from "@/lib/return-to";
+import { PAGE_SIZES } from "@/lib/list-page-params";
 import { parsePaymentHistoryQuery, serializePaymentHistoryQuery, type PaymentHistoryQuery } from "../utils/payment-history-query";
 import {
   MasterSelectField,
@@ -601,7 +602,7 @@ export function PaymentBatchHistory() {
             setPageSize(Number(event.target.value));
             setPage(0);
           }}
-          rowsPerPageOptions={[10, 20, 50, 100]}
+          rowsPerPageOptions={PAGE_SIZES}
           labelRowsPerPage="Số dòng/trang"
           labelDisplayedRows={({ from, to, count }) =>
             `${from}–${to} trên ${count !== -1 ? count : `hơn ${to}`}`
