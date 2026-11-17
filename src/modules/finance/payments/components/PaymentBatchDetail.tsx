@@ -120,7 +120,13 @@ const statusColors: Record<string, "warning" | "success" | "error" | "default"> 
   CANCELLED: "default",
 };
 
-export function PaymentBatchDetail({ id }: { id: string }) {
+export function PaymentBatchDetail({
+  id,
+  backHref = "/admin/tuition-fees/payment-history",
+}: {
+  id: string;
+  backHref?: string;
+}) {
   const [batch, setBatch] = useState<Batch | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -282,11 +288,11 @@ export function PaymentBatchDetail({ id }: { id: string }) {
         </Box>
         <Button
           component={Link}
-          href="/admin/tuition-fees/payment-history"
+          href={backHref}
           variant="outlined"
           startIcon={<ArrowBackOutlinedIcon />}
         >
-          Quay lại lịch sử
+          {backHref.startsWith("/admin/tuition-fees/payment-history") ? "Quay lại lịch sử" : "Quay lại học phí"}
         </Button>
       </Stack>
 
