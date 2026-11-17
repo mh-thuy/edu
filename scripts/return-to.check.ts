@@ -13,6 +13,9 @@ assert.equal(resolveReturnTo("//evil.example", P, FB), FB);
 assert.equal(resolveReturnTo("/admin/classes/1", P, FB), FB);
 assert.equal(resolveReturnTo("/admin/tuition-fees-x", P, FB), FB);
 assert.equal(resolveReturnTo("admin/tuition-fees", P, FB), FB);
+// Đường dẫn lùi thư mục không được chấp nhận
+assert.equal(resolveReturnTo("/admin/tuition-fees/../../admin/users", P, FB), FB);
+assert.equal(resolveReturnTo("/admin/tuition-fees/..", P, FB), FB);
 // ?returnTo=a&returnTo=b làm Next truyền vào mảng: không được ném lỗi
 assert.equal(resolveReturnTo(["/admin/tuition-fees/1", "/admin/tuition-fees/2"] as unknown as string, P, FB), FB);
 

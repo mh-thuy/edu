@@ -436,7 +436,7 @@ export function TuitionDetail({
               ) : (
                 <Button
                   component={Link}
-                  href={`/admin/tuition-fees/${id}/edit`}
+                  href={withReturnTo(`/admin/tuition-fees/${id}/edit`, backHref)}
                   variant="outlined"
                   startIcon={<EditOutlinedIcon />}
                 >
