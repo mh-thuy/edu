@@ -24,6 +24,8 @@ import {
 } from "@mui/material";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { withReturnTo } from "@/lib/return-to";
+import { parseTuitionListQuery, serializeTuitionListQuery, type TuitionListQuery } from "../utils/tuition-list-query";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterActions } from "@/components/shared/FilterActions";
 import { ClassSelectDialog, type ClassItem } from "@/components/shared/dialogs/ClassSelectDialog";
@@ -102,6 +104,9 @@ export function TuitionList() {
   const [appliedBillingType, setAppliedBillingType] = useState("");
   const [billingMonth, setBillingMonth] = useState("");
   const [appliedBillingMonth, setAppliedBillingMonth] = useState("");
+  const [appliedStudent, setAppliedStudent] = useState<MasterSelectValue | null>(null);
+  const [appliedClass, setAppliedClass] = useState<MasterSelectValue | null>(null);
+  const [restored, setRestored] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -129,7 +134,45 @@ export function TuitionList() {
     }
   }, [appliedStudentCode, appliedClassId, appliedStatus, appliedBillingType, appliedBillingMonth, page, pageSize]);
 
-  useEffect(() => { void load(); }, [load]);
+  // Khôi phục bộ lọc từ URL trước khi tải lần đầu, để tải lại trang hoặc quay lại vẫn giữ nguyên.
+  useEffect(() => {
+    const q = parseTuitionListQuery(new URLSearchParams(window.location.search));
+    const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
+    const restoredClass = q.classId ? { id: q.classId, code: q.classCode, name: q.className } : null;
+    setStudent(restoredStudent); setAppliedStudent(restoredStudent);
+    setStudentCode(q.studentCode); setAppliedStudentCode(q.studentCode);
+    setSelectedClass(restoredClass); setAppliedClass(restoredClass);
+    setClassId(q.classId); setAppliedClassId(q.classId);
+    setStatus(q.status); setAppliedStatus(q.status);
+    setBillingType(q.billingType); setAppliedBillingType(q.billingType);
+    setBillingMonth(q.billingMonth); setAppliedBillingMonth(q.billingMonth);
+    setPage(q.page);
+    setPageSize(q.pageSize);
+    setRestored(true);
+  }, []);
+
+  useEffect(() => { if (restored) void load(); }, [load, restored]);
+
+  const currentQuery: TuitionListQuery = {
+    studentId: appliedStudent?.id ?? "",
+    studentCode: appliedStudentCode.trim(),
+    studentName: appliedStudent?.name ?? "",
+    classId: appliedClassId,
+    classCode: appliedClass?.code ?? "",
+    className: appliedClass?.name ?? "",
+    status: appliedStatus,
+    billingType: appliedBillingType,
+    billingMonth: appliedBillingMonth,
+    page,
+    pageSize,
+  };
+  const listQueryString = serializeTuitionListQuery(currentQuery).toString();
+  const listReturnPath = listQueryString ? `/admin/tuition-fees?${listQueryString}` : "/admin/tuition-fees";
+
+  useEffect(() => {
+    if (!restored) return;
+    window.history.replaceState(null, "", listQueryString ? `?${listQueryString}` : window.location.pathname);
+  }, [restored, listQueryString]);
 
   async function exportCsv() {
     setExporting(true);
@@ -158,6 +201,8 @@ export function TuitionList() {
   }
 
   function clearFilters() {
+    setAppliedStudent(null);
+    setAppliedClass(null);
     setStudent(null);
     setStudentCode("");
     setAppliedStudentCode("");
@@ -174,6 +219,8 @@ export function TuitionList() {
   }
 
   function applyFilters() {
+    setAppliedStudent(student);
+    setAppliedClass(selectedClass);
     setAppliedStudentCode(studentCode);
     setAppliedClassId(classId);
     setAppliedStatus(status);
@@ -263,7 +310,7 @@ export function TuitionList() {
           <TableBody>
             {!loading && items.map((item) => <TableRow key={item.id} hover>
               <TableCell sx={{ minWidth: { xs: 150, md: 155 } }}>
-                <Button component={Link} href={`/admin/tuition-fees/${item.id}`} size="small" variant="text" sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}>{item.feeNo}</Button>
+                <Button component={Link} href={withReturnTo(`/admin/tuition-fees/${item.id}`, listReturnPath)} size="small" variant="text" sx={{ p: 0, minWidth: 0, justifyContent: "flex-start", fontWeight: 800 }}>{item.feeNo}</Button>
                 <Chip size="small" variant="outlined" label={billingTypeLabels[item.billingType] || item.billingType} sx={{ mt: 0.75, display: "flex", width: "fit-content" }} />
                 {item.note && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75, maxWidth: 230, whiteSpace: "normal", overflowWrap: "anywhere" }}><strong>Ghi chú:</strong> {item.note}</Typography>}
               </TableCell>

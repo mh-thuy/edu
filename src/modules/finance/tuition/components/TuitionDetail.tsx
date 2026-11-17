@@ -22,6 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 import Link from "next/link";
+import { withReturnTo } from "@/lib/return-to";
 import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
@@ -117,11 +118,13 @@ const dateTime = (value: string) =>
 export function TuitionDetail({
   id,
   mode = "page",
+  backHref = "/admin/tuition-fees",
   onClose,
   onUpdated,
 }: {
   id: string;
   mode?: "page" | "drawer";
+  backHref?: string;
   onClose?: () => void;
   onUpdated?: () => void;
 }) {
@@ -344,7 +347,7 @@ export function TuitionDetail({
           {mode === "page" ? (
             <Button
               component={Link}
-              href="/admin/tuition-fees"
+              href={backHref}
               startIcon={<ArrowBackOutlinedIcon />}
               sx={{ mb: 1, px: 0 }}
             >
@@ -391,7 +394,7 @@ export function TuitionDetail({
             <>
               <Button
                 component={Link}
-                href={`/admin/tuition-fees/payment-history/${pendingBatch.id}`}
+                href={withReturnTo(`/admin/tuition-fees/payment-history/${pendingBatch.id}`, `/admin/tuition-fees/${id}?returnTo=${encodeURIComponent(backHref)}`)}
                 variant="contained"
                 color="warning"
               >

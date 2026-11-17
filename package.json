@@ -21,7 +21,8 @@
     "test:payment-batch-bulk": "tsx scripts/payment-batch-bulk.check.ts",
     "test:bank-reconciliation-row-action": "tsx scripts/bank-reconciliation-row-action.check.ts",
     "test:notice-outstanding-fees-query": "tsx scripts/notice-outstanding-fees-query.check.ts",
-    "test:return-to": "tsx scripts/return-to.check.ts"
+    "test:return-to": "tsx scripts/return-to.check.ts",
+    "test:tuition-list-query": "tsx scripts/tuition-list-query.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
