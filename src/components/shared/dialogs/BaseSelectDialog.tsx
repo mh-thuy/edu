@@ -248,8 +248,12 @@ export function BaseSelectDialog<T extends SelectableItem>({
                 pageSizeOptions={[5, 10, 25]}
                 paginationModel={{ page: page - 1, pageSize }}
                 onPaginationModelChange={(model) => {
+                  // setPageSize đặt lại về trang 1, nên chỉ gọi khi số dòng thật sự đổi.
+                  if (model.pageSize !== pageSize) {
+                    setPageSize(model.pageSize);
+                    return;
+                  }
                   setPageNumber(model.page + 1);
-                  setPageSize(model.pageSize);
                 }}
                 rowCount={total}
                 paginationMode="server"
