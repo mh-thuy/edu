@@ -59,6 +59,7 @@ export type NoticeListFilters = {
   pageSize: number;
   search: string;
   studentId?: string;
+  studentCode?: string;
   studentClassId?: string;
 };
 
@@ -108,7 +109,7 @@ export async function fetchAllNoticePages<T>(
   };
 }
 
-function buildListQuery(filters: NoticeListFilters) {
+export function buildListQuery(filters: NoticeListFilters) {
   const params = new URLSearchParams({
     page: String(filters.page),
     pageSize: String(filters.pageSize),
@@ -130,11 +131,19 @@ async function fetchPage<T>(endpoint: string): Promise<NoticePage<T>> {
   return unwrapApiResponse<NoticePage<T>>(response);
 }
 
-export async function fetchOutstandingFees(filters: NoticeListFilters) {
-  const query = buildListQuery(filters);
+// /api/tuition-fees không đọc studentId, nên tab học phí lọc theo studentCode.
+export function buildOutstandingFeesQuery(filters: NoticeListFilters) {
+  const query = buildListQuery({ ...filters, studentId: undefined });
+  if (filters.studentCode) query.set("studentCode", filters.studentCode);
   query.set("statuses", ["UNPAID", "PARTIAL", "OVERDUE"].join(","));
   query.set("unissuedOnly", "true");
-  return fetchPage<NoticeFee>(`/api/tuition-fees?${query}`);
+  return query;
+}
+
+export async function fetchOutstandingFees(filters: NoticeListFilters) {
+  return fetchPage<NoticeFee>(
+    `/api/tuition-fees?${buildOutstandingFeesQuery(filters)}`,
+  );
 }
 
 export async function fetchPaymentBatches(

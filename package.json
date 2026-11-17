@@ -19,7 +19,8 @@
     "test:tuition-period": "tsx scripts/tuition-period.check.ts",
     "test:class-student-fee-stats": "tsx scripts/class-student-fee-stats.check.ts",
     "test:payment-batch-bulk": "tsx scripts/payment-batch-bulk.check.ts",
-    "test:bank-reconciliation-row-action": "tsx scripts/bank-reconciliation-row-action.check.ts"
+    "test:bank-reconciliation-row-action": "tsx scripts/bank-reconciliation-row-action.check.ts",
+    "test:notice-outstanding-fees-query": "tsx scripts/notice-outstanding-fees-query.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
