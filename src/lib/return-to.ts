@@ -4,7 +4,7 @@ export function resolveReturnTo(
   allowedPrefixes: readonly string[],
   fallback: string,
 ): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return fallback;
+  if (typeof raw !== "string" || !raw.startsWith("/") || raw.startsWith("//")) return fallback;
   const allowed = allowedPrefixes.some((prefix) => {
     if (!raw.startsWith(prefix)) return false;
     const next = raw.charAt(prefix.length);

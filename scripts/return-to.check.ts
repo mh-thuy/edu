@@ -13,6 +13,8 @@ assert.equal(resolveReturnTo("//evil.example", P, FB), FB);
 assert.equal(resolveReturnTo("/admin/classes/1", P, FB), FB);
 assert.equal(resolveReturnTo("/admin/tuition-fees-x", P, FB), FB);
 assert.equal(resolveReturnTo("admin/tuition-fees", P, FB), FB);
+// ?returnTo=a&returnTo=b làm Next truyền vào mảng: không được ném lỗi
+assert.equal(resolveReturnTo(["/admin/tuition-fees/1", "/admin/tuition-fees/2"] as unknown as string, P, FB), FB);
 
 assert.equal(withReturnTo("/admin/tuition-fees/1", "/admin/tuition-fees?page=2"), "/admin/tuition-fees/1?returnTo=%2Fadmin%2Ftuition-fees%3Fpage%3D2");
 assert.equal(withReturnTo("/admin/x?a=1", "/b"), "/admin/x?a=1&returnTo=%2Fb");
