@@ -33,9 +33,11 @@ export function TuitionEditForm({
   onSuccess,
   embedded = false,
   onCancel,
+  cancelHref = `/admin/tuition-fees/${id}`,
 }: {
   id: string;
   onSuccess: () => void;
+  cancelHref?: string;
   embedded?: boolean;
   onCancel?: () => void;
 }) {
@@ -220,7 +222,7 @@ export function TuitionEditForm({
         ) : (
           <Button
             component={Link}
-            href={`/admin/tuition-fees/${id}`}
+            href={cancelHref}
             variant="outlined"
           >
             Hủy
