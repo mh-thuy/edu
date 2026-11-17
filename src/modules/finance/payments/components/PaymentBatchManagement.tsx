@@ -271,6 +271,7 @@ export function PaymentBatchManagement() {
     months,
     search: search.trim(),
     studentId: student?.id,
+    studentCode: student?.code,
     classId: selectedClass?.id,
   }) => {
     // Không tải toàn bộ dữ liệu khi chưa có từ khóa hoặc bộ lọc nào.
@@ -287,6 +288,7 @@ export function PaymentBatchManagement() {
       pageSize: 100,
       search: filters.search,
       studentId: filters.studentId,
+      studentCode: filters.studentCode,
       studentClassId: filters.classId,
     };
     try {
@@ -342,6 +344,7 @@ export function PaymentBatchManagement() {
       months,
       search: search.trim(),
       studentId: student?.id,
+      studentCode: student?.code,
       classId: selectedClass?.id,
     };
     setAppliedSearch(nextFilters.search);
