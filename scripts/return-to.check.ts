@@ -16,6 +16,8 @@ assert.equal(resolveReturnTo("admin/tuition-fees", P, FB), FB);
 // Đường dẫn lùi thư mục không được chấp nhận
 assert.equal(resolveReturnTo("/admin/tuition-fees/../../admin/users", P, FB), FB);
 assert.equal(resolveReturnTo("/admin/tuition-fees/..", P, FB), FB);
+// Hai dấu chấm trong tham số tìm kiếm không được làm mất bộ lọc
+assert.equal(resolveReturnTo("/admin/tuition-fees?transactionCode=868..abc&status=PENDING", P, FB), "/admin/tuition-fees?transactionCode=868..abc&status=PENDING");
 // ?returnTo=a&returnTo=b làm Next truyền vào mảng: không được ném lỗi
 assert.equal(resolveReturnTo(["/admin/tuition-fees/1", "/admin/tuition-fees/2"] as unknown as string, P, FB), FB);
 

@@ -12,12 +12,9 @@ export type TuitionListQuery = {
   pageSize: number;
 };
 
-const PAGE_SIZES = [10, 20, 50, 100];
-const DEFAULT_PAGE_SIZE = 20;
+import { DEFAULT_PAGE_SIZE, parsePageParams } from "@/lib/list-page-params";
 
 export function parseTuitionListQuery(params: URLSearchParams): TuitionListQuery {
-  const page = Number(params.get("page") ?? 0);
-  const pageSize = Number(params.get("pageSize") ?? DEFAULT_PAGE_SIZE);
   return {
     studentId: params.get("studentId") ?? "",
     studentCode: params.get("studentCode") ?? "",
@@ -28,8 +25,7 @@ export function parseTuitionListQuery(params: URLSearchParams): TuitionListQuery
     status: params.get("status") ?? "",
     billingType: params.get("billingType") ?? "",
     billingMonth: params.get("billingMonth") ?? "",
-    page: Number.isInteger(page) && page >= 0 ? page : 0,
-    pageSize: PAGE_SIZES.includes(pageSize) ? pageSize : DEFAULT_PAGE_SIZE,
+    ...parsePageParams(params),
   };
 }
 

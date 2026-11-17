@@ -4,7 +4,10 @@ export function resolveReturnTo(
   allowedPrefixes: readonly string[],
   fallback: string,
 ): string {
-  if (typeof raw !== "string" || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("..")) return fallback;
+  if (typeof raw !== "string" || !raw.startsWith("/") || raw.startsWith("//")) return fallback;
+  // Chỉ kiểm tra phần đường dẫn; tham số tìm kiếm có thể chứa "..".
+  const path = raw.split("?")[0] ?? "";
+  if (path.split("/").includes("..")) return fallback;
   const allowed = allowedPrefixes.some((prefix) => {
     if (!raw.startsWith(prefix)) return false;
     const next = raw.charAt(prefix.length);
