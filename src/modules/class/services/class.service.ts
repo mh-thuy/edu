@@ -1571,11 +1571,11 @@ export async function getClassStudentsPage(
   },
 ) {
   const period = parseStudentListMonth(options.month);
-  const periodEndExclusive = new Date(Date.UTC(period.year, period.month, 1));
+  // Môn bỏ trong hoặc sau tháng đang xem vẫn đang học ở tháng đó.
   const subjectForPeriodWhere: Prisma.EnrollmentSubjectWhereInput = {
     OR: [
       { status: { in: ["ACTIVE", "COMPLETED"] } },
-      { droppedAt: { gte: period.start, lt: periodEndExclusive } },
+      { droppedAt: { gte: period.start } },
     ],
   };
   const pauseWhere: Prisma.EnrollmentPauseWhereInput = {
@@ -1583,14 +1583,19 @@ export async function getClassStudentsPage(
     startMonth: { lte: period.end },
     endMonth: { gte: period.start },
   };
+  // Học viên rời lớp sau tháng đang xem vẫn tính là đang học ở tháng đó.
   const activeInPeriod: Prisma.ClassStudentWhereInput = {
-    status: "ACTIVE",
+    OR: [{ status: "ACTIVE" }, { status: "LEFT", leftAt: { gt: period.end } }],
+  };
+  const leftInPeriod: Prisma.ClassStudentWhereInput = {
+    status: "LEFT",
+    OR: [{ leftAt: null }, { leftAt: { lte: period.end } }],
   };
   const statusWhere: Prisma.ClassStudentWhereInput =
     options.status === "COMPLETED"
       ? { status: "COMPLETED" }
       : options.status === "LEFT"
-        ? { status: "LEFT" }
+        ? leftInPeriod
         : options.status === "PAUSED"
           ? { ...activeInPeriod, pauses: { some: pauseWhere } }
           : options.status === "ACTIVE"
@@ -1648,7 +1653,7 @@ export async function getClassStudentsPage(
 
   const activeWhere: Prisma.ClassStudentWhereInput = {
     classId,
-    status: "ACTIVE",
+    ...activeInPeriod,
     pauses: { none: pauseWhere },
   };
   const feeSort = ["item", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"].includes(options.sortBy ?? "");
@@ -1694,14 +1699,19 @@ export async function getClassStudentsPage(
         WHERE cs.class_id = ${classId}::uuid
           AND cs.status::text IN ('ACTIVE', 'COMPLETED', 'LEFT')
           AND (${options.status ?? null}::text IS NULL
-            OR (${options.status ?? null}::text = 'ACTIVE' AND cs.status::text = 'ACTIVE' AND NOT EXISTS (
+            OR (${options.status ?? null}::text = 'ACTIVE'
+              AND (cs.status::text = 'ACTIVE' OR (cs.status::text = 'LEFT' AND cs.left_at > ${period.end}::date))
+              AND NOT EXISTS (
               SELECT 1 FROM enrollment_pauses ep WHERE ep.enrollment_id = cs.id AND ep.status::text = 'ACTIVE'
                 AND ep.start_month <= ${period.end}::date AND ep.end_month >= ${period.start}::date))
-            OR (${options.status ?? null}::text = 'PAUSED' AND cs.status::text = 'ACTIVE' AND EXISTS (
+            OR (${options.status ?? null}::text = 'PAUSED'
+              AND (cs.status::text = 'ACTIVE' OR (cs.status::text = 'LEFT' AND cs.left_at > ${period.end}::date))
+              AND EXISTS (
               SELECT 1 FROM enrollment_pauses ep WHERE ep.enrollment_id = cs.id AND ep.status::text = 'ACTIVE'
                 AND ep.start_month <= ${period.end}::date AND ep.end_month >= ${period.start}::date))
             OR (${options.status ?? null}::text = 'COMPLETED' AND cs.status::text = 'COMPLETED')
-            OR (${options.status ?? null}::text = 'LEFT' AND cs.status::text = 'LEFT'))
+            OR (${options.status ?? null}::text = 'LEFT' AND cs.status::text = 'LEFT'
+              AND (cs.left_at IS NULL OR cs.left_at <= ${period.end}::date)))
           AND (${options.search?.trim() || null}::text IS NULL OR
             s.code ILIKE '%' || ${options.search?.trim() || ""} || '%' OR
             s.full_name ILIKE '%' || ${options.search?.trim() || ""} || '%' OR
@@ -1709,7 +1719,7 @@ export async function getClassStudentsPage(
           AND (${options.subjectId ?? null}::uuid IS NULL OR EXISTS (
             SELECT 1 FROM enrollment_subjects es WHERE es.enrollment_id = cs.id
               AND es.class_subject_id = ${options.subjectId ?? "00000000-0000-0000-0000-000000000000"}::uuid
-              AND (es.status::text IN ('ACTIVE', 'COMPLETED') OR (es.dropped_at >= ${period.start}::date AND es.dropped_at < ${periodEndExclusive}::date))))
+              AND (es.status::text IN ('ACTIVE', 'COMPLETED') OR es.dropped_at >= ${period.start}::date)))
           AND (${options.tuitionStatus ?? null}::text IS NULL
             OR (${options.tuitionStatus ?? null}::text = 'NONE' AND COALESCE(fee_sort.fee_count, 0) = 0)
             OR (${options.tuitionStatus ?? null}::text <> 'NONE' AND EXISTS (
@@ -1837,6 +1847,8 @@ export async function getClassStudentsPage(
               reason: true,
             },
           },
+          // Số học phí mọi tháng (kể cả đã hủy), khớp với điều kiện force khi rời lớp.
+          _count: { select: { tuitionFees: true } },
         },
       }),
       prisma.classStudent.count({ where }),
@@ -1844,17 +1856,18 @@ export async function getClassStudentsPage(
       prisma.classStudent.count({
         where: {
           classId,
-          status: "ACTIVE",
+          ...activeInPeriod,
           pauses: { some: pauseWhere },
         },
       }),
       prisma.classStudent.count({ where: { classId, status: "COMPLETED" } }),
-      prisma.classStudent.count({ where: { classId, status: "LEFT" } }),
+      prisma.classStudent.count({ where: { classId, ...leftInPeriod } }),
       prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*)::bigint AS count
       FROM class_students cs
       WHERE cs.class_id = ${classId}::uuid
-        AND cs.status = 'ACTIVE'::enrollment_status
+        AND (cs.status = 'ACTIVE'::enrollment_status
+          OR (cs.status = 'LEFT'::enrollment_status AND cs.left_at > ${period.end}::date))
         AND NOT EXISTS (
           SELECT 1
           FROM enrollment_pauses ep
@@ -1863,7 +1876,8 @@ export async function getClassStudentsPage(
             AND ep.start_month <= ${period.end}::date
             AND ep.end_month >= ${period.start}::date
         )
-        AND EXISTS (
+        -- Đã rời lớp thì không tạo học phí được nữa, không tính vào "chưa tạo học phí".
+        AND (cs.status = 'LEFT'::enrollment_status OR EXISTS (
           SELECT 1
           FROM tuition_fees tf
           WHERE tf.enrollment_id = cs.id
@@ -1887,7 +1901,7 @@ export async function getClassStudentsPage(
                     AND tfi.class_subject_id = es.class_subject_id
                 )
             )
-        )
+        ))
     `.then((rows) => Number(rows[0]?.count ?? 0)),
     ]);
 

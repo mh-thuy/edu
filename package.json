@@ -25,7 +25,8 @@
     "test:tuition-list-query": "tsx scripts/tuition-list-query.check.ts",
     "test:payment-history-query": "tsx scripts/payment-history-query.check.ts",
     "test:notice-query": "tsx scripts/notice-query.check.ts",
-    "test:enrollment-pause-cancelled-fee": "tsx scripts/enrollment-pause-cancelled-fee.check.ts"
+    "test:enrollment-pause-cancelled-fee": "tsx scripts/enrollment-pause-cancelled-fee.check.ts",
+    "test:class-students-left-month": "tsx scripts/class-students-left-month.check.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -44,6 +44,11 @@ Tài liệu này là bản tóm tắt triển khai thực tế sau refactor theo
 - Tái đăng ký giữ lịch sử enrollment cũ và dùng `currentPeriodStart` để lưu mốc
   giai đoạn hiện tại, không dùng mốc này để giới hạn kỳ học phí.
 - Bỏ một môn chỉ ảnh hưởng các kỳ sau; khoản đã phát sinh không tự xóa.
+- Danh sách học viên theo tháng hiển thị trạng thái tại tháng đang xem: học viên
+  rời lớp chỉ hiện `Đã rời lớp` từ tháng của `leftAt` trở đi; các tháng trước
+  vẫn hiện đang học/tạm nghỉ cùng các môn đã học. Ngày rời lớp vẫn là ngày bấm
+  nút. Hộp thoại rời lớp yêu cầu lý do force khi enrollment có học phí ở bất kỳ
+  tháng nào, khớp với kiểm tra ở backend.
 - Khi lớp chuyển `ACTIVE -> COMPLETED`, enrollment và môn đang `ACTIVE` được chuyển sang `COMPLETED` cùng transaction, có audit log; lịch sử vẫn hiển thị nhưng chỉ đọc.
 - Lớp `CANCELLED` có thể được khôi phục về `ACTIVE`; thao tác xóa `deleted_at` nếu có và ghi audit log `CLASS_RESTORED`. Lớp `COMPLETED` không thể khôi phục.
 - Không cho tạo học phí cho lớp `COMPLETED` hoặc `CANCELLED`; không cho tạm nghỉ trong khoảng đã phát sinh học phí.

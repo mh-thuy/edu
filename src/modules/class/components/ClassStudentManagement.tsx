@@ -111,10 +111,12 @@ type StudentRow = {
   id: string;
   studentId: string;
   status: "ACTIVE" | "COMPLETED" | "LEFT";
+  leftAt: string | null;
   student: { code: string; fullName: string; phone?: string | null };
   subjects: Array<{ classSubjectId: string }>;
   tuitionFees: Fee[];
   pauses: EnrollmentPause[];
+  _count: { tuitionFees: number };
 };
 type StudentSummary = {
   total: number;
@@ -301,6 +303,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
 
   const subjectName = useMemo(() => new Map((classData?.classSubjects ?? []).map((item) => [item.id, item.subject.name])), [classData]);
   const getPause = (student: StudentRow) => student.pauses.find((pause) => pause.status === "ACTIVE" && monthValue(pause.startMonth) <= month && monthValue(pause.endMonth) >= month);
+  const hasLeftByMonth = (student: StudentRow) => student.status === "LEFT" && (!student.leftAt || monthValue(student.leftAt) <= month);
   const getFee = (student: StudentRow) => {
     const [year, selectedMonth] = month.split("-").map(Number);
     return student.tuitionFees.find((fee) => fee.billingType === "MONTHLY" && fee.billingYear === year && fee.billingMonth === selectedMonth);
@@ -397,7 +400,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
 
   async function deleteStudent() {
     if (!deleteTarget) return;
-    const hasFee = deleteTarget.tuitionFees.length > 0;
+    const hasFee = deleteTarget._count.tuitionFees > 0;
     if (hasFee && !deleteReason.trim()) {
       showError("Vui lòng nhập lý do force rời lớp đã phát sinh học phí");
       return;
@@ -707,7 +710,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
               const pendingBatch = fee.paymentAllocations[0]?.paymentBatch;
               return <Stack key={fee.id} spacing={0.5} alignItems="flex-start" sx={{ mb: 0.5 }}><Chip size="small" color={pendingBatch ? "warning" : feeStatusColor[fee.status] ?? "default"} label={pendingBatch ? "Đang chờ đối soát" : feeStatusLabel[fee.status] ?? fee.status} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack>;
             })}{fees.length > 2 && <Typography variant="caption" color="text.secondary">+{fees.length - 2} trạng thái</Typography>}</> : <Chip size="small" color={pause ? "info" : "warning"} label={pause ? "Tạm nghỉ · không phát sinh" : "Chưa tạo"} />}</TableCell>
-            <TableCell sx={{ minWidth: 170 }}><Chip size="small" color={student.status === "LEFT" ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={student.status === "LEFT" ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
+            <TableCell sx={{ minWidth: 170 }}><Chip size="small" color={hasLeftByMonth(student) ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={hasLeftByMonth(student) ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
             <TableCell align="right" sx={{ position: "sticky", right: 0, zIndex: 1, bgcolor: "background.paper", whiteSpace: "nowrap", boxShadow: "-6px 0 8px -8px rgba(0,0,0,0.35)" }}><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Chi tiết</Button><Button size="small" aria-label={`Thao tác ${student.student.fullName}`} onClick={(event) => setActionMenu({ anchorEl: event.currentTarget, student })}><MoreVertOutlinedIcon /></Button></TableCell>
           </TableRow>;
         })}{!pagedStudents.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
@@ -722,7 +725,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
           const remainingAmount = feeAmount(fees, "remainingAmount");
           const studentStatus = student.status === "COMPLETED"
             ? { label: "Đã hoàn thành", color: "default" as const }
-            : student.status === "LEFT"
+            : hasLeftByMonth(student)
               ? { label: "Đã rời lớp", color: "error" as const }
               : pause
                 ? { label: `Tạm nghỉ đến ${monthValue(pause.endMonth)}`, color: "info" as const }
@@ -1059,12 +1062,12 @@ export function ClassStudentManagement({ id }: { id: string }) {
       </DialogActions>
     </Dialog>
     <Dialog open={Boolean(deleteTarget)} onClose={() => !busy && setDeleteTarget(null)} fullWidth maxWidth="sm">
-      <DialogTitle>{deleteTarget?.tuitionFees.length ? "Force rời lớp" : "Rời lớp"}</DialogTitle>
+      <DialogTitle>{deleteTarget?._count.tuitionFees ? "Force rời lớp" : "Rời lớp"}</DialogTitle>
       <DialogContent>
         <Typography sx={{ mb: 1 }}>
           {deleteTarget?.student.fullName ?? "Học viên này"} sẽ rời khỏi lớp và các môn đang đăng ký sẽ được đánh dấu đã bỏ.
         </Typography>
-        {deleteTarget?.tuitionFees.length ? <>
+        {deleteTarget?._count.tuitionFees ? <>
           <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
             Học phí đã phát sinh sẽ được giữ nguyên để bảo toàn lịch sử. Thao tác force cần lý do.
           </Typography>
@@ -1073,7 +1076,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
       </DialogContent>
       <DialogActions>
         <Button variant="outlined" onClick={() => setDeleteTarget(null)} disabled={busy}>Hủy</Button>
-        <Button variant="contained" color="error" onClick={() => void deleteStudent()} disabled={busy || Boolean(deleteTarget?.tuitionFees.length && !deleteReason.trim())}>{busy ? "Đang xử lý..." : deleteTarget?.tuitionFees.length ? "Force rời lớp" : "Rời lớp"}</Button>
+        <Button variant="contained" color="error" onClick={() => void deleteStudent()} disabled={busy || Boolean(deleteTarget?._count.tuitionFees && !deleteReason.trim())}>{busy ? "Đang xử lý..." : deleteTarget?._count.tuitionFees ? "Force rời lớp" : "Rời lớp"}</Button>
       </DialogActions>
     </Dialog>
     <ConfirmDialog
