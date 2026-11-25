@@ -888,6 +888,7 @@ export async function pauseStudentEnrollment(
       FROM tuition_fees
       WHERE enrollment_id = ${enrollment.id}::uuid
         AND billing_type = 'MONTHLY'::tuition_fee_billing_type
+        AND status <> 'CANCELLED'::tuition_fee_status
         AND make_date(billing_year::integer, billing_month::integer, 1)
           BETWEEN make_date(${startMonth.getUTCFullYear()}::integer, ${startMonth.getUTCMonth() + 1}::integer, 1)
           AND make_date(${endMonth.getUTCFullYear()}::integer, ${endMonth.getUTCMonth() + 1}::integer, 1)
@@ -1009,6 +1010,7 @@ export async function updateEnrollmentPause(
       SELECT id FROM tuition_fees
       WHERE enrollment_id = ${pause.enrollmentId}::uuid
         AND billing_type = 'MONTHLY'::tuition_fee_billing_type
+        AND status <> 'CANCELLED'::tuition_fee_status
         AND make_date(billing_year::integer, billing_month::integer, 1)
           BETWEEN make_date(${startMonth.getUTCFullYear()}::integer, ${startMonth.getUTCMonth() + 1}::integer, 1)
           AND make_date(${endMonth.getUTCFullYear()}::integer, ${endMonth.getUTCMonth() + 1}::integer, 1)

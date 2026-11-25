@@ -912,6 +912,24 @@ export class TuitionService {
         throw new ConflictError(
           "Không thể khôi phục học phí của lớp đã kết thúc hoặc đã hủy",
         );
+      if (current.billingType === "MONTHLY") {
+        const billingMonth = new Date(
+          Date.UTC(current.billingYear, current.billingMonth - 1, 1),
+        );
+        const activePause = await tx.enrollmentPause.findFirst({
+          where: {
+            enrollmentId: current.enrollmentId,
+            status: "ACTIVE",
+            startMonth: { lte: billingMonth },
+            endMonth: { gte: billingMonth },
+          },
+          select: { id: true },
+        });
+        if (activePause)
+          throw new ConflictError(
+            `Không thể khôi phục học phí vì học viên đang tạm nghỉ trong tháng ${current.billingMonth}/${current.billingYear}`,
+          );
+      }
       if (current.payments.length)
         throw new ConflictError(
           "Không thể khôi phục khoản học phí đã có thanh toán thành công",
