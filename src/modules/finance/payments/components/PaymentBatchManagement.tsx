@@ -1579,9 +1579,7 @@ export function PaymentBatchManagement() {
                               <TableCell>
                                 {getBatchFeeGroups(batch).map((group) => (
                                   <Box key={group.period} sx={{ mb: 0.75 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block">
-                                      {group.period}
-                                    </Typography>
+                                    <Chip size="small" variant="outlined" label={group.period} sx={{ mb: 0.5 }} />
                                     {group.classes.map((line) => (
                                       <Typography key={line.className} variant="body2">
                                         {line.className} · {money(line.amount)}
@@ -1811,9 +1809,7 @@ export function PaymentBatchManagement() {
                           <TableCell>
                             {getBatchFeeGroups(batch).map((group) => (
                               <Box key={group.period} sx={{ mb: 0.75 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  {group.period}
-                                </Typography>
+                                <Chip size="small" variant="outlined" label={group.period} sx={{ mb: 0.5 }} />
                                 {group.classes.map((line) => (
                                   <Typography key={line.className} variant="body2">
                                     {line.className} · {money(line.amount)}
