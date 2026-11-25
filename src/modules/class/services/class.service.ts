@@ -1419,7 +1419,8 @@ export async function removeStudentFromClass(
     });
     await tx.classStudent.update({
       where: { id: enrollment.id },
-      data: { status: "LEFT", leftAt: new Date(), deletedAt: new Date() },
+      // leftAt là cột ngày: lấy ngày theo giờ Việt Nam, không cắt theo UTC.
+      data: { status: "LEFT", leftAt: getVietnamCalendarDateStart(), deletedAt: new Date() },
     });
     if (actorId) {
       await tx.tuitionAuditLog.create({
