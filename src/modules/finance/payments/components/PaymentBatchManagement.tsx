@@ -69,7 +69,11 @@ import { useSnackbar } from "@/hooks/useSnackbar";
 import { extractApiErrorMessage, unwrapApiResponse } from "@/lib/api-client";
 import { withReturnTo } from "@/lib/return-to";
 import { useUrlListState } from "@/lib/use-url-list-state";
-import { parseNoticeQuery, serializeNoticeQuery, type NoticeQuery } from "../utils/notice-query";
+import {
+  parseNoticeQuery,
+  serializeNoticeQuery,
+  type NoticeQuery,
+} from "../utils/notice-query";
 import { LoadingState } from "@/components/shared/feedback/LoadingState";
 import { FilterActions } from "@/components/shared/FilterActions";
 import {
@@ -89,12 +93,21 @@ import {
 } from "@/modules/finance/payments/services/payment-batch-management.client";
 
 type View = "UNISSUED" | "PENDING" | "SUCCESS";
-type NoticeFilters = { months: string[]; search: string; studentId: string | undefined; studentCode: string | undefined; classId: string | undefined };
+type NoticeFilters = {
+  months: string[];
+  search: string;
+  studentId: string | undefined;
+  studentCode: string | undefined;
+  classId: string | undefined;
+};
 type RestructureMode = "SPLIT" | "MERGE";
 const viewHints: Record<View, string> = {
-  UNISSUED: "Khoản học phí còn nợ chưa có thông báo chuyển khoản. Chọn khoản rồi bấm Phát hành.",
-  PENDING: "Đợt thu đã phát hành, đang chờ học sinh chuyển khoản. Gộp: gom nhiều đợt của một học sinh về một đợt. Tách: chia đợt theo từng khoản học phí.",
-  SUCCESS: "Đợt thu đã đối soát thành công với sao kê ngân hàng hoặc đã thu tiền mặt.",
+  UNISSUED:
+    "Khoản học phí còn nợ chưa có thông báo chuyển khoản. Chọn khoản rồi bấm Phát hành.",
+  PENDING:
+    "Đợt thu đã phát hành, đang chờ học sinh chuyển khoản. Gộp: gom nhiều đợt của một học sinh về một đợt. Tách: chia đợt theo từng khoản học phí.",
+  SUCCESS:
+    "Đợt thu đã đối soát thành công với sao kê ngân hàng hoặc đã thu tiền mặt.",
 };
 type IssuedBatch = { id: string; batchNo: string; totalAmount: number };
 
@@ -144,13 +157,17 @@ function getFeePeriod(year: number, month: number) {
 }
 
 function samePeriods(left: string[], right: string[]) {
-  return left.length === right.length && left.every((period, index) => period === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((period, index) => period === right[index])
+  );
 }
 
-function getBatchFeeGroups(
-  batch: PendingBatch,
-) {
-  const grouped = new Map<string, Map<string, { className: string; amount: number }>>();
+function getBatchFeeGroups(batch: PendingBatch) {
+  const grouped = new Map<
+    string,
+    Map<string, { className: string; amount: number }>
+  >();
   for (const allocation of batch.allocations) {
     const fee = allocation.tuitionFee;
     const period = getFeePeriod(fee.billingYear, fee.billingMonth);
@@ -177,12 +194,12 @@ function getBatchFeeGroups(
     }));
 }
 
-function batchHasOutOfScopeFees(
-  batch: PendingBatch,
-  monthFilters: string[],
-) {
+function batchHasOutOfScopeFees(batch: PendingBatch, monthFilters: string[]) {
   return batch.allocations.some(({ tuitionFee }) => {
-    const period = getFeePeriod(tuitionFee.billingYear, tuitionFee.billingMonth);
+    const period = getFeePeriod(
+      tuitionFee.billingYear,
+      tuitionFee.billingMonth,
+    );
     return monthFilters.length > 0 && !monthFilters.includes(period);
   });
 }
@@ -202,7 +219,9 @@ function groupFeesByPeriod(items: NoticeFee[]) {
     const period = getFeePeriod(fee.billingYear, fee.billingMonth);
     groups.set(period, [...(groups.get(period) ?? []), fee]);
   }
-  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
+  return [...groups.entries()].sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
 }
 
 export function PaymentBatchManagement() {
@@ -221,8 +240,11 @@ export function PaymentBatchManagement() {
   >();
   const [appliedClassId, setAppliedClassId] = useState<string | undefined>();
   const [appliedMonths, setAppliedMonths] = useState<string[]>([]);
-  const [appliedStudent, setAppliedStudent] = useState<MasterSelectValue | null>(null);
-  const [appliedClass, setAppliedClass] = useState<MasterSelectValue | null>(null);
+  const [appliedStudent, setAppliedStudent] =
+    useState<MasterSelectValue | null>(null);
+  const [appliedClass, setAppliedClass] = useState<MasterSelectValue | null>(
+    null,
+  );
   const [fees, setFees] = useState<NoticeFee[]>([]);
   const [unissuedTotal, setUnissuedTotal] = useState(0);
   const [pendingBatches, setPendingBatches] = useState<PendingBatch[]>([]);
@@ -252,7 +274,8 @@ export function PaymentBatchManagement() {
   const [issuedMonths, setIssuedMonths] = useState<string[] | null>(null);
   const [issuedDialogOpen, setIssuedDialogOpen] = useState(false);
   const [isDownloadingNoticePdf, setIsDownloadingNoticePdf] = useState(false);
-  const [isDownloadingSelectedNotices, setIsDownloadingSelectedNotices] = useState(false);
+  const [isDownloadingSelectedNotices, setIsDownloadingSelectedNotices] =
+    useState(false);
   const { showSuccess, showWarning, showError, Snackbar } = useSnackbar();
   const pendingRestore = useRef<NoticeFilters | null>(null);
   const studentDialog = useDisclosure();
@@ -274,77 +297,91 @@ export function PaymentBatchManagement() {
     setHasLoaded(false);
   }, []);
 
-  const load = useCallback(async (filters = {
-    months,
-    search: search.trim(),
-    studentId: student?.id,
-    studentCode: student?.code,
-    classId: selectedClass?.id,
-  }) => {
-    // Không tải toàn bộ dữ liệu khi chưa có từ khóa hoặc bộ lọc nào.
-    if (!filters.months.length && !filters.search && !filters.studentId && !filters.classId) {
-      showWarning("Nhập từ khóa hoặc chọn học viên, lớp, kỳ trước khi tải dữ liệu.");
-      resetNoticeLists();
-      return;
-    }
-    setLoading(true);
-    setError("");
-    const listFilters = {
-      months: filters.months,
-      page: 1,
-      pageSize: 100,
-      search: filters.search,
-      studentId: filters.studentId,
-      studentCode: filters.studentCode,
-      studentClassId: filters.classId,
-    };
-    try {
-      const [feeItems, batchItems, paidBatchItems, accounts] =
-        await Promise.all([
-          fetchAllNoticePages(fetchOutstandingFees, listFilters),
-          fetchAllNoticePages(fetchPendingBatches, listFilters),
-          fetchAllNoticePages(fetchSuccessfulBatches, listFilters),
-          fetchNoticeBankAccounts(),
-        ]);
-      setFees(feeItems.items);
-      setUnissuedTotal(feeItems.total);
-      setPendingBatches(batchItems.items);
-      setPendingTotal(batchItems.total);
-      setSuccessfulBatches(paidBatchItems.items);
-      setSuccessfulTotal(paidBatchItems.total);
-      if (!filters.months.length) {
-        const availablePeriods = new Set<string>(
-          feeItems.items.map((fee) => getFeePeriod(fee.billingYear, fee.billingMonth)),
+  const load = useCallback(
+    async (
+      filters = {
+        months,
+        search: search.trim(),
+        studentId: student?.id,
+        studentCode: student?.code,
+        classId: selectedClass?.id,
+      },
+    ) => {
+      // Không tải toàn bộ dữ liệu khi chưa có từ khóa hoặc bộ lọc nào.
+      if (
+        !filters.months.length &&
+        !filters.search &&
+        !filters.studentId &&
+        !filters.classId
+      ) {
+        showWarning(
+          "Nhập từ khóa hoặc chọn học viên, lớp, kỳ trước khi tải dữ liệu.",
         );
-        for (const batch of [...batchItems.items, ...paidBatchItems.items]) {
-          for (const allocation of batch.allocations) {
-            availablePeriods.add(
-              getFeePeriod(
-                allocation.tuitionFee.billingYear,
-                allocation.tuitionFee.billingMonth,
-              ),
-            );
-          }
-        }
-        setPeriodOptions([...availablePeriods].sort());
+        resetNoticeLists();
+        return;
       }
-      setBankAccounts(accounts);
-      setBankAccountId((current) =>
-        accounts.some((account) => account.id === current)
-          ? current
-          : (accounts[0]?.id ?? ""),
-      );
-    } catch (reasonValue) {
-      setError(
-        reasonValue instanceof Error
-          ? reasonValue.message
-          : "Không thể tải dữ liệu",
-      );
-    } finally {
-      setLoading(false);
-      setHasLoaded(true);
-    }
-  }, [months, search, selectedClass, student, resetNoticeLists, showWarning]);
+      setLoading(true);
+      setError("");
+      const listFilters = {
+        months: filters.months,
+        page: 1,
+        pageSize: 100,
+        search: filters.search,
+        studentId: filters.studentId,
+        studentCode: filters.studentCode,
+        studentClassId: filters.classId,
+      };
+      try {
+        const [feeItems, batchItems, paidBatchItems, accounts] =
+          await Promise.all([
+            fetchAllNoticePages(fetchOutstandingFees, listFilters),
+            fetchAllNoticePages(fetchPendingBatches, listFilters),
+            fetchAllNoticePages(fetchSuccessfulBatches, listFilters),
+            fetchNoticeBankAccounts(),
+          ]);
+        setFees(feeItems.items);
+        setUnissuedTotal(feeItems.total);
+        setPendingBatches(batchItems.items);
+        setPendingTotal(batchItems.total);
+        setSuccessfulBatches(paidBatchItems.items);
+        setSuccessfulTotal(paidBatchItems.total);
+        if (!filters.months.length) {
+          const availablePeriods = new Set<string>(
+            feeItems.items.map((fee) =>
+              getFeePeriod(fee.billingYear, fee.billingMonth),
+            ),
+          );
+          for (const batch of [...batchItems.items, ...paidBatchItems.items]) {
+            for (const allocation of batch.allocations) {
+              availablePeriods.add(
+                getFeePeriod(
+                  allocation.tuitionFee.billingYear,
+                  allocation.tuitionFee.billingMonth,
+                ),
+              );
+            }
+          }
+          setPeriodOptions([...availablePeriods].sort());
+        }
+        setBankAccounts(accounts);
+        setBankAccountId((current) =>
+          accounts.some((account) => account.id === current)
+            ? current
+            : (accounts[0]?.id ?? ""),
+        );
+      } catch (reasonValue) {
+        setError(
+          reasonValue instanceof Error
+            ? reasonValue.message
+            : "Không thể tải dữ liệu",
+        );
+      } finally {
+        setLoading(false);
+        setHasLoaded(true);
+      }
+    },
+    [months, search, selectedClass, student, resetNoticeLists, showWarning],
+  );
 
   const noticeQuery: NoticeQuery = {
     view,
@@ -363,8 +400,13 @@ export function PaymentBatchManagement() {
     parse: parseNoticeQuery,
     serialize: serializeNoticeQuery,
     restore: (q) => {
-      const restoredStudent = q.studentCode ? { id: q.studentId, code: q.studentCode, name: q.studentName } : null;
-      const restoredClass = q.classId && q.className ? { id: q.classId, code: q.classCode, name: q.className } : null;
+      const restoredStudent = q.studentCode
+        ? { id: q.studentId, code: q.studentCode, name: q.studentName }
+        : null;
+      const restoredClass =
+        q.classId && q.className
+          ? { id: q.classId, code: q.classCode, name: q.className }
+          : null;
       setView(q.view as View);
       setMonths(q.months);
       setAppliedMonths(q.months);
@@ -381,7 +423,12 @@ export function PaymentBatchManagement() {
         void fetch(`/api/classes/${encodeURIComponent(q.classId)}`)
           .then(async (response) => {
             if (!response.ok)
-              throw new Error(await extractApiErrorMessage(response, "Không thể tải lớp đã chọn"));
+              throw new Error(
+                await extractApiErrorMessage(
+                  response,
+                  "Không thể tải lớp đã chọn",
+                ),
+              );
             return unwrapApiResponse<ClassItem>(response);
           })
           .then((item) => {
@@ -390,7 +437,11 @@ export function PaymentBatchManagement() {
             setAppliedClass(found);
           })
           .catch((reasonValue: unknown) => {
-            showError(reasonValue instanceof Error ? reasonValue.message : "Không thể tải lớp đã chọn");
+            showError(
+              reasonValue instanceof Error
+                ? reasonValue.message
+                : "Không thể tải lớp đã chọn",
+            );
           });
       }
       pendingRestore.current = {
@@ -408,7 +459,13 @@ export function PaymentBatchManagement() {
     const filters = pendingRestore.current;
     if (!restored || !filters) return;
     pendingRestore.current = null;
-    if (filters.months.length || filters.search || filters.studentId || filters.classId) void load(filters);
+    if (
+      filters.months.length ||
+      filters.search ||
+      filters.studentId ||
+      filters.classId
+    )
+      void load(filters);
   }, [restored, load]);
 
   function applyFilters() {
@@ -469,8 +526,8 @@ export function PaymentBatchManagement() {
   const selectedStudentBatches = pendingBatches.filter((batch) =>
     selectedStudentIds.includes(batch.student.id),
   );
-  const selectedStudentOutOfScopeBatches = selectedStudentBatches.filter((batch) =>
-    batchHasOutOfScopeFees(batch, months),
+  const selectedStudentOutOfScopeBatches = selectedStudentBatches.filter(
+    (batch) => batchHasOutOfScopeFees(batch, months),
   );
   const selectedStudentNoticeCount = selectedStudentBatches.length;
   const selectedFeeTotal = selectedFees.reduce(
@@ -501,7 +558,6 @@ export function PaymentBatchManagement() {
     issuedClassId === appliedClassId &&
     issuedMonths !== null &&
     samePeriods(issuedMonths, months);
-
 
   function toggleFee(id: string) {
     setSelectedFeeIds((current) =>
@@ -718,9 +774,7 @@ export function PaymentBatchManagement() {
       try {
         const pdf = await downloadNoticeBatchesPdf(
           result.batches.map((batch) => batch.id),
-        classNoticeMode
-          ? getNoticePdfScope(months)
-          : undefined,
+          classNoticeMode ? getNoticePdfScope(months) : undefined,
         );
         const url = URL.createObjectURL(pdf);
         const anchor = document.createElement("a");
@@ -855,7 +909,8 @@ export function PaymentBatchManagement() {
         } catch (error) {
           failed++;
           if (!firstError) {
-            firstError = error instanceof Error ? error.message : "Không thể thao tác";
+            firstError =
+              error instanceof Error ? error.message : "Không thể thao tác";
           }
         }
       }
@@ -908,10 +963,15 @@ export function PaymentBatchManagement() {
           </Stack>
           <Chip
             icon={<InfoOutlinedIcon />}
-            label={months.length ? `Kỳ ${months.join(", ")}` : "Tất cả kỳ học phí"}
+            label={
+              months.length ? `Kỳ ${months.join(", ")}` : "Tất cả kỳ học phí"
+            }
             variant="outlined"
             color="primary"
-            sx={{ alignSelf: { xs: "flex-start", sm: "center" }, fontWeight: 700 }}
+            sx={{
+              alignSelf: { xs: "flex-start", sm: "center" },
+              fontWeight: 700,
+            }}
           />
         </Stack>
       </Paper>
@@ -1045,92 +1105,129 @@ export function PaymentBatchManagement() {
               sx={{ flex: 1, minWidth: 0 }}
             />
           </Stack>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          justifyContent="space-between"
-          alignItems={{ sm: "flex-end" }}
-          gap={1.5}
-        >
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "flex-end" }} flex={1}>
-            <FormControl
-              size="small"
-              sx={{ width: { xs: "100%", sm: 280 }, maxWidth: "100%" }}
-              disabled={loading || periodOptions.length === 0}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            justifyContent="space-between"
+            alignItems={{ sm: "flex-end" }}
+            gap={1.5}
+          >
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1.25}
+              alignItems={{ sm: "flex-end" }}
+              flex={1}
             >
-              <InputLabel id="notice-periods-label">Kỳ học phí</InputLabel>
-              <Select
-                labelId="notice-periods-label"
-                multiple
-                value={months}
-                label="Kỳ học phí"
-                onChange={(event) => {
-                  const selected = typeof event.target.value === "string"
-                    ? event.target.value.split(",")
-                    : event.target.value;
-                  setMonths([...selected].sort());
-                  setIssuedBatches([]);
-                  setIssuedClassId(null);
-                  setIssuedMonths(null);
-                  setIssuedDialogOpen(false);
-                }}
-                renderValue={(selected) =>
-                  selected.length ? selected.join(", ") : "Tất cả kỳ"
-                }
-              >
-                {periodOptions.map((period) => (
-                  <MenuItem key={period} value={period}>
-                    <Checkbox checked={months.includes(period)} />
-                    {period}
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText sx={{ mx: 0 }}>Có thể chọn nhiều kỳ. Bỏ trống để xem tất cả.</FormHelperText>
-            </FormControl>
-            {months.length > 0 && (
-              <Button
+              <FormControl
                 size="small"
-                onClick={() => {
-                  setIssuedBatches([]);
-                  setIssuedClassId(null);
-                  setIssuedMonths(null);
-                  setIssuedDialogOpen(false);
-                  setMonths([]);
-                }}
-                sx={{ whiteSpace: "nowrap", mb: 0.5 }}
+                sx={{ width: { xs: "100%", sm: 280 }, maxWidth: "100%" }}
+                disabled={loading || periodOptions.length === 0}
               >
-                Tất cả kỳ
-              </Button>
-            )}
-          </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="flex-end">
-            <FilterActions
-              onSearch={applyFilters}
-              onClear={clearFilters}
-              hasFilters={Boolean(search.trim() || appliedSearch || student || selectedClass || months.length)}
-              isLoading={loading}
-            />
-            <Button
-              variant="outlined"
-              startIcon={<RefreshOutlinedIcon />}
-              onClick={() => void load()}
-              disabled={loading}
-              sx={{ whiteSpace: "nowrap" }}
+                <InputLabel id="notice-periods-label">Kỳ học phí</InputLabel>
+                <Select
+                  labelId="notice-periods-label"
+                  multiple
+                  value={months}
+                  label="Kỳ học phí"
+                  onChange={(event) => {
+                    const selected =
+                      typeof event.target.value === "string"
+                        ? event.target.value.split(",")
+                        : event.target.value;
+                    setMonths([...selected].sort());
+                    setIssuedBatches([]);
+                    setIssuedClassId(null);
+                    setIssuedMonths(null);
+                    setIssuedDialogOpen(false);
+                  }}
+                  renderValue={(selected) =>
+                    selected.length ? selected.join(", ") : "Tất cả kỳ"
+                  }
+                >
+                  {periodOptions.map((period) => (
+                    <MenuItem key={period} value={period}>
+                      <Checkbox checked={months.includes(period)} />
+                      {period}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText sx={{ mx: 0 }}>
+                  Có thể chọn nhiều kỳ. Bỏ trống để xem tất cả.
+                </FormHelperText>
+              </FormControl>
+              {months.length > 0 && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setIssuedBatches([]);
+                    setIssuedClassId(null);
+                    setIssuedMonths(null);
+                    setIssuedDialogOpen(false);
+                    setMonths([]);
+                  }}
+                  sx={{ whiteSpace: "nowrap", mb: 0.5 }}
+                >
+                  Tất cả kỳ
+                </Button>
+              )}
+            </Stack>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              justifyContent="flex-end"
             >
-              Làm mới
-            </Button>
-            {appliedClassId && (
+              <FilterActions
+                onSearch={applyFilters}
+                onClear={clearFilters}
+                hasFilters={Boolean(
+                  search.trim() ||
+                  appliedSearch ||
+                  student ||
+                  selectedClass ||
+                  months.length,
+                )}
+                isLoading={loading}
+              />
               <Button
-                variant="contained"
-                startIcon={hasMatchingIssuedNotice ? <DownloadOutlinedIcon /> : <SendOutlinedIcon />}
-                onClick={() => hasMatchingIssuedNotice ? void downloadIssuedNoticePdf() : openClassNoticeDialog()}
-                disabled={loading || busy || isDownloadingNoticePdf || (hasMatchingIssuedNotice && !issuedBatches.length)}
+                variant="outlined"
+                startIcon={<RefreshOutlinedIcon />}
+                onClick={() => void load()}
+                disabled={loading}
                 sx={{ whiteSpace: "nowrap" }}
               >
-                {hasMatchingIssuedNotice ? (isDownloadingNoticePdf ? "Đang tạo PDF..." : "Xuất PDF toàn bộ lớp") : "Phát hành toàn bộ lớp"}
+                Làm mới
               </Button>
-            )}
+              {appliedClassId && (
+                <Button
+                  variant="contained"
+                  startIcon={
+                    hasMatchingIssuedNotice ? (
+                      <DownloadOutlinedIcon />
+                    ) : (
+                      <SendOutlinedIcon />
+                    )
+                  }
+                  onClick={() =>
+                    hasMatchingIssuedNotice
+                      ? void downloadIssuedNoticePdf()
+                      : openClassNoticeDialog()
+                  }
+                  disabled={
+                    loading ||
+                    busy ||
+                    isDownloadingNoticePdf ||
+                    (hasMatchingIssuedNotice && !issuedBatches.length)
+                  }
+                  sx={{ whiteSpace: "nowrap" }}
+                >
+                  {hasMatchingIssuedNotice
+                    ? isDownloadingNoticePdf
+                      ? "Đang tạo PDF..."
+                      : "Xuất PDF toàn bộ lớp"
+                    : "Phát hành toàn bộ lớp"}
+                </Button>
+              )}
+            </Stack>
           </Stack>
-        </Stack>
         </Stack>
       </Paper>
 
@@ -1154,7 +1251,11 @@ export function PaymentBatchManagement() {
             setSelectedBatchIds([]);
           }}
           sx={{
-            "& .MuiTab-root": { minHeight: 58, fontWeight: 700, textTransform: "none" },
+            "& .MuiTab-root": {
+              minHeight: 58,
+              fontWeight: 700,
+              textTransform: "none",
+            },
             "& .Mui-selected": { color: "primary.main" },
             "& .MuiTabs-indicator": { height: 3, borderRadius: 3 },
           }}
@@ -1179,7 +1280,9 @@ export function PaymentBatchManagement() {
           />
         </Tabs>
       </Paper>
-      <Typography variant="body2" color="text.secondary">{viewHints[view]}</Typography>
+      <Typography variant="body2" color="text.secondary">
+        {viewHints[view]}
+      </Typography>
 
       {error && (
         <Alert
@@ -1223,7 +1326,10 @@ export function PaymentBatchManagement() {
               <Button
                 key={batch.id}
                 component={Link}
-                href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
+                href={withReturnTo(
+                  `/admin/tuition-fees/payment-history/${batch.id}`,
+                  noticeReturnPath,
+                )}
                 variant="outlined"
                 sx={{ justifyContent: "flex-start" }}
               >
@@ -1270,11 +1376,23 @@ export function PaymentBatchManagement() {
           >
             <Paper
               variant="outlined"
-              sx={{ overflow: "hidden", borderRadius: 3, borderColor: "divider" }}
+              sx={{
+                overflow: "hidden",
+                borderRadius: 3,
+                borderColor: "divider",
+              }}
             >
               <Box sx={{ overflowX: "auto" }}>
                 <Table sx={{ minWidth: 900 }} size="small">
-                  <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
+                  <TableHead
+                    sx={{
+                      "& .MuiTableCell-root": {
+                        bgcolor: "action.hover",
+                        color: "text.secondary",
+                        fontWeight: 800,
+                      },
+                    }}
+                  >
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -1351,7 +1469,9 @@ export function PaymentBatchManagement() {
                                   <TableRow key={fee.id} hover>
                                     <TableCell padding="checkbox">
                                       <Checkbox
-                                        checked={selectedFeeIds.includes(fee.id)}
+                                        checked={selectedFeeIds.includes(
+                                          fee.id,
+                                        )}
                                         onChange={() => toggleFee(fee.id)}
                                       />
                                     </TableCell>
@@ -1366,7 +1486,9 @@ export function PaymentBatchManagement() {
                                       </Typography>
                                     </TableCell>
                                     <TableCell>{fee.class.name}</TableCell>
-                                    <TableCell>{money(fee.finalAmount)}</TableCell>
+                                    <TableCell>
+                                      {money(fee.finalAmount)}
+                                    </TableCell>
                                     <TableCell>
                                       <Typography fontWeight={700}>
                                         {money(fee.remainingAmount)}
@@ -1390,7 +1512,13 @@ export function PaymentBatchManagement() {
                     {!loading && !unissuedFees.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message={hasLoaded ? "Không có khoản học phí chưa phát thông báo với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
+                          <EmptyState
+                            message={
+                              hasLoaded
+                                ? "Không có khoản học phí chưa phát thông báo với bộ lọc hiện tại"
+                                : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1403,7 +1531,10 @@ export function PaymentBatchManagement() {
               total={selectedFeeTotal}
               details={selectedFees
                 .slice(0, 5)
-                .map((fee) => `${getFeePeriod(fee.billingYear, fee.billingMonth)} · ${fee.class.name} · ${fee.student.fullName}`)}
+                .map(
+                  (fee) =>
+                    `${getFeePeriod(fee.billingYear, fee.billingMonth)} · ${fee.class.name} · ${fee.student.fullName}`,
+                )}
             >
               <Button
                 fullWidth
@@ -1444,11 +1575,23 @@ export function PaymentBatchManagement() {
           >
             <Paper
               variant="outlined"
-              sx={{ overflow: "hidden", borderRadius: 3, borderColor: "divider" }}
+              sx={{
+                overflow: "hidden",
+                borderRadius: 3,
+                borderColor: "divider",
+              }}
             >
               <Box sx={{ overflowX: "auto" }}>
                 <Table sx={{ minWidth: 900 }} size="small">
-                  <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
+                  <TableHead
+                    sx={{
+                      "& .MuiTableCell-root": {
+                        bgcolor: "action.hover",
+                        color: "text.secondary",
+                        fontWeight: 800,
+                      },
+                    }}
+                  >
                     <TableRow>
                       <TableCell padding="checkbox">
                         <Tooltip title="Chọn tất cả học sinh để xuất thông báo">
@@ -1456,7 +1599,8 @@ export function PaymentBatchManagement() {
                             <Checkbox
                               checked={
                                 pendingGroups.length > 0 &&
-                                selectedStudentIds.length === pendingGroups.length
+                                selectedStudentIds.length ===
+                                  pendingGroups.length
                               }
                               indeterminate={
                                 selectedStudentIds.length > 0 &&
@@ -1465,11 +1609,17 @@ export function PaymentBatchManagement() {
                               onChange={(event) => {
                                 const checked = event.target.checked;
                                 setSelectedStudentIds(
-                                  checked ? pendingGroups.map((group) => group.student.id) : [],
+                                  checked
+                                    ? pendingGroups.map(
+                                        (group) => group.student.id,
+                                      )
+                                    : [],
                                 );
                                 setSelectedBatchIds(
                                   checked
-                                    ? pendingGroups.flatMap((group) => group.items.map((batch) => batch.id))
+                                    ? pendingGroups.flatMap((group) =>
+                                        group.items.map((batch) => batch.id),
+                                      )
                                     : [],
                                 );
                               }}
@@ -1486,9 +1636,11 @@ export function PaymentBatchManagement() {
                   </TableHead>
                   <TableBody>
                     {pendingGroups.map((group) => {
-                      const groupSelected = selectedStudentIds.includes(group.student.id);
-                      const selectedGroupBatchCount = group.items.filter((batch) =>
-                        selectedBatchIds.includes(batch.id),
+                      const groupSelected = selectedStudentIds.includes(
+                        group.student.id,
+                      );
+                      const selectedGroupBatchCount = group.items.filter(
+                        (batch) => selectedBatchIds.includes(batch.id),
                       ).length;
                       return (
                         <Fragment key={group.student.id}>
@@ -1496,9 +1648,15 @@ export function PaymentBatchManagement() {
                             <TableCell padding="checkbox">
                               <Checkbox
                                 checked={groupSelected}
-                                indeterminate={selectedGroupBatchCount > 0 && selectedGroupBatchCount < group.items.length}
+                                indeterminate={
+                                  selectedGroupBatchCount > 0 &&
+                                  selectedGroupBatchCount < group.items.length
+                                }
                                 onChange={(event) =>
-                                  setStudentGroupSelection(group, event.target.checked)
+                                  setStudentGroupSelection(
+                                    group,
+                                    event.target.checked,
+                                  )
                                 }
                               />
                             </TableCell>
@@ -1517,32 +1675,47 @@ export function PaymentBatchManagement() {
                                     variant="caption"
                                     color="text.secondary"
                                   >
-                                    {group.student.code} · {group.items.length} đợt
-                                    đang chờ
+                                    {group.student.code} · {group.items.length}{" "}
+                                    đợt đang chờ
                                   </Typography>
                                 </Box>
-                                {group.items.length > 1 && (() => {
-                                  const canMergeStudentGroup =
-                                    new Set(group.items.map((batch) => batch.bankAccountId)).size === 1;
-                                  return (
-                                    <Tooltip
-                                      title={canMergeStudentGroup ? "Gộp tất cả batch đang chờ của học sinh này" : "Chỉ gộp được các batch cùng tài khoản nhận tiền"}
-                                    >
-                                      <span>
-                                        <Button
-                                          size="small"
-                                          variant="outlined"
-                                          color="warning"
-                                          startIcon={<MergeTypeOutlinedIcon />}
-                                          disabled={!canMergeStudentGroup || busy}
-                                          onClick={() => mergeStudentGroup(group)}
-                                        >
-                                          Gộp {group.items.length} đợt
-                                        </Button>
-                                      </span>
-                                    </Tooltip>
-                                  );
-                                })()}
+                                {group.items.length > 1 &&
+                                  (() => {
+                                    const canMergeStudentGroup =
+                                      new Set(
+                                        group.items.map(
+                                          (batch) => batch.bankAccountId,
+                                        ),
+                                      ).size === 1;
+                                    return (
+                                      <Tooltip
+                                        title={
+                                          canMergeStudentGroup
+                                            ? "Gộp tất cả batch đang chờ của học sinh này"
+                                            : "Chỉ gộp được các batch cùng tài khoản nhận tiền"
+                                        }
+                                      >
+                                        <span>
+                                          <Button
+                                            size="small"
+                                            variant="outlined"
+                                            color="warning"
+                                            startIcon={
+                                              <MergeTypeOutlinedIcon />
+                                            }
+                                            disabled={
+                                              !canMergeStudentGroup || busy
+                                            }
+                                            onClick={() =>
+                                              mergeStudentGroup(group)
+                                            }
+                                          >
+                                            Gộp {group.items.length} đợt
+                                          </Button>
+                                        </span>
+                                      </Tooltip>
+                                    );
+                                  })()}
                               </Stack>
                             </TableCell>
                           </TableRow>
@@ -1551,8 +1724,12 @@ export function PaymentBatchManagement() {
                               <TableCell padding="checkbox">
                                 <Tooltip title="Chọn batch để tách hoặc gộp">
                                   <Checkbox
-                                    checked={selectedBatchIds.includes(batch.id)}
-                                    onChange={() => toggleStudentBatch(group, batch.id)}
+                                    checked={selectedBatchIds.includes(
+                                      batch.id,
+                                    )}
+                                    onChange={() =>
+                                      toggleStudentBatch(group, batch.id)
+                                    }
                                   />
                                 </Tooltip>
                               </TableCell>
@@ -1579,9 +1756,18 @@ export function PaymentBatchManagement() {
                               <TableCell>
                                 {getBatchFeeGroups(batch).map((group) => (
                                   <Box key={group.period} sx={{ mb: 0.75 }}>
-                                    <Chip size="small" variant="outlined" label={group.period} sx={{ mb: 0.5 }} />
+                                    <Chip
+                                      size="small"
+                                      color="primary"
+                                      variant="filled"
+                                      label={group.period}
+                                      sx={{ mb: 0.5, fontWeight: 700 }}
+                                    />
                                     {group.classes.map((line) => (
-                                      <Typography key={line.className} variant="body2">
+                                      <Typography
+                                        key={line.className}
+                                        variant="body2"
+                                      >
                                         {line.className} · {money(line.amount)}
                                       </Typography>
                                     ))}
@@ -1601,15 +1787,23 @@ export function PaymentBatchManagement() {
                                   useFlexGap
                                 >
                                   <Tooltip
-                                    title={batch.allocations.length >= 2 ? "Tách batch này thành các batch theo từng khoản học phí" : "Batch chỉ có một khoản học phí, không thể tách"}
+                                    title={
+                                      batch.allocations.length >= 2
+                                        ? "Tách batch này thành các batch theo từng khoản học phí"
+                                        : "Batch chỉ có một khoản học phí, không thể tách"
+                                    }
                                   >
                                     <span>
                                       <Button
                                         size="small"
                                         color="warning"
                                         startIcon={<CallSplitOutlinedIcon />}
-                                        disabled={batch.allocations.length < 2 || busy}
-                                        onClick={() => openBatchSplitDialog(batch)}
+                                        disabled={
+                                          batch.allocations.length < 2 || busy
+                                        }
+                                        onClick={() =>
+                                          openBatchSplitDialog(batch)
+                                        }
                                       >
                                         Tách
                                       </Button>
@@ -1618,14 +1812,21 @@ export function PaymentBatchManagement() {
                                   <Button
                                     size="small"
                                     startIcon={<DownloadOutlinedIcon />}
-                                    onClick={() => void downloadPendingBatchNotice(batch)}
+                                    onClick={() =>
+                                      void downloadPendingBatchNotice(batch)
+                                    }
                                     disabled={isDownloadingSelectedNotices}
                                   >
-                                    {isDownloadingSelectedNotices ? "Đang xuất" : "Xuất PDF"}
+                                    {isDownloadingSelectedNotices
+                                      ? "Đang xuất"
+                                      : "Xuất PDF"}
                                   </Button>
                                   <Button
                                     component={Link}
-                                    href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
+                                    href={withReturnTo(
+                                      `/admin/tuition-fees/payment-history/${batch.id}`,
+                                      noticeReturnPath,
+                                    )}
                                     size="small"
                                   >
                                     Chi tiết
@@ -1640,7 +1841,13 @@ export function PaymentBatchManagement() {
                     {!loading && !visiblePendingBatches.length && (
                       <TableRow>
                         <TableCell colSpan={6}>
-                          <EmptyState message={hasLoaded ? "Không có đợt thanh toán đang chờ với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
+                          <EmptyState
+                            message={
+                              hasLoaded
+                                ? "Không có đợt thanh toán đang chờ với bộ lọc hiện tại"
+                                : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"
+                            }
+                          />
                         </TableCell>
                       </TableRow>
                     )}
@@ -1648,40 +1855,53 @@ export function PaymentBatchManagement() {
                 </Table>
               </Box>
             </Paper>
-            <Stack spacing={2} sx={{ alignSelf: "start", position: { xl: "sticky" }, top: { xl: 24 } }}>
-              <Paper variant="outlined" sx={{ p: 2, borderColor: "primary.light" }}>
+            <Stack
+              spacing={2}
+              sx={{
+                alignSelf: "start",
+                position: { xl: "sticky" },
+                top: { xl: 24 },
+              }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{ p: 2, borderColor: "primary.light" }}
+              >
                 <Stack spacing={1}>
-                <Typography variant="body2" fontWeight={700}>
-                  Đã chọn {selectedStudentIds.length} học sinh · {selectedStudentNoticeCount} thông báo
-                </Typography>
-                {selectedStudentOutOfScopeBatches.length > 0 && (
-                  <Alert severity="warning" sx={{ py: 0.25 }}>
-                    Batch {selectedStudentOutOfScopeBatches[0]!.batchNo} có khoản
-                    ngoài kỳ/lớp đang lọc. Hãy chọn batch đó và tách đợt trước khi
-                    xuất PDF.
-                  </Alert>
-                )}
-                <Button
-                  fullWidth
-                  variant="contained"
-                  startIcon={<DownloadOutlinedIcon />}
-                  onClick={() => void downloadSelectedStudentNotices()}
-                  disabled={
-                    !selectedStudentIds.length ||
-                    !selectedStudentNoticeCount ||
-                    selectedStudentOutOfScopeBatches.length > 0 ||
-                    selectedStudentNoticeCount > 5000 ||
-                    isDownloadingSelectedNotices
-                  }
-                  sx={{ mt: 1 }}
-                >
-                  {isDownloadingSelectedNotices ? "Đang xuất PDF..." : "Xuất PDF học sinh đã chọn"}
-                </Button>
-                {selectedStudentNoticeCount > 5000 && (
-                  <Typography variant="caption" color="error.main">
-                    Mỗi lần xuất tối đa 5.000 thông báo.
+                  <Typography variant="body2" fontWeight={700}>
+                    Đã chọn {selectedStudentIds.length} học sinh ·{" "}
+                    {selectedStudentNoticeCount} thông báo
                   </Typography>
-                )}
+                  {selectedStudentOutOfScopeBatches.length > 0 && (
+                    <Alert severity="warning" sx={{ py: 0.25 }}>
+                      Batch {selectedStudentOutOfScopeBatches[0]!.batchNo} có
+                      khoản ngoài kỳ/lớp đang lọc. Hãy chọn batch đó và tách đợt
+                      trước khi xuất PDF.
+                    </Alert>
+                  )}
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    startIcon={<DownloadOutlinedIcon />}
+                    onClick={() => void downloadSelectedStudentNotices()}
+                    disabled={
+                      !selectedStudentIds.length ||
+                      !selectedStudentNoticeCount ||
+                      selectedStudentOutOfScopeBatches.length > 0 ||
+                      selectedStudentNoticeCount > 5000 ||
+                      isDownloadingSelectedNotices
+                    }
+                    sx={{ mt: 1 }}
+                  >
+                    {isDownloadingSelectedNotices
+                      ? "Đang xuất PDF..."
+                      : "Xuất PDF học sinh đã chọn"}
+                  </Button>
+                  {selectedStudentNoticeCount > 5000 && (
+                    <Typography variant="caption" color="error.main">
+                      Mỗi lần xuất tối đa 5.000 thông báo.
+                    </Typography>
+                  )}
                 </Stack>
               </Paper>
               <SelectionSummary
@@ -1689,65 +1909,68 @@ export function PaymentBatchManagement() {
                 total={selectedBatchTotal}
                 details={selectedBatches
                   .slice(0, 5)
-                  .map((batch) => `${batch.batchNo} · ${batch.student.fullName}`)}
+                  .map(
+                    (batch) => `${batch.batchNo} · ${batch.student.fullName}`,
+                  )}
               >
-              <Button
-                fullWidth
-                variant="contained"
-                color="warning"
-                startIcon={<CallSplitOutlinedIcon />}
-                onClick={() => openRestructureDialog("SPLIT")}
-                disabled={!splitTarget || splitTarget.allocations.length < 2}
-              >
-                Tách đợt thu
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<MergeTypeOutlinedIcon />}
-                onClick={() => openRestructureDialog("MERGE")}
-                disabled={!canMergeBatches}
-              >
-                Gộp đợt thu
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<MergeTypeOutlinedIcon />}
-                disabled={!bulkMergeGroups.length || busy}
-                onClick={() => {
-                  setReason("");
-                  setBulkMode("MERGE");
-                }}
-              >
-                Gộp tất cả ({bulkMergeGroups.length})
-              </Button>
-              <Button
-                fullWidth
-                variant="outlined"
-                color="warning"
-                startIcon={<CallSplitOutlinedIcon />}
-                disabled={!bulkSplitBatches.length || busy}
-                onClick={() => {
-                  setReason("");
-                  setBulkMode("SPLIT");
-                }}
-              >
-                Tách tất cả ({bulkSplitBatches.length})
-              </Button>
-              {selectedBatches.length > 0 && !sameStudent(selectedBatches) && (
-                <Alert severity="info">
-                  Chỉ được gộp các đợt của cùng một học sinh.
-                </Alert>
-              )}
-              {selectedBatches.length > 0 &&
-                selectedBatchStudent &&
-                new Set(selectedBatches.map((batch) => batch.bankAccountId))
-                  .size > 1 && (
-                  <Alert severity="info">
-                    Các đợt phải dùng cùng tài khoản nhận tiền.
-                  </Alert>
-                )}
+                <Button
+                  fullWidth
+                  variant="contained"
+                  color="warning"
+                  startIcon={<CallSplitOutlinedIcon />}
+                  onClick={() => openRestructureDialog("SPLIT")}
+                  disabled={!splitTarget || splitTarget.allocations.length < 2}
+                >
+                  Tách đợt thu
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<MergeTypeOutlinedIcon />}
+                  onClick={() => openRestructureDialog("MERGE")}
+                  disabled={!canMergeBatches}
+                >
+                  Gộp đợt thu
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<MergeTypeOutlinedIcon />}
+                  disabled={!bulkMergeGroups.length || busy}
+                  onClick={() => {
+                    setReason("");
+                    setBulkMode("MERGE");
+                  }}
+                >
+                  Gộp tất cả ({bulkMergeGroups.length})
+                </Button>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<CallSplitOutlinedIcon />}
+                  disabled={!bulkSplitBatches.length || busy}
+                  onClick={() => {
+                    setReason("");
+                    setBulkMode("SPLIT");
+                  }}
+                >
+                  Tách tất cả ({bulkSplitBatches.length})
+                </Button>
+                {selectedBatches.length > 0 &&
+                  !sameStudent(selectedBatches) && (
+                    <Alert severity="info">
+                      Chỉ được gộp các đợt của cùng một học sinh.
+                    </Alert>
+                  )}
+                {selectedBatches.length > 0 &&
+                  selectedBatchStudent &&
+                  new Set(selectedBatches.map((batch) => batch.bankAccountId))
+                    .size > 1 && (
+                    <Alert severity="info">
+                      Các đợt phải dùng cùng tài khoản nhận tiền.
+                    </Alert>
+                  )}
               </SelectionSummary>
             </Stack>
           </Box>
@@ -1765,7 +1988,15 @@ export function PaymentBatchManagement() {
           >
             <Box sx={{ overflowX: "auto" }}>
               <Table sx={{ minWidth: 850 }} size="small">
-                <TableHead sx={{ "& .MuiTableCell-root": { bgcolor: "action.hover", color: "text.secondary", fontWeight: 800 } }}>
+                <TableHead
+                  sx={{
+                    "& .MuiTableCell-root": {
+                      bgcolor: "action.hover",
+                      color: "text.secondary",
+                      fontWeight: 800,
+                    },
+                  }}
+                >
                   <TableRow>
                     <TableCell>Đợt thu</TableCell>
                     <TableCell>Học sinh</TableCell>
@@ -1809,9 +2040,18 @@ export function PaymentBatchManagement() {
                           <TableCell>
                             {getBatchFeeGroups(batch).map((group) => (
                               <Box key={group.period} sx={{ mb: 0.75 }}>
-                                <Chip size="small" variant="outlined" label={group.period} sx={{ mb: 0.5 }} />
+                                <Chip
+                                  size="small"
+                                  color="primary"
+                                  variant="filled"
+                                  label={group.period}
+                                  sx={{ mb: 0.5, fontWeight: 700 }}
+                                />
                                 {group.classes.map((line) => (
-                                  <Typography key={line.className} variant="body2">
+                                  <Typography
+                                    key={line.className}
+                                    variant="body2"
+                                  >
                                     {line.className} · {money(line.amount)}
                                   </Typography>
                                 ))}
@@ -1833,7 +2073,10 @@ export function PaymentBatchManagement() {
                           <TableCell>
                             <Button
                               component={Link}
-                              href={withReturnTo(`/admin/tuition-fees/payment-history/${batch.id}`, noticeReturnPath)}
+                              href={withReturnTo(
+                                `/admin/tuition-fees/payment-history/${batch.id}`,
+                                noticeReturnPath,
+                              )}
                               size="small"
                             >
                               Xem chi tiết
@@ -1846,7 +2089,13 @@ export function PaymentBatchManagement() {
                   {!loading && !visibleSuccessfulBatches.length && (
                     <TableRow>
                       <TableCell colSpan={6}>
-                        <EmptyState message={hasLoaded ? "Không có đợt đã thanh toán với bộ lọc hiện tại" : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"} />
+                        <EmptyState
+                          message={
+                            hasLoaded
+                              ? "Không có đợt đã thanh toán với bộ lọc hiện tại"
+                              : "Nhập từ khóa hoặc chọn học viên, lớp, kỳ rồi bấm Tìm kiếm để tải dữ liệu"
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   )}
@@ -1877,7 +2126,7 @@ export function PaymentBatchManagement() {
         }
         message={
           classNoticeMode
-          ? `Hệ thống tìm học sinh thuộc lớp ${selectedClass?.name ?? "đã chọn"}, rồi lấy các khoản học phí tháng còn nợ của các em ở mọi lớp ${months.length ? `trong các kỳ ${months.join(", ")}` : "ở tất cả kỳ học phí"}. Mỗi học sinh và mỗi kỳ được phát hành thành một đợt riêng. Đợt chuyển khoản đang chờ cùng học sinh và kỳ được cập nhật nếu phù hợp; đợt đang gắn với sao kê không bị thay đổi.`
+            ? `Hệ thống tìm học sinh thuộc lớp ${selectedClass?.name ?? "đã chọn"}, rồi lấy các khoản học phí tháng còn nợ của các em ở mọi lớp ${months.length ? `trong các kỳ ${months.join(", ")}` : "ở tất cả kỳ học phí"}. Mỗi học sinh và mỗi kỳ được phát hành thành một đợt riêng. Đợt chuyển khoản đang chờ cùng học sinh và kỳ được cập nhật nếu phù hợp; đợt đang gắn với sao kê không bị thay đổi.`
             : `Hệ thống sẽ phát hành ${selectedFeeIds.length} khoản cho ${selectedStudentCount} học viên, tự gom theo từng học viên. Tổng số tiền còn nợ: ${money(selectedFeeTotal)}.`
         }
         content={
@@ -1944,7 +2193,12 @@ export function PaymentBatchManagement() {
                 </Typography>
                 {splitTarget.allocations.map((allocation) => (
                   <Typography key={allocation.tuitionFee.id} variant="body2">
-                    {getFeePeriod(allocation.tuitionFee.billingYear, allocation.tuitionFee.billingMonth)} · {allocation.tuitionFee.class?.name || "-"}: {money(allocation.amount)}
+                    {getFeePeriod(
+                      allocation.tuitionFee.billingYear,
+                      allocation.tuitionFee.billingMonth,
+                    )}{" "}
+                    · {allocation.tuitionFee.class?.name || "-"}:{" "}
+                    {money(allocation.amount)}
                   </Typography>
                 ))}
               </Alert>
@@ -1987,7 +2241,11 @@ export function PaymentBatchManagement() {
       />
       <ConfirmDialog
         open={Boolean(bulkMode)}
-        title={bulkMode === "MERGE" ? "Gộp tất cả đợt đã chọn" : "Tách tất cả đợt đã chọn"}
+        title={
+          bulkMode === "MERGE"
+            ? "Gộp tất cả đợt đã chọn"
+            : "Tách tất cả đợt đã chọn"
+        }
         message={
           bulkMode === "MERGE"
             ? `Sẽ gộp ${bulkMergeGroups.length} học sinh (${bulkMergeGroups.reduce((sum, group) => sum + group.items.length, 0)} đợt). Các batch cũ bị hủy và tạo lại.`
