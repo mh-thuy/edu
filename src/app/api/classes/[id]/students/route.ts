@@ -50,7 +50,7 @@ export async function GET(_request: NextRequest, context: { params?: Params }) {
       status: z.enum(["ACTIVE", "PAUSED", "COMPLETED", "LEFT"]).optional(),
       subjectId: z.string().uuid().optional(),
       month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-      sortBy: z.enum(["code", "fullName", "item", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"]).default("fullName"),
+      sortBy: z.enum(["code", "fullName", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"]).default("fullName"),
       sortDirection: z.enum(["asc", "desc"]).default("asc"),
       tuitionStatus: z.enum(["NONE", "UNPAID", "PARTIAL", "PAID", "OVERDUE", "EXEMPTED", "CANCELLED"]).optional(),
     }).parse({

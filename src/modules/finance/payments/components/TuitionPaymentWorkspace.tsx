@@ -96,10 +96,11 @@ const money = (value: number) =>
 const paymentAttemptStoragePrefix = "edu:payment-attempt:";
 
 export function TuitionPaymentWorkspace({
-  initialTuitionFeeId,
+  initialTuitionFeeIds = [],
 }: {
-  initialTuitionFeeId?: string;
+  initialTuitionFeeIds?: string[];
 }) {
+  const initialKey = initialTuitionFeeIds.join(",");
   const [step, setStep] = useState(0);
   const [student, setStudent] = useState<MasterSelectValue | null>(null);
   const [studentCode, setStudentCode] = useState("");
@@ -180,10 +181,12 @@ export function TuitionPaymentWorkspace({
   }, [loadBankAccounts]);
 
   useEffect(() => {
-    if (!initialTuitionFeeId) return;
+    const ids = initialKey ? initialKey.split(",") : [];
+    const firstId = ids[0];
+    if (!firstId) return;
     setInitialLoading(true);
     setError("");
-    void fetch(`/api/tuition-fees/${initialTuitionFeeId}`)
+    void fetch(`/api/tuition-fees/${firstId}`)
       .then(async (response) => {
         if (!response.ok)
           throw new Error(
@@ -255,8 +258,11 @@ export function TuitionPaymentWorkspace({
       .then(({ fee, fees: studentFees }) => {
         setFees(studentFees);
         setAmounts(Object.fromEntries(studentFees.map((item) => [item.id, Number(item.remainingAmount ?? item.finalAmount)])));
-        setSelectedIds([fee.id]);
-        setShowMultipleFees(false);
+        const preselected = studentFees
+          .filter((item) => ids.includes(item.id) && !item.paymentAllocations?.length)
+          .map((item) => item.id);
+        setSelectedIds(preselected.length ? preselected : [fee.id]);
+        setShowMultipleFees(preselected.length > 1);
         setStep(1);
       })
       .catch((reason) =>
@@ -267,7 +273,7 @@ export function TuitionPaymentWorkspace({
         ),
       )
       .finally(() => setInitialLoading(false));
-  }, [initialTuitionFeeId]);
+  }, [initialKey]);
 
   async function lookupStudent() {
     if (!studentCode) {

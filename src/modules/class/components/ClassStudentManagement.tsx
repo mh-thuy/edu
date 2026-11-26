@@ -27,6 +27,7 @@ import {
   TablePagination,
   TableRow,
   TableSortLabel,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import Link from "next/link";
@@ -49,6 +50,8 @@ import AddCardOutlinedIcon from "@mui/icons-material/AddCardOutlined";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import MoreVertOutlinedIcon from "@mui/icons-material/MoreVertOutlined";
 import { TuitionDetail } from "@/modules/finance/tuition/components/TuitionDetail";
+import { TuitionEditForm } from "@/modules/finance/tuition/components/TuitionEditForm";
+import { getTuitionFeeAmountEditBlock } from "@/modules/finance/tuition/utils/tuition-amount-edit";
 
 type ClassSubject = {
   id: string;
@@ -117,6 +120,10 @@ type StudentRow = {
   tuitionFees: Fee[];
   pauses: EnrollmentPause[];
   _count: { tuitionFees: number };
+  otherPeriodDebt: {
+    amount: string;
+    periods: Array<{ id: string; billingYear: number; billingMonth: number; remainingAmount: string; status: string; pending: boolean }>;
+  };
 };
 type StudentSummary = {
   total: number;
@@ -214,6 +221,8 @@ export function ClassStudentManagement({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [createFeesConfirmOpen, setCreateFeesConfirmOpen] = useState(false);
   const [selectedFeeId, setSelectedFeeId] = useState<string | null>(null);
+  const [amountTarget, setAmountTarget] = useState<StudentRow | null>(null);
+  const [amountEditFeeId, setAmountEditFeeId] = useState<string | null>(null);
   const [actionMenu, setActionMenu] = useState<{ anchorEl: HTMLElement; student: StudentRow } | null>(null);
   const feeDrawerHistoryEntry = useRef(false);
   const { showSuccess, showError, Snackbar } = useSnackbar();
@@ -308,6 +317,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
     const [year, selectedMonth] = month.split("-").map(Number);
     return student.tuitionFees.find((fee) => fee.billingType === "MONTHLY" && fee.billingYear === year && fee.billingMonth === selectedMonth);
   };
+  const amountEditBlock = (fee: Fee) => getTuitionFeeAmountEditBlock({ status: fee.status, paymentCount: fee.payments.length, pendingBatchNo: fee.paymentAllocations[0]?.paymentBatch.batchNo });
   const getFees = (student: StudentRow) => {
     const [year, selectedMonth] = month.split("-").map(Number);
     return student.tuitionFees.filter((fee) => fee.billingType === "MONTHLY" && fee.billingYear === year && fee.billingMonth === selectedMonth);
@@ -684,10 +694,8 @@ export function ClassStudentManagement({ id }: { id: string }) {
       <Table sx={{ minWidth: 1250 }}>
         <TableHead><TableRow>
           <TableCell><TableSortLabel active={studentSort.key === "fullName"} direction={studentSort.key === "fullName" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("fullName")}>Học viên</TableSortLabel></TableCell>
-          <TableCell align="right"><TableSortLabel active={studentSort.key === "finalAmount"} direction={studentSort.key === "finalAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("finalAmount")}>Phải thu</TableSortLabel></TableCell>
           <TableCell align="right"><TableSortLabel active={studentSort.key === "remainingAmount"} direction={studentSort.key === "remainingAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("remainingAmount")}>Còn nợ</TableSortLabel></TableCell>
-          <TableCell align="right"><TableSortLabel active={studentSort.key === "paidAmount"} direction={studentSort.key === "paidAmount" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("paidAmount")}>Đã thu</TableSortLabel></TableCell>
-          <TableCell><TableSortLabel active={studentSort.key === "item"} direction={studentSort.key === "item" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("item")}>Khoản phí / ghi chú</TableSortLabel></TableCell>
+          <TableCell align="right">Nợ kỳ khác</TableCell>
           <TableCell><TableSortLabel active={studentSort.key === "feeStatus"} direction={studentSort.key === "feeStatus" ? studentSort.direction : "asc"} onClick={() => handleStudentSort("feeStatus")}>Trạng thái phí</TableSortLabel></TableCell>
           <TableCell>Tình trạng</TableCell>
           <TableCell align="right" sx={{ position: "sticky", right: 0, zIndex: 3, bgcolor: "background.paper", boxShadow: "-6px 0 8px -8px rgba(0,0,0,0.35)" }}>Thao tác</TableCell>
@@ -695,17 +703,11 @@ export function ClassStudentManagement({ id }: { id: string }) {
         <TableBody>{pagedStudents.map((student) => {
           const pause = getPause(student);
           const fees = getFees(student);
-          const totalAmount = feeAmount(fees, "finalAmount");
           const remainingAmount = feeAmount(fees, "remainingAmount");
-          const paidAmount = feeAmount(fees, "paidAmount");
           return <TableRow key={student.id} hover>
             <TableCell sx={{ minWidth: 200 }}><Typography fontWeight={600}>{student.student.fullName}</Typography><Typography variant="caption" color="text.secondary">{student.student.code} · {student.student.phone || "Chưa có SĐT"}</Typography></TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? money(totalAmount) : <Typography variant="body2" color="text.secondary">{pause ? "Không phát sinh" : "Chưa tạo phí"}</Typography>}</TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}><Typography fontWeight={700} color={remainingAmount > 0 ? "error.main" : "success.main"}>{fees.length ? money(remainingAmount) : "—"}</Typography></TableCell>
-            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? money(paidAmount) : "—"}</TableCell>
-            <TableCell sx={{ minWidth: 190, maxWidth: 260 }}>
-              {fees.length ? <>{fees.slice(0, 2).map((fee) => <Box key={fee.id} sx={{ mb: fee.note ? 0.75 : 0 }}><Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>{fee.items.map((item) => item.itemName).join(", ") || "Học phí"}</Typography>{fee.note && <Typography variant="caption" color="text.secondary" sx={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }} title={fee.note}><strong>Ghi chú:</strong> {fee.note}</Typography>}</Box>)}{fees.length > 2 && <Typography variant="caption" color="text.secondary">+{fees.length - 2} khoản phí khác</Typography>}</> : <Typography variant="body2" color="text.secondary">{pause ? "Không phát sinh do tạm nghỉ" : "Chưa tạo học phí"}</Typography>}
-            </TableCell>
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{fees.length ? <Button size="small" onClick={() => { const editable = fees.filter((fee) => !amountEditBlock(fee)); setAmountTarget(student); setAmountEditFeeId(editable.length === 1 ? editable[0]?.id ?? null : null); }} sx={{ fontWeight: 700, color: remainingAmount > 0 ? "error.main" : "success.main" }}>{money(remainingAmount)}</Button> : <Typography color="text.secondary">—</Typography>}</TableCell>
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>{Number(student.otherPeriodDebt.amount) > 0 ? <Tooltip arrow title={<Stack spacing={0.5} sx={{ p: 0.5 }}>{student.otherPeriodDebt.periods.map((period) => <Typography key={`${period.billingYear}-${period.billingMonth}`} variant="caption" display="block">Tháng {period.billingMonth}/{period.billingYear}: {money(Number(period.remainingAmount))} · {feeStatusLabel[period.status] ?? period.status}</Typography>)}</Stack>}>{student.otherPeriodDebt.periods.some((period) => !period.pending) ? <Button component={Link} href={`/admin/tuition-fees/payment?tuitionFeeIds=${student.otherPeriodDebt.periods.filter((period) => !period.pending).map((period) => period.id).join(",")}`} size="small" sx={{ fontWeight: 700, color: "warning.dark" }}>{money(Number(student.otherPeriodDebt.amount))}</Button> : <Typography fontWeight={700} color="warning.dark">{money(Number(student.otherPeriodDebt.amount))}</Typography>}</Tooltip> : "—"}</TableCell>
             <TableCell sx={{ minWidth: 150 }}>{fees.length ? <>{fees.slice(0, 2).map((fee) => {
               const pendingBatch = fee.paymentAllocations[0]?.paymentBatch;
               return <Stack key={fee.id} spacing={0.5} alignItems="flex-start" sx={{ mb: 0.5 }}><Chip size="small" color={pendingBatch ? "warning" : feeStatusColor[fee.status] ?? "default"} label={pendingBatch ? "Đang chờ đối soát" : feeStatusLabel[fee.status] ?? fee.status} />{pendingBatch && <Typography variant="caption" color="text.secondary">{pendingBatch.batchNo}</Typography>}</Stack>;
@@ -713,7 +715,7 @@ export function ClassStudentManagement({ id }: { id: string }) {
             <TableCell sx={{ minWidth: 170 }}><Chip size="small" color={hasLeftByMonth(student) ? "error" : student.status === "COMPLETED" ? "default" : pause ? "info" : "success"} label={hasLeftByMonth(student) ? "Đã rời lớp" : student.status === "COMPLETED" ? "Đã hoàn thành" : pause ? `Tạm nghỉ đến ${monthValue(pause.endMonth)}` : "Đang học"} /><Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, maxWidth: 220 }} noWrap title={student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ")}>{student.subjects.map((item) => subjectName.get(item.classSubjectId)).filter(Boolean).join(", ") || "Chưa đăng ký môn"}</Typography></TableCell>
             <TableCell align="right" sx={{ position: "sticky", right: 0, zIndex: 1, bgcolor: "background.paper", whiteSpace: "nowrap", boxShadow: "-6px 0 8px -8px rgba(0,0,0,0.35)" }}><Button size="small" variant="outlined" onClick={() => setSelectedStudent(student)}>Chi tiết</Button><Button size="small" aria-label={`Thao tác ${student.student.fullName}`} onClick={(event) => setActionMenu({ anchorEl: event.currentTarget, student })}><MoreVertOutlinedIcon /></Button></TableCell>
           </TableRow>;
-        })}{!pagedStudents.length && <TableRow><TableCell colSpan={8}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
+        })}{!pagedStudents.length && <TableRow><TableCell colSpan={6}><Typography sx={{ p: 4, textAlign: "center" }} color="text.secondary">{loading ? "Đang tải dữ liệu..." : "Không có học viên hoặc khoản phí phù hợp"}</Typography></TableCell></TableRow>}</TableBody>
       </Table>
       </Box>
       <Box sx={{ display: { xs: "grid", md: "none" }, gap: 1.25, p: 1.5 }}>
@@ -1033,6 +1035,39 @@ export function ClassStudentManagement({ id }: { id: string }) {
         <Button variant="outlined" onClick={() => setCreateFeesConfirmOpen(false)} disabled={busy}>Đóng</Button>
         <Button variant="contained" onClick={() => void createFees()} disabled={busy}>{busy ? "Đang tạo..." : "Xác nhận tạo phí"}</Button>
       </DialogActions>
+    </Dialog>
+    <Dialog open={Boolean(amountTarget)} onClose={() => { setAmountTarget(null); setAmountEditFeeId(null); }} fullWidth maxWidth="sm">
+      <DialogTitle>{amountEditFeeId ? "Sửa số tiền học phí" : `Còn nợ · ${amountTarget?.student.fullName ?? ""}`}</DialogTitle>
+      <DialogContent>
+        {amountEditFeeId ? (
+          <TuitionEditForm
+            id={amountEditFeeId}
+            embedded
+            onCancel={() => { setAmountTarget(null); setAmountEditFeeId(null); }}
+            onSuccess={() => { setAmountEditFeeId(null); setAmountTarget(null); void load(); }}
+          />
+        ) : (
+          <Stack spacing={1.25} sx={{ pt: 1 }}>
+            {amountTarget && getFees(amountTarget).map((fee) => {
+              const block = amountEditBlock(fee);
+              const editable = !block;
+              return <Paper key={fee.id} variant="outlined" sx={{ p: 1.5 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                  <Box minWidth={0}>
+                    <Typography fontWeight={700}>{fee.feeNo}</Typography>
+                    <Typography variant="caption" color="text.secondary">{feeStatusLabel[fee.status] ?? fee.status}{block ? ` · ${block}` : ""}</Typography>
+                  </Box>
+                  <Stack alignItems="flex-end" gap={0.5}>
+                    <Typography fontWeight={700}>{money(fee.remainingAmount)}</Typography>
+                    <Button size="small" variant="outlined" disabled={!editable} onClick={() => setAmountEditFeeId(fee.id)}>Sửa số tiền</Button>
+                  </Stack>
+                </Stack>
+              </Paper>;
+            })}
+          </Stack>
+        )}
+      </DialogContent>
+      {!amountEditFeeId && <DialogActions><Button onClick={() => setAmountTarget(null)}>Đóng</Button></DialogActions>}
     </Dialog>
     {selectedFeeId && <TuitionDetail
       id={selectedFeeId}

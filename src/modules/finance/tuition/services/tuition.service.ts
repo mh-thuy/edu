@@ -17,6 +17,7 @@ import {
   PARTIAL_FEE_STATUS,
 } from "@/modules/finance/tuition/utils/tuition-status";
 import { getVietnamDayStart } from "@/lib/vietnam-time";
+import { getTuitionFeeAmountEditBlock } from "@/modules/finance/tuition/utils/tuition-amount-edit";
 
 const feeInclude = {
   student: true,
@@ -709,20 +710,12 @@ export class TuitionService {
           "Khoản học phí đã thay đổi, vui lòng tải lại",
           "VERSION_CONFLICT",
         );
-      if (
-        current.status !== TuitionFeeStatus.UNPAID &&
-        current.status !== TuitionFeeStatus.OVERDUE
-      ) {
-        throw new ConflictError(
-          "Chỉ có thể sửa khoản học phí chưa thu hoặc quá hạn",
-        );
-      }
-      if (current.payments.length)
-        throw new ConflictError("Không thể sửa khoản học phí đã thanh toán");
-      if (current.paymentAllocations.length)
-        throw new ConflictError(
-          `Không thể sửa khoản học phí đang chờ thanh toán trong đợt ${current.paymentAllocations[0]?.paymentBatch.batchNo}`,
-        );
+      const editBlock = getTuitionFeeAmountEditBlock({
+        status: current.status,
+        paymentCount: current.payments.length,
+        pendingBatchNo: current.paymentAllocations[0]?.paymentBatch.batchNo,
+      });
+      if (editBlock) throw new ConflictError(editBlock);
       const discountAmount = new Prisma.Decimal(
         data.discountAmount ?? current.discountAmount,
       );

@@ -19,7 +19,7 @@ import type {
   ClassWithRelations,
 } from "@/types/prisma";
 import { getEffectiveTuitionFeeStatus } from "@/modules/finance/tuition/utils/tuition-status";
-import { getVietnamCalendarDateStart } from "@/lib/vietnam-time";
+import { getVietnamCalendarDateStart, getVietnamMonth } from "@/lib/vietnam-time";
 
 function toNullableDate(value?: string): Date | undefined {
   return value ? new Date(value) : undefined;
@@ -1566,7 +1566,7 @@ export async function getClassStudentsPage(
     status?: "ACTIVE" | "PAUSED" | "COMPLETED" | "LEFT";
     subjectId?: string;
     month: string;
-    sortBy?: "code" | "fullName" | "item" | "finalAmount" | "paidAmount" | "remainingAmount" | "feeStatus";
+    sortBy?: "code" | "fullName" | "finalAmount" | "paidAmount" | "remainingAmount" | "feeStatus";
     sortDirection?: "asc" | "desc";
     tuitionStatus?: "NONE" | "UNPAID" | "PARTIAL" | "PAID" | "OVERDUE" | "EXEMPTED" | "CANCELLED";
   },
@@ -1657,7 +1657,7 @@ export async function getClassStudentsPage(
     ...activeInPeriod,
     pauses: { none: pauseWhere },
   };
-  const feeSort = ["item", "finalAmount", "paidAmount", "remainingAmount", "feeStatus"].includes(options.sortBy ?? "");
+  const feeSort = ["finalAmount", "paidAmount", "remainingAmount", "feeStatus"].includes(options.sortBy ?? "");
   const sortedPageIds = feeSort
     ? await prisma.$queryRaw<Array<{ id: string }>>`
         WITH fee_sort AS (
@@ -1683,20 +1683,11 @@ export async function getClassStudentsPage(
             AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
             AND tf.billing_year = ${period.year} AND tf.billing_month = ${period.month}
           GROUP BY tf.enrollment_id
-        ), fee_item_sort AS (
-          SELECT tf.enrollment_id, string_agg(DISTINCT tfi.item_name, ', ' ORDER BY tfi.item_name) AS item_name
-          FROM tuition_fees tf
-          JOIN tuition_fee_items tfi ON tfi.tuition_fee_id = tf.id
-          WHERE tf.class_id = ${classId}::uuid
-            AND tf.billing_type = 'MONTHLY'::tuition_fee_billing_type
-            AND tf.billing_year = ${period.year} AND tf.billing_month = ${period.month}
-          GROUP BY tf.enrollment_id
         )
         SELECT cs.id
         FROM class_students cs
         JOIN students s ON s.id = cs.student_id
         LEFT JOIN fee_sort ON fee_sort.enrollment_id = cs.id
-        LEFT JOIN fee_item_sort ON fee_item_sort.enrollment_id = cs.id
         WHERE cs.class_id = ${classId}::uuid
           AND cs.status::text IN ('ACTIVE', 'COMPLETED', 'LEFT')
           AND (${options.status ?? null}::text IS NULL
@@ -1730,10 +1721,10 @@ export async function getClassStudentsPage(
                 AND CASE WHEN tf.status::text IN ('UNPAID', 'PARTIAL') AND tf.due_date < ${asOfDate}::date THEN 'OVERDUE'
                   ELSE tf.status::text END = ${options.tuitionStatus ?? ""})))
         ORDER BY
-          CASE WHEN ${options.sortBy ?? "fullName"} IN ('item', 'code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'asc'
-            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'item' THEN fee_item_sort.item_name WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END ASC NULLS LAST,
-          CASE WHEN ${options.sortBy ?? "fullName"} IN ('item', 'code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'desc'
-            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'item' THEN fee_item_sort.item_name WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END DESC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} IN ('code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'asc'
+            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END ASC NULLS LAST,
+          CASE WHEN ${options.sortBy ?? "fullName"} IN ('code', 'fullName') AND ${options.sortDirection ?? "asc"} = 'desc'
+            THEN CASE WHEN ${options.sortBy ?? "fullName"} = 'code' THEN s.code ELSE s.full_name END END DESC NULLS LAST,
           CASE WHEN ${options.sortBy ?? "fullName"} = 'finalAmount' AND ${options.sortDirection ?? "asc"} = 'asc' THEN fee_sort.final_amount END ASC NULLS LAST,
           CASE WHEN ${options.sortBy ?? "fullName"} = 'finalAmount' AND ${options.sortDirection ?? "asc"} = 'desc' THEN fee_sort.final_amount END DESC NULLS LAST,
           CASE WHEN ${options.sortBy ?? "fullName"} = 'paidAmount' AND ${options.sortDirection ?? "asc"} = 'asc' THEN fee_sort.paid_amount END ASC NULLS LAST,
@@ -1947,11 +1938,60 @@ export async function getClassStudentsPage(
       AND tf.billing_year = ${period.year}
       AND tf.billing_month = ${period.month}
   `;
+  // Nợ các kỳ khác đã đến hạn (không gồm kỳ đang xem và kỳ tương lai).
+  const [nowYear, nowMonth] = getVietnamMonth().split("-").map(Number);
+  const otherPeriodFees = students.length
+    ? await prisma.tuitionFee.findMany({
+        where: {
+          classId,
+          enrollmentId: { in: students.map((student) => student.id) },
+          billingType: "MONTHLY",
+          status: { in: ["UNPAID", "PARTIAL", "OVERDUE"] },
+          NOT: feePeriodWhere,
+          OR: [
+            { billingYear: { lt: nowYear } },
+            { billingYear: nowYear, billingMonth: { lte: nowMonth } },
+          ],
+        },
+        select: {
+          id: true,
+          enrollmentId: true,
+          billingYear: true,
+          billingMonth: true,
+          status: true,
+          dueDate: true,
+          finalAmount: true,
+          payments: { where: { paymentStatus: "SUCCESS" }, select: { amount: true } },
+          paymentAllocations: { where: { paymentBatch: { status: "PENDING" } }, select: { id: true }, take: 1 },
+        },
+      })
+    : [];
+  const otherPeriodDebtById = new Map<string, { amount: Prisma.Decimal; periods: Array<{ id: string; billingYear: number; billingMonth: number; remainingAmount: Prisma.Decimal; status: string; pending: boolean }> }>();
+  for (const fee of otherPeriodFees) {
+    const paid = fee.payments.reduce((total, payment) => total.add(payment.amount), new Prisma.Decimal(0));
+    const remaining = fee.finalAmount.sub(paid);
+    if (!remaining.greaterThan(0)) continue;
+    const entry = otherPeriodDebtById.get(fee.enrollmentId) ?? { amount: new Prisma.Decimal(0), periods: [] };
+    entry.amount = entry.amount.add(remaining);
+    entry.periods.push({
+      id: fee.id,
+      billingYear: fee.billingYear,
+      billingMonth: fee.billingMonth,
+      remainingAmount: remaining,
+      status: getEffectiveTuitionFeeStatus(fee.status, fee.dueDate),
+      pending: fee.paymentAllocations.length > 0,
+    });
+    otherPeriodDebtById.set(fee.enrollmentId, entry);
+  }
+  for (const entry of otherPeriodDebtById.values()) {
+    entry.periods.sort((a, b) => a.billingYear - b.billingYear || a.billingMonth - b.billingMonth);
+  }
   const orderedStudents = sortedPageIds
     ? sortedPageIds.map(({ id }) => students.find((student) => student.id === id)).filter((student) => student !== undefined)
     : students;
   const items = orderedStudents.map((student) => ({
     ...student,
+    otherPeriodDebt: otherPeriodDebtById.get(student.id) ?? { amount: new Prisma.Decimal(0), periods: [] },
     pauses: student.pauses.map((pause) => ({
       ...pause,
       status: statusById.get(pause.id) ?? "ACTIVE",
