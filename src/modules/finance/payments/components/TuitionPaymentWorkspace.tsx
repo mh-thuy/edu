@@ -106,7 +106,6 @@ export function TuitionPaymentWorkspace({
   const [studentCode, setStudentCode] = useState("");
   const [fees, setFees] = useState<Fee[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showMultipleFees, setShowMultipleFees] = useState(false);
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [method, setMethod] = useState("CASH");
   const [payerName, setPayerName] = useState("");
@@ -134,7 +133,6 @@ export function TuitionPaymentWorkspace({
   const studentDialog = useDisclosure();
   const { showSuccess, showError, Snackbar } = useSnackbar();
   const selectedFees = fees.filter((fee) => selectedIds.includes(fee.id));
-  const selectedFee = selectedFees[0];
   const getRemaining = (fee: Fee) => Number(fee.remainingAmount ?? fee.finalAmount);
   const getAmount = (fee: Fee) => amounts[fee.id] ?? getRemaining(fee);
   const getAmountError = (fee: Fee) => {
@@ -262,7 +260,6 @@ export function TuitionPaymentWorkspace({
           .filter((item) => ids.includes(item.id) && !item.paymentAllocations?.length)
           .map((item) => item.id);
         setSelectedIds(preselected.length ? preselected : [fee.id]);
-        setShowMultipleFees(preselected.length > 1);
         setStep(1);
       })
       .catch((reason) =>
@@ -311,7 +308,6 @@ export function TuitionPaymentWorkspace({
       setFees(unpaid);
       setAmounts(Object.fromEntries(unpaid.map((fee) => [fee.id, Number(fee.remainingAmount ?? fee.finalAmount)])));
       setSelectedIds(firstAvailableFee ? [firstAvailableFee.id] : []);
-      setShowMultipleFees(false);
       if (!unpaid.length || !firstAvailableFee) {
         setError("Học sinh không còn khoản học phí cần thanh toán");
         return;
@@ -566,7 +562,6 @@ export function TuitionPaymentWorkspace({
     setStudentCode("");
     setFees([]);
     setSelectedIds([]);
-    setShowMultipleFees(false);
     setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
@@ -596,7 +591,6 @@ export function TuitionPaymentWorkspace({
     setFees([]);
     setSelectedIds([]);
     setAmounts({});
-    setShowMultipleFees(false);
     setPendingBatch(null);
     setReceiptId(null);
     setCompletedBatchId(null);
@@ -612,7 +606,6 @@ export function TuitionPaymentWorkspace({
     setStudentCode(item.code);
     setFees([]);
     setSelectedIds([]);
-    setShowMultipleFees(false);
     setAmounts({});
     setPendingBatch(null);
     setReceiptId(null);
@@ -873,80 +866,13 @@ export function TuitionPaymentWorkspace({
                       Nhập số tiền nhỏ hơn số còn nợ nếu muốn thanh toán từng phần.
                     </Typography>
                   </Box>
-                  {!showMultipleFees && selectedFee && (
-                    <Button size="small" variant="outlined" onClick={() => setShowMultipleFees(true)}>
-                      Thu nhiều khoản
-                    </Button>
-                  )}
                 </Stack>
 
-                {!showMultipleFees && selectedFee && (
-                  <Paper variant="outlined" sx={{ p: { xs: 2, md: 2.5 }, borderColor: "primary.main", borderWidth: 1.5, borderRadius: 2 }}>
-                    <Stack spacing={2.25}>
-                      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                            <Typography variant="subtitle1" fontWeight={800}>{selectedFee.feeNo}</Typography>
-                            <Chip
-                              size="small"
-                              color={feeStatusColors[selectedFee.status] || "warning"}
-                              label={feeStatusLabels[selectedFee.status] || selectedFee.status}
-                            />
-                          </Stack>
-                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                            {selectedFee.class?.name || "Chưa có lớp"}
-                            {selectedFee.dueDate
-                              ? ` · Hạn ${new Date(selectedFee.dueDate).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}`
-                              : ""}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
-                          gap: 1,
-                        }}
-                      >
-                        {[
-                          ["Tổng phải thu", money(Number(selectedFee.finalAmount)), "text.primary"],
-                          ["Đã thu", money(Number(selectedFee.paidAmount ?? 0)), "text.primary"],
-                          ["Còn nợ", money(getRemaining(selectedFee)), "warning.main"],
-                        ].map(([label, value, color]) => (
-                          <Box key={label} sx={{ p: 1.25, borderRadius: 1.5, bgcolor: "action.hover" }}>
-                            <Typography variant="caption" color="text.secondary">{label}</Typography>
-                            <Typography fontWeight={800} color={color}>{value}</Typography>
-                          </Box>
-                        ))}
-                      </Box>
-                      <CurrencyInput
-                        label="Số tiền thu lần này"
-                        value={getAmount(selectedFee)}
-                        onChange={(value) => setAmounts((current) => ({ ...current, [selectedFee.id]: value }))}
-                        error={getAmountError(selectedFee) || undefined}
-                        helperText="Mặc định là toàn bộ số tiền còn nợ."
-                      />
-                    </Stack>
-                  </Paper>
-                )}
 
-                {showMultipleFees && (
+                {fees.length > 0 && (
                   <>
                     <Alert
                       severity="info"
-                      action={
-                        <Button
-                          color="inherit"
-                          size="small"
-                          onClick={() => {
-                            const feeToKeep = selectedFee ?? fees.find((fee) => !fee.paymentAllocations?.length);
-                            setShowMultipleFees(false);
-                            setSelectedIds(feeToKeep ? [feeToKeep.id] : []);
-                          }}
-                        >
-                          Thu một khoản
-                        </Button>
-                      }
                     >
                       Chọn nhiều khoản và nhập số tiền riêng cho từng khoản.
                     </Alert>
